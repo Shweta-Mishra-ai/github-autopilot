@@ -1,5 +1,6 @@
-flask
-requests
-PyJWT
-cryptography
-gunicorn
+flask==2.3.3
+requests==2.31.0
+PyJWT==2.8.0
+cryptography==41.0.7
+gunicorn==21.2.0
+Werkzeug==2.3.7

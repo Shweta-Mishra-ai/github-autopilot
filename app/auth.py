@@ -27,7 +27,8 @@ def get_jwt() -> str:
         "exp": now + (10 * 60),
         "iss": APP_ID
     }
-    return jwt.encode(payload, PRIVATE_KEY, algorithm="RS256")
+    token = jwt.encode(payload, PRIVATE_KEY, algorithm="RS256")
+    return token if isinstance(token, str) else token.decode("utf-8")
 
 
 def get_installation_token(installation_id: int) -> str:

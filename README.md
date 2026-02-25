@@ -4,6 +4,21 @@
 > AI-powered PR reviews, commit fixing, issue triage, and bot commands. Free forever.
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
+[![Live Server](https://img.shields.io/badge/Server-Live%20on%20Render-46E3B7?logo=render&logoColor=white)](https://github-autopilot-1.onrender.com)
+[![GitHub App](https://img.shields.io/badge/GitHub%20App-ai--repo--manager-181717?logo=github)](https://github.com/apps/ai-repo-manager)
+[![Powered by Groq](https://img.shields.io/badge/AI-Groq%20Llama%203.3%2070B-F55036)](https://console.groq.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Made by Shweta](https://img.shields.io/badge/Made%20by-Shweta%20Mishra-ff69b4)](https://github.com/Shweta-Mishra-ai)
+
+---
+
+## 🌐 Live Demo
+
+| Resource | Link |
+|----------|------|
+| 🚀 **Live Server** | [https://github-autopilot-1.onrender.com](https://github-autopilot-1.onrender.com) |
+| 🤖 **GitHub App** | [ai-repo-manager](https://github.com/apps/ai-repo-manager) |
+| 📦 **Source Code** | [Shweta-Mishra-ai/github-autopilot](https://github.com/Shweta-Mishra-ai/github-autopilot) |
 
 ---
 
@@ -47,6 +62,8 @@ Type any of these in a PR or issue comment:
    - **Start Command:** `gunicorn server:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120`
    - **Instance Type:** Free
 6. Click **"Create Web Service"** — your server URL will be: `https://YOUR-APP.onrender.com`
+
+> ✅ **Live example:** [https://github-autopilot-1.onrender.com](https://github-autopilot-1.onrender.com)
 
 ### Step 2 — Create a GitHub App
 
@@ -109,7 +126,7 @@ Click **Save** → then **Manual Deploy** → **"Deploy latest commit"**
 
 - **Server:** Python + Flask
 - **AI Model:** Llama 3.3 70B via Groq API
-- **Deployment:** Render.com
+- **Deployment:** Render.com → [https://github-autopilot-1.onrender.com](https://github-autopilot-1.onrender.com)
 - **Authentication:** GitHub App (JWT + installation tokens)
 
 ---

@@ -1,87 +1,100 @@
 """
-GitHub Autopilot — Main Server
-Flask app that receives GitHub webhooks and manages repos automatically.
+server.py — Flask entry point.
+This file ONLY does: routing, signature verification, idempotency check.
+All business logic lives in app/handlers/*.
 """
 
 import os
 import hmac
 import hashlib
-import json
 import logging
 from flask import Flask, request, jsonify
-from app.handlers import handle_pull_request, handle_issues, handle_issue_comment, handle_push
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+from app.core.logger import setup_logging
+from app.core.idempotency import make_fingerprint, is_duplicate
+
+setup_logging()
 log = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-WEBHOOK_SECRET = os.environ.get("GITHUB_WEBHOOK_SECRET", "")
+WEBHOOK_SECRET = os.environ.get("GITHUB_WEBHOOK_SECRET", "").encode()
 
 
-def verify_signature(payload: bytes, signature: str) -> bool:
-    """Verify GitHub webhook signature."""
+def _verify_signature(payload_bytes: bytes, signature: str) -> bool:
+    """Verify GitHub webhook HMAC signature."""
     if not WEBHOOK_SECRET:
-        return True  # Skip in dev mode
-    expected = "sha256=" + hmac.new(
-        WEBHOOK_SECRET.encode(), payload, hashlib.sha256
-    ).hexdigest()
-    return hmac.compare_digest(expected, signature or "")
+        log.warning("GITHUB_WEBHOOK_SECRET not set — skipping signature verification")
+        return True
+    if not signature or not signature.startswith("sha256="):
+        return False
+    expected = "sha256=" + hmac.new(WEBHOOK_SECRET, payload_bytes, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
 
 
 @app.route("/", methods=["GET"])
-def home():
-    return jsonify({
-        "status": "running",
-        "app": "GitHub Autopilot",
-        "version": "1.0.0",
-        "install_url": f"https://github.com/apps/{os.environ.get('GITHUB_APP_SLUG', 'github-autopilot')}/installations/new"
-    })
+def health():
+    return jsonify({"app": "AI Repo Manager", "status": "running", "version": "2.0.0"})
 
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    """Main webhook endpoint — GitHub sends all events here."""
-    # Verify signature
+    # 1. Verify signature
     sig = request.headers.get("X-Hub-Signature-256", "")
-    if WEBHOOK_SECRET and not verify_signature(request.data, sig):
-        log.warning("Invalid webhook signature")
+    if not _verify_signature(request.data, sig):
+        log.warning("Invalid webhook signature — rejecting")
         return jsonify({"error": "Invalid signature"}), 401
 
-    event = request.headers.get("X-GitHub-Event", "")
-    payload = request.get_json(force=True) or {}
-
-    log.info(f"Event: {event} | Repo: {payload.get('repository', {}).get('full_name', 'unknown')}")
-
+    # 2. Parse payload
     try:
-        if event == "pull_request":
-            handle_pull_request(payload)
-        elif event == "issues":
-            handle_issues(payload)
-        elif event == "issue_comment":
-            handle_issue_comment(payload)
-        elif event == "push":
-            handle_push(payload)
-        elif event == "installation":
-            action = payload.get("action")
-            account = payload.get("installation", {}).get("account", {}).get("login", "unknown")
-            log.info(f"App {action} by: {account}")
-        elif event == "ping":
-            log.info("Ping received — webhook connected!")
-        else:
-            log.info(f"Unhandled event: {event}")
+        payload = request.get_json(force=True)
+    except Exception:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    event_type = request.headers.get("X-GitHub-Event", "")
+    delivery_id = request.headers.get("X-GitHub-Delivery", "")
+    repo = payload.get("repository", {}).get("full_name", "unknown")
+
+    log.info(f"Event: {event_type} | Repo: {repo} | Delivery: {delivery_id}")
+
+    # 3. Idempotency check
+    fingerprint = make_fingerprint(delivery_id, event_type, payload)
+    if is_duplicate(fingerprint):
+        return jsonify({"status": "duplicate — skipped"}), 200
+
+    # 4. Dispatch to handler
+    try:
+        _dispatch(event_type, payload)
     except Exception as e:
-        log.error(f"Error handling {event}: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        log.error(f"Handler error [{event_type}] {repo}: {e}", exc_info=True)
+        # Return 200 so GitHub doesn't retry — we log internally
+        return jsonify({"status": "error", "detail": str(e)[:200]}), 200
 
-    return jsonify({"ok": True, "event": event}), 200
+    return jsonify({"status": "ok"}), 200
 
 
-@app.route("/health", methods=["GET"])
-def health():
-    return jsonify({"status": "healthy"}), 200
+def _dispatch(event_type: str, payload: dict):
+    """Route event to the correct handler module."""
+    if event_type == "pull_request":
+        from app.handlers.pull_request import handle
+        handle(payload)
+
+    elif event_type == "issues":
+        from app.handlers.issues import handle
+        handle(payload)
+
+    elif event_type == "issue_comment":
+        from app.handlers.comments import handle
+        handle(payload)
+
+    elif event_type == "push":
+        from app.handlers.push import handle
+        handle(payload)
+
+    else:
+        log.debug(f"Unhandled event type: {event_type}")
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 3000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)

@@ -67,7 +67,6 @@ def webhook():
         _dispatch(event_type, payload)
     except Exception as e:
         log.error(f"Handler error [{event_type}] {repo}: {e}", exc_info=True)
-        # Return 200 so GitHub doesn't retry — we log internally
         return jsonify({"status": "error", "detail": str(e)[:200]}), 200
 
     return jsonify({"status": "ok"}), 200

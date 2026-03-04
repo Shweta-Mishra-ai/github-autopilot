@@ -1,1 +1,1 @@
-# app/handlers
+# app/handlers/__init__.py

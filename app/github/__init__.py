@@ -1,1 +1,1 @@
-# app/github
+# app/github/__init__.py

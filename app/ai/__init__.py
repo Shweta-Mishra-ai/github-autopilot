@@ -1,1 +1,1 @@
-# app/ai
+# app/ai/__init__.py

@@ -146,7 +146,7 @@ Anyone can use this system on their own repositories for free:
 ## 📄 License
 
 MIT License — free to use, modify, and distribute.
-
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ---
 
 *Built with ❤️ by [Shweta Mishra](https://github.com/Shweta-Mishra-ai) — Star ⭐ the repo if it helps!*

@@ -8,6 +8,7 @@ import os
 import hmac
 import hashlib
 import logging
+import threading
 from flask import Flask, request, jsonify
 
 from app.core.logger import setup_logging
@@ -35,6 +36,12 @@ def _verify_signature(payload_bytes: bytes, signature: str) -> bool:
 @app.route("/", methods=["GET"])
 def health():
     return jsonify({"app": "AI Repo Manager", "status": "running", "version": "2.0.0"})
+
+
+@app.route("/metrics", methods=["GET"])
+def get_metrics():
+    """Observability endpoint — shows system activity counters."""
+    return jsonify(metrics.snapshot())
 
 
 @app.route("/webhook", methods=["POST"])

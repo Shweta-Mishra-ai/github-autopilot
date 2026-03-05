@@ -289,8 +289,8 @@ test: add or update tests
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
-
+MIT License — free to use, modify, and distribute.
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ---
 
 *Built by [Shweta Mishra](https://github.com/Shweta-Mishra-ai)*

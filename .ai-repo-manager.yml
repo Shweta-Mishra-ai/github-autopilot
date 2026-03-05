@@ -1,0 +1,56 @@
+# .ai-repo-manager.yml
+# AI Repo Manager — Repo-level configuration
+# Place this file in your repo root to customize bot behavior.
+# All settings are optional — safe defaults are used if missing.
+# Docs: https://github.com/Shweta-Mishra-ai/github-autopilot
+
+bot:
+  enabled: true
+  footer: "🤖 [AI Repo Manager](https://github.com/apps/ai-repo-manager) — AI-powered repo management"
+
+pull_requests:
+  enabled: true
+  auto_polish_title: true        # Rewrite title to conventional commit format
+  auto_fill_description: true    # Fill empty PR descriptions with AI-generated template
+  code_review: true              # Run AI code review on changed files
+  max_files_reviewed: 4          # Max files to review per PR (higher = more AI tokens)
+
+issues:
+  enabled: true
+  auto_triage: true              # Auto-classify issue type and priority
+  auto_label: true               # Apply labels automatically
+
+push:
+  enabled: true
+  enforce_conventional_commits: true
+  create_issue_threshold: 3      # Create quality alert issue only if >= N bad commits
+
+auto_merge:
+  enabled: false                 # DISABLED by default — set to true to enable
+  require_passing_checks: true   # All CI checks must pass
+  require_no_blocking_reviews: true
+  allow_protected_branches: false  # Never auto-merge to main/master unless explicitly enabled
+  allowed_risk_levels:
+    - low                        # Only auto-merge AI-assessed low-risk PRs
+
+ai:
+  primary_model: "llama-3.3-70b-versatile"
+  fallback_model: "llama-3.1-8b-instant"
+  max_tokens: 1500
+  temperature: 0.2
+  timeout_seconds: 45
+
+labels:
+  auto_create: true              # Create labels if they don't exist
+
+commands:
+  enabled:
+    - fix
+    - explain
+    - improve
+    - test
+    - docs
+    - refactor
+    - health
+    - version
+    - merge

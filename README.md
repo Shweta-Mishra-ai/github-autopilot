@@ -292,5 +292,17 @@ test: add or update tests
 MIT License — free to use, modify, and distribute.
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ---
+## Support
+
+If this project saved you time or taught you something useful, consider giving it a star.
+
+It helps others find the project and keeps the work going.
+
+[
+
+![Star on GitHub](https://img.shields.io/github/stars/Shweta-Mishra-ai/github-autopilot?style=social)
+
+](https://github.com/Shweta-Mishra-ai/github-autopilot)
+
 
 *Built by [Shweta Mishra](https://github.com/Shweta-Mishra-ai)*

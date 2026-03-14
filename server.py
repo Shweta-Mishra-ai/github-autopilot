@@ -1,31 +1,29 @@
 """
-server.py — Flask entry point.
-This file ONLY does: routing, signature verification, idempotency check.
-All business logic lives in app/handlers/*.
+server.py — Flask entry point. V3
+Webhook ingestion ONLY. No processing here.
+All events are enqueued and processed by workers.
 """
 
 import os
 import hmac
 import hashlib
 import logging
-import threading
 from flask import Flask, request, jsonify
 
-from app.core.logger import setup_logging
+from app.core.logger import get_logger
+from app.core.metrics import metrics
 from app.core.idempotency import make_fingerprint, is_duplicate
+from app.queue.producer import enqueue_event
 
-setup_logging()
-log = logging.getLogger(__name__)
-
+log = get_logger(__name__)
 app = Flask(__name__)
 
 WEBHOOK_SECRET = os.environ.get("GITHUB_WEBHOOK_SECRET", "").encode()
 
 
 def _verify_signature(payload_bytes: bytes, signature: str) -> bool:
-    """Verify GitHub webhook HMAC signature."""
     if not WEBHOOK_SECRET:
-        log.warning("GITHUB_WEBHOOK_SECRET not set — skipping signature verification")
+        log.warning("GITHUB_WEBHOOK_SECRET not set — skipping verification")
         return True
     if not signature or not signature.startswith("sha256="):
         return False
@@ -35,12 +33,16 @@ def _verify_signature(payload_bytes: bytes, signature: str) -> bool:
 
 @app.route("/", methods=["GET"])
 def health():
-    return jsonify({"app": "AI Repo Manager", "status": "running", "version": "2.0.0"})
+    return jsonify({
+        "app": "AI Repo Manager",
+        "version": "3.0.0",
+        "status": "running",
+        "events_processed": metrics.get("events.total", 0),
+    })
 
 
 @app.route("/metrics", methods=["GET"])
 def get_metrics():
-    """Observability endpoint — shows system activity counters."""
     return jsonify(metrics.snapshot())
 
 
@@ -49,56 +51,36 @@ def webhook():
     # 1. Verify signature
     sig = request.headers.get("X-Hub-Signature-256", "")
     if not _verify_signature(request.data, sig):
-        log.warning("Invalid webhook signature — rejecting")
+        log.warning("invalid_signature")
+        metrics.increment("webhook.rejected.invalid_signature")
         return jsonify({"error": "Invalid signature"}), 401
 
     # 2. Parse payload
     try:
         payload = request.get_json(force=True)
     except Exception:
+        metrics.increment("webhook.rejected.invalid_json")
         return jsonify({"error": "Invalid JSON"}), 400
 
     event_type = request.headers.get("X-GitHub-Event", "")
     delivery_id = request.headers.get("X-GitHub-Delivery", "")
     repo = payload.get("repository", {}).get("full_name", "unknown")
 
-    log.info(f"Event: {event_type} | Repo: {repo} | Delivery: {delivery_id}")
+    log.info("webhook.received", event=event_type, repo=repo, delivery=delivery_id[:8])
+    metrics.increment("webhook.received")
 
     # 3. Idempotency check
     fingerprint = make_fingerprint(delivery_id, event_type, payload)
     if is_duplicate(fingerprint):
+        log.info("webhook.duplicate_skipped", fingerprint=fingerprint)
+        metrics.increment("webhook.duplicate_skipped")
         return jsonify({"status": "duplicate — skipped"}), 200
 
-    # 4. Dispatch to handler
-    try:
-        _dispatch(event_type, payload)
-    except Exception as e:
-        log.error(f"Handler error [{event_type}] {repo}: {e}", exc_info=True)
-        return jsonify({"status": "error", "detail": str(e)[:200]}), 200
+    # 4. Enqueue — respond immediately
+    enqueue_event(event_type, payload, delivery_id)
+    metrics.increment("events.total")
 
-    return jsonify({"status": "ok"}), 200
-
-
-def _dispatch(event_type: str, payload: dict):
-    """Route event to the correct handler module."""
-    if event_type == "pull_request":
-        from app.handlers.pull_request import handle
-        handle(payload)
-
-    elif event_type == "issues":
-        from app.handlers.issues import handle
-        handle(payload)
-
-    elif event_type == "issue_comment":
-        from app.handlers.comments import handle
-        handle(payload)
-
-    elif event_type == "push":
-        from app.handlers.push import handle
-        handle(payload)
-
-    else:
-        log.debug(f"Unhandled event type: {event_type}")
+    return jsonify({"status": "accepted"}), 202
 
 
 if __name__ == "__main__":

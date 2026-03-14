@@ -1,36 +1,40 @@
 """
 Push Handler - app/handlers/push.py
-Handles push webhook events — enforces conventional commits.
+V3: Conventional commit linting + secret detection + dependency scanning.
 """
 
-import re
 import logging
 from app.github.auth import get_installation_token
-from app.github.client import gh_post, GitHubError
+from app.github.client import gh_get, gh_post, GitHubError
+from app.github.notifications import notify_secret_detected
+from app.ai.client import groq_text
 from app.core.config import load_config
 from app.core.logger import EventLogger
+from app.security.secrets import scan_diff, format_findings as format_secret_findings
+from app.security.dependencies import scan_requirements_txt, format_findings as format_dep_findings
 
-SKIP_AUTHORS = {"dependabot[bot]", "renovate[bot]", "github-actions[bot]"}
-
-CONVENTIONAL = re.compile(
-    r'^(feat|fix|docs|style|refactor|perf|test|chore|ci|build|revert)(\(.+\))?(!)?: .+',
-    re.IGNORECASE
-)
+CONVENTIONAL_TYPES = {"feat", "fix", "docs", "refactor", "test", "chore", "perf", "ci", "style", "build"}
+SKIP_AUTHORS = {"dependabot[bot]", "renovate[bot]", "github-actions[bot]", "ai-repo-manager[bot]"}
 
 
 def handle(payload: dict):
-    ref = payload.get("ref", "")
-    if not any(b in ref for b in ["/main", "/master"]):
-        return
-
-    commits = payload.get("commits", [])
     repo = payload["repository"]["full_name"]
-    installation_id = payload.get("installation", {}).get("id")
-
-    if not installation_id or not commits:
-        return
+    installation_id = payload["installation"]["id"]
+    pusher = payload.get("pusher", {}).get("name", "")
+    commits = payload.get("commits", [])
+    ref = payload.get("ref", "")
 
     log = EventLogger("push", repo=repo)
+
+    if pusher in SKIP_AUTHORS or pusher.endswith("[bot]"):
+        return
+
+    # Only lint protected branches
+    if ref not in ("refs/heads/main", "refs/heads/master"):
+        return
+
+    if not commits:
+        return
 
     try:
         token = get_installation_token(installation_id)
@@ -39,41 +43,102 @@ def handle(payload: dict):
         return
 
     config = load_config(repo, token)
-
     if not config.get("push", "enabled", default=True):
         return
 
-    if not config.get("push", "enforce_conventional_commits", default=True):
-        return
+    # ── Secret Detection ──────────────────────────────────────────
+    _scan_secrets(repo, commits, token, config, log)
 
-    # Find non-conventional commits
-    bad = [
-        (c["id"][:7], c["message"].split("\n")[0])
-        for c in commits[:10]
-        if not CONVENTIONAL.match(c["message"].split("\n")[0])
-        and not c["message"].startswith("Merge")
-        and c.get("author", {}).get("name", "") not in SKIP_AUTHORS
-    ]
+    # ── Dependency Scanning ───────────────────────────────────────
+    _scan_dependencies(repo, commits, token, config, log)
 
-    if not bad:
-        log.info(f"All {len(commits)} commits follow convention ✅")
-        return
+    # ── Conventional Commit Linting ───────────────────────────────
+    if config.get("push", "enforce_conventional_commits", default=True):
+        _lint_commits(repo, commits, token, config, log)
+
+
+def _scan_secrets(repo, commits, token, config, log):
+    """Scan each commit diff for secrets."""
+    all_findings = []
+
+    for commit in commits:
+        sha = commit.get("id", "")
+        if not sha:
+            continue
+        try:
+            diff_data = gh_get(f"/repos/{repo}/commits/{sha}", token)
+            files = diff_data.get("files", [])
+            for f in files:
+                patch = f.get("patch", "")
+                if patch:
+                    findings = scan_diff(patch)
+                    all_findings.extend(findings)
+        except Exception as e:
+            log.error(f"Secret scan failed for {sha[:7]}: {e}")
+
+    if all_findings:
+        comment = format_secret_findings(all_findings, repo)
+        try:
+            # Post as issue
+            gh_post(f"/repos/{repo}/issues", token, {
+                "title": f"🚨 Secret detected in push — {len(all_findings)} finding(s)",
+                "body": comment,
+                "labels": ["security", "critical"]
+            })
+            notify_secret_detected(repo, len(all_findings))
+            log.warning(f"Secret detection: {len(all_findings)} findings posted as issue")
+        except Exception as e:
+            log.error(f"Failed to post secret alert: {e}")
+
+
+def _scan_dependencies(repo, commits, token, config, log):
+    """Scan requirements.txt if changed in this push."""
+    changed_files = set()
+    for commit in commits:
+        changed_files.update(commit.get("added", []))
+        changed_files.update(commit.get("modified", []))
+
+    dep_files = [f for f in changed_files if f in ("requirements.txt", "requirements-dev.txt")]
+
+    for dep_file in dep_files:
+        try:
+            file_data = gh_get(f"/repos/{repo}/contents/{dep_file}", token)
+            import base64
+            content = base64.b64decode(file_data["content"]).decode("utf-8")
+            findings = scan_requirements_txt(content)
+            if findings:
+                comment = format_dep_findings(findings)
+                gh_post(f"/repos/{repo}/issues", token, {
+                    "title": f"⚠️ Vulnerable dependencies found in {dep_file}",
+                    "body": comment,
+                    "labels": ["security", "dependencies"]
+                })
+                log.warning(f"Dependency scan: {len(findings)} vulnerable packages found")
+        except Exception as e:
+            log.error(f"Dependency scan failed for {dep_file}: {e}")
+
+
+def _lint_commits(repo, commits, token, config, log):
+    """Lint commit messages for conventional commits format."""
+    bad_commits = []
+
+    for commit in commits:
+        msg = commit.get("message", "").split("\n")[0].strip()
+        if not _is_conventional(msg):
+            bad_commits.append({"sha": commit["id"][:7], "message": msg})
 
     threshold = config.get("push", "create_issue_threshold", default=3)
-    log.info(f"{len(bad)} non-conventional commits — threshold is {threshold}")
 
-    if len(bad) < threshold:
-        log.info("Below threshold — skipping issue creation")
+    if len(bad_commits) < threshold:
+        log.info(f"push | {len(bad_commits)} non-conventional commit(s) — below threshold")
         return
 
-    rows = "\n".join(f"| `{sha}` | `{msg[:60]}` |" for sha, msg in bad)
+    log.info(f"push | {len(bad_commits)} non-conventional commits — creating issue")
 
-    try:
-        gh_post(f"/repos/{repo}/issues", token, {
-            "title": f"⚡ {len(bad)} non-conventional commits pushed to main",
-            "body": f"""## Commit Convention Alert
+    rows = "\n".join(f"| `{c['sha']}` | {c['message']} |" for c in bad_commits)
+    body = f"""## ⚡ Commit Convention Alert
 
-These commits don't follow [Conventional Commits](https://conventionalcommits.org) format:
+These commits don't follow [Conventional Commits](https://www.conventionalcommits.org/) format:
 
 | SHA | Message |
 |-----|---------|
@@ -92,13 +157,26 @@ type(scope): description
 feat: add user authentication
 fix(api): handle null response from Groq
 docs: update README setup guide
-refactor(auth): simplify JWT encoding
 ```
 
 > 💡 Use `/fix` command on this issue for AI help fixing commit messages.
-""",
-            "labels": ["help wanted 🙏"]
+"""
+
+    try:
+        gh_post(f"/repos/{repo}/issues", token, {
+            "title": f"⚡ {len(bad_commits)} non-conventional commits pushed to main",
+            "body": body,
+            "labels": ["commit-convention", "help wanted ⚠️"]
         })
-        log.done(f"Created commit convention issue for {len(bad)} bad commits")
+        log.done(f"Commit lint issue created: {len(bad_commits)} bad commits")
     except GitHubError as e:
-        log.warning(f"Could not create issue: {e}")
+        log.error(f"Failed to create issue: {e}")
+
+
+def _is_conventional(msg: str) -> bool:
+    if not msg:
+        return False
+    # type(scope)!: description OR type: description
+    import re
+    pattern = r'^(' + '|'.join(CONVENTIONAL_TYPES) + r')(\([^)]+\))?!?:\s.+'
+    return bool(re.match(pattern, msg))

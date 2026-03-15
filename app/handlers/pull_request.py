@@ -1,6 +1,7 @@
 """
 Pull Request Handler - app/handlers/pull_request.py
-V3: PR analysis + AI code review + embedding-based context.
+V3: PR analysis + AI code review + embedding-based context
+    + AI PR Summary auto-post + Test gap detection
 """
 
 import logging
@@ -61,13 +62,21 @@ def handle(payload: dict):
     except Exception as e:
         log.debug(f"Context retrieval skipped: {e}")
 
-    # ── PR Analysis ───────────────────────────────────────────────
+    # ── On PR opened ──────────────────────────────────────────────
     if action == "opened":
+        # 1. PR Analysis (risk, title, description)
         _analyze_pr(pr, repo, pr_number, files, token, config, gate, context, log)
 
-    # ── Code Review ───────────────────────────────────────────────
+        # 2. AI PR Summary — auto-post
+        _post_pr_summary(pr, repo, pr_number, files, token, config, log)
+
+    # ── Code Review (on open + sync) ──────────────────────────────
     if config.get("pull_requests", "code_review", default=True):
         _review_code(pr, repo, pr_number, files, token, config, gate, context, log)
+
+    # ── Test Gap Detection ────────────────────────────────────────
+    if config.get("pull_requests", "detect_test_gaps", default=True):
+        _detect_test_gaps(pr, repo, pr_number, files, token, config, log)
 
 
 def _analyze_pr(pr, repo, pr_number, files, token, config, gate, context, log):
@@ -94,12 +103,12 @@ Description: {body[:600]}
 Changed files:
 {files_summary}
 
-{context}
+{context[:800] if context else ""}
 
 Return JSON:
 {{
   "suggested_title": "conventional commit format title",
-  "description": "structured PR description with ## Summary, ## Changes, ## Testing",
+  "description": "structured PR description with ## Summary, ## Changes, ## Testing sections",
   "risk_level": "low|medium|high",
   "risk_reason": "why this risk level",
   "review_focus": ["area1", "area2"],
@@ -110,7 +119,6 @@ Return JSON:
     r = validate_pr_analysis(r)
     result = gate.evaluate("pr_title_rewrite", r)
 
-    # Post analysis comment
     risk_emoji = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(r.get("risk_level", "low"), "🟢")
     focus_items = "\n".join(f"- {f}" for f in r.get("review_focus", [])[:3])
     confidence_note = result.get("confidence_note", "")
@@ -132,7 +140,8 @@ Return JSON:
 """
 
     try:
-        gh_post(f"/repos/{repo}/issues/{pr_number}/comments", token, {"body": comment + config.footer})
+        gh_post(f"/repos/{repo}/issues/{pr_number}/comments", token,
+                {"body": comment + config.footer})
         log.done("pr_analysis_posted")
     except GitHubError as e:
         log.error(f"Failed to post PR analysis: {e}")
@@ -155,6 +164,164 @@ Return JSON:
             notify_high_risk_pr(repo, pr_number, title)
         except Exception:
             pass
+
+
+def _post_pr_summary(pr, repo, pr_number, files, token, config, log):
+    """
+    Auto-generate and post a human-readable PR summary on open.
+    Gives reviewers instant context without reading the whole diff.
+    """
+    try:
+        title = pr.get("title", "")
+        body = pr.get("body", "") or ""
+
+        files_list = "\n".join(
+            f"- {f.get('filename','')} (+{f.get('additions',0)} -{f.get('deletions',0)})"
+            for f in files[:10]
+        )
+
+        total_additions = sum(f.get("additions", 0) for f in files)
+        total_deletions = sum(f.get("deletions", 0) for f in files)
+
+        summary = groq_text(
+            "Senior engineer. Write clear, concise PR summaries for reviewers.",
+            f"""Write a reviewer-friendly summary for this Pull Request.
+
+Title: {title}
+Author: {pr['user']['login']}
+Base branch: {pr['base']['ref']}
+Description: {body[:500]}
+
+Changed files ({len(files)} total, +{total_additions} -{total_deletions} lines):
+{files_list}
+
+Write 3-5 sentences covering:
+1. What this PR accomplishes
+2. Key technical changes made
+3. What reviewers should focus on
+Keep it concise and helpful."""
+        )
+
+        comment = f"""## 📋 PR Summary
+
+{summary}
+
+| Stat | Value |
+|------|-------|
+| 📁 Files changed | {len(files)} |
+| ➕ Lines added | {total_additions} |
+| ➖ Lines removed | {total_deletions} |
+"""
+
+        gh_post(f"/repos/{repo}/issues/{pr_number}/comments", token,
+                {"body": comment + config.footer})
+        log.done("pr_summary_posted")
+
+    except Exception as e:
+        log.error(f"PR summary failed: {e}")
+
+
+def _detect_test_gaps(pr, repo, pr_number, files, token, config, log):
+    """
+    Detect test coverage gaps in changed files.
+    Only runs on PRs that change Python/JS files without corresponding test changes.
+    """
+    try:
+        # Find changed source files
+        source_files = [
+            f for f in files
+            if f.get("filename", "").endswith((".py", ".js", ".ts"))
+            and not _is_test_file(f.get("filename", ""))
+            and f.get("patch")
+        ]
+
+        # Find changed test files
+        test_files = [
+            f for f in files
+            if _is_test_file(f.get("filename", ""))
+        ]
+
+        if not source_files:
+            return
+
+        # Build context from changed source patches
+        source_context = "\n\n".join(
+            f"### {f['filename']}\n```\n{f.get('patch','')[:600]}\n```"
+            for f in source_files[:4]
+        )
+
+        test_context = "\n".join(
+            f"- {f['filename']}" for f in test_files
+        ) or "No test files changed in this PR."
+
+        r = groq_ask(
+            "Senior QA engineer. Identify test gaps precisely. JSON only.",
+            f"""Analyze these code changes for test coverage gaps:
+
+Changed source files:
+{source_context}
+
+Test files changed in this PR:
+{test_context}
+
+Return JSON:
+{{
+  "has_gaps": true,
+  "coverage_score": 6,
+  "gaps": [
+    {{
+      "file": "filename.py",
+      "function": "function_name",
+      "risk": "high|medium|low",
+      "suggested_test": "describe the test to add"
+    }}
+  ],
+  "summary": "brief overall assessment"
+}}
+
+Only report real gaps. If tests are adequate, set has_gaps to false.""",
+            fast=True
+        )
+
+        if not r.get("has_gaps", False):
+            log.info("test_gaps.none_found", pr=pr_number)
+            return
+
+        gaps = r.get("gaps", [])
+        if not gaps:
+            return
+
+        # Format gaps as comment
+        gaps_md = "\n".join(
+            f"| `{g.get('file','?')}` | `{g.get('function','?')}` | "
+            f"`{g.get('risk','medium')}` | {g.get('suggested_test','')[:80]} |"
+            for g in gaps[:5]
+        )
+
+        score = r.get("coverage_score", 5)
+        score_emoji = "🟢" if score >= 8 else "🟡" if score >= 5 else "🔴"
+
+        comment = f"""## 🔍 Test Coverage Analysis
+
+{score_emoji} **Coverage Score: {score}/10**
+{r.get('summary', '')}
+
+### Gaps Found
+
+| File | Function | Risk | Suggested Test |
+|------|----------|------|----------------|
+{gaps_md}
+
+> 💡 Use `/gaps` command for a detailed test gap analysis.
+> 💡 Use `/test` command to auto-generate missing tests.
+"""
+
+        gh_post(f"/repos/{repo}/issues/{pr_number}/comments", token,
+                {"body": comment + config.footer})
+        log.done(f"test_gaps_posted: {len(gaps)} gaps found")
+
+    except Exception as e:
+        log.error(f"Test gap detection failed: {e}")
 
 
 def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
@@ -184,7 +351,7 @@ Patch:
 {patch}
 ```
 
-{context[:800] if context else ""}
+{context[:600] if context else ""}
 
 Return JSON:
 {{
@@ -209,15 +376,16 @@ Return JSON:
 
         if issues:
             issues_md = "\n".join(
-                f"- **{i.get('severity','minor').upper()}** line ~{i.get('line','?')}: "
+                f"- **{i.get('severity','minor').upper()}** ~line {i.get('line','?')}: "
                 f"{i.get('issue','')} → `{i.get('fix','')[:80]}`"
                 for i in issues[:4]
             )
         else:
-            issues_md = "No issues found."
+            issues_md = "✅ No issues found."
 
         reviews.append(
-            f"### `{filename}` — Score: {score}/10\n{r.get('summary','')}\n\n{issues_md}"
+            f"### `{filename}` — Score: {score}/10\n"
+            f"{r.get('summary','')}\n\n{issues_md}"
         )
 
     if reviews:
@@ -225,13 +393,21 @@ Return JSON:
         try:
             gh_post(f"/repos/{repo}/issues/{pr_number}/comments", token,
                     {"body": review_body + config.footer})
-            log.done(f"code_review_posted for {len(reviews)} files")
+            log.done(f"code_review_posted: {len(reviews)} files")
         except GitHubError as e:
             log.error(f"Failed to post code review: {e}")
 
 
+def _is_test_file(filename: str) -> bool:
+    return (
+        "test_" in filename or
+        "_test." in filename or
+        "/tests/" in filename or
+        filename.startswith("test")
+    )
+
+
 def _is_generated(filename: str) -> bool:
-    """Skip generated/binary files."""
     skip_extensions = {
         ".lock", ".sum", ".min.js", ".min.css",
         ".png", ".jpg", ".jpeg", ".gif", ".svg",

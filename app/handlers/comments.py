@@ -79,13 +79,13 @@ def handle(payload: dict):
 
     try:
         if cmd == "/fix":
-            response = _cmd_fix(ctx_title, full_context)
+            response = _cmd_fix(ctx_title, full_context, gate)
         elif cmd == "/apply":
             response = _cmd_apply(repo, issue_number, ctx_title, full_context, token)
         elif cmd == "/explain":
             response = _cmd_explain(full_context)
         elif cmd == "/improve":
-            response = _cmd_improve(full_context)
+            response = _cmd_improve(full_context, gate)
         elif cmd == "/test":
             response = _cmd_test(full_context)
         elif cmd == "/docs":
@@ -101,7 +101,7 @@ def handle(payload: dict):
         elif cmd == "/summarize":
             response = _cmd_summarize(repo, issue_number, token)
         elif cmd == "/ci":
-            response = _cmd_ci(full_context)
+            response = _cmd_ci(full_context, gate)
         elif cmd == "/security":
             response = _cmd_security(repo, issue_number, issue, token)
         elif cmd == "/gaps":
@@ -126,7 +126,7 @@ def handle(payload: dict):
 # EXISTING COMMANDS (V2.1 compatible)
 # ─────────────────────────────────────────────────────
 
-def _cmd_fix(ctx_title: str, context: str) -> str:
+def _cmd_fix(ctx_title: str, context: str, gate=None) -> str:
     r = groq_ask(
         "Senior engineer. Give precise, working fix. JSON only.",
         f"""Fix this issue:
@@ -143,12 +143,20 @@ Return JSON:
 }}""",
         fast=True
     )
+
+    confidence_note = ""
+    if gate:
+        result = gate.evaluate("fix_command", r)
+        if not result["auto_apply"]:
+            confidence_note = f"\n\n> ⚠️ {result['confidence_note']}"
+
     return (
         f"## 🔧 Fix\n\n"
         f"**Root cause:** {r.get('root_cause', 'See fix below')}\n\n"
         f"**Fix:**\n```\n{r.get('fix', '')}\n```\n\n"
         f"**Why:** {r.get('explanation', '')}\n\n"
         f"**Test:**\n```\n{r.get('test', '')}\n```"
+        f"{confidence_note}"
     )
 
 

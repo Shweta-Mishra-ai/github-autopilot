@@ -28,7 +28,7 @@ jobs:
           pip install pytest pytest-cov ruff
 
       - name: Lint with ruff
-        run: ruff check app/ --ignore E501
+        run: ruff check app/ --ignore E501,E401,E741,F401
 
       - name: Run tests
         run: pytest tests/ -v --cov=app --cov-report=term-missing

@@ -36,7 +36,10 @@ Installs as a GitHub App. Processes webhook events asynchronously — no polling
 | ⚡ Queue-based processing | Redis Streams with in-memory fallback — no dropped webhooks |
 | 📊 Structured logging | structlog JSON logs — queryable and machine-readable |
 | 🗓️ Scheduled tasks | Auto stale detection, monthly health reports, weekly dep reports |
-| 💬 Slack/Discord alerts | Critical events posted to your team channel |
+| 🔒 Stale auto-close | Issues auto-closed after 37 days of inactivity |
+| 📋 AI PR Summary | Human-readable PR summary auto-posted on every PR open |
+| 🔍 Test gap detection | Automatically detects missing tests in changed code |
+| 🐳 Docker support | One-command local setup with docker-compose |
 | 🔁 Replay fixtures | Capture real webhooks as test fixtures for regression testing |
 
 ---
@@ -46,12 +49,15 @@ Installs as a GitHub App. Processes webhook events asynchronously — no polling
 | Capability | Behavior |
 |------------|----------|
 | PR Analysis | Rewrites titles to conventional format, generates descriptions, assigns risk level, uses repo context |
+| AI PR Summary | Auto-posts human-readable summary on every PR open — instant reviewer context |
 | AI Code Review | Scores each file 0–10, categorizes issues by severity, suggests exact fixes with codebase awareness |
+| Test Gap Detection | Detects missing tests in changed files, suggests what to add |
 | Issue Triage | Classifies by type and priority, applies labels, asks clarifying questions |
 | Repo Health | Grades A+ to F across six dimensions with actionable recommendations |
 | Commit Linting | Detects non-conventional commits on push, creates structured alert |
 | Secret Detection | Scans push diffs for API keys, tokens, private keys — alerts immediately |
 | Dependency Scanning | Weekly vulnerability scan via OSV.dev — no API key required |
+| Stale Management | Flags issues after 30 days, auto-closes after 37 days |
 | Slash Commands | 15 commands in any PR or issue comment |
 | Scheduled Tasks | Stale issues, health reports, dependency reports on cron |
 
@@ -89,6 +95,8 @@ github-autopilot/
 ├── server.py                    # Webhook ingestion only — enqueues events
 ├── worker.py                    # Event processor + APScheduler
 ├── Procfile                     # web + worker processes
+├── Dockerfile                   # Docker support
+├── docker-compose.yml           # Full stack: web + worker + Redis
 │
 ├── app/
 │   ├── core/                    # Foundation — no side effects
@@ -128,7 +136,7 @@ github-autopilot/
 │   │   └── validator.py         # JSON validation + sanitization
 │   │
 │   └── handlers/
-│       ├── pull_request.py      # PR analysis + code review
+│       ├── pull_request.py      # PR analysis + summary + review + test gaps
 │       ├── issues.py            # Issue triage
 │       ├── comments.py          # 15 slash commands
 │       ├── push.py              # Commit linting + security scan + indexing
@@ -153,7 +161,7 @@ github-autopilot/
 | V1 | Single monolithic file, no retry, no validation, no guardrails |
 | V2 | Modular four-layer architecture, guardrails, idempotency, AI validation |
 | V2.1 | Async webhook dispatch, metrics endpoint, 40+ tests |
-| V3 | Queue-based processing, embeddings, security scanning, confidence scoring, 15 slash commands, scheduled tasks, 60+ tests |
+| V3 | Queue-based processing, embeddings, security scanning, confidence scoring, 15 slash commands, AI PR summary, test gap detection, stale auto-close, Docker support, 60+ tests |
 
 ---
 
@@ -162,10 +170,18 @@ github-autopilot/
 Place `.ai-repo-manager.yml` in your repository root:
 
 ```yaml
+pull_requests:
+  auto_polish_title: true
+  auto_fill_description: true
+  code_review: true
+  detect_test_gaps: true
+  max_files_reviewed: 4
+
 push:
   enforce_conventional_commits: true
   scan_secrets: true
   scan_dependencies: true
+  create_issue_threshold: 3
 
 confidence:
   thresholds:
@@ -200,16 +216,30 @@ All keys are optional — safe defaults applied when missing.
 
 ### Prerequisites
 - GitHub account with permission to create GitHub Apps
-- Deployment target (Render, Railway, Fly.io)
+- Deployment target (Render, Railway, Fly.io, or Docker)
 - Groq API key — [console.groq.com](https://console.groq.com)
 
-### 1. Deploy the Server
+### Option A — Deploy to Render / Railway
 
 ```bash
 gunicorn server:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120
 ```
 
-### 2. Create a GitHub App
+### Option B — Run with Docker
+
+```bash
+# Clone the repo
+git clone https://github.com/Shweta-Mishra-ai/github-autopilot.git
+cd github-autopilot
+
+# Copy and fill in environment variables
+cp .env.example .env
+
+# Start web + worker + Redis
+docker-compose up
+```
+
+### Create a GitHub App
 
 Navigate to `github.com/settings/apps/new`:
 
@@ -217,7 +247,7 @@ Navigate to `github.com/settings/apps/new`:
 - **Permissions:** Contents (Read), Issues (Read/Write), Pull requests (Read/Write), Metadata (Read)
 - **Events:** Pull request, Issues, Issue comment, Push
 
-### 3. Environment Variables
+### Environment Variables
 
 | Variable | Description |
 |----------|-------------|
@@ -231,7 +261,7 @@ Navigate to `github.com/settings/apps/new`:
 | `SCHEDULED_REPO` | Optional — repo for scheduled tasks |
 | `SCHEDULED_INSTALLATION_ID` | Optional — installation ID for scheduler |
 
-### 4. Install the App
+### Install the App
 
 GitHub App settings → Install App → select repositories → Install.
 
@@ -265,6 +295,7 @@ pytest --cov=app tests/
 | Embeddings | sentence-transformers |
 | Logging | structlog |
 | Scheduling | APScheduler |
+| Containerization | Docker + docker-compose |
 | Primary AI | Llama 3.3 70B via Groq |
 | Fallback AI | Llama 3.1 8B via Groq |
 | Testing | pytest |

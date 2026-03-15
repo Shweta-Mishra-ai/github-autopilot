@@ -57,7 +57,7 @@ def run_stale_check(repo: str, installation_id: int):
 
 
 def _mark_stale(repo: str, issue: dict, token: str, config):
-    """Post stale comment and add label."""
+    """Post stale comment, add label, and auto-close if already stale for 7+ more days."""
     issue_number = issue["number"]
     title = issue.get("title", "")
     days_inactive = (
@@ -65,11 +65,37 @@ def _mark_stale(repo: str, issue: dict, token: str, config):
         datetime.strptime(issue["updated_at"], "%Y-%m-%dT%H:%M:%SZ")
     ).days
 
+    # Check if issue already has stale label
+    labels = [l["name"] for l in issue.get("labels", [])]
+    already_stale = "stale" in labels
+
+    # Auto-close if stale for 7+ extra days (total 37+ days inactive)
+    auto_close = already_stale and days_inactive >= (STALE_DAYS + 7)
+
+    if auto_close:
+        try:
+            gh_post(f"/repos/{repo}/issues/{issue_number}/comments", token, {
+                "body": (
+                    f"## 🔒 Auto-Closed\n\n"
+                    f"This issue has been inactive for **{days_inactive} days** "
+                    f"and was marked stale. Closing automatically.\n\n"
+                    f"Feel free to reopen if this is still relevant!\n\n"
+                    f"> 🤖 Auto-closed by AI Repo Manager V3"
+                )
+            })
+            gh_put(f"/repos/{repo}/issues/{issue_number}", token, {"state": "closed"})
+            log.info("schedule.stale_auto_closed",
+                     repo=repo, issue=issue_number, days=days_inactive)
+        except GitHubError as e:
+            log.error("schedule.stale_close_failed",
+                      repo=repo, issue=issue_number, error=str(e))
+        return
+
     comment = f"""## 👴 Stale Issue
 
 This issue has had no activity for **{days_inactive} days**.
 
-It will be closed in 7 days unless there is new activity.
+It will be **automatically closed in 7 days** unless there is new activity.
 
 - If this is still relevant, please leave a comment
 - If this is resolved, please close it manually
@@ -79,18 +105,13 @@ It will be closed in 7 days unless there is new activity.
 """
 
     try:
-        # Add stale label
         _ensure_label(repo, token, "stale", "cccccc", "No recent activity")
         gh_post(f"/repos/{repo}/issues/{issue_number}/labels", token,
                 {"labels": ["stale"]})
-
-        # Post comment
         gh_post(f"/repos/{repo}/issues/{issue_number}/comments", token,
                 {"body": comment + config.footer})
-
         log.info("schedule.stale_marked",
                  repo=repo, issue=issue_number, title=title[:50])
-
     except GitHubError as e:
         log.error("schedule.stale_mark_failed",
                   repo=repo, issue=issue_number, error=str(e))
@@ -275,4 +296,3 @@ def _ensure_label(repo: str, token: str, name: str, color: str, description: str
         })
     except Exception:
         pass  # Label already exists
-

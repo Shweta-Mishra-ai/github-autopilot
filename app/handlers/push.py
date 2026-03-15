@@ -1,20 +1,26 @@
 """
 Push Handler - app/handlers/push.py
-V3: Conventional commit linting + secret detection + dependency scanning.
+V3 Updated: Conventional commit linting + secret detection + dependency scanning
+    + intelligence layer (auto-index files on push)
 """
 
-import logging
+import base64
 from app.github.auth import get_installation_token
 from app.github.client import gh_get, gh_post, GitHubError
 from app.github.notifications import notify_secret_detected
-from app.ai.client import groq_text
 from app.core.config import load_config
 from app.core.logger import EventLogger
 from app.security.secrets import scan_diff, format_findings as format_secret_findings
 from app.security.dependencies import scan_requirements_txt, format_findings as format_dep_findings
 
-CONVENTIONAL_TYPES = {"feat", "fix", "docs", "refactor", "test", "chore", "perf", "ci", "style", "build"}
-SKIP_AUTHORS = {"dependabot[bot]", "renovate[bot]", "github-actions[bot]", "ai-repo-manager[bot]"}
+CONVENTIONAL_TYPES = {
+    "feat", "fix", "docs", "refactor", "test",
+    "chore", "perf", "ci", "style", "build"
+}
+SKIP_AUTHORS = {
+    "dependabot[bot]", "renovate[bot]",
+    "github-actions[bot]", "ai-repo-manager[bot]"
+}
 
 
 def handle(payload: dict):
@@ -29,7 +35,6 @@ def handle(payload: dict):
     if pusher in SKIP_AUTHORS or pusher.endswith("[bot]"):
         return
 
-    # Only lint protected branches
     if ref not in ("refs/heads/main", "refs/heads/master"):
         return
 
@@ -43,56 +48,54 @@ def handle(payload: dict):
         return
 
     config = load_config(repo, token)
+
     if not config.get("push", "enabled", default=True):
         return
 
-    # ── Secret Detection ──────────────────────────────────────────
-    _scan_secrets(repo, commits, token, config, log)
+    latest_sha = commits[-1].get("id", "") if commits else ""
 
-    # ── Dependency Scanning ───────────────────────────────────────
-    _scan_dependencies(repo, commits, token, config, log)
+    if config.get("push", "scan_secrets", default=True):
+        _scan_secrets(repo, commits, token, config, log)
 
-    # ── Conventional Commit Linting ───────────────────────────────
+    if config.get("push", "scan_dependencies", default=True):
+        _scan_dependencies(repo, commits, token, config, log)
+
     if config.get("push", "enforce_conventional_commits", default=True):
         _lint_commits(repo, commits, token, config, log)
 
+    _index_changed_files(repo, commits, token, latest_sha, log)
+
 
 def _scan_secrets(repo, commits, token, config, log):
-    """Scan each commit diff for secrets."""
     all_findings = []
-
     for commit in commits:
         sha = commit.get("id", "")
         if not sha:
             continue
         try:
             diff_data = gh_get(f"/repos/{repo}/commits/{sha}", token)
-            files = diff_data.get("files", [])
-            for f in files:
+            for f in diff_data.get("files", []):
                 patch = f.get("patch", "")
                 if patch:
-                    findings = scan_diff(patch)
-                    all_findings.extend(findings)
+                    all_findings.extend(scan_diff(patch))
         except Exception as e:
             log.error(f"Secret scan failed for {sha[:7]}: {e}")
 
     if all_findings:
         comment = format_secret_findings(all_findings, repo)
         try:
-            # Post as issue
             gh_post(f"/repos/{repo}/issues", token, {
                 "title": f"🚨 Secret detected in push — {len(all_findings)} finding(s)",
                 "body": comment,
                 "labels": ["security", "critical"]
             })
             notify_secret_detected(repo, len(all_findings))
-            log.warning(f"Secret detection: {len(all_findings)} findings posted as issue")
+            log.warning(f"Secret detection: {len(all_findings)} findings posted")
         except Exception as e:
             log.error(f"Failed to post secret alert: {e}")
 
 
 def _scan_dependencies(repo, commits, token, config, log):
-    """Scan requirements.txt if changed in this push."""
     changed_files = set()
     for commit in commits:
         changed_files.update(commit.get("added", []))
@@ -103,25 +106,21 @@ def _scan_dependencies(repo, commits, token, config, log):
     for dep_file in dep_files:
         try:
             file_data = gh_get(f"/repos/{repo}/contents/{dep_file}", token)
-            import base64
             content = base64.b64decode(file_data["content"]).decode("utf-8")
             findings = scan_requirements_txt(content)
             if findings:
-                comment = format_dep_findings(findings)
                 gh_post(f"/repos/{repo}/issues", token, {
                     "title": f"⚠️ Vulnerable dependencies found in {dep_file}",
-                    "body": comment,
+                    "body": format_dep_findings(findings),
                     "labels": ["security", "dependencies"]
                 })
-                log.warning(f"Dependency scan: {len(findings)} vulnerable packages found")
+                log.warning(f"Dependency scan: {len(findings)} vulnerable packages")
         except Exception as e:
             log.error(f"Dependency scan failed for {dep_file}: {e}")
 
 
 def _lint_commits(repo, commits, token, config, log):
-    """Lint commit messages for conventional commits format."""
     bad_commits = []
-
     for commit in commits:
         msg = commit.get("message", "").split("\n")[0].strip()
         if not _is_conventional(msg):
@@ -130,10 +129,8 @@ def _lint_commits(repo, commits, token, config, log):
     threshold = config.get("push", "create_issue_threshold", default=3)
 
     if len(bad_commits) < threshold:
-        log.info(f"push | {len(bad_commits)} non-conventional commit(s) — below threshold")
+        log.info(f"push | {len(bad_commits)} non-conventional — below threshold")
         return
-
-    log.info(f"push | {len(bad_commits)} non-conventional commits — creating issue")
 
     rows = "\n".join(f"| `{c['sha']}` | {c['message']} |" for c in bad_commits)
     body = f"""## ⚡ Commit Convention Alert
@@ -152,14 +149,8 @@ type(scope): description
 ### Valid Types
 `feat` `fix` `docs` `refactor` `test` `chore` `perf` `ci` `style` `build`
 
-### Examples
-```
-feat: add user authentication
-fix(api): handle null response from Groq
-docs: update README setup guide
-```
-
 > 💡 Use `/fix` command on this issue for AI help fixing commit messages.
+> ⚡ Use `/apply` to automatically fix all commit messages.
 """
 
     try:
@@ -173,10 +164,45 @@ docs: update README setup guide
         log.error(f"Failed to create issue: {e}")
 
 
+def _index_changed_files(repo, commits, token, latest_sha, log):
+    """Index changed files into ChromaDB — runs silently."""
+    try:
+        from app.intelligence.embeddings import embed_file
+
+        changed_files = set()
+        for commit in commits:
+            changed_files.update(commit.get("added", []))
+            changed_files.update(commit.get("modified", []))
+
+        indexable = [
+            f for f in changed_files
+            if f.endswith((".py", ".md", ".yml", ".yaml", ".json", ".txt"))
+            and not f.startswith("tests/")
+        ]
+
+        if not indexable:
+            return
+
+        indexed = 0
+        for filepath in indexable[:10]:
+            try:
+                file_data = gh_get(f"/repos/{repo}/contents/{filepath}", token)
+                content = base64.b64decode(file_data["content"]).decode("utf-8")
+                if embed_file(repo, filepath, content, latest_sha):
+                    indexed += 1
+            except Exception:
+                pass
+
+        if indexed > 0:
+            log.info(f"intelligence.indexed {indexed}/{len(indexable)} files")
+
+    except Exception as e:
+        log.debug(f"Intelligence indexing skipped: {e}")
+
+
 def _is_conventional(msg: str) -> bool:
     if not msg:
         return False
-    # type(scope)!: description OR type: description
     import re
     pattern = r'^(' + '|'.join(CONVENTIONAL_TYPES) + r')(\([^)]+\))?!?:\s.+'
     return bool(re.match(pattern, msg))

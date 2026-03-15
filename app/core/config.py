@@ -1,7 +1,6 @@
 """
 Config Loader - app/core/config.py
-Loads .ai-repo-manager.yml from repo root.
-Falls back to safe defaults if file missing or malformed.
+V3: Added confidence thresholds, new commands, notifications config.
 """
 
 import logging
@@ -10,7 +9,6 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
-# ── Safe defaults ────────────────────────────────────────────────────────────
 DEFAULTS = {
     "bot": {
         "enabled": True,
@@ -31,10 +29,12 @@ DEFAULTS = {
     "push": {
         "enabled": True,
         "enforce_conventional_commits": True,
-        "create_issue_threshold": 3,   # only create issue if >= N bad commits
+        "create_issue_threshold": 3,
+        "scan_secrets": True,
+        "scan_dependencies": True,
     },
     "auto_merge": {
-        "enabled": False,              # OFF by default — opt-in only
+        "enabled": False,
         "require_passing_checks": True,
         "require_no_blocking_reviews": True,
         "allowed_risk_levels": ["low"],
@@ -46,18 +46,36 @@ DEFAULTS = {
         "temperature": 0.2,
         "timeout_seconds": 45,
     },
+    "confidence": {
+        "thresholds": {
+            "pr_title_rewrite": 0.85,
+            "issue_label":      0.75,
+            "auto_merge":       0.95,
+            "fix_command":      0.70,
+            "code_review":      0.75,
+        }
+    },
+    "notifications": {
+        "slack": False,
+        "discord": False,
+        "on_secret_detected": True,
+        "on_high_risk_pr": True,
+        "on_health_degraded": True,
+    },
     "labels": {
         "auto_create": True,
     },
     "commands": {
-        "enabled": ["fix", "explain", "improve", "test", "docs",
-                    "refactor", "health", "version", "merge"],
+        "enabled": [
+            "fix", "apply", "explain", "improve", "test", "docs",
+            "refactor", "health", "version", "merge",
+            "summarize", "ci", "security", "gaps", "changelog"
+        ],
     },
 }
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
-    """Recursively merge override into base. Base keys not in override are kept."""
     result = base.copy()
     for key, value in override.items():
         if key in result and isinstance(result[key], dict) and isinstance(value, dict):
@@ -68,16 +86,10 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 
 class Config:
-    """
-    Repo-level config loaded from .ai-repo-manager.yml.
-    Always falls back to DEFAULTS — never crashes on bad config.
-    """
-
     def __init__(self, data: dict):
         self._data = _deep_merge(DEFAULTS, data)
 
     def get(self, *keys: str, default: Any = None) -> Any:
-        """Safe nested key access. config.get('auto_merge', 'enabled')"""
         node = self._data
         for key in keys:
             if not isinstance(node, dict):
@@ -99,10 +111,6 @@ class Config:
     def auto_merge_enabled(self) -> bool:
         return bool(self.get("auto_merge", "enabled", default=False))
 
-    def auto_merge_risk_ok(self, risk: str) -> bool:
-        allowed = self.get("auto_merge", "allowed_risk_levels", default=["low"])
-        return risk in allowed
-
     def command_enabled(self, cmd: str) -> bool:
         enabled = self.get("commands", "enabled", default=[])
         return cmd.lstrip("/") in enabled
@@ -114,25 +122,16 @@ class Config:
 
 
 def load_config(repo: str, token: str) -> Config:
-    """
-    Fetch .ai-repo-manager.yml from repo root.
-    Returns Config with defaults if file not found or invalid.
-    """
     try:
         from app.github.client import gh_get
         data = gh_get(f"/repos/{repo}/contents/.ai-repo-manager.yml", token)
         content = base64.b64decode(data["content"]).decode("utf-8")
-
         import yaml
         parsed = yaml.safe_load(content) or {}
         if not isinstance(parsed, dict):
-            log.warning(f"[{repo}] .ai-repo-manager.yml is not a dict — using defaults")
             return Config({})
-
         log.info(f"[{repo}] Loaded .ai-repo-manager.yml")
         return Config(parsed)
-
     except Exception as e:
-        # File not found OR invalid YAML — silent fallback to defaults
-        log.debug(f"[{repo}] No config file found, using defaults: {e}")
+        log.debug(f"[{repo}] Using defaults: {e}")
         return Config({})

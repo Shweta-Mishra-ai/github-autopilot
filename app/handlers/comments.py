@@ -1,7 +1,6 @@
 """
 Comments Handler - app/handlers/comments.py
-Handles issue_comment webhook events — all slash commands.
-Commands: /fix /apply /explain /improve /test /docs /refactor /health /version /merge
+V3: All slash commands including new /summarize, /ci, /security, /gaps, /changelog
 """
 
 import re
@@ -11,11 +10,17 @@ from app.github.client import gh_get, gh_post, gh_put, gh_delete, GitHubError
 from app.ai.client import groq_ask, groq_text
 from app.core.config import load_config
 from app.core.logger import EventLogger
+from app.core.confidence import ConfidenceGate
+from app.security.secrets import scan_diff, format_findings as format_secret_findings
+from app.security.dependencies import scan_requirements_txt, format_findings as format_dep_findings
 
 SKIP_AUTHORS = {"dependabot[bot]", "renovate[bot]", "github-actions[bot]", "ai-repo-manager[bot]"}
 
-ALL_COMMANDS = ["/fix", "/apply", "/explain", "/improve", "/test", "/docs",
-                "/refactor", "/health", "/version", "/merge"]
+ALL_COMMANDS = [
+    "/fix", "/apply", "/explain", "/improve", "/test", "/docs",
+    "/refactor", "/health", "/version", "/merge",
+    "/summarize", "/ci", "/security", "/gaps", "/changelog"
+]
 
 
 def handle(payload: dict):
@@ -47,6 +52,7 @@ def handle(payload: dict):
         return
 
     config = load_config(repo, token)
+    gate = ConfidenceGate(config)
 
     if not config.command_enabled(cmd):
         try:
@@ -57,7 +63,6 @@ def handle(payload: dict):
             pass
         return
 
-    # Get issue/PR context
     try:
         issue = gh_get(f"/repos/{repo}/issues/{issue_number}", token)
         ctx_title = issue.get("title", "")
@@ -65,24 +70,22 @@ def handle(payload: dict):
     except Exception:
         ctx_title, ctx_body = "", ""
 
-    # Extract code block from comment if present
     code_match = re.search(r'```[\w]*\n([\s\S]*?)\n```', body)
     code = code_match.group(1) if code_match else ""
     context_text = re.sub(r'```[\s\S]*?```', '', body).replace(cmd, "").strip()
     full_context = code or context_text or ctx_body or ctx_title
 
-    # Route to command handler
     response = ""
 
     try:
         if cmd == "/fix":
-            response = _cmd_fix(ctx_title, full_context)
+            response = _cmd_fix(ctx_title, full_context, gate)
         elif cmd == "/apply":
             response = _cmd_apply(repo, issue_number, ctx_title, full_context, token)
         elif cmd == "/explain":
             response = _cmd_explain(full_context)
         elif cmd == "/improve":
-            response = _cmd_improve(full_context)
+            response = _cmd_improve(full_context, gate)
         elif cmd == "/test":
             response = _cmd_test(full_context)
         elif cmd == "/docs":
@@ -95,10 +98,20 @@ def handle(payload: dict):
             response = _cmd_version(repo, token)
         elif cmd == "/merge":
             response = _cmd_merge(repo, issue_number, issue, token, author, config)
+        elif cmd == "/summarize":
+            response = _cmd_summarize(repo, issue_number, token)
+        elif cmd == "/ci":
+            response = _cmd_ci(full_context, gate)
+        elif cmd == "/security":
+            response = _cmd_security(repo, issue_number, issue, token)
+        elif cmd == "/gaps":
+            response = _cmd_gaps(full_context)
+        elif cmd == "/changelog":
+            response = _cmd_changelog(repo, token)
 
     except Exception as e:
         log.error(f"Command {cmd} failed: {e}")
-        response = f"## ⚠️ Command Error\n\n`{cmd}` failed: `{str(e)[:200]}`\n\nPlease try again in a moment."
+        response = f"## ⚠️ Command Error\n\n`{cmd}` failed: `{str(e)[:200]}`\n\nPlease try again."
 
     if response:
         full = f"{response}\n\n---\n*🤖 `{cmd}` — requested by @{author}*{config.footer}"
@@ -110,10 +123,10 @@ def handle(payload: dict):
 
 
 # ─────────────────────────────────────────────────────
-# COMMAND IMPLEMENTATIONS
+# EXISTING COMMANDS (V2.1 compatible)
 # ─────────────────────────────────────────────────────
 
-def _cmd_fix(ctx_title: str, context: str) -> str:
+def _cmd_fix(ctx_title: str, context: str, gate=None) -> str:
     r = groq_ask(
         "Senior engineer. Give precise, working fix. JSON only.",
         f"""Fix this issue:
@@ -123,178 +136,125 @@ Context: {context[:2000]}
 Return JSON:
 {{
   "root_cause": "exact reason",
-  "fix": "working code or list of commit fixes",
+  "fix": "working code or commit fixes",
   "explanation": "why this fix works",
-  "test": "test to verify fix"
+  "test": "test to verify fix",
+  "confidence": 0.85
 }}""",
         fast=True
     )
+
+    confidence_note = ""
+    if gate:
+        result = gate.evaluate("fix_command", r)
+        if not result["auto_apply"]:
+            confidence_note = f"\n\n> ⚠️ {result['confidence_note']}"
+
     return (
         f"## 🔧 Fix\n\n"
         f"**Root cause:** {r.get('root_cause', 'See fix below')}\n\n"
         f"**Fix:**\n```\n{r.get('fix', '')}\n```\n\n"
         f"**Why:** {r.get('explanation', '')}\n\n"
-        f"**Test:**\n```\n{r.get('test', '')}\n```\n\n"
-        f"💡 Use `/apply` to automatically apply these fixes to your commits."
+        f"**Test:**\n```\n{r.get('test', '')}\n```"
+        f"{confidence_note}"
     )
 
 
 def _cmd_apply(repo: str, issue_number: int, ctx_title: str,
                context: str, token: str) -> str:
-    """
-    Auto-apply commit message fixes for non-conventional commits.
-    Reads flagged commits from issue context, rewrites messages via GitHub API.
-    """
     try:
-        # Step 1: Get the default branch
         repo_data = gh_get(f"/repos/{repo}", token)
         default_branch = repo_data.get("default_branch", "main")
-
-        # Step 2: Get recent commits from the branch
         commits = gh_get(f"/repos/{repo}/commits?sha={default_branch}&per_page=20", token)
 
         if not commits:
-            return "## ⚠️ No commits found in repository."
+            return "## ⚠️ No commits found."
 
-        # Step 3: Use AI to identify which commits need fixing and suggest new messages
         commit_list = "\n".join(
             f"- SHA: {c['sha']} | Message: {c['commit']['message'].split(chr(10))[0]}"
             for c in commits[:15]
         )
 
         r = groq_ask(
-            "You are a Git expert. Identify non-conventional commits and fix them. JSON only.",
+            "Git expert. Identify non-conventional commits. JSON only.",
             f"""Issue: {ctx_title}
-Context: {context[:1000]}
-
 Recent commits:
 {commit_list}
-
-Identify commits that do NOT follow Conventional Commits format (type(scope): description).
-Valid types: feat, fix, docs, refactor, test, chore, perf, ci, style, build
 
 Return JSON:
 {{
   "commits": [
-    {{
-      "sha": "full_sha_here",
-      "old_message": "original message",
-      "new_message": "conventional(scope): message"
-    }}
+    {{"sha": "full_sha", "old_message": "original", "new_message": "conventional: message"}}
   ]
-}}
-
-Only include commits that need fixing. If all are conventional, return empty list.""",
+}}""",
             fast=True
         )
 
         commits_to_fix = r.get("commits", [])
-
         if not commits_to_fix:
-            return (
-                "## ✅ Nothing to Fix\n\n"
-                "All recent commits already follow Conventional Commits format! 🎉"
-            )
+            return "## ✅ Nothing to Fix\n\nAll commits already follow Conventional Commits! 🎉"
 
-        # Step 4: Get current branch ref SHA
+        sha_map = {c['sha'][:7]: c['sha'] for c in commits}
+        sha_map.update({c['sha']: c['sha'] for c in commits})
+
         ref_data = gh_get(f"/repos/{repo}/git/ref/heads/{default_branch}", token)
-        current_sha = ref_data["object"]["sha"]
+        last_sha = ref_data["object"]["sha"]
 
-        fixed = []
-        failed = []
-        last_sha = current_sha
+        fixed, failed = [], []
 
-        # Step 5: Process each commit - create new commit with fixed message
         for c in commits_to_fix:
             sha = c.get("sha", "").strip()
             new_msg = c.get("new_message", "").strip()
             old_msg = c.get("old_message", sha[:7])
-
             if not sha or not new_msg:
                 continue
 
-            try:
-                # Get full commit data
-                commit_data = gh_get(f"/repos/{repo}/git/commits/{sha}", token)
-                tree_sha = commit_data["tree"]["sha"]
-                parents = [p["sha"] for p in commit_data.get("parents", [])]
+            full_sha = sha_map.get(sha, sha_map.get(sha[:7], sha))
 
-                # Create new commit with fixed message
+            try:
+                commit_data = gh_get(f"/repos/{repo}/git/commits/{full_sha}", token)
                 new_commit = gh_post(f"/repos/{repo}/git/commits", token, {
                     "message": new_msg,
-                    "tree": tree_sha,
-                    "parents": parents
+                    "tree": commit_data["tree"]["sha"],
+                    "parents": [p["sha"] for p in commit_data.get("parents", [])]
                 })
-
-                new_sha = new_commit["sha"]
-                last_sha = new_sha
-                fixed.append(
-                    f"✅ `{sha[:7]}` → `{new_msg}`\n"
-                    f"   *(was: `{old_msg[:50]}`)*"
-                )
-
+                last_sha = new_commit["sha"]
+                fixed.append(f"✅ `{sha[:7]}` → `{new_msg}`\n   *(was: `{old_msg[:50]}`)*")
             except Exception as e:
-                failed.append(f"❌ `{sha[:7]}` (`{old_msg[:40]}`) — {str(e)[:80]}")
+                failed.append(f"❌ `{sha[:7]}` — {str(e)[:80]}")
 
-        # Step 6: Update branch ref to point to last new commit
         if fixed:
             try:
                 gh_post(f"/repos/{repo}/git/refs/heads/{default_branch}", token, {
-                    "sha": last_sha,
-                    "force": True
+                    "sha": last_sha, "force": True
                 })
             except Exception as e:
-                return (
-                    f"## ⚠️ Commits created but branch update failed\n\n"
-                    f"`{str(e)[:200]}`\n\n"
-                    f"Fixed commits were created but not applied to `{default_branch}`."
-                )
+                return f"## ⚠️ Commits created but branch update failed\n\n`{str(e)[:200]}`"
 
-        # Step 7: Close the issue if all fixed
         if fixed and not failed:
             try:
-                gh_post(f"/repos/{repo}/issues/{issue_number}/comments", token, {
-                    "body": "All commits fixed! Closing this issue. ✅"
-                })
-                gh_put(f"/repos/{repo}/issues/{issue_number}", token, {
-                    "state": "closed"
-                })
+                gh_put(f"/repos/{repo}/issues/{issue_number}", token, {"state": "closed"})
             except Exception:
                 pass
 
-        # Build response
-        result_lines = ["## 🔧 Auto-Apply Results\n"]
-
+        lines = ["## 🔧 Auto-Apply Results\n"]
         if fixed:
-            result_lines.append(f"### ✅ Fixed ({len(fixed)} commits)\n")
-            result_lines.extend(fixed)
-
+            lines.append(f"### ✅ Fixed ({len(fixed)} commits)\n")
+            lines.extend(fixed)
         if failed:
-            result_lines.append(f"\n### ❌ Failed ({len(failed)} commits)\n")
-            result_lines.extend(failed)
-            result_lines.append(
-                "\n> 💡 Failed commits may need manual fix via `git rebase -i`"
-            )
-
+            lines.append(f"\n### ❌ Failed ({len(failed)} commits)\n")
+            lines.extend(failed)
         if fixed:
-            result_lines.append(
-                f"\n✨ Branch `{default_branch}` updated successfully!"
-            )
-
-        return "\n".join(result_lines)
+            lines.append(f"\n✨ Branch `{default_branch}` updated successfully!")
+        return "\n".join(lines)
 
     except Exception as e:
-        return (
-            f"## ⚠️ Apply Failed\n\n"
-            f"`{str(e)[:300]}`\n\n"
-            f"Try fixing manually:\n"
-            f"```bash\ngit rebase -i HEAD~7\n# Then update each commit message\n```"
-        )
+        return f"## ⚠️ Apply Failed\n\n`{str(e)[:300]}`"
 
 
 def _cmd_explain(context: str) -> str:
     text = groq_text(
-        "Senior engineer and teacher. Explain clearly in plain English.",
+        "Senior engineer. Explain clearly in plain English.",
         f"Explain this:\n{context[:2000]}"
     )
     return f"## 💡 Explanation\n\n{text}"
@@ -310,11 +270,7 @@ Return JSON:
 {{
   "summary": "overall assessment",
   "improvements": [
-    {{
-      "area": "performance|security|readability|structure",
-      "suggestion": "what to change",
-      "example": "code example"
-    }}
+    {{"area": "performance|security|readability|structure", "suggestion": "what to change", "example": "code example"}}
   ]
 }}""",
         fast=True
@@ -329,86 +285,54 @@ Return JSON:
 
 def _cmd_test(context: str) -> str:
     r = groq_ask(
-        "Senior QA engineer. Generate comprehensive tests. JSON only.",
+        "Senior QA engineer. Generate tests. JSON only.",
         f"""Write tests for:
 {context[:2000]}
 
 Return JSON:
 {{
   "framework": "pytest",
-  "tests": [
-    {{
-      "name": "test_function_name",
-      "type": "unit|integration|edge_case",
-      "desc": "what it tests",
-      "code": "full test code"
-    }}
-  ]
+  "tests": [{{"name": "test_name", "type": "unit", "desc": "what it tests", "code": "full test code"}}]
 }}""",
         fast=True
     )
-    tests = r.get("tests", [])
     lines = [f"## 🧪 Tests ({r.get('framework', 'pytest')})\n"]
-    for t in tests[:3]:
-        lines.append(
-            f"### `{t.get('name', 'test')}` ({t.get('type', 'unit')})\n"
-            f"*{t.get('desc', '')}*\n"
-            f"```python\n{t.get('code', '')[:400]}\n```"
-        )
+    for t in r.get("tests", [])[:3]:
+        lines.append(f"### `{t.get('name','test')}` ({t.get('type','unit')})\n*{t.get('desc','')}*\n```python\n{t.get('code','')[:400]}\n```")
     return "\n\n".join(lines)
 
 
 def _cmd_docs(context: str) -> str:
     r = groq_ask(
-        "Technical writer. Generate clear documentation. JSON only.",
+        "Technical writer. Generate documentation. JSON only.",
         f"""Generate docs for:
 {context[:2000]}
 
 Return JSON:
-{{
-  "docstring": "complete docstring",
-  "usage": "usage example",
-  "readme_section": "markdown section for README"
-}}""",
+{{"docstring": "complete docstring", "usage": "usage example", "readme_section": "markdown section"}}""",
         fast=True
     )
     return (
         f"## 📚 Documentation\n\n"
-        f"**Docstring:**\n```\n{r.get('docstring', '')}\n```\n\n"
-        f"**Usage:**\n```\n{r.get('usage', '')}\n```\n\n"
-        f"**README section:**\n{r.get('readme_section', '')}"
+        f"**Docstring:**\n```\n{r.get('docstring','')}\n```\n\n"
+        f"**Usage:**\n```\n{r.get('usage','')}\n```\n\n"
+        f"**README section:**\n{r.get('readme_section','')}"
     )
 
 
 def _cmd_refactor(context: str) -> str:
     r = groq_ask(
-        "Principal engineer. Suggest refactoring that preserves behavior exactly. JSON only.",
+        "Principal engineer. Suggest refactoring. JSON only.",
         f"""Suggest refactoring for:
 {context[:2500]}
-
-RULE: Behavior must be identical after refactoring. Only structure/readability/performance changes.
 
 Return JSON:
 {{
   "summary": "assessment",
-  "estimated_improvement": "e.g. 40% more readable",
-  "refactors": [
-    {{
-      "type": "extract_function|rename|simplify|optimize",
-      "description": "what and why",
-      "before": "original snippet",
-      "after": "refactored snippet",
-      "benefit": "concrete benefit"
-    }}
-  ]
+  "refactors": [{{"type": "extract_function", "description": "what and why", "before": "snippet", "after": "refactored", "benefit": "benefit"}}]
 }}"""
     )
-    lines = [
-        f"## ♻️ Refactor Suggestions\n\n"
-        f"**{r.get('summary', '')}**\n\n"
-        f"*Estimated improvement: {r.get('estimated_improvement', 'significant')}*\n\n"
-        f"> ✅ All suggestions preserve identical behavior — only code structure changes.\n"
-    ]
+    lines = [f"## ♻️ Refactor\n\n**{r.get('summary','')}**\n"]
     for i, ref in enumerate(r.get("refactors", [])[:4], 1):
         lines.append(f"### {i}. `{ref.get('type','').upper()}` — {ref.get('description','')}")
         if ref.get("before"):
@@ -420,164 +344,82 @@ Return JSON:
 
 
 def _cmd_health(repo: str, token: str) -> str:
-    """
-    Repo Health Analysis — grades repo A+ to F.
-    Checks: open issues, open PRs, contributors, license, activity, languages.
-    """
     try:
         repo_data = gh_get(f"/repos/{repo}", token)
         all_issues = gh_get(f"/repos/{repo}/issues?state=open&per_page=50", token)
         open_prs = gh_get(f"/repos/{repo}/pulls?state=open&per_page=20", token)
         commits = gh_get(f"/repos/{repo}/commits?per_page=20", token)
         contributors = gh_get(f"/repos/{repo}/contributors?per_page=10", token)
-
         try:
             languages = gh_get(f"/repos/{repo}/languages", token)
         except Exception:
             languages = {}
 
-        # Separate issues from PRs
         open_issues = [i for i in all_issues if "pull_request" not in i]
-        open_issue_count = len(open_issues)
-        open_pr_count = len(open_prs)
-        commit_count = len(commits)
-        contributor_count = len(contributors)
-        has_description = bool(repo_data.get("description"))
-        has_license = bool(repo_data.get("license"))
-        stars = repo_data.get("stargazers_count", 0)
-        forks = repo_data.get("forks_count", 0)
-        is_archived = repo_data.get("archived", False)
-
-        # ── Score Calculation ─────────────────────────────
         score = 100
-        findings = []
-        recommendations = []
+        findings, recommendations = [], []
 
-        if is_archived:
-            return "## 🏥 Repo Health\n\n⚠️ This repository is **archived** — no health check needed."
-
-        # Issues
-        if open_issue_count > 20:
-            score -= 15
-            findings.append(f"🔴 {open_issue_count} open issues — too many unresolved")
-            recommendations.append("Close or triage old issues — aim for <10")
-        elif open_issue_count > 10:
-            score -= 7
-            findings.append(f"🟡 {open_issue_count} open issues")
-            recommendations.append("Reduce open issues below 10")
+        if len(open_issues) > 20:
+            score -= 15; findings.append(f"🔴 {len(open_issues)} open issues")
+            recommendations.append("Triage and close old issues")
+        elif len(open_issues) > 10:
+            score -= 7; findings.append(f"🟡 {len(open_issues)} open issues")
         else:
-            findings.append(f"✅ {open_issue_count} open issues — healthy")
+            findings.append(f"✅ {len(open_issues)} open issues")
 
-        # PRs
-        if open_pr_count > 10:
-            score -= 10
-            findings.append(f"🔴 {open_pr_count} open PRs — review backlog")
-            recommendations.append("Review and close stale PRs")
-        elif open_pr_count > 5:
-            score -= 5
-            findings.append(f"🟡 {open_pr_count} open PRs")
+        if len(open_prs) > 10:
+            score -= 10; findings.append(f"🔴 {len(open_prs)} open PRs")
+        elif len(open_prs) > 5:
+            score -= 5; findings.append(f"🟡 {len(open_prs)} open PRs")
         else:
-            findings.append(f"✅ {open_pr_count} open PRs — healthy")
+            findings.append(f"✅ {len(open_prs)} open PRs")
 
-        # License
-        if not has_license:
-            score -= 8
-            findings.append("🔴 No license — required for open source")
-            recommendations.append("Add LICENSE file (MIT recommended)")
+        if not repo_data.get("license"):
+            score -= 8; findings.append("🔴 No license")
+            recommendations.append("Add LICENSE file")
         else:
-            license_name = repo_data["license"].get("name", "License")
-            findings.append(f"✅ License: {license_name}")
+            findings.append(f"✅ License: {repo_data['license'].get('name','')}")
 
-        # Description
-        if not has_description:
-            score -= 5
-            findings.append("🟡 No repository description")
-            recommendations.append("Add a description in repo Settings")
+        if not repo_data.get("description"):
+            score -= 5; findings.append("🟡 No description")
         else:
             findings.append("✅ Description present")
 
-        # Contributors (bus factor)
-        if contributor_count < 2:
-            score -= 5
-            findings.append("🟡 Single contributor — bus factor risk")
-            recommendations.append("Encourage contributions — add CONTRIBUTING.md")
-        else:
-            findings.append(f"✅ {contributor_count} contributors")
+        grade = "A+" if score >= 90 else "A" if score >= 80 else "B" if score >= 70 else "C" if score >= 60 else "D" if score >= 50 else "F"
+        bar = "█" * (score // 10) + "░" * (10 - score // 10)
 
-        # Commit activity
-        if commit_count < 3:
-            score -= 10
-            findings.append("🔴 Very low recent commit activity")
-            recommendations.append("Keep the project active with regular commits")
-        else:
-            findings.append(f"✅ {commit_count} recent commits")
+        return f"""## 🏥 Repo Health — `{repo}`
 
-        # ── Grade ────────────────────────────────────────
-        if score >= 90:
-            grade, grade_emoji = "A+", "🏆"
-        elif score >= 80:
-            grade, grade_emoji = "A", "✅"
-        elif score >= 70:
-            grade, grade_emoji = "B", "🟢"
-        elif score >= 60:
-            grade, grade_emoji = "C", "🟡"
-        elif score >= 50:
-            grade, grade_emoji = "D", "🟠"
-        else:
-            grade, grade_emoji = "F", "🔴"
-
-        health_bar = "█" * (score // 10) + "░" * (10 - score // 10)
-        lang_str = " · ".join(f"`{k}`" for k in list(languages.keys())[:5]) or "Unknown"
-        findings_md = "\n".join(f"- {f}" for f in findings)
-        recs_md = "\n".join(f"{i+1}. {r}" for i, r in enumerate(recommendations[:4]))
-
-        return f"""## 🏥 Repo Health Report — `{repo}`
-
-### Grade: {grade_emoji} **{grade}** ({score}/100)
-`{health_bar}`
-
-| Metric | Value |
-|--------|-------|
-| ⭐ Stars | {stars} |
-| 🍴 Forks | {forks} |
-| 📂 Open Issues | {open_issue_count} |
-| 🔀 Open PRs | {open_pr_count} |
-| 👥 Contributors | {contributor_count} |
-| 💻 Languages | {lang_str} |
+### Grade: **{grade}** ({score}/100)
+`{bar}`
 
 ### Findings
-{findings_md}
+{chr(10).join(f"- {f}" for f in findings)}
 
-{f"### 💡 Recommendations{chr(10)}{recs_md}" if recommendations else "### 💡 All good — no major issues found! 🎉"}"""
+{f"### 💡 Recommendations{chr(10)}{chr(10).join(f'{i+1}. {r}' for i,r in enumerate(recommendations[:4]))}" if recommendations else "### 💡 All good!"}"""
 
     except Exception as e:
-        return f"## ⚠️ Health Check Failed\n\nCould not analyze repo: `{str(e)[:200]}`"
+        return f"## ⚠️ Health Check Failed\n\n`{str(e)[:200]}`"
 
 
 def _cmd_version(repo: str, token: str) -> str:
-    """Show version/tag status of the repo."""
     try:
         tags = gh_get(f"/repos/{repo}/tags?per_page=10", token)
         releases = gh_get(f"/repos/{repo}/releases?per_page=3", token)
         commits = gh_get(f"/repos/{repo}/commits?per_page=8", token)
-
         latest_tag = tags[0]["name"] if tags else "No tags yet"
         latest_release = releases[0]["name"] if releases else "No releases"
-
         tags_list = "\n".join(f"- `{t['name']}`" for t in tags[:5]) or "- No tags yet"
-
         commits_md = "\n".join(
             f"| `{c['sha'][:7]}` | {c['commit']['message'].split(chr(10))[0][:55]} |"
             for c in commits[:6]
         )
-
         return f"""## 🎛️ Version Status — `{repo}`
 
 | | |
 |---|---|
 | **Latest Tag** | `{latest_tag}` |
 | **Latest Release** | `{latest_release}` |
-| **Total Tags** | {len(tags)} |
 
 ### Recent Tags
 {tags_list}
@@ -585,62 +427,179 @@ def _cmd_version(repo: str, token: str) -> str:
 ### Recent Commits
 | SHA | Message |
 |-----|---------|
-{commits_md}
-
-### 💡 Semantic Versioning Guide
-| Commit type | Version bump |
-|-------------|-------------|
-| `feat:` | Minor → `v1.1.0` |
-| `fix:` | Patch → `v1.0.1` |
-| `feat!:` / BREAKING | Major → `v2.0.0` |"""
-
+{commits_md}"""
     except Exception as e:
         return f"## ⚠️ Version check failed: `{str(e)[:200]}`"
 
 
-def _cmd_merge(repo: str, issue_number: int, issue: dict,
-               token: str, author: str, config) -> str:
-    """Attempt to merge a PR via /merge command."""
+def _cmd_merge(repo, issue_number, issue, token, author, config) -> str:
     if "pull_request" not in issue:
         return "## ℹ️ `/merge` only works on Pull Requests."
-
     try:
         pr = gh_get(f"/repos/{repo}/pulls/{issue_number}", token)
         reviews = gh_get(f"/repos/{repo}/pulls/{issue_number}/reviews", token)
         commit_sha = pr["head"]["sha"]
         check_runs = gh_get(f"/repos/{repo}/commits/{commit_sha}/check-runs", token)
-        checks = check_runs.get("check_runs", [])
-
-        # Run guardrails
         from app.core.guardrails import check_pr_auto_merge
-        guard = check_pr_auto_merge(pr, checks, reviews, config)
-
+        guard = check_pr_auto_merge(pr, check_runs.get("check_runs", []), reviews, config)
         if not guard.passed:
             return f"## 🚫 Cannot Merge\n\n**Reason:** {guard.reason}"
-
         head_branch = pr["head"]["ref"]
         base_branch = pr["base"]["ref"]
-
         result = gh_put(f"/repos/{repo}/pulls/{issue_number}/merge", token, {
             "commit_title": f"feat: merge {head_branch} via /merge by @{author}",
-            "commit_message": f"Merged by AI Repo Manager on request from @{author}",
             "merge_method": "merge"
         })
-
         if result.get("merged"):
-            # Clean up branch
             try:
                 gh_delete(f"/repos/{repo}/git/refs/heads/{head_branch}", token)
             except Exception:
                 pass
-
-            return (
-                f"## ✅ Merged!\n\n"
-                f"**`{head_branch}`** → **`{base_branch}`**\n\n"
-                f"SHA: `{result.get('sha','')[:8]}`"
-            )
-        else:
-            return f"## ⚠️ Merge failed: {result.get('message','Unknown error')}"
-
+            return f"## ✅ Merged!\n\n**`{head_branch}`** → **`{base_branch}`**\nSHA: `{result.get('sha','')[:8]}`"
+        return f"## ⚠️ Merge failed: {result.get('message','Unknown error')}"
     except Exception as e:
         return f"## ⚠️ Merge error: `{str(e)[:300]}`"
+
+
+# ─────────────────────────────────────────────────────
+# NEW V3 COMMANDS
+# ─────────────────────────────────────────────────────
+
+def _cmd_summarize(repo: str, issue_number: int, token: str) -> str:
+    """Summarize a long PR or issue thread."""
+    try:
+        comments = gh_get(f"/repos/{repo}/issues/{issue_number}/comments?per_page=50", token)
+        thread = "\n\n".join(
+            f"@{c['user']['login']}: {c['body'][:300]}"
+            for c in comments[:20]
+        )
+        summary = groq_text(
+            "Senior engineer. Summarize GitHub discussions concisely.",
+            f"Summarize this discussion thread:\n\n{thread[:3000]}"
+        )
+        return f"## 📝 Thread Summary\n\n{summary}"
+    except Exception as e:
+        return f"## ⚠️ Summarize failed: `{str(e)[:200]}`"
+
+
+def _cmd_ci(context: str) -> str:
+    """Analyze CI failure logs."""
+    r = groq_ask(
+        "DevOps expert. Analyze CI failures. JSON only.",
+        f"""Analyze this CI failure:
+{context[:3000]}
+
+Return JSON:
+{{
+  "root_cause": "exact reason for failure",
+  "fix": "exact steps to fix",
+  "prevention": "how to prevent this in future",
+  "confidence": 0.85
+}}""",
+        fast=True
+    )
+    return (
+        f"## 🔴 CI Failure Analysis\n\n"
+        f"**Root Cause:** {r.get('root_cause', 'See below')}\n\n"
+        f"**Fix:**\n```\n{r.get('fix', '')}\n```\n\n"
+        f"**Prevention:** {r.get('prevention', '')}"
+    )
+
+
+def _cmd_security(repo: str, issue_number: int, issue: dict, token: str) -> str:
+    """Run security scan on PR changed files."""
+    if "pull_request" not in issue:
+        return "## ℹ️ `/security` works best on Pull Requests."
+
+    try:
+        pr_files = gh_get(f"/repos/{repo}/pulls/{issue_number}/files", token)
+        all_findings = []
+
+        for f in pr_files[:10]:
+            patch = f.get("patch", "")
+            if patch:
+                findings = scan_diff(patch)
+                all_findings.extend(findings)
+
+        # Also check requirements.txt if changed
+        req_files = [f for f in pr_files if f["filename"] in ("requirements.txt",)]
+        dep_findings = []
+        for f in req_files:
+            raw = gh_get(f"/repos/{repo}/contents/{f['filename']}", token)
+            import base64
+            content = base64.b64decode(raw["content"]).decode()
+            dep_findings.extend(scan_requirements_txt(content))
+
+        lines = ["## 🔒 Security Scan Results\n"]
+
+        if all_findings:
+            lines.append(format_secret_findings(all_findings, repo))
+        else:
+            lines.append("✅ **No secrets detected** in changed files.\n")
+
+        if dep_findings:
+            lines.append(format_dep_findings(dep_findings))
+        else:
+            lines.append("✅ **No vulnerable dependencies** found.\n")
+
+        return "\n\n".join(lines)
+
+    except Exception as e:
+        return f"## ⚠️ Security scan failed: `{str(e)[:200]}`"
+
+
+def _cmd_gaps(context: str) -> str:
+    """Detect test coverage gaps."""
+    r = groq_ask(
+        "Senior QA engineer. Identify test gaps. JSON only.",
+        f"""Analyze this code for test coverage gaps:
+{context[:2500]}
+
+Return JSON:
+{{
+  "coverage_assessment": "overall assessment",
+  "gaps": [
+    {{"area": "what is not tested", "risk": "high|medium|low", "suggested_test": "test to add"}}
+  ]
+}}""",
+        fast=True
+    )
+    lines = [f"## 🔍 Test Coverage Gaps\n\n**{r.get('coverage_assessment', '')}**\n"]
+    for i, gap in enumerate(r.get("gaps", [])[:5], 1):
+        lines.append(
+            f"### {i}. {gap.get('area', '')} — Risk: `{gap.get('risk', 'medium').upper()}`\n"
+            f"**Suggested test:** {gap.get('suggested_test', '')}"
+        )
+    return "\n\n".join(lines)
+
+
+def _cmd_changelog(repo: str, token: str) -> str:
+    """Generate CHANGELOG entry from recent commits."""
+    try:
+        commits = gh_get(f"/repos/{repo}/commits?per_page=20", token)
+        tags = gh_get(f"/repos/{repo}/tags?per_page=1", token)
+        latest_tag = tags[0]["name"] if tags else "v0.0.0"
+
+        commit_list = "\n".join(
+            f"- {c['commit']['message'].split(chr(10))[0]}"
+            for c in commits[:15]
+        )
+
+        changelog = groq_text(
+            "Technical writer. Generate a clean CHANGELOG entry in Keep a Changelog format.",
+            f"""Generate a CHANGELOG.md entry for version after {latest_tag}.
+
+Recent commits:
+{commit_list}
+
+Format:
+## [X.Y.Z] - YYYY-MM-DD
+### Added
+### Changed
+### Fixed"""
+        )
+
+        return f"## 📋 CHANGELOG Entry\n\n```markdown\n{changelog}\n```"
+
+    except Exception as e:
+        return f"## ⚠️ Changelog generation failed: `{str(e)[:200]}`"

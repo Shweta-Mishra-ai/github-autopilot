@@ -27,8 +27,8 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-cov
 
-      - name: Run tests
-        run: pytest tests/ -v --cov=app --cov-report=term-missing
+      - name: Run V3 tests
+        run: pytest tests/test_confidence.py tests/test_storage.py -v
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4

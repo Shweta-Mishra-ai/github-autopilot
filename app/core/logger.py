@@ -1,7 +1,9 @@
 """
 Logger - app/core/logger.py
-Structured logging using structlog.
-V3: Machine-readable JSON logs with trace context.
+V3: Structured logging using structlog.
+IMPORTANT: Never use 'event' as a keyword argument in log calls.
+structlog reserves 'event' for the log message itself.
+Use 'webhook_event', 'event_name', or 'evt' instead.
 """
 
 import logging
@@ -20,7 +22,7 @@ def setup_logging(level: str = "INFO"):
             structlog.processors.TimeStamper(fmt="iso"),
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
-            structlog.dev.ConsoleRenderer(),  # Use JSONRenderer() in production
+            structlog.dev.ConsoleRenderer(),
         ],
         wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
         context_class=dict,
@@ -32,13 +34,25 @@ def get_logger(name: str = __name__):
     return structlog.get_logger(name)
 
 
-# Legacy EventLogger for backwards compatibility with V2.1 handlers
 class EventLogger:
+    """
+    Wrapper around structlog for handler-level logging.
+    NOTE: Never pass event= as a kwarg. Use evt=, webhook_event=, or event_name= instead.
+    """
     def __init__(self, name: str, **ctx):
         self._log = structlog.get_logger(name).bind(**ctx)
 
-    def info(self, msg: str, **kw):  self._log.info(msg, **kw)
-    def warning(self, msg: str, **kw): self._log.warning(msg, **kw)
-    def error(self, msg: str, **kw):  self._log.error(msg, **kw)
-    def debug(self, msg: str, **kw):  self._log.debug(msg, **kw)
-    def done(self, msg: str, **kw):   self._log.info(msg, status="done", **kw)
+    def info(self, msg: str, **kw):
+        self._log.info(msg, **kw)
+
+    def warning(self, msg: str, **kw):
+        self._log.warning(msg, **kw)
+
+    def error(self, msg: str, **kw):
+        self._log.error(msg, **kw)
+
+    def debug(self, msg: str, **kw):
+        self._log.debug(msg, **kw)
+
+    def done(self, msg: str, **kw):
+        self._log.info(msg, status="done", **kw)

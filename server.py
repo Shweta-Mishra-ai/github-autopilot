@@ -7,23 +7,23 @@ All events are enqueued and processed by workers.
 import os
 import hmac
 import hashlib
-import logging
 from flask import Flask, request, jsonify
 
+from app.core.logger import get_logger, setup_logging
 from app.core.metrics import metrics
 from app.core.idempotency import make_fingerprint, is_duplicate
 from app.queue.producer import enqueue_event
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-log = logging.getLogger(__name__)
-
+setup_logging()
+log = get_logger(__name__)
 app = Flask(__name__)
+
 WEBHOOK_SECRET = os.environ.get("GITHUB_WEBHOOK_SECRET", "").encode()
 
 
 def _verify_signature(payload_bytes: bytes, signature: str) -> bool:
     if not WEBHOOK_SECRET:
-        log.warning("GITHUB_WEBHOOK_SECRET not set — skipping verification")
+        log.warning("webhook_secret_not_set")
         return True
     if not signature or not signature.startswith("sha256="):
         return False
@@ -50,7 +50,7 @@ def get_metrics():
 def webhook():
     sig = request.headers.get("X-Hub-Signature-256", "")
     if not _verify_signature(request.data, sig):
-        log.warning("Invalid webhook signature")
+        log.warning("invalid_webhook_signature")
         metrics.increment("webhook.rejected.invalid_signature")
         return jsonify({"error": "Invalid signature"}), 401
 
@@ -60,20 +60,24 @@ def webhook():
         metrics.increment("webhook.rejected.invalid_json")
         return jsonify({"error": "Invalid JSON"}), 400
 
-    event_type = request.headers.get("X-GitHub-Event", "")
+    webhook_event = request.headers.get("X-GitHub-Event", "")
     delivery_id = request.headers.get("X-GitHub-Delivery", "")
     repo = payload.get("repository", {}).get("full_name", "unknown")
 
-    log.info(f"Webhook received: {event_type} | {repo} | {delivery_id[:8]}")
+    # NOTE: Use webhook_event= NOT event= (structlog reserves 'event' keyword)
+    log.info("webhook_received",
+             webhook_event=webhook_event,
+             repo=repo,
+             delivery=delivery_id[:8])
     metrics.increment("webhook.received")
 
-    fingerprint = make_fingerprint(delivery_id, event_type, payload)
+    fingerprint = make_fingerprint(delivery_id, webhook_event, payload)
     if is_duplicate(fingerprint):
-        log.info(f"Duplicate skipped: {fingerprint}")
+        log.info("webhook_duplicate_skipped", fingerprint=fingerprint)
         metrics.increment("webhook.duplicate_skipped")
         return jsonify({"status": "duplicate — skipped"}), 200
 
-    enqueue_event(event_type, payload, delivery_id)
+    enqueue_event(webhook_event, payload, delivery_id)
     metrics.increment("events.total")
 
     return jsonify({"status": "accepted"}), 202

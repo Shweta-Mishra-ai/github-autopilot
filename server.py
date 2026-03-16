@@ -7,23 +7,23 @@ All events are enqueued and processed by workers.
 import os
 import hmac
 import hashlib
+import logging
 from flask import Flask, request, jsonify
 
-from app.core.logger import get_logger, setup_logging
 from app.core.metrics import metrics
 from app.core.idempotency import make_fingerprint, is_duplicate
 from app.queue.producer import enqueue_event
 
-setup_logging()
-log = get_logger(__name__)
-app = Flask(__name__)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+log = logging.getLogger(__name__)
 
+app = Flask(__name__)
 WEBHOOK_SECRET = os.environ.get("GITHUB_WEBHOOK_SECRET", "").encode()
 
 
 def _verify_signature(payload_bytes: bytes, signature: str) -> bool:
     if not WEBHOOK_SECRET:
-        log.warning("webhook_secret_not_set")
+        log.warning("GITHUB_WEBHOOK_SECRET not set — skipping verification")
         return True
     if not signature or not signature.startswith("sha256="):
         return False
@@ -50,7 +50,7 @@ def get_metrics():
 def webhook():
     sig = request.headers.get("X-Hub-Signature-256", "")
     if not _verify_signature(request.data, sig):
-        log.warning("invalid_signature")
+        log.warning("Invalid webhook signature")
         metrics.increment("webhook.rejected.invalid_signature")
         return jsonify({"error": "Invalid signature"}), 401
 
@@ -64,13 +64,12 @@ def webhook():
     delivery_id = request.headers.get("X-GitHub-Delivery", "")
     repo = payload.get("repository", {}).get("full_name", "unknown")
 
-    # Fixed: use event_type= instead of event= to avoid structlog conflict
-    log.info("webhook_received", event_type=event_type, repo=repo, delivery=delivery_id[:8])
+    log.info(f"Webhook received: {event_type} | {repo} | {delivery_id[:8]}")
     metrics.increment("webhook.received")
 
     fingerprint = make_fingerprint(delivery_id, event_type, payload)
     if is_duplicate(fingerprint):
-        log.info("webhook_duplicate_skipped", fingerprint=fingerprint)
+        log.info(f"Duplicate skipped: {fingerprint}")
         metrics.increment("webhook.duplicate_skipped")
         return jsonify({"status": "duplicate — skipped"}), 200
 

@@ -1,7 +1,8 @@
 """
 Queue Consumer - app/queue/consumer.py
-Yields events from queue for worker processing.
-V3: Redis Streams with in-memory fallback.
+V3: Yields events from queue for worker processing.
+Uses Redis Streams if available, falls back to in-memory queue.
+NOTE: Never use event= in log calls (structlog reserved keyword).
 """
 
 import json
@@ -16,7 +17,7 @@ _use_redis = bool(os.environ.get("REDIS_URL"))
 
 
 def consume_events() -> Generator[Tuple[str, dict], None, None]:
-    """Yields (event_type, payload) tuples indefinitely."""
+    """Yields (webhook_event, payload) tuples indefinitely."""
     if _use_redis:
         yield from _consume_redis()
     else:
@@ -26,11 +27,11 @@ def consume_events() -> Generator[Tuple[str, dict], None, None]:
 def _consume_memory() -> Generator[Tuple[str, dict], None, None]:
     from app.queue.producer import get_memory_queue
     q = get_memory_queue()
-    log.info("consumer.started.memory")
+    log.info("consumer_started_memory")
     while True:
         try:
-            event = q.get(timeout=1.0)
-            yield event["event_type"], event["payload"]
+            item = q.get(timeout=1.0)
+            yield item["event_type"], item["payload"]
             q.task_done()
         except Exception:
             time.sleep(0.1)
@@ -44,13 +45,12 @@ def _consume_redis() -> Generator[Tuple[str, dict], None, None]:
     consumer_group = "workers"
     consumer_name = f"worker-{os.getpid()}"
 
-    # Create consumer group if not exists
     try:
         r.xgroup_create(stream, consumer_group, id="0", mkstream=True)
     except Exception:
-        pass  # Group already exists
+        pass
 
-    log.info("consumer.started.redis", stream=stream)
+    log.info("consumer_started_redis", stream=stream)
 
     while True:
         try:
@@ -62,10 +62,9 @@ def _consume_redis() -> Generator[Tuple[str, dict], None, None]:
                 continue
             for _, messages in results:
                 for msg_id, data in messages:
-                    event = json.loads(data[b"data"])
-                    yield event["event_type"], event["payload"]
+                    item = json.loads(data[b"data"])
+                    yield item["event_type"], item["payload"]
                     r.xack(stream, consumer_group, msg_id)
         except Exception as e:
-            log.error("consumer.error.redis", error=str(e))
+            log.error("consumer_redis_error", error=str(e))
             time.sleep(2)
-

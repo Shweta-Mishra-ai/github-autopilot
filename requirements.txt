@@ -8,7 +8,3 @@ PyYAML==6.0.2
 structlog==24.4.0
 redis==5.2.1
 APScheduler==3.10.4
-opentelemetry-api==1.29.0
-opentelemetry-sdk==1.29.0
-chromadb==0.5.20
-sentence-transformers==3.3.1

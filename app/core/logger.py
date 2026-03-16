@@ -1,6 +1,6 @@
 """
 Logger - app/core/logger.py
-V3: Structured logging using structlog.
+V3: Structured logging using structlog with stdlib backend.
 IMPORTANT: Never use 'event' as a keyword argument in log calls.
 structlog reserves 'event' for the log message itself.
 Use 'webhook_event', 'event_name', or 'evt' instead.
@@ -12,21 +12,25 @@ import structlog
 
 def setup_logging(level: str = "INFO"):
     logging.basicConfig(
-        format="%(message)s",
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         level=getattr(logging, level.upper(), logging.INFO),
     )
     structlog.configure(
         processors=[
-            structlog.stdlib.add_log_level,
+            structlog.stdlib.filter_by_level,
             structlog.stdlib.add_logger_name,
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.PositionalArgumentsFormatter(),
             structlog.processors.TimeStamper(fmt="iso"),
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
-            structlog.dev.ConsoleRenderer(),
+            structlog.processors.UnicodeDecoder(),
+            structlog.stdlib.render_to_log_kwargs,
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
         context_class=dict,
-        logger_factory=structlog.PrintLoggerFactory(),
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        wrapper_class=structlog.stdlib.BoundLogger,
+        cache_logger_on_first_use=True,
     )
 
 
@@ -37,7 +41,7 @@ def get_logger(name: str = __name__):
 class EventLogger:
     """
     Wrapper around structlog for handler-level logging.
-    NOTE: Never pass event= as a kwarg. Use evt=, webhook_event=, or event_name= instead.
+    NOTE: Never pass event= as a kwarg. Use webhook_event=, evt=, or event_name= instead.
     """
     def __init__(self, name: str, **ctx):
         self._log = structlog.get_logger(name).bind(**ctx)

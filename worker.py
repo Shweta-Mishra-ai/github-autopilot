@@ -17,26 +17,27 @@ SCHEDULED_REPO = os.environ.get("SCHEDULED_REPO", "")
 SCHEDULED_INSTALLATION_ID = int(os.environ.get("SCHEDULED_INSTALLATION_ID", "0"))
 
 
-def _dispatch(event_type: str, payload: dict):
-    if event_type == "pull_request":
+def _dispatch(webhook_event: str, payload: dict):
+    # NOTE: Use webhook_event= NOT event= (structlog reserves 'event' keyword)
+    if webhook_event == "pull_request":
         from app.handlers.pull_request import handle
         handle(payload)
-    elif event_type == "issues":
+    elif webhook_event == "issues":
         from app.handlers.issues import handle
         handle(payload)
-    elif event_type == "issue_comment":
+    elif webhook_event == "issue_comment":
         from app.handlers.comments import handle
         handle(payload)
-    elif event_type == "push":
+    elif webhook_event == "push":
         from app.handlers.push import handle
         handle(payload)
     else:
-        log.debug("unhandled_event", event_name=event_type)
+        log.debug("unhandled_webhook_event", webhook_event=webhook_event)
 
 
 def _start_scheduler():
     if not SCHEDULED_REPO or not SCHEDULED_INSTALLATION_ID:
-        log.info("scheduler_skipped")
+        log.info("scheduler_skipped_no_config")
         return
 
     try:
@@ -51,15 +52,18 @@ def _start_scheduler():
 
         scheduler.add_job(
             run_stale_check, "cron", day_of_week="mon", hour=9,
-            args=[SCHEDULED_REPO, SCHEDULED_INSTALLATION_ID], id="stale_check"
+            args=[SCHEDULED_REPO, SCHEDULED_INSTALLATION_ID],
+            id="stale_check"
         )
         scheduler.add_job(
             run_dependency_report, "cron", day_of_week="sun", hour=10,
-            args=[SCHEDULED_REPO, SCHEDULED_INSTALLATION_ID], id="dependency_report"
+            args=[SCHEDULED_REPO, SCHEDULED_INSTALLATION_ID],
+            id="dependency_report"
         )
         scheduler.add_job(
             run_health_report, "cron", day=1, hour=8,
-            args=[SCHEDULED_REPO, SCHEDULED_INSTALLATION_ID], id="health_report"
+            args=[SCHEDULED_REPO, SCHEDULED_INSTALLATION_ID],
+            id="health_report"
         )
 
         scheduler.start()
@@ -74,13 +78,16 @@ def run():
     scheduler_thread = threading.Thread(target=_start_scheduler, daemon=True)
     scheduler_thread.start()
 
-    for event_type, payload in consume_events():
+    for webhook_event, payload in consume_events():
         try:
-            _dispatch(event_type, payload)
-            metrics.increment(f"events.{event_type}.success")
+            _dispatch(webhook_event, payload)
+            metrics.increment(f"events.{webhook_event}.success")
         except Exception as e:
-            log.error("dispatch_failed", event_name=event_type, error=str(e))
-            metrics.increment(f"events.{event_type}.error")
+            # NOTE: Use webhook_event= NOT event=
+            log.error("dispatch_failed",
+                      webhook_event=webhook_event,
+                      error=str(e))
+            metrics.increment(f"events.{webhook_event}.error")
 
 
 if __name__ == "__main__":

@@ -1,14 +1,13 @@
 """
 server.py — Flask entry point. V3
 Webhook ingestion + background thread processing.
-Redis available hone par queue-based processing use karo.
-Free tier pe: in-memory queue + background thread.
 """
 
 import os
 import hmac
 import hashlib
 import threading
+import traceback
 import logging
 from flask import Flask, request, jsonify
 
@@ -25,18 +24,9 @@ log = logging.getLogger("server")
 app = Flask(__name__)
 WEBHOOK_SECRET = os.environ.get("GITHUB_WEBHOOK_SECRET", "").encode()
 
-# Start background worker thread on startup
-def _start_worker():
-    from app.queue.consumer import consume_events
-    for webhook_event, payload in consume_events():
-        try:
-            _dispatch(webhook_event, payload)
-            metrics.increment(f"events.{webhook_event}.success")
-        except Exception as e:
-            log.error(f"Dispatch failed: {webhook_event} — {e}")
-            metrics.increment(f"events.{webhook_event}.error")
 
 def _dispatch(webhook_event: str, payload: dict):
+    log.info(f"Dispatching: {webhook_event}")
     if webhook_event == "pull_request":
         from app.handlers.pull_request import handle
         handle(payload)
@@ -52,10 +42,24 @@ def _dispatch(webhook_event: str, payload: dict):
     else:
         log.debug(f"Unhandled event: {webhook_event}")
 
-# Start worker thread as daemon
+
+def _start_worker():
+    log.info("Worker thread started")
+    from app.queue.consumer import consume_events
+    for webhook_event, payload in consume_events():
+        try:
+            log.info(f"Processing: {webhook_event}")
+            _dispatch(webhook_event, payload)
+            metrics.increment(f"events.{webhook_event}.success")
+            log.info(f"Done: {webhook_event}")
+        except Exception as e:
+            log.error(f"Dispatch failed: {webhook_event} — {e}")
+            log.error(traceback.format_exc())
+            metrics.increment(f"events.{webhook_event}.error")
+
+
 _worker_thread = threading.Thread(target=_start_worker, daemon=True)
 _worker_thread.start()
-log.info("Background worker thread started")
 
 
 def _verify_signature(payload_bytes: bytes, signature: str) -> bool:

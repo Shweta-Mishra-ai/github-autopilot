@@ -1,19 +1,17 @@
 """
 server.py — Flask entry point. V3
-Webhook ingestion + background thread processing.
+Direct async dispatch via threading - same as V2.1 which worked perfectly.
 """
 
 import os
 import hmac
 import hashlib
 import threading
-import traceback
 import logging
 from flask import Flask, request, jsonify
 
 from app.core.metrics import metrics
 from app.core.idempotency import make_fingerprint, is_duplicate
-from app.queue.producer import enqueue_event
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -25,43 +23,6 @@ app = Flask(__name__)
 WEBHOOK_SECRET = os.environ.get("GITHUB_WEBHOOK_SECRET", "").encode()
 
 
-def _dispatch(webhook_event: str, payload: dict):
-    log.info(f"Dispatching: {webhook_event}")
-    if webhook_event == "pull_request":
-        from app.handlers.pull_request import handle
-        handle(payload)
-    elif webhook_event == "issues":
-        from app.handlers.issues import handle
-        handle(payload)
-    elif webhook_event == "issue_comment":
-        from app.handlers.comments import handle
-        handle(payload)
-    elif webhook_event == "push":
-        from app.handlers.push import handle
-        handle(payload)
-    else:
-        log.debug(f"Unhandled event: {webhook_event}")
-
-
-def _start_worker():
-    log.info("Worker thread started")
-    from app.queue.consumer import consume_events
-    for webhook_event, payload in consume_events():
-        try:
-            log.info(f"Processing: {webhook_event}")
-            _dispatch(webhook_event, payload)
-            metrics.increment(f"events.{webhook_event}.success")
-            log.info(f"Done: {webhook_event}")
-        except Exception as e:
-            log.error(f"Dispatch failed: {webhook_event} — {e}")
-            log.error(traceback.format_exc())
-            metrics.increment(f"events.{webhook_event}.error")
-
-
-_worker_thread = threading.Thread(target=_start_worker, daemon=True)
-_worker_thread.start()
-
-
 def _verify_signature(payload_bytes: bytes, signature: str) -> bool:
     if not WEBHOOK_SECRET:
         log.warning("GITHUB_WEBHOOK_SECRET not set — skipping verification")
@@ -70,6 +31,33 @@ def _verify_signature(payload_bytes: bytes, signature: str) -> bool:
         return False
     expected = "sha256=" + hmac.new(WEBHOOK_SECRET, payload_bytes, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature)
+
+
+def _dispatch(webhook_event: str, payload: dict, repo: str):
+    """Runs in background thread - same as V2.1."""
+    try:
+        log.info(f"Processing: {webhook_event} | {repo}")
+        if webhook_event == "pull_request":
+            from app.handlers.pull_request import handle
+            handle(payload)
+        elif webhook_event == "issues":
+            from app.handlers.issues import handle
+            handle(payload)
+        elif webhook_event == "issue_comment":
+            from app.handlers.comments import handle
+            handle(payload)
+        elif webhook_event == "push":
+            from app.handlers.push import handle
+            handle(payload)
+        else:
+            log.debug(f"Unhandled event: {webhook_event}")
+        metrics.increment(f"events.{webhook_event}.success")
+        log.info(f"Done: {webhook_event}")
+    except Exception as e:
+        import traceback
+        log.error(f"Handler error [{webhook_event}]: {e}")
+        log.error(traceback.format_exc())
+        metrics.increment(f"events.{webhook_event}.error")
 
 
 @app.route("/", methods=["GET"])
@@ -114,9 +102,15 @@ def webhook():
         metrics.increment("webhook.duplicate_skipped")
         return jsonify({"status": "duplicate — skipped"}), 200
 
-    enqueue_event(webhook_event, payload, delivery_id)
-    metrics.increment("events.total")
+    # Dispatch in background thread - same pattern as V2.1
+    thread = threading.Thread(
+        target=_dispatch,
+        args=(webhook_event, payload, repo),
+        daemon=True
+    )
+    thread.start()
 
+    metrics.increment("events.total")
     return jsonify({"status": "accepted"}), 202
 
 

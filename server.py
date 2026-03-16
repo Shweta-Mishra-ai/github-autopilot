@@ -1,29 +1,66 @@
 """
 server.py — Flask entry point. V3
-Webhook ingestion ONLY. No processing here.
-All events are enqueued and processed by workers.
+Webhook ingestion + background thread processing.
+Redis available hone par queue-based processing use karo.
+Free tier pe: in-memory queue + background thread.
 """
 
 import os
 import hmac
 import hashlib
+import threading
+import logging
 from flask import Flask, request, jsonify
 
-from app.core.logger import get_logger, setup_logging
 from app.core.metrics import metrics
 from app.core.idempotency import make_fingerprint, is_duplicate
 from app.queue.producer import enqueue_event
 
-setup_logging()
-log = get_logger(__name__)
-app = Flask(__name__)
+logging.basicConfig(
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    level=logging.INFO
+)
+log = logging.getLogger("server")
 
+app = Flask(__name__)
 WEBHOOK_SECRET = os.environ.get("GITHUB_WEBHOOK_SECRET", "").encode()
+
+# Start background worker thread on startup
+def _start_worker():
+    from app.queue.consumer import consume_events
+    for webhook_event, payload in consume_events():
+        try:
+            _dispatch(webhook_event, payload)
+            metrics.increment(f"events.{webhook_event}.success")
+        except Exception as e:
+            log.error(f"Dispatch failed: {webhook_event} — {e}")
+            metrics.increment(f"events.{webhook_event}.error")
+
+def _dispatch(webhook_event: str, payload: dict):
+    if webhook_event == "pull_request":
+        from app.handlers.pull_request import handle
+        handle(payload)
+    elif webhook_event == "issues":
+        from app.handlers.issues import handle
+        handle(payload)
+    elif webhook_event == "issue_comment":
+        from app.handlers.comments import handle
+        handle(payload)
+    elif webhook_event == "push":
+        from app.handlers.push import handle
+        handle(payload)
+    else:
+        log.debug(f"Unhandled event: {webhook_event}")
+
+# Start worker thread as daemon
+_worker_thread = threading.Thread(target=_start_worker, daemon=True)
+_worker_thread.start()
+log.info("Background worker thread started")
 
 
 def _verify_signature(payload_bytes: bytes, signature: str) -> bool:
     if not WEBHOOK_SECRET:
-        log.warning("webhook_secret_not_set")
+        log.warning("GITHUB_WEBHOOK_SECRET not set — skipping verification")
         return True
     if not signature or not signature.startswith("sha256="):
         return False
@@ -50,7 +87,7 @@ def get_metrics():
 def webhook():
     sig = request.headers.get("X-Hub-Signature-256", "")
     if not _verify_signature(request.data, sig):
-        log.warning("invalid_webhook_signature")
+        log.warning("Invalid webhook signature")
         metrics.increment("webhook.rejected.invalid_signature")
         return jsonify({"error": "Invalid signature"}), 401
 
@@ -64,16 +101,12 @@ def webhook():
     delivery_id = request.headers.get("X-GitHub-Delivery", "")
     repo = payload.get("repository", {}).get("full_name", "unknown")
 
-    # NOTE: Use webhook_event= NOT event= (structlog reserves 'event' keyword)
-    log.info("webhook_received",
-             webhook_event=webhook_event,
-             repo=repo,
-             delivery=delivery_id[:8])
+    log.info(f"Webhook received: {webhook_event} | {repo} | {delivery_id[:8]}")
     metrics.increment("webhook.received")
 
     fingerprint = make_fingerprint(delivery_id, webhook_event, payload)
     if is_duplicate(fingerprint):
-        log.info("webhook_duplicate_skipped", fingerprint=fingerprint)
+        log.info(f"Duplicate skipped: {fingerprint}")
         metrics.increment("webhook.duplicate_skipped")
         return jsonify({"status": "duplicate — skipped"}), 200
 

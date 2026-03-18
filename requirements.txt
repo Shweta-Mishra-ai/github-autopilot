@@ -8,3 +8,4 @@ PyYAML==6.0.2
 structlog==24.4.0
 redis==5.2.1
 APScheduler==3.10.4
+qdrant-client==1.9.1

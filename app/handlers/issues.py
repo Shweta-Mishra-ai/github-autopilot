@@ -4,6 +4,7 @@ Issues Handler - app/handlers/issues.py
 
 from app.github.auth import get_installation_token
 from app.github.client import gh_get, gh_post, GitHubError
+from app.github.notifications import notify_new_issue  # ✅ ADDED — import kiya
 from app.ai.client import groq_ask
 from app.ai.validator import validate_issue_triage
 from app.core.config import load_config
@@ -118,6 +119,18 @@ Return JSON:
         log.done(f"Issue #{issue_number} triaged as {result['type']}/{priority}")
     except GitHubError as e:
         log.error(f"Could not post comment: {e}")
+
+    # ✅ ADDED — Slack + Discord pe notify karo issue open hone pe
+    # Triage complete hone ke baad bhejo taaki labels/type pata ho
+    try:
+        notify_new_issue(
+            repo=repo,
+            issue_number=issue_number,
+            title=issue.get("title", ""),
+            labels=all_labels
+        )
+    except Exception:
+        pass  # Notification fail ho toh main flow affect na ho
 
 
 def _ensure_labels(repo: str, token: str):

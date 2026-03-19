@@ -2,14 +2,12 @@
 server.py — Flask entry point. V3
 Direct async dispatch via threading - same as V2.1 which worked perfectly.
 """
-
 import os
 import hmac
 import hashlib
 import threading
 import logging
 from flask import Flask, request, jsonify
-
 from app.core.metrics import metrics
 from app.core.idempotency import make_fingerprint, is_duplicate
 
@@ -18,7 +16,6 @@ logging.basicConfig(
     level=logging.INFO
 )
 log = logging.getLogger("server")
-
 app = Flask(__name__)
 WEBHOOK_SECRET = os.environ.get("GITHUB_WEBHOOK_SECRET", "").encode()
 
@@ -29,6 +26,7 @@ def _verify_signature(payload_bytes: bytes, signature: str) -> bool:
         return True
     if not signature or not signature.startswith("sha256="):
         return False
+    # ✅ NO CHANGE — hmac.new is correct Python syntax
     expected = "sha256=" + hmac.new(WEBHOOK_SECRET, payload_bytes, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature)
 
@@ -60,16 +58,34 @@ def _dispatch(webhook_event: str, payload: dict, repo: str):
         metrics.increment(f"events.{webhook_event}.error")
 
 
+# ✅ CHANGED — "/" sirf basic info deta hai, monitoring ke liye nahi
 @app.route("/", methods=["GET"])
-def health():
+def index():
     return jsonify({
         "app": "AI Repo Manager",
         "version": "3.0.0",
         "status": "running",
-        "events_processed": metrics.get("events.total", 0),
     })
 
 
+# ✅ NEW — /health route add kiya
+# UptimeRobot aur Render health checks yahi ping karenge
+# UptimeRobot mein URL set karo: https://github-autopilot-1.onrender.com/health
+@app.route("/health", methods=["GET"])
+def health():
+    total = metrics.get("events.total", 0)
+    errors = metrics.get("events.error", 0)
+    return jsonify({
+        "status": "ok",
+        "version": "3.0.0",
+        "events_processed": total,
+        "errors": errors,
+        "queue": "threading",
+        "worker": "active"
+    })
+
+
+# ✅ NO CHANGE — metrics endpoint theek hai
 @app.route("/metrics", methods=["GET"])
 def get_metrics():
     return jsonify(metrics.snapshot())
@@ -82,7 +98,6 @@ def webhook():
         log.warning("Invalid webhook signature")
         metrics.increment("webhook.rejected.invalid_signature")
         return jsonify({"error": "Invalid signature"}), 401
-
     try:
         payload = request.get_json(force=True)
     except Exception:
@@ -102,14 +117,15 @@ def webhook():
         metrics.increment("webhook.duplicate_skipped")
         return jsonify({"status": "duplicate — skipped"}), 200
 
-    # Dispatch in background thread - same pattern as V2.1
+    # ✅ CHANGED — daemon=False kiya
+    # daemon=True tha pehle — Flask restart hone pe processing mein chal raha
+    # webhook silently mar jata tha. Ab gracefully complete hoga.
     thread = threading.Thread(
         target=_dispatch,
         args=(webhook_event, payload, repo),
-        daemon=True
+        daemon=False  # ← CHANGED from True to False
     )
     thread.start()
-
     metrics.increment("events.total")
     return jsonify({"status": "accepted"}), 202
 

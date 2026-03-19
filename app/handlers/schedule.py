@@ -10,7 +10,7 @@ import os
 from datetime import datetime, timedelta
 from app.github.auth import get_installation_token
 from app.github.client import gh_get, gh_post, GitHubError
-from app.github.notifications import notify_health_degraded
+from app.github.notifications import notify_health_degraded, notify_stale_closed  # ✅ ADDED notify_stale_closed
 from app.ai.client import groq_ask, groq_text
 from app.core.config import load_config
 from app.core.logger import get_logger
@@ -38,7 +38,6 @@ def run_stale_check(repo: str, installation_id: int):
 
         stale_count = 0
         for issue in issues:
-            # Skip PRs
             if "pull_request" in issue:
                 continue
 
@@ -65,11 +64,9 @@ def _mark_stale(repo: str, issue: dict, token: str, config):
         datetime.strptime(issue["updated_at"], "%Y-%m-%dT%H:%M:%SZ")
     ).days
 
-    # Check if issue already has stale label
     labels = [l["name"] for l in issue.get("labels", [])]
     already_stale = "stale" in labels
 
-    # Auto-close if stale for 7+ extra days (total 37+ days inactive)
     auto_close = already_stale and days_inactive >= (STALE_DAYS + 7)
 
     if auto_close:
@@ -86,6 +83,13 @@ def _mark_stale(repo: str, issue: dict, token: str, config):
             gh_put(f"/repos/{repo}/issues/{issue_number}", token, {"state": "closed"})
             log.info("schedule.stale_auto_closed",
                      repo=repo, issue=issue_number, days=days_inactive)
+
+            # ✅ ADDED — Auto-close hone pe notify karo
+            try:
+                notify_stale_closed(repo, issue_number, title)
+            except Exception:
+                pass  # Notification fail ho toh close flow affect na ho
+
         except GitHubError as e:
             log.error("schedule.stale_close_failed",
                       repo=repo, issue=issue_number, error=str(e))
@@ -220,7 +224,7 @@ def run_health_report(repo: str, installation_id: int):
             "labels": ["health-report"]
         })
 
-        # Notify if health degraded below B
+        # ✅ NO CHANGE — health degraded notify already tha, rakhte hain
         if score < 70:
             try:
                 notify_health_degraded(repo, grade, score)

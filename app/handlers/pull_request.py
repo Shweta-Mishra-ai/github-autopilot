@@ -7,7 +7,7 @@ V3: PR analysis + AI code review + embedding-based context
 import logging
 from app.github.auth import get_installation_token
 from app.github.client import gh_get, gh_post, gh_put, GitHubError
-from app.github.notifications import notify_high_risk_pr
+from app.github.notifications import notify_high_risk_pr, notify_pr_opened  # ✅ ADDED notify_pr_opened
 from app.ai.client import groq_ask, groq_text
 from app.ai.validator import validate_pr_analysis, validate_code_review
 from app.core.config import load_config
@@ -64,6 +64,18 @@ def handle(payload: dict):
 
     # ── On PR opened ──────────────────────────────────────────────
     if action == "opened":
+        # ✅ ADDED — PR open hone pe turant notify karo
+        # Analysis se pehle bhejo taaki team ko instantly pata chale
+        try:
+            notify_pr_opened(
+                repo=repo,
+                pr_number=pr_number,
+                title=pr.get("title", ""),
+                risk="unknown"  # Analysis se pehle risk pata nahi hota
+            )
+        except Exception:
+            pass
+
         # 1. PR Analysis (risk, title, description)
         _analyze_pr(pr, repo, pr_number, files, token, config, gate, context, log)
 
@@ -158,7 +170,7 @@ Return JSON:
             except Exception as e:
                 log.error(f"Title update failed: {e}")
 
-    # Notify if high risk
+    # ✅ NO CHANGE — high risk pe notify already tha, rakhte hain
     if r.get("risk_level") == "high":
         try:
             notify_high_risk_pr(repo, pr_number, title)
@@ -227,7 +239,6 @@ def _detect_test_gaps(pr, repo, pr_number, files, token, config, log):
     Only runs on PRs that change Python/JS files without corresponding test changes.
     """
     try:
-        # Find changed source files
         source_files = [
             f for f in files
             if f.get("filename", "").endswith((".py", ".js", ".ts"))
@@ -235,7 +246,6 @@ def _detect_test_gaps(pr, repo, pr_number, files, token, config, log):
             and f.get("patch")
         ]
 
-        # Find changed test files
         test_files = [
             f for f in files
             if _is_test_file(f.get("filename", ""))
@@ -244,7 +254,6 @@ def _detect_test_gaps(pr, repo, pr_number, files, token, config, log):
         if not source_files:
             return
 
-        # Build context from changed source patches
         source_context = "\n\n".join(
             f"### {f['filename']}\n```\n{f.get('patch','')[:600]}\n```"
             for f in source_files[:4]
@@ -291,7 +300,6 @@ Only report real gaps. If tests are adequate, set has_gaps to false.""",
         if not gaps:
             return
 
-        # Format gaps as comment
         gaps_md = "\n".join(
             f"| `{g.get('file','?')}` | `{g.get('function','?')}` | "
             f"`{g.get('risk','medium')}` | {g.get('suggested_test','')[:80]} |"

@@ -2,18 +2,20 @@
 Pull Request Handler - app/handlers/pull_request.py
 V3: PR analysis + AI code review + embedding-based context
     + AI PR Summary auto-post + Test gap detection
+
+FIXED (ruff F401 line 7):  Removed unused `import logging`.
+FIXED (ruff F401 line 16): Removed unused `check_pr_description_update` import.
 """
 
-import logging
 from app.github.auth import get_installation_token
 from app.github.client import gh_get, gh_post, gh_put, GitHubError
-from app.github.notifications import notify_high_risk_pr, notify_pr_opened  # ✅ ADDED notify_pr_opened
+from app.github.notifications import notify_high_risk_pr, notify_pr_opened
 from app.ai.client import groq_ask, groq_text
 from app.ai.validator import validate_pr_analysis, validate_code_review
 from app.core.config import load_config
 from app.core.logger import EventLogger
 from app.core.confidence import ConfidenceGate
-from app.core.guardrails import check_pr_title_update, check_pr_description_update
+from app.core.guardrails import check_pr_title_update
 
 SKIP_AUTHORS = {"dependabot[bot]", "renovate[bot]", "github-actions[bot]", "ai-repo-manager[bot]"}
 
@@ -23,11 +25,11 @@ def handle(payload: dict):
     if action not in ("opened", "reopened", "synchronize"):
         return
 
-    pr = payload["pull_request"]
-    repo = payload["repository"]["full_name"]
+    pr              = payload["pull_request"]
+    repo            = payload["repository"]["full_name"]
     installation_id = payload["installation"]["id"]
-    author = pr["user"]["login"]
-    pr_number = pr["number"]
+    author          = pr["user"]["login"]
+    pr_number       = pr["number"]
 
     log = EventLogger("pull_request", repo=repo, pr=pr_number)
 
@@ -41,18 +43,16 @@ def handle(payload: dict):
         return
 
     config = load_config(repo, token)
-    gate = ConfidenceGate(config)
+    gate   = ConfidenceGate(config)
 
     if not config.pr_enabled():
         return
 
-    # Get changed files
     try:
         files = gh_get(f"/repos/{repo}/pulls/{pr_number}/files", token)
     except Exception:
         files = []
 
-    # ── Get embedding-based context ───────────────────────────────
     context = ""
     try:
         from app.intelligence.retrieval import get_context_for_pr
@@ -62,39 +62,31 @@ def handle(payload: dict):
     except Exception as e:
         log.debug(f"Context retrieval skipped: {e}")
 
-    # ── On PR opened ──────────────────────────────────────────────
     if action == "opened":
-        # ✅ ADDED — PR open hone pe turant notify karo
-        # Analysis se pehle bhejo taaki team ko instantly pata chale
         try:
             notify_pr_opened(
                 repo=repo,
                 pr_number=pr_number,
                 title=pr.get("title", ""),
-                risk="unknown"  # Analysis se pehle risk pata nahi hota
+                risk="unknown"
             )
         except Exception:
             pass
 
-        # 1. PR Analysis (risk, title, description)
         _analyze_pr(pr, repo, pr_number, files, token, config, gate, context, log)
-
-        # 2. AI PR Summary — auto-post
         _post_pr_summary(pr, repo, pr_number, files, token, config, log)
 
-    # ── Code Review (on open + sync) ──────────────────────────────
     if config.get("pull_requests", "code_review", default=True):
         _review_code(pr, repo, pr_number, files, token, config, gate, context, log)
 
-    # ── Test Gap Detection ────────────────────────────────────────
     if config.get("pull_requests", "detect_test_gaps", default=True):
         _detect_test_gaps(pr, repo, pr_number, files, token, config, log)
 
 
 def _analyze_pr(pr, repo, pr_number, files, token, config, gate, context, log):
     """Run PR analysis: title rewrite, description, risk assessment."""
-    title = pr.get("title", "")
-    body = pr.get("body", "") or ""
+    title       = pr.get("title", "")
+    body        = pr.get("body", "") or ""
     base_branch = pr["base"]["ref"]
     head_branch = pr["head"]["ref"]
 
@@ -128,11 +120,11 @@ Return JSON:
 }}"""
     )
 
-    r = validate_pr_analysis(r)
+    r      = validate_pr_analysis(r)
     result = gate.evaluate("pr_title_rewrite", r)
 
-    risk_emoji = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(r.get("risk_level", "low"), "🟢")
-    focus_items = "\n".join(f"- {f}" for f in r.get("review_focus", [])[:3])
+    risk_emoji      = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(r.get("risk_level", "low"), "🟢")
+    focus_items     = "\n".join(f"- {f}" for f in r.get("review_focus", [])[:3])
     confidence_note = result.get("confidence_note", "")
 
     comment = f"""## 🤖 PR Analysis
@@ -158,19 +150,16 @@ Return JSON:
     except GitHubError as e:
         log.error(f"Failed to post PR analysis: {e}")
 
-    # Auto-update title if confidence is high enough
     if result["auto_apply"] and r.get("suggested_title"):
         guard = check_pr_title_update(pr, config)
         if guard.passed:
             try:
-                gh_put(f"/repos/{repo}/pulls/{pr_number}", token, {
-                    "title": r["suggested_title"]
-                })
+                gh_put(f"/repos/{repo}/pulls/{pr_number}", token,
+                       {"title": r["suggested_title"]})
                 log.done("pr_title_updated")
             except Exception as e:
                 log.error(f"Title update failed: {e}")
 
-    # ✅ NO CHANGE — high risk pe notify already tha, rakhte hain
     if r.get("risk_level") == "high":
         try:
             notify_high_risk_pr(repo, pr_number, title)
@@ -179,13 +168,10 @@ Return JSON:
 
 
 def _post_pr_summary(pr, repo, pr_number, files, token, config, log):
-    """
-    Auto-generate and post a human-readable PR summary on open.
-    Gives reviewers instant context without reading the whole diff.
-    """
+    """Auto-generate and post a human-readable PR summary on open."""
     try:
-        title = pr.get("title", "")
-        body = pr.get("body", "") or ""
+        title  = pr.get("title", "")
+        body   = pr.get("body", "") or ""
 
         files_list = "\n".join(
             f"- {f.get('filename','')} (+{f.get('additions',0)} -{f.get('deletions',0)})"
@@ -234,10 +220,7 @@ Keep it concise and helpful."""
 
 
 def _detect_test_gaps(pr, repo, pr_number, files, token, config, log):
-    """
-    Detect test coverage gaps in changed files.
-    Only runs on PRs that change Python/JS files without corresponding test changes.
-    """
+    """Detect test coverage gaps in changed files."""
     try:
         source_files = [
             f for f in files
@@ -246,10 +229,7 @@ def _detect_test_gaps(pr, repo, pr_number, files, token, config, log):
             and f.get("patch")
         ]
 
-        test_files = [
-            f for f in files
-            if _is_test_file(f.get("filename", ""))
-        ]
+        test_files = [f for f in files if _is_test_file(f.get("filename", ""))]
 
         if not source_files:
             return
@@ -306,7 +286,7 @@ Only report real gaps. If tests are adequate, set has_gaps to false.""",
             for g in gaps[:5]
         )
 
-        score = r.get("coverage_score", 5)
+        score       = r.get("coverage_score", 5)
         score_emoji = "🟢" if score >= 8 else "🟡" if score >= 5 else "🔴"
 
         comment = f"""## 🔍 Test Coverage Analysis
@@ -334,7 +314,7 @@ Only report real gaps. If tests are adequate, set has_gaps to false.""",
 
 def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
     """Run AI code review on changed files."""
-    max_files = config.get("pull_requests", "max_files_reviewed", default=4)
+    max_files  = config.get("pull_requests", "max_files_reviewed", default=4)
     reviewable = [
         f for f in files[:max_files]
         if f.get("patch") and not _is_generated(f["filename"])
@@ -347,7 +327,7 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
 
     for f in reviewable:
         filename = f["filename"]
-        patch = f.get("patch", "")[:1500]
+        patch    = f.get("patch", "")[:1500]
 
         r = groq_ask(
             "Senior code reviewer. Give precise, actionable feedback. JSON only.",
@@ -378,8 +358,8 @@ Return JSON:
             fast=True
         )
 
-        r = validate_code_review(r)
-        score = r.get("score", 8)
+        r      = validate_code_review(r)
+        score  = r.get("score", 8)
         issues = r.get("issues", [])
 
         if issues:

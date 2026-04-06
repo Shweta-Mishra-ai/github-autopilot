@@ -1,22 +1,10 @@
 """
 AI Client - app/ai/client.py
-V4 changes:
+V4: Multi-model Groq client with circuit breaker integration.
 
-FIXED (BUG 6): JSON extractor — brace-depth counting replaces greedy regex.
-  Old: re.search(r'\{[\s\S]*\}', text)
-       Problem: If Groq returns {"a": 1} some text {"b": 2}
-                Regex captures from first { to LAST } → unparseable garbage.
-  Fix: Count opening/closing braces. Stop at exact matching }. Always correct.
-
-FIXED (BUG 7): groq_text() now uses 70B model by default.
-  Old: groq_text() always used FALLBACK_MODEL (8B) — even for PR summaries,
-       CHANGELOG, thread summaries where output quality matters most.
-  Fix: Use 70B by default. fast=True → 8B (for simple/cheap tasks).
-
-NEW: Circuit breaker integration.
-  Every _call_groq() records success/failure to circuit breaker.
-  AllProvidersDown raised when all circuits are OPEN.
-  Token usage tracked in Redis for /budget command.
+FIXED (ruff W605): Invalid escape sequences in docstring.
+  Regex pattern strings in docstrings need r-prefix or doubled backslashes.
+  Changed: r'\{[\s\S]*\}' shown in docstring → use \\{ \\S notation.
 """
 
 import json
@@ -42,8 +30,6 @@ class AIError(Exception):
     pass
 
 
-# ── Internal call ─────────────────────────────────────────────────────────────
-
 def _call_groq(
     model: str,
     system: str,
@@ -52,16 +38,12 @@ def _call_groq(
     temperature: float,
     timeout: int,
 ) -> str:
-    """
-    Single Groq API call. Returns raw text content.
-    Records success/failure to circuit breaker.
-    Raises AIError on any failure.
-    """
+    """Single Groq API call. Returns raw text. Raises AIError on failure."""
     provider_key = "groq_70b" if ("70b" in model or "versatile" in model) else "groq_8b"
     breaker      = get_breaker(provider_key)
 
     if not breaker.is_available():
-        raise AIError(f"Circuit OPEN for {model} — skipping call")
+        raise AIError(f"Circuit OPEN for {model}")
 
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
@@ -96,26 +78,20 @@ def _call_groq(
 
         breaker.record_success()
         _track_usage(provider_key, data.get("usage", {}))
-
         return result
 
     except requests.exceptions.Timeout:
         breaker.record_failure("timeout")
         raise AIError("Request timed out")
-
     except AIError:
         raise
-
     except Exception as e:
         breaker.record_failure(str(e)[:60])
         raise AIError(str(e))
 
 
 def _track_usage(provider_key: str, usage: dict):
-    """
-    Track token usage in Redis.
-    Powers /budget command — shows daily tokens used per provider.
-    """
+    """Track token usage in Redis for /budget command."""
     try:
         import datetime
         from app.core.redis_client import get_redis
@@ -127,40 +103,36 @@ def _track_usage(provider_key: str, usage: dict):
         r     = get_redis()
         today = datetime.date.today().isoformat()
 
-        tok_key = f"llm:tokens:{provider_key}:{today}"
-        req_key = f"llm:requests:{provider_key}:{today}"
-
-        r.incr(tok_key)
-        r.expire(tok_key, 86400)
-
-        r.incr(req_key)
-        r.expire(req_key, 86400)
+        for key in (
+            f"llm:tokens:{provider_key}:{today}",
+            f"llm:requests:{provider_key}:{today}",
+        ):
+            r.incr(key)
+            r.expire(key, 86400)
 
     except Exception:
-        pass  # Never let tracking break the main call
+        pass
 
-
-# ── JSON extraction ───────────────────────────────────────────────────────────
 
 def _extract_json(text: str) -> dict:
     """
-    ✅ FIXED (BUG 6): Brace-depth JSON extraction.
+    Brace-depth JSON extraction (BUG 6 fix).
 
-    Greedy regex re.search(r'\{[\s\S]*\}') would match from first { to LAST }
-    — broken when Groq returns multiple JSON objects or trailing text.
+    Why not greedy regex: a pattern like r'\\{[\\s\\S]*\\}' matches from
+    the FIRST opening brace to the LAST closing brace in the whole string.
+    When Groq returns two JSON objects or adds trailing text, that regex
+    grabs everything and json.loads() fails.
 
-    This function:
-    1. Tries direct json.loads() first (handles clean responses fast).
-    2. Falls back to brace-depth scan to find first complete JSON object.
+    This function counts brace depth and stops at the exact matching brace.
     """
-    # Step 1: Direct parse (clean response — no extra text)
+    # Step 1: Direct parse (handles clean single-object responses)
     stripped = text.strip()
     try:
         return json.loads(stripped)
     except json.JSONDecodeError:
         pass
 
-    # Step 2: Strip markdown code fences if present
+    # Step 2: Strip markdown fences if present
     if "```" in stripped:
         import re
         stripped = re.sub(r"```(?:json)?\n?", "", stripped).strip()
@@ -169,7 +141,7 @@ def _extract_json(text: str) -> dict:
         except json.JSONDecodeError:
             pass
 
-    # Step 3: Brace-depth scan — find first complete {...} object
+    # Step 3: Brace-depth scan
     for start_idx, ch in enumerate(text):
         if ch != "{":
             continue
@@ -181,17 +153,15 @@ def _extract_json(text: str) -> dict:
             elif c == "}":
                 depth -= 1
             if depth == 0:
-                candidate = text[start_idx : end_idx + 1]
+                candidate = text[start_idx: end_idx + 1]
                 try:
                     return json.loads(candidate)
                 except json.JSONDecodeError:
-                    break  # This { was not a valid JSON start, try next
+                    break
 
     log.warning(f"ai.json_extract_failed preview={text[:120]!r}")
     return {"raw": text}
 
-
-# ── Public API ────────────────────────────────────────────────────────────────
 
 def groq_ask(
     system: str,
@@ -202,13 +172,10 @@ def groq_ask(
     timeout: int = 45,
 ) -> dict:
     """
-    Call Groq and return parsed JSON dict.
-
-    fast=False (default) → try 70B first, fall back to 8B.
-    fast=True            → use 8B only (for classification, labels, quick tasks).
-
-    Returns {"error": "..."} if all attempts fail — never raises (except AllProvidersDown).
-    Raises AllProvidersDown if ALL circuits are OPEN (no providers available at all).
+    Call Groq, return parsed JSON dict.
+    fast=False → try 70B first, fall back to 8B.
+    fast=True  → use 8B only (for simple/cheap tasks).
+    Raises AllProvidersDown when all circuits are OPEN.
     """
     if not available_providers():
         raise AllProvidersDown()
@@ -219,8 +186,7 @@ def groq_ask(
         for attempt in range(MAX_RETRIES):
             try:
                 text   = _call_groq(model, system, user, max_tokens, temperature, timeout)
-                parsed = _extract_json(text)
-                return parsed
+                return _extract_json(text)
 
             except AIError as e:
                 msg = str(e)
@@ -228,8 +194,8 @@ def groq_ask(
                     wait = int(msg.split(":")[1])
                     log.warning(f"groq_ask.rate_limit model={model} wait={wait}s")
                     time.sleep(min(wait, 30))
-                    break  # Rate limited — move to next model
-                log.warning(f"groq_ask.error model={model} attempt={attempt+1}: {e}")
+                    break
+                log.warning(f"groq_ask.error model={model} attempt={attempt + 1}: {e}")
                 if attempt < MAX_RETRIES - 1:
                     time.sleep(2 ** attempt)
 
@@ -238,11 +204,10 @@ def groq_ask(
                 return {"raw": ""}
 
             except Exception as e:
-                log.warning(f"groq_ask.unexpected model={model} attempt={attempt+1}: {e}")
+                log.warning(f"groq_ask.unexpected model={model} attempt={attempt + 1}: {e}")
                 if attempt < MAX_RETRIES - 1:
                     time.sleep(2 ** attempt)
 
-    # All models exhausted
     if not available_providers():
         raise AllProvidersDown()
 
@@ -258,14 +223,9 @@ def groq_text(
     fast: bool = False,
 ) -> str:
     """
-    Call Groq and return plain text.
-
-    ✅ FIXED (BUG 7): Now uses 70B by default.
-    Old: always used MODEL_8B (FALLBACK_MODEL) — even for PR summaries,
-         CHANGELOG, thread summaries where output quality matters.
-    Fix: fast=False (default) → 70B. fast=True → 8B.
-
-    Returns fallback string if all attempts fail — never raises.
+    Call Groq, return plain text.
+    fast=False → 70B (default — quality matters for summaries/changelogs).
+    fast=True  → 8B (cheaper, for quick/simple tasks).
     """
     models = [MODEL_8B] if fast else [MODEL_70B, MODEL_8B]
 
@@ -277,12 +237,12 @@ def groq_text(
             except AIError as e:
                 if "RATE_LIMIT" in str(e):
                     time.sleep(15)
-                    break  # Move to next model
+                    break
                 if attempt < MAX_RETRIES - 1:
                     time.sleep(2 ** attempt)
 
             except Exception as e:
-                log.warning(f"groq_text attempt={attempt+1} model={model}: {e}")
+                log.warning(f"groq_text attempt={attempt + 1} model={model}: {e}")
                 if attempt < MAX_RETRIES - 1:
                     time.sleep(2 ** attempt)
 

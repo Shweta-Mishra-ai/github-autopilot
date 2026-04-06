@@ -1,5 +1,8 @@
 # requirements.txt — AI Repo Manager V4
-# Install: pip install -r requirements.txt
+# FIXED: Removed pydantic==2.9.2
+# Reason: pydantic v2 compiles pydantic-core with Rust (maturin).
+#         Render free tier has read-only filesystem during build → Rust fails.
+#         Our config validation is manual (isinstance checks) — pydantic not needed.
 
 # ── Web framework ─────────────────────────────────────────────────────────────
 flask==3.1.1
@@ -21,18 +24,14 @@ structlog==24.4.0
 # ── Redis ─────────────────────────────────────────────────────────────────────
 redis==5.2.1
 
-# ── Task queue (V4 NEW — replaces raw threading) ──────────────────────────────
+# ── Task queue ────────────────────────────────────────────────────────────────
 celery[redis]==5.3.6
 
 # ── AI providers ─────────────────────────────────────────────────────────────
 groq==0.11.0
 
-# ── Data validation (V4 NEW — config schema validation) ───────────────────────
-pydantic==2.9.2
-
 # ── Vector DB ─────────────────────────────────────────────────────────────────
 qdrant-client==1.9.1
-weaviate-client==4.9.0
 
-# ── Embeddings ────────────────────────────────────────────────────────────────
+# ── Embeddings (lazy-loaded — not imported at startup) ────────────────────────
 sentence-transformers==3.2.1

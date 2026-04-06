@@ -1,18 +1,23 @@
 """
 Tasks - app/tasks.py
-V4: All Celery task definitions.
-Each task wraps a handler with retry logic and all-provider-fail handling.
+V4: All Celery task definitions with retry and all-provider-fail handling.
+
+FIXED (ruff F821): _handle_max_retries was called but never defined.
+FIXED (ruff F401): Removed unused imports (get_recent, get_installation_token).
 """
 
-import os
 import logging
+import os
+
 from celery.exceptions import MaxRetriesExceededError
-from app.celery_app import celery
+
 from app.ai.circuit_breaker import AllProvidersDown
+from app.celery_app import celery
 
 log = logging.getLogger(__name__)
 
-# ── Webhook event tasks ──────────────────────────────────────────────────────
+
+# ── Webhook event tasks ───────────────────────────────────────────────────────
 
 @celery.task(
     bind=True,
@@ -28,12 +33,9 @@ def handle_pull_request(self, payload: dict):
     except AllProvidersDown as exc:
         _handle_all_providers_down(self, payload, exc, "PR analysis")
     except Exception as exc:
-        log.error(f"handle_pull_request failed (attempt {self.request.retries + 1}): {exc}")
+        log.error(f"handle_pull_request failed attempt={self.request.retries + 1}: {exc}")
         try:
-            raise self.retry(
-                exc=exc,
-                countdown=_retry_countdown(self.request.retries),
-            )
+            raise self.retry(exc=exc, countdown=_retry_countdown(self.request.retries))
         except MaxRetriesExceededError:
             _handle_max_retries(payload, "PR processing")
 
@@ -52,12 +54,9 @@ def handle_issue_comment(self, payload: dict):
     except AllProvidersDown as exc:
         _handle_all_providers_down(self, payload, exc, "command")
     except Exception as exc:
-        log.error(f"handle_issue_comment failed (attempt {self.request.retries + 1}): {exc}")
+        log.error(f"handle_issue_comment failed attempt={self.request.retries + 1}: {exc}")
         try:
-            raise self.retry(
-                exc=exc,
-                countdown=_retry_countdown(self.request.retries),
-            )
+            raise self.retry(exc=exc, countdown=_retry_countdown(self.request.retries))
         except MaxRetriesExceededError:
             _handle_max_retries(payload, "comment command")
 
@@ -95,8 +94,7 @@ def handle_push(self, payload: dict):
         from app.handlers.push import handle
         handle(payload)
     except AllProvidersDown as exc:
-        # Push events: no user waiting for response, just log and retry
-        log.warning(f"Push handler: all providers down, retrying in {exc.retry_in_seconds}s")
+        log.warning(f"Push handler: all providers down, retry in {exc.retry_in_seconds}s")
         raise self.retry(exc=exc, countdown=exc.retry_in_seconds)
     except Exception as exc:
         log.error(f"handle_push failed: {exc}")
@@ -127,7 +125,7 @@ def handle_check_run(self, payload: dict):
             log.error("handle_check_run: max retries exceeded")
 
 
-# ── Scheduled tasks ──────────────────────────────────────────────────────────
+# ── Scheduled tasks ───────────────────────────────────────────────────────────
 
 @celery.task(
     bind=True,
@@ -136,19 +134,15 @@ def handle_check_run(self, payload: dict):
 )
 def run_scheduled_tasks(self, task_name: str):
     """
-    Runs a scheduled maintenance task.
-    Called by Celery Beat on cron schedule.
+    Runs a scheduled maintenance task via Celery Beat.
     task_name: "stale_check" | "health_report" | "dependency_report"
-    """
-    from app.storage.events import get_recent
-    from app.github.auth import get_installation_token
 
-    # Get all installed repos from storage
-    # (In real deployment: query GitHub API for all installations)
-    # For now: driven by MANAGED_REPOS env var (comma-separated "org/repo:install_id")
+    Repos configured via MANAGED_REPOS env var:
+    Format: "org/repo1:install_id1,org/repo2:install_id2"
+    """
     managed = os.environ.get("MANAGED_REPOS", "")
     if not managed:
-        log.info(f"scheduled.{task_name}: no MANAGED_REPOS configured, skipping")
+        log.info(f"scheduled.{task_name}: MANAGED_REPOS not configured — skipping")
         return
 
     for entry in managed.split(","):
@@ -159,6 +153,7 @@ def run_scheduled_tasks(self, task_name: str):
         try:
             installation_id = int(install_id_str)
         except ValueError:
+            log.warning(f"scheduled.{task_name}: invalid install_id in '{entry}'")
             continue
 
         try:
@@ -180,69 +175,80 @@ def run_scheduled_tasks(self, task_name: str):
 
 @celery.task(name="app.tasks.cleanup_token_counters")
 def cleanup_token_counters():
-    """
-    Cleanup task: Redis token usage counters auto-expire at midnight.
-    This task just logs current state for monitoring.
-    """
+    """Log current LLM token usage. Redis keys auto-expire at 24h."""
     try:
-        from app.core.redis_client import get_redis
-        r = get_redis()
         import datetime
+        from app.core.redis_client import get_redis
+
+        r     = get_redis()
         today = datetime.date.today().isoformat()
-        for provider in ["groq_70b", "groq_8b", "gemini", "openrouter"]:
-            key = f"llm:tokens:{provider}:{today}"
-            val = r.get(key) or 0
-            log.info(f"token_counter provider={provider} tokens_today={val}")
+
+        for provider in ("groq_70b", "groq_8b", "gemini", "openrouter"):
+            tokens = r.get(f"llm:tokens:{provider}:{today}") or 0
+            reqs   = r.get(f"llm:requests:{provider}:{today}") or 0
+            log.info(
+                f"token_counter provider={provider} "
+                f"tokens={tokens} requests={reqs}"
+            )
     except Exception as e:
         log.warning(f"cleanup_token_counters: {e}")
 
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
+# ── Private helpers ───────────────────────────────────────────────────────────
 
 def _retry_countdown(retries: int) -> int:
-    """Exponential backoff: 60s, 120s, 240s."""
+    """Exponential backoff: 60s → 120s → 240s."""
     return 60 * (2 ** retries)
 
 
-def _handle_all_providers_down(task, payload: dict, exc: AllProvidersDown, task_desc: str):
+def _handle_max_retries(payload: dict, task_desc: str):
     """
-    When all LLM providers are down:
-    1. On first failure → post "queued" message to GitHub
-    2. Schedule retry when providers should recover
-    3. On max retries → post failure message
+    Called when all Celery retries are exhausted (non-provider-down failures).
+    Posts a failure notice to GitHub and logs the incident.
+    FIXED (ruff F821): Was called in 3 tasks but never defined.
+    """
+    log.error(f"tasks.max_retries_exceeded task={task_desc}")
+    _post_failure_message(payload, task_desc)
+
+
+def _handle_all_providers_down(
+    task,
+    payload: dict,
+    exc: AllProvidersDown,
+    task_desc: str,
+):
+    """
+    When all LLM providers are OPEN (rate-limited / down):
+    1. First attempt → post "queued" message so user knows it's coming.
+    2. Retry with countdown until providers recover.
+    3. All retries exhausted → post failure message.
     """
     if task.request.retries == 0:
         _post_queued_message(payload, exc.retry_in_seconds, task_desc)
 
     try:
-        raise task.retry(
-            exc=exc,
-            countdown=exc.retry_in_seconds + 10,
-        )
+        raise task.retry(exc=exc, countdown=exc.retry_in_seconds + 10)
     except MaxRetriesExceededError:
         _post_failure_message(payload, task_desc)
         _notify_providers_down()
 
 
 def _post_queued_message(payload: dict, retry_in: int, task_desc: str):
-    """Post 'AI Queued' comment to GitHub issue/PR."""
+    """Post '⏳ AI Queued' comment so user doesn't need to retype."""
     try:
         from app.github.auth import get_installation_token
         from app.github.client import gh_post
 
         installation_id = payload.get("installation", {}).get("id")
-        if not installation_id:
-            return
-
         repo = payload.get("repository", {}).get("full_name", "")
         issue_number = (
             payload.get("issue", {}).get("number")
             or payload.get("pull_request", {}).get("number")
         )
-        if not repo or not issue_number:
+        if not (installation_id and repo and issue_number):
             return
 
-        token = get_installation_token(installation_id)
+        token    = get_installation_token(installation_id)
         wait_min = max(1, retry_in // 60)
 
         gh_post(f"/repos/{repo}/issues/{issue_number}/comments", token, {
@@ -251,64 +257,56 @@ def _post_queued_message(payload: dict, retry_in: int, task_desc: str):
                 f"All AI providers are temporarily busy (rate limited).\n\n"
                 f"Your **{task_desc}** request has been queued and will be "
                 f"processed automatically in **~{wait_min} minute(s)**.\n\n"
-                f"No need to type the command again — I'll post the result here.\n\n"
-                f"---\n*🤖 AI Repo Manager V4*"
+                "No need to type the command again — I'll post the result here.\n\n"
+                "---\n*🤖 AI Repo Manager V4*"
             )
         })
     except Exception as e:
-        log.warning(f"Could not post queued message: {e}")
+        log.warning(f"_post_queued_message failed: {e}")
 
 
 def _post_failure_message(payload: dict, task_desc: str):
-    """Post failure message after all retries exhausted."""
+    """Post permanent failure notice after all retries exhausted."""
     try:
+        from app.ai.circuit_breaker import status_all
         from app.github.auth import get_installation_token
         from app.github.client import gh_post
-        from app.ai.circuit_breaker import status_all
 
         installation_id = payload.get("installation", {}).get("id")
-        if not installation_id:
-            return
-
         repo = payload.get("repository", {}).get("full_name", "")
         issue_number = (
             payload.get("issue", {}).get("number")
             or payload.get("pull_request", {}).get("number")
         )
-        if not repo or not issue_number:
+        if not (installation_id and repo and issue_number):
             return
 
-        token = get_installation_token(installation_id)
+        token    = get_installation_token(installation_id)
         statuses = status_all()
         status_lines = "\n".join(
-            f"- **{name}**: {s['state']} "
-            f"({'recovers in ' + str(s['recovers_in_seconds']) + 's' if s['recovers_in_seconds'] else 'available'})"
+            f"- **{name}**: {s['state']}"
+            + (f" (recovers in {s['recovers_in_seconds']}s)" if s["recovers_in_seconds"] else "")
             for name, s in statuses.items()
         )
 
         gh_post(f"/repos/{repo}/issues/{issue_number}/comments", token, {
             "body": (
                 f"## ⚠️ AI Temporarily Unavailable\n\n"
-                f"Your **{task_desc}** request could not be completed after multiple retries.\n\n"
+                f"Your **{task_desc}** request could not be completed "
+                f"after multiple retries.\n\n"
                 f"**Provider Status:**\n{status_lines}\n\n"
-                f"Please try again in **30 minutes**.\n\n"
-                f"---\n*🤖 AI Repo Manager V4*"
+                "Please try again in **30 minutes**.\n\n"
+                "---\n*🤖 AI Repo Manager V4*"
             )
         })
     except Exception as e:
-        log.warning(f"Could not post failure message: {e}")
+        log.warning(f"_post_failure_message failed: {e}")
 
 
 def _notify_providers_down():
     """Alert Discord/Slack that all providers are down."""
     try:
-        from app.github.notifications import notify
-        notify(
-            title="All LLM Providers Down",
-            message="All AI providers failed after 3 retries. Manual check required.",
-            severity="critical",
-            event_type="all_providers_down",
-        )
+        from app.github.notifications import notify_all_providers_down
+        notify_all_providers_down()
     except Exception:
         pass
-

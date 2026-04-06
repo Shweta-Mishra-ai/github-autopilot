@@ -2,22 +2,16 @@
 Input Validator - app/core/input_validator.py
 V4: Validates ALL slash commands before any AI call.
 
-Flow:
-  1. Command recognized?          → No  → "Unknown command. Did you mean X?"
-  2. Context correct (PR/issue)?  → No  → "This command only works on PRs."
-  3. Args valid?                  → No  → "Invalid arg. Use: /release [patch|minor|major]"
-  4. Context length OK?           → No  → "Need more context. Example: ..."
-  5. Maintainer-only check?       → No  → "Only repo maintainers can use /merge."
-  6. All pass                     → Proceed to AI call
+FIXED (ruff F401): Removed COMMAND_SPECS + ALL_COMMANDS from import — unused.
+FIXED (ruff F541): Two f-strings had no placeholders — removed f prefix.
 """
 
 import re
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 from app.core.command_specs import (
-    COMMAND_SPECS, CommandSpec, ALL_COMMANDS, get_spec, find_similar, commands_for_context
+    CommandSpec, get_spec, find_similar, commands_for_context
 )
 
 log = logging.getLogger(__name__)
@@ -26,12 +20,12 @@ log = logging.getLogger(__name__)
 @dataclass
 class ValidationResult:
     valid: bool
-    error_response: str = ""     # Post this to GitHub if not valid
-    cleaned_cmd: str = ""        # Normalized command e.g. "/fix"
-    cmd_args: str = ""           # Args after command e.g. "patch" for /release patch
-    cmd_subcommand: str = ""     # Subcommand e.g. "readme" for /docs readme
-    context_text: str = ""       # Extracted/cleaned context for LLM
-    spec: Optional[CommandSpec] = None
+    error_response: str = ""
+    cleaned_cmd: str = ""
+    cmd_args: str = ""
+    cmd_subcommand: str = ""
+    context_text: str = ""
+    spec: CommandSpec | None = None
 
 
 def validate_command(
@@ -45,26 +39,15 @@ def validate_command(
 ) -> ValidationResult:
     """
     Full validation pipeline for a slash command.
-
-    Args:
-        body:                   Full comment body
-        raw_cmd:                The matched command string (e.g. "/fix")
-        is_pr:                  True if this comment is on a PR, False for issue
-        author:                 GitHub username of commenter
-        author_is_maintainer:   Whether author has write/maintain/admin role
-        code_context:           Code extracted from ``` blocks in body
-        text_context:           Plain text context (issue title + body)
-
-    Returns:
-        ValidationResult with valid=True if OK to proceed, else error_response to post.
+    Returns ValidationResult with valid=True if OK to proceed.
     """
-    cmd = raw_cmd.lower().strip()
+    cmd          = raw_cmd.lower().strip()
     context_type = "pr" if is_pr else "issue"
 
-    # ── Step 1: Command recognized? ─────────────────────────────────────────
+    # Step 1: Command recognized?
     spec = get_spec(cmd)
     if spec is None:
-        similar = find_similar(cmd)
+        similar   = find_similar(cmd)
         available = commands_for_context(context_type)[:8]
         suggestion = f"\n\n💡 Did you mean **{similar}**?" if similar else ""
         return ValidationResult(
@@ -75,12 +58,13 @@ def validate_command(
                     f"This command isn't recognized.{suggestion}\n\n"
                     f"**Available commands for this {context_type}:**\n"
                     + " ".join(f"`{c}`" for c in available)
-                    + f"\n\nSee all commands in [README](https://github.com/Shweta-Mishra-ai/github-autopilot#commands)."
+                    # FIXED (F541): Removed f prefix — no placeholders
+                    + "\n\nSee all commands in [README](https://github.com/Shweta-Mishra-ai/github-autopilot#commands)."
                 ),
             ),
         )
 
-    # ── Step 2: Context check (PR vs Issue) ──────────────────────────────────
+    # Step 2: Context check (PR vs Issue)
     if context_type not in spec.contexts:
         allowed = " and ".join(spec.contexts)
         return ValidationResult(
@@ -94,7 +78,7 @@ def validate_command(
             ),
         )
 
-    # ── Step 3: Maintainer-only check ────────────────────────────────────────
+    # Step 3: Maintainer-only check
     if spec.maintainer_only and not author_is_maintainer:
         return ValidationResult(
             valid=False,
@@ -102,13 +86,12 @@ def validate_command(
                 title=f"Permission Denied: `{cmd}`",
                 body=(
                     f"`{cmd}` is restricted to repo maintainers and owners.\n\n"
-                    f"@{author} — if you think this is an error, "
-                    f"ask a maintainer to run it."
+                    f"@{author} — if you think this is an error, ask a maintainer to run it."
                 ),
             ),
         )
 
-    # ── Step 4: Args validation ───────────────────────────────────────────────
+    # Step 4: Args validation
     cmd_args, cmd_subcommand = _extract_args(body, cmd)
 
     if spec.requires_args and not cmd_args:
@@ -138,21 +121,19 @@ def validate_command(
             ),
         )
 
-    # /docs subcommand check
     if spec.valid_subcommands and cmd_subcommand not in spec.valid_subcommands:
         return ValidationResult(
             valid=False,
             error_response=_fmt_error(
                 title=f"Invalid Subcommand: `{cmd} {cmd_subcommand}`",
                 body=(
-                    f"**Valid subcommands:** "
+                    "**Valid subcommands:** "
                     + ", ".join(f"`{s}`" if s else "*(none)*" for s in spec.valid_subcommands)
                     + f"\n\n**Example:**\n```\n{spec.example}\n```"
                 ),
             ),
         )
 
-    # /rollback number range check
     if cmd == "/rollback" and cmd_args:
         try:
             n = int(cmd_args)
@@ -163,8 +144,8 @@ def validate_command(
                         title="Invalid Snapshot Number",
                         body=(
                             f"Snapshot `#{n}` is out of range. "
-                            f"Valid range: 1–10.\n\n"
-                            f"Use `/rollback` (no number) to see available snapshots."
+                            "Valid range: 1–10.\n\n"
+                            "Use `/rollback` (no number) to see available snapshots."
                         ),
                     ),
                 )
@@ -175,14 +156,14 @@ def validate_command(
                     title="Invalid Snapshot Number",
                     body=(
                         f"`{cmd_args}` is not a valid number.\n\n"
-                        f"Use `/rollback` to list snapshots, then `/rollback 2` to restore."
+                        "Use `/rollback` to list snapshots, then `/rollback 2` to restore."
                     ),
                 ),
             )
 
-    # ── Step 5: Context length check ─────────────────────────────────────────
+    # Step 5: Context length check
     combined_context = code_context or text_context or ""
-    context_len = len(combined_context.strip())
+    context_len      = len(combined_context.strip())
 
     if spec.min_context_chars > 0 and context_len < spec.min_context_chars:
         return ValidationResult(
@@ -192,18 +173,15 @@ def validate_command(
                 body=(
                     f"Not enough context to work with "
                     f"({context_len} chars, minimum {spec.min_context_chars}).\n\n"
-                    f"💡 **{spec.hint}**\n\n"
+                    f"**{spec.hint}**\n\n"
                     f"**Example:**\n```\n{spec.example}\n```"
                 ),
             ),
         )
 
-    # Truncate if too long (soft — don't reject, just truncate)
     if spec.max_context_chars > 0 and context_len > spec.max_context_chars:
         combined_context = combined_context[:spec.max_context_chars]
-        log.debug(f"input_validator.truncated cmd={cmd} from={context_len} to={spec.max_context_chars}")
 
-    # ── All checks passed ────────────────────────────────────────────────────
     log.info(f"input_validator.passed cmd={cmd} context={context_type} author={author}")
     return ValidationResult(
         valid=True,
@@ -215,59 +193,34 @@ def validate_command(
     )
 
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
-
 def _extract_args(body: str, cmd: str) -> tuple[str, str]:
-    """
-    Extract argument and subcommand from command body.
-    e.g. "/release patch" → args="patch", subcommand=""
-         "/docs readme"   → args="readme", subcommand="readme"
-    """
-    # Get the part of body after the command on the same line
     pattern = re.escape(cmd) + r"\s*([^\n]*)"
-    match = re.search(pattern, body, re.IGNORECASE)
+    match   = re.search(pattern, body, re.IGNORECASE)
     if not match:
         return "", ""
 
     rest = match.group(1).strip().lower()
 
-    # For docs, first word is subcommand
-    if cmd == "/docs":
+    if cmd in ("/docs", "/rollback", "/release"):
         parts = rest.split()
-        subcommand = parts[0] if parts else ""
-        return subcommand, subcommand
-
-    # For rollback, first word is the number
-    if cmd == "/rollback":
-        parts = rest.split()
-        arg = parts[0] if parts else ""
-        return arg, ""
-
-    # For release, first word is patch/minor/major
-    if cmd == "/release":
-        parts = rest.split()
-        arg = parts[0] if parts else ""
-        return arg, ""
+        arg   = parts[0] if parts else ""
+        return arg, arg if cmd == "/docs" else ""
 
     return rest, ""
 
 
 def _fmt_error(title: str, body: str) -> str:
-    """Format a validation error as a GitHub comment."""
     return (
         f"## ℹ️ {title}\n\n"
         f"{body}\n\n"
-        f"---\n"
-        f"*🤖 AI Repo Manager V4 — "
-        f"[All Commands](https://github.com/Shweta-Mishra-ai/github-autopilot#commands)*"
+        "---\n"
+        # FIXED (F541): Removed f prefix — no placeholders
+        "*🤖 AI Repo Manager V4 — "
+        "[All Commands](https://github.com/Shweta-Mishra-ai/github-autopilot#commands)*"
     )
 
 
 def check_maintainer_role(repo: str, username: str, token: str) -> bool:
-    """
-    Returns True if username has write/maintain/admin permission on repo.
-    Used for maintainer_only commands.
-    """
     try:
         from app.github.client import gh_get
         data = gh_get(
@@ -278,4 +231,3 @@ def check_maintainer_role(repo: str, username: str, token: str) -> bool:
         return role in ("write", "maintain", "admin")
     except Exception:
         return False
-

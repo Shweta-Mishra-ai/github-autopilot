@@ -1,10 +1,13 @@
 """
 Issues Handler - app/handlers/issues.py
+V3: Auto-triage issues with AI labels + welcome comment.
+
+FIXED (ruff F401): Removed unused `gh_get` from github client import.
 """
 
 from app.github.auth import get_installation_token
-from app.github.client import gh_get, gh_post, GitHubError
-from app.github.notifications import notify_new_issue  # ✅ ADDED — import kiya
+from app.github.client import gh_post, GitHubError
+from app.github.notifications import notify_new_issue
 from app.ai.client import groq_ask
 from app.ai.validator import validate_issue_triage
 from app.core.config import load_config
@@ -21,11 +24,11 @@ def handle(payload: dict):
 
     issue = payload["issue"]
     if "pull_request" in issue:
-        return  # PR events come via pull_request webhook, not issues
+        return
 
-    repo = payload["repository"]["full_name"]
-    issue_number = issue["number"]
-    author = issue["user"]["login"]
+    repo           = payload["repository"]["full_name"]
+    issue_number   = issue["number"]
+    author         = issue["user"]["login"]
     installation_id = payload["installation"]["id"]
 
     log = EventLogger("issues", repo=repo)
@@ -52,7 +55,6 @@ def handle(payload: dict):
         except Exception:
             pass
 
-    # AI triage
     raw = groq_ask(
         "You are an expert open source maintainer. Triage issues. Return valid JSON only.",
         f"""Triage this issue:
@@ -75,21 +77,18 @@ Return JSON:
 
     result = validate_issue_triage(raw)
 
-    # Build final labels
     priority = result["priority"]
-    p_emoji = {"high": "🔥", "medium": "📌", "low": "💤"}.get(priority, "📌")
+    p_emoji  = {"high": "🔥", "medium": "📌", "low": "💤"}.get(priority, "📌")
     all_labels = result["labels"] + [f"priority: {priority} {p_emoji}"]
 
-    # Guardrail: labels
     label_guard = check_auto_label(issue, all_labels, config)
     if label_guard.passed:
         try:
             gh_post(f"/repos/{repo}/issues/{issue_number}/labels", token,
-                   {"labels": all_labels})
+                    {"labels": all_labels})
         except GitHubError:
             pass
 
-    # Build comment
     t_emoji = {"bug": "🐛", "feature": "✨", "question": "❓", "docs": "📚",
                "performance": "⚡", "security": "🔒"}.get(result["type"], "📋")
     c_emoji = {"trivial": "⚡", "simple": "🟢", "moderate": "🟡", "complex": "🔴"}.get(
@@ -120,8 +119,6 @@ Return JSON:
     except GitHubError as e:
         log.error(f"Could not post comment: {e}")
 
-    # ✅ ADDED — Slack + Discord pe notify karo issue open hone pe
-    # Triage complete hone ke baad bhejo taaki labels/type pata ho
     try:
         notify_new_issue(
             repo=repo,
@@ -130,7 +127,7 @@ Return JSON:
             labels=all_labels
         )
     except Exception:
-        pass  # Notification fail ho toh main flow affect na ho
+        pass
 
 
 def _ensure_labels(repo: str, token: str):

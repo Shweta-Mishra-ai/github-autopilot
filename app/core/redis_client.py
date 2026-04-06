@@ -44,7 +44,7 @@ def get_redis() -> redis_lib.Redis:
         )
         _client = redis_lib.Redis(connection_pool=_pool)
         _client.ping()  # Verify connection works at startup
-        log.info("redis.connected", url=REDIS_URL[:30] + "...")
+        log.info(f"redis.connected url={REDIS_URL[:30]}...")
     except Exception as e:
         log.warning(f"Redis connection failed: {e} — using in-memory fallback")
         _client = _FakeRedis()

@@ -35,10 +35,8 @@ def handle_pull_request(payload: dict):
     log.info(f"PR #{pr_number} opened in {repo} by {author}")
     token = get_installation_token(installation_id)
 
-    # Ensure labels exist
     _ensure_labels(repo, token)
 
-    # Get changed files
     try:
         files = gh_get(f"/repos/{repo}/pulls/{pr_number}/files", token)
         file_names = [f["filename"] for f in files[:15]]
@@ -50,7 +48,6 @@ def handle_pull_request(payload: dict):
     files_str = "\n".join(file_names) or "unknown"
     patches_str = "\n\n".join(f"# {k}\n{v}" for k, v in patches.items())
 
-    # AI: Polish PR
     result = groq_ask(
         "You are a principal engineer. Analyze PRs and respond with valid JSON only — no markdown.",
         f"""Analyze this PR:
@@ -73,7 +70,6 @@ Return JSON:
 }}"""
     )
 
-    # Update PR title if improved
     patch_data = {}
     if result.get("improved_title") and result["improved_title"] != title:
         patch_data["title"] = result["improved_title"]
@@ -86,7 +82,6 @@ Return JSON:
         except Exception as e:
             log.warning(f"Could not update PR: {e}")
 
-    # Add labels
     labels = result.get("labels", [])
     risk = result.get("risk_level", "low")
     if labels:
@@ -95,7 +90,6 @@ Return JSON:
         except Exception:
             pass
 
-    # Post comment
     risk_emoji = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(risk, "🟡")
     was_updated = bool(patch_data)
     update_note = f"\n\n> 📝 Auto-improved: {'title + description' if 'body' in patch_data else 'title'}" if was_updated else ""
@@ -111,8 +105,6 @@ Return JSON:
 {update_note}{BOT_FOOTER}"""
 
     gh_post(f"/repos/{repo}/issues/{pr_number}/comments", token, {"body": comment})
-
-    # Run code review async-style (same request)
     _run_code_review(repo, pr_number, token, files, author)
 
 
@@ -163,7 +155,6 @@ Return JSON:
 
     critical = [i for i in all_issues if i.get("severity") == "critical"]
     score_bar = "█" * int(avg) + "░" * (10 - int(avg))
-
     verdict = "✅ Good to merge" if avg >= 7.5 else "🟡 Review needed" if avg >= 5 else "🔴 Issues found"
 
     issues_md = ""
@@ -192,10 +183,9 @@ Return JSON:
 
     try:
         gh_post(f"/repos/{repo}/issues/{pr_number}/comments", token, {"body": comment})
-        # Add critical label if needed
         if critical:
             gh_post(f"/repos/{repo}/issues/{pr_number}/labels", token,
-                   {"labels": ["excellence: critical 🚨"]})
+                    {"labels": ["excellence: critical 🚨"]})
     except Exception as e:
         log.warning(f"Review comment failed: {e}")
 
@@ -244,7 +234,6 @@ Return JSON:
 }}"""
     )
 
-    # Add labels
     labels = result.get("labels", [])
     priority = result.get("priority", "medium")
     p_emoji = {"high": "🔥", "medium": "📌", "low": "💤"}.get(priority, "📌")
@@ -305,7 +294,6 @@ def handle_issue_comment(payload: dict):
     log.info(f"Command {cmd} by @{author} in {repo}#{issue_number}")
     token = get_installation_token(installation_id)
 
-    # Get issue context
     try:
         issue = gh_get(f"/repos/{repo}/issues/{issue_number}", token)
         ctx_title = issue.get("title", "")
@@ -313,7 +301,6 @@ def handle_issue_comment(payload: dict):
     except Exception:
         ctx_title, ctx_body = "", ""
 
-    # Extract code block from comment
     import re
     code_match = re.search(r'```[\w]*\n([\s\S]*?)\n```', body)
     code = code_match.group(1) if code_match else ""
@@ -408,10 +395,8 @@ def handle_push(payload: dict):
 
     log.info(f"Push to {repo} main: {len(bad)} non-conventional commits")
 
-    # Just log — don't spam on every push, only flag
     token = get_installation_token(installation_id)
     try:
-        # Create an issue if many bad commits pile up
         if len(bad) >= 3:
             rows = "\n".join(f"| `{sha}` | `{msg[:60]}` |" for sha, msg in bad)
             gh_post(f"/repos/{repo}/issues", token, {
@@ -457,7 +442,7 @@ def _ensure_labels(repo: str, token: str):
         ("help wanted 🙏", "008672"),
         ("good first issue 👋", "7057ff"),
     ]
-    import requests as _req
+    # FIXED (F401): Removed unused `import requests as _req` — gh_post is used directly
     for name, color in LABELS:
         try:
             gh_post(f"/repos/{repo}/labels", token, {"name": name, "color": color})

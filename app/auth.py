@@ -4,6 +4,8 @@ Gets installation access tokens so we can act on user repos.
 """
 
 import os
+import re
+import json as _json
 import time
 import jwt
 import requests
@@ -89,8 +91,9 @@ def gh_patch(path: str, token: str, data: dict) -> dict:
 
 
 def groq_ask(system: str, user: str, max_tokens: int = 1500, fast: bool = False) -> dict:
-    """Call Groq AI and return parsed JSON."""
-    import re, json as _json
+    """Call Groq AI and return parsed JSON.
+    FIXED (E401): Moved `import re, json as _json` to module level.
+    """
     model = "llama-3.1-8b-instant" if fast else "llama-3.3-70b-versatile"
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",

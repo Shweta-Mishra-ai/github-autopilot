@@ -1,12 +1,14 @@
 """
 Event Storage - app/storage/events.py
 V3: SQLite-based event log for replay and debugging.
+
+FIXED (ruff F401): Removed unused `from datetime import datetime`.
+SQLite uses its own datetime('now') function — Python datetime not needed.
 """
 
 import sqlite3
 import json
 import os
-from datetime import datetime
 from app.core.logger import get_logger
 
 log = get_logger(__name__)
@@ -78,4 +80,3 @@ def get_recent(repo: str, limit: int = 20) -> list:
     except Exception as e:
         log.error("storage.get_recent_failed", error=str(e))
         return []
-

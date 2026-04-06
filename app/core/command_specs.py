@@ -3,33 +3,28 @@ Command Specs - app/core/command_specs.py
 V4: Single source of truth for all slash command rules.
 Used by input_validator.py before any AI call.
 
-Adding a new command? Add it here ONLY. Validator picks it up automatically.
+FIXED (ruff F401): Removed unused `Optional` from typing import.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass
 class CommandSpec:
-    name: str                               # e.g. "/fix"
-    contexts: list[str]                     # ["pr", "issue"] or ["pr"] only
-    description: str                        # Short human-readable description
-    hint: str                               # What to do if input is wrong
-    example: str                            # Copy-paste example for error message
-    min_context_chars: int = 0             # 0 = no minimum
-    max_context_chars: int = 5000          # Hard truncation limit
-    requires_args: bool = False            # Must have args after command?
-    valid_args: list[str] = field(default_factory=list)   # Empty = any args ok
-    valid_subcommands: list[str] = field(default_factory=list)  # For /docs readme etc
-    maintainer_only: bool = False          # Requires repo maintainer/owner role
+    name: str
+    contexts: list[str]
+    description: str
+    hint: str
+    example: str
+    min_context_chars: int = 0
+    max_context_chars: int = 5000
+    requires_args: bool = False
+    valid_args: list[str] = field(default_factory=list)
+    valid_subcommands: list[str] = field(default_factory=list)
+    maintainer_only: bool = False
 
-
-# ── Registry ────────────────────────────────────────────────────────────────
 
 COMMAND_SPECS: dict[str, CommandSpec] = {
-
-    # ── V2.1 originals ──────────────────────────────────────────────────────
 
     "/fix": CommandSpec(
         name="/fix",
@@ -118,14 +113,12 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
 
     "/merge": CommandSpec(
         name="/merge",
-        contexts=["pr"],           # PRs ONLY
+        contexts=["pr"],
         description="Merge this PR if all guardrails pass",
         hint="This command only works on Pull Requests, not Issues.",
         example="/merge",
         maintainer_only=True,
     ),
-
-    # ── V3 additions ─────────────────────────────────────────────────────────
 
     "/summarize": CommandSpec(
         name="/summarize",
@@ -140,14 +133,14 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         contexts=["pr", "issue"],
         description="Analyze CI failure logs",
         hint="Paste your CI failure output after the command.",
-        example="/ci\n```\nFAILED tests/test_auth.py::test_login - AssertionError\nE   assert 401 == 200\n```",
+        example="/ci\n```\nFAILED tests/test_auth.py::test_login - AssertionError\n```",
         min_context_chars=20,
         max_context_chars=8000,
     ),
 
     "/security": CommandSpec(
         name="/security",
-        contexts=["pr"],           # Reads PR files — PRs only
+        contexts=["pr"],
         description="Security scan of changed files using GitHub Security APIs",
         hint="Works on Pull Requests. Reads Dependabot, CodeQL, and Secret Scanning.",
         example="/security",
@@ -158,7 +151,7 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         contexts=["pr", "issue"],
         description="Find test coverage gaps in code",
         hint="Paste the code you want gap analysis for.",
-        example="/gaps\n```python\nclass PaymentProcessor:\n    def charge(self, amount): ...\n    def refund(self, transaction_id): ...\n```",
+        example="/gaps\n```python\nclass PaymentProcessor:\n    def charge(self, amount): ...\n```",
         min_context_chars=20,
         max_context_chars=4000,
     ),
@@ -170,8 +163,6 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         hint="No arguments needed.",
         example="/changelog",
     ),
-
-    # ── V4 new commands ──────────────────────────────────────────────────────
 
     "/rollback": CommandSpec(
         name="/rollback",
@@ -203,9 +194,9 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
     "/perf": CommandSpec(
         name="/perf",
         contexts=["pr", "issue"],
-        description="Performance analysis — find bottlenecks and N+1 queries",
+        description="Performance analysis — find bottlenecks",
         hint="Paste the code you want performance analysis for.",
-        example="/perf\n```python\ndef get_users():\n    users = db.query(User).all()\n    for user in users:\n        user.posts = db.query(Post).filter_by(user_id=user.id).all()  # N+1!\n    return users\n```",
+        example="/perf\n```python\n# paste code here\n```",
         min_context_chars=20,
         max_context_chars=5000,
     ),
@@ -256,28 +247,19 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
     ),
 }
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
-
 ALL_COMMANDS: list[str] = list(COMMAND_SPECS.keys())
 
 
 def get_spec(cmd: str) -> CommandSpec | None:
-    """Returns spec for command, or None if not found."""
     return COMMAND_SPECS.get(cmd.lower())
 
 
 def find_similar(cmd: str) -> str | None:
-    """
-    Fuzzy match: if user types '/fixx' → suggest '/fix'.
-    Simple prefix + edit-distance check.
-    """
     cmd_lower = cmd.lower().lstrip("/")
-    # Prefix match
     for known in ALL_COMMANDS:
         known_bare = known.lstrip("/")
         if known_bare.startswith(cmd_lower[:3]):
             return known
-    # Single char diff
     for known in ALL_COMMANDS:
         known_bare = known.lstrip("/")
         if abs(len(known_bare) - len(cmd_lower)) <= 1:
@@ -288,9 +270,7 @@ def find_similar(cmd: str) -> str | None:
 
 
 def commands_for_context(context: str) -> list[str]:
-    """Returns commands valid for 'pr' or 'issue' context."""
     return [
         name for name, spec in COMMAND_SPECS.items()
         if context in spec.contexts
     ]
-

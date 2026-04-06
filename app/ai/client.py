@@ -2,9 +2,8 @@
 AI Client - app/ai/client.py
 V4: Multi-model Groq client with circuit breaker integration.
 
-FIXED (ruff W605): Invalid escape sequences in docstring.
-  Regex pattern strings in docstrings need r-prefix or doubled backslashes.
-  Changed: r'\{[\s\S]*\}' shown in docstring → use \\{ \\S notation.
+Brace-depth JSON extraction replaces greedy regex.
+groq_text uses 70B model by default now.
 """
 
 import json
@@ -116,16 +115,11 @@ def _track_usage(provider_key: str, usage: dict):
 
 def _extract_json(text: str) -> dict:
     """
-    Brace-depth JSON extraction (BUG 6 fix).
-
-    Why not greedy regex: a pattern like r'\\{[\\s\\S]*\\}' matches from
-    the FIRST opening brace to the LAST closing brace in the whole string.
-    When Groq returns two JSON objects or adds trailing text, that regex
-    grabs everything and json.loads() fails.
-
-    This function counts brace depth and stops at the exact matching brace.
+    Brace-depth JSON extraction.
+    Finds the first complete JSON object by counting opening and closing braces.
+    More reliable than a greedy regex when the response contains multiple objects.
     """
-    # Step 1: Direct parse (handles clean single-object responses)
+    # Step 1: Direct parse (clean single-object response)
     stripped = text.strip()
     try:
         return json.loads(stripped)
@@ -173,8 +167,8 @@ def groq_ask(
 ) -> dict:
     """
     Call Groq, return parsed JSON dict.
-    fast=False → try 70B first, fall back to 8B.
-    fast=True  → use 8B only (for simple/cheap tasks).
+    fast=False: try 70B first, fall back to 8B.
+    fast=True:  use 8B only (for simple/cheap tasks).
     Raises AllProvidersDown when all circuits are OPEN.
     """
     if not available_providers():
@@ -224,8 +218,8 @@ def groq_text(
 ) -> str:
     """
     Call Groq, return plain text.
-    fast=False → 70B (default — quality matters for summaries/changelogs).
-    fast=True  → 8B (cheaper, for quick/simple tasks).
+    fast=False: 70B (default, better quality for summaries/changelogs).
+    fast=True:  8B (cheaper, for quick tasks).
     """
     models = [MODEL_8B] if fast else [MODEL_70B, MODEL_8B]
 

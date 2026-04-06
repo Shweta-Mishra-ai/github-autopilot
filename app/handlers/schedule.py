@@ -1,17 +1,18 @@
 """
 Schedule Handler - app/handlers/schedule.py
 V3: Automated maintenance tasks on cron schedule.
-- Stale issue detection
-- Weekly health reports
-- Dependency update recommendations
+
+FIXED (ruff F401): Removed unused `groq_ask, groq_text` imports.
+FIXED (ruff E741): Renamed ambiguous `l` → `lbl` in list comprehension.
+FIXED (ruff F821): Added `gh_put` to github client import (was called but not imported).
+FIXED: Updated notify_stale_closed() call to pass days_inactive param (was missing).
 """
 
 import os
 from datetime import datetime, timedelta
 from app.github.auth import get_installation_token
-from app.github.client import gh_get, gh_post, GitHubError
-from app.github.notifications import notify_health_degraded, notify_stale_closed  # ✅ ADDED notify_stale_closed
-from app.ai.client import groq_ask, groq_text
+from app.github.client import gh_get, gh_post, gh_put, GitHubError
+from app.github.notifications import notify_health_degraded, notify_stale_closed
 from app.core.config import load_config
 from app.core.logger import get_logger
 
@@ -64,7 +65,8 @@ def _mark_stale(repo: str, issue: dict, token: str, config):
         datetime.strptime(issue["updated_at"], "%Y-%m-%dT%H:%M:%SZ")
     ).days
 
-    labels = [l["name"] for l in issue.get("labels", [])]
+    # FIXED (E741): Renamed `l` → `lbl`
+    labels = [lbl["name"] for lbl in issue.get("labels", [])]
     already_stale = "stale" in labels
 
     auto_close = already_stale and days_inactive >= (STALE_DAYS + 7)
@@ -77,18 +79,19 @@ def _mark_stale(repo: str, issue: dict, token: str, config):
                     f"This issue has been inactive for **{days_inactive} days** "
                     f"and was marked stale. Closing automatically.\n\n"
                     f"Feel free to reopen if this is still relevant!\n\n"
-                    f"> 🤖 Auto-closed by AI Repo Manager V3"
+                    f"> 🤖 Auto-closed by AI Repo Manager V4"
                 )
             })
+            # FIXED (F821): gh_put now imported above
             gh_put(f"/repos/{repo}/issues/{issue_number}", token, {"state": "closed"})
             log.info("schedule.stale_auto_closed",
                      repo=repo, issue=issue_number, days=days_inactive)
 
-            # ✅ ADDED — Auto-close hone pe notify karo
+            # FIXED: Pass days_inactive to fix hardcoded 37 days bug
             try:
-                notify_stale_closed(repo, issue_number, title)
+                notify_stale_closed(repo, issue_number, title, days_inactive)
             except Exception:
-                pass  # Notification fail ho toh close flow affect na ho
+                pass
 
         except GitHubError as e:
             log.error("schedule.stale_close_failed",
@@ -105,7 +108,7 @@ It will be **automatically closed in 7 days** unless there is new activity.
 - If this is resolved, please close it manually
 - If this needs help, add the `help wanted` label
 
-> 🤖 This is an automated message from AI Repo Manager V3
+> 🤖 This is an automated message from AI Repo Manager V4
 """
 
     try:
@@ -122,18 +125,16 @@ It will be **automatically closed in 7 days** unless there is new activity.
 
 
 def run_health_report(repo: str, installation_id: int):
-    """
-    Generate monthly health report and post as issue.
-    """
+    """Generate monthly health report and post as issue."""
     log.info("schedule.health_report.start", repo=repo)
     try:
         token = get_installation_token(installation_id)
         config = load_config(repo, token)
 
-        repo_data = gh_get(f"/repos/{repo}", token)
-        all_issues = gh_get(f"/repos/{repo}/issues?state=open&per_page=50", token)
-        open_prs = gh_get(f"/repos/{repo}/pulls?state=open&per_page=20", token)
-        commits = gh_get(f"/repos/{repo}/commits?per_page=30", token)
+        repo_data    = gh_get(f"/repos/{repo}", token)
+        all_issues   = gh_get(f"/repos/{repo}/issues?state=open&per_page=50", token)
+        open_prs     = gh_get(f"/repos/{repo}/pulls?state=open&per_page=20", token)
+        commits      = gh_get(f"/repos/{repo}/commits?per_page=30", token)
         contributors = gh_get(f"/repos/{repo}/contributors?per_page=10", token)
 
         open_issues = [i for i in all_issues if "pull_request" not in i]
@@ -188,12 +189,10 @@ def run_health_report(repo: str, installation_id: int):
             "C"  if score >= 60 else
             "D"  if score >= 50 else "F"
         )
-        bar = "█" * (score // 10) + "░" * (10 - score // 10)
-        month = datetime.utcnow().strftime("%B %Y")
-        findings_md = "\n".join(f"- {f}" for f in findings)
-        recs_md = "\n".join(
-            f"{i+1}. {r}" for i, r in enumerate(recommendations[:5])
-        )
+        bar          = "█" * (score // 10) + "░" * (10 - score // 10)
+        month        = datetime.utcnow().strftime("%B %Y")
+        findings_md  = "\n".join(f"- {finding}" for finding in findings)
+        recs_md      = "\n".join(f"{i+1}. {r}" for i, r in enumerate(recommendations[:5]))
 
         body = f"""## 🏥 Monthly Health Report — {month}
 
@@ -215,7 +214,7 @@ def run_health_report(repo: str, installation_id: int):
 {f"### 💡 Recommendations{chr(10)}{recs_md}" if recommendations else "### 💡 All good — keep it up!"}
 
 ---
-> 🤖 Auto-generated monthly report by AI Repo Manager V3
+> 🤖 Auto-generated monthly report by AI Repo Manager V4
 """
 
         gh_post(f"/repos/{repo}/issues", token, {
@@ -224,32 +223,28 @@ def run_health_report(repo: str, installation_id: int):
             "labels": ["health-report"]
         })
 
-        # ✅ NO CHANGE — health degraded notify already tha, rakhte hain
         if score < 70:
             try:
                 notify_health_degraded(repo, grade, score)
             except Exception:
                 pass
 
-        log.info("schedule.health_report.done",
-                 repo=repo, grade=grade, score=score)
+        log.info("schedule.health_report.done", repo=repo, grade=grade, score=score)
 
     except Exception as e:
         log.error("schedule.health_report.failed", repo=repo, error=str(e))
 
 
 def run_dependency_report(repo: str, installation_id: int):
-    """
-    Check for outdated dependencies and post recommendations.
-    """
+    """Check for outdated dependencies and post recommendations."""
     log.info("schedule.dependency_report.start", repo=repo)
     try:
-        token = get_installation_token(installation_id)
+        token  = get_installation_token(installation_id)
         config = load_config(repo, token)
 
         import base64
         try:
-            data = gh_get(f"/repos/{repo}/contents/requirements.txt", token)
+            data    = gh_get(f"/repos/{repo}/contents/requirements.txt", token)
             content = base64.b64decode(data["content"]).decode("utf-8")
         except Exception:
             log.info("schedule.dependency_report.no_requirements", repo=repo)
@@ -274,7 +269,7 @@ pip install --upgrade {' '.join(f['package'] for f in findings[:5])}
 ```
 
 ---
-> 🤖 Auto-generated weekly report by AI Repo Manager V3
+> 🤖 Auto-generated weekly report by AI Repo Manager V4
 """
 
         gh_post(f"/repos/{repo}/issues", token, {
@@ -283,8 +278,7 @@ pip install --upgrade {' '.join(f['package'] for f in findings[:5])}
             "labels": ["security", "dependencies"]
         })
 
-        log.info("schedule.dependency_report.done",
-                 repo=repo, findings=len(findings))
+        log.info("schedule.dependency_report.done", repo=repo, findings=len(findings))
 
     except Exception as e:
         log.error("schedule.dependency_report.failed", repo=repo, error=str(e))

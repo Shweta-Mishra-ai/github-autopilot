@@ -1,6 +1,11 @@
 """
-Tests - tests/test_secrets.py
-V3: Unit tests for secret detection scanner.
+tests/test_secrets.py
+V4 - Fixed token length.
+
+FIXED: test_detects_github_token used a 35-char token after ghp_ prefix.
+  Pattern requires exactly 36 alphanumeric chars: r"ghp_[0-9a-zA-Z]{36}"
+  "aBcDeFgHiJkLmNoPqRsTuVwXyZ123456789" = 26 letters + 9 digits = 35 chars.
+  Fix: Use 36 chars after ghp_ → added one more digit.
 """
 
 import pytest
@@ -10,7 +15,8 @@ from app.security.secrets import scan_diff, _entropy, SecretFinding
 class TestSecretDetection:
 
     def test_detects_github_token(self):
-        diff = "+token = 'ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ123456789'"
+        # FIXED: 36 chars after ghp_ (was 35)
+        diff = "+token = 'ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ1234567890'"
         findings = scan_diff(diff)
         assert len(findings) > 0
         assert any(f.pattern_name == "GitHub Token" for f in findings)
@@ -28,12 +34,12 @@ class TestSecretDetection:
         assert any(f.pattern_name == "Private Key" for f in findings)
 
     def test_ignores_deleted_lines(self):
-        diff = "-token = 'ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ123456789'"
+        diff = "-token = 'ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ1234567890'"
         findings = scan_diff(diff)
         assert len(findings) == 0
 
     def test_ignores_context_lines(self):
-        diff = " token = 'ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ123456789'"
+        diff = " token = 'ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ1234567890'"
         findings = scan_diff(diff)
         assert len(findings) == 0
 
@@ -43,7 +49,7 @@ class TestSecretDetection:
         assert findings == []
 
     def test_finding_has_correct_fields(self):
-        diff = "+api_key = 'ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ123456789'"
+        diff = "+api_key = 'ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ1234567890'"
         findings = scan_diff(diff)
         assert len(findings) > 0
         f = findings[0]
@@ -53,15 +59,15 @@ class TestSecretDetection:
         assert hasattr(f, "redacted_match")
 
     def test_redacted_match_hides_secret(self):
-        diff = "+token = 'ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ123456789'"
+        diff = "+token = 'ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ1234567890'"
         findings = scan_diff(diff)
         for f in findings:
-            assert "ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ123456789" not in f.redacted_match
+            assert "ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ1234567890" not in f.redacted_match
 
     def test_multiple_secrets_in_diff(self):
         diff = (
             "+aws = 'AKIAIOSFODNN7EXAMPLE'\n"
-            "+token = 'ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ123456789'"
+            "+token = 'ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ1234567890'"
         )
         findings = scan_diff(diff)
         assert len(findings) >= 2
@@ -85,4 +91,3 @@ class TestSecretDetection:
         diff = f"+GROQ_API_KEY = '{long_key}'"
         findings = scan_diff(diff)
         assert len(findings) > 0
-

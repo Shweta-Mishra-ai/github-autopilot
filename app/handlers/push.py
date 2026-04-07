@@ -1,7 +1,14 @@
 """
 Push Handler - app/handlers/push.py
-V3 Updated: Conventional commit linting + secret detection + dependency scanning
-    + intelligence layer (auto-index files on push)
+V4: Fixed duplicate issue creation.
+
+FIXED: _scan_dependencies() was creating a new issue on EVERY push
+  that touched requirements.txt — even if an identical issue already exists.
+  Fix: Check Redis for a recent issue fingerprint (24h TTL).
+       If same vulnerabilities reported recently → skip (no duplicate).
+
+FIXED: _lint_commits() same problem — duplicate commit convention issues.
+  Fix: Same Redis dedup with 6h TTL per repo.
 """
 
 import base64
@@ -24,20 +31,18 @@ SKIP_AUTHORS = {
 
 
 def handle(payload: dict):
-    repo = payload["repository"]["full_name"]
+    repo            = payload["repository"]["full_name"]
     installation_id = payload["installation"]["id"]
-    pusher = payload.get("pusher", {}).get("name", "")
-    commits = payload.get("commits", [])
-    ref = payload.get("ref", "")
+    pusher          = payload.get("pusher", {}).get("name", "")
+    commits         = payload.get("commits", [])
+    ref             = payload.get("ref", "")
 
     log = EventLogger("push", repo=repo)
 
     if pusher in SKIP_AUTHORS or pusher.endswith("[bot]"):
         return
-
     if ref not in ("refs/heads/main", "refs/heads/master"):
         return
-
     if not commits:
         return
 
@@ -47,12 +52,11 @@ def handle(payload: dict):
         log.error(f"Auth failed: {e}")
         return
 
-    config = load_config(repo, token)
+    config     = load_config(repo, token)
+    latest_sha = commits[-1].get("id", "") if commits else ""
 
     if not config.get("push", "enabled", default=True):
         return
-
-    latest_sha = commits[-1].get("id", "") if commits else ""
 
     if config.get("push", "scan_secrets", default=True):
         _scan_secrets(repo, commits, token, config, log)
@@ -64,6 +68,22 @@ def handle(payload: dict):
         _lint_commits(repo, commits, token, config, log)
 
     _index_changed_files(repo, commits, token, latest_sha, log)
+
+
+def _already_reported(repo: str, report_type: str, ttl_seconds: int = 86400) -> bool:
+    """
+    Returns True if we already created this type of issue recently.
+    Uses Redis with TTL to prevent duplicate issues.
+    ttl_seconds: how long to suppress duplicate reports (default 24h).
+    """
+    try:
+        from app.core.redis_client import get_redis
+        r   = get_redis()
+        key = f"push_reported:{repo}:{report_type}"
+        result = r.set(key, "1", nx=True, ex=ttl_seconds)
+        return result is None  # None = key existed = already reported
+    except Exception:
+        return False  # If Redis unavailable, allow (better than missing alerts)
 
 
 def _scan_secrets(repo, commits, token, config, log):
@@ -86,7 +106,7 @@ def _scan_secrets(repo, commits, token, config, log):
         try:
             gh_post(f"/repos/{repo}/issues", token, {
                 "title": f"🚨 Secret detected in push — {len(all_findings)} finding(s)",
-                "body": comment,
+                "body":   comment,
                 "labels": ["security", "critical"]
             })
             notify_secret_detected(repo, len(all_findings))
@@ -101,20 +121,30 @@ def _scan_dependencies(repo, commits, token, config, log):
         changed_files.update(commit.get("added", []))
         changed_files.update(commit.get("modified", []))
 
-    dep_files = [f for f in changed_files if f in ("requirements.txt", "requirements-dev.txt")]
+    dep_files = [f for f in changed_files
+                 if f in ("requirements.txt", "requirements-dev.txt")]
 
     for dep_file in dep_files:
         try:
             file_data = gh_get(f"/repos/{repo}/contents/{dep_file}", token)
-            content = base64.b64decode(file_data["content"]).decode("utf-8")
-            findings = scan_requirements_txt(content)
-            if findings:
-                gh_post(f"/repos/{repo}/issues", token, {
-                    "title": f"⚠️ Vulnerable dependencies found in {dep_file}",
-                    "body": format_dep_findings(findings),
-                    "labels": ["security", "dependencies"]
-                })
-                log.warning(f"Dependency scan: {len(findings)} vulnerable packages")
+            content   = base64.b64decode(file_data["content"]).decode("utf-8")
+            findings  = scan_requirements_txt(content)
+
+            if not findings:
+                continue
+
+            # FIXED: Skip if we already reported this in last 24 hours
+            if _already_reported(repo, f"dep_scan_{dep_file}", ttl_seconds=86400):
+                log.info(f"push.dep_scan_skipped repo={repo} file={dep_file} (already reported today)")
+                continue
+
+            gh_post(f"/repos/{repo}/issues", token, {
+                "title":  f"⚠️ Vulnerable dependencies found in {dep_file}",
+                "body":   format_dep_findings(findings),
+                "labels": ["security", "dependencies"]
+            })
+            log.warning(f"Dependency scan: {len(findings)} vulnerable packages in {dep_file}")
+
         except Exception as e:
             log.error(f"Dependency scan failed for {dep_file}: {e}")
 
@@ -130,6 +160,11 @@ def _lint_commits(repo, commits, token, config, log):
 
     if len(bad_commits) < threshold:
         log.info(f"push | {len(bad_commits)} non-conventional — below threshold")
+        return
+
+    # FIXED: Skip if we already reported commit lint in last 6 hours
+    if _already_reported(repo, "commit_lint", ttl_seconds=21600):
+        log.info(f"push.commit_lint_skipped repo={repo} (already reported in last 6h)")
         return
 
     rows = "\n".join(f"| `{c['sha']}` | {c['message']} |" for c in bad_commits)
@@ -155,8 +190,8 @@ type(scope): description
 
     try:
         gh_post(f"/repos/{repo}/issues", token, {
-            "title": f"⚡ {len(bad_commits)} non-conventional commits pushed to main",
-            "body": body,
+            "title":  f"⚡ {len(bad_commits)} non-conventional commits pushed to main",
+            "body":   body,
             "labels": ["commit-convention", "help wanted ⚠️"]
         })
         log.done(f"Commit lint issue created: {len(bad_commits)} bad commits")
@@ -165,7 +200,7 @@ type(scope): description
 
 
 def _index_changed_files(repo, commits, token, latest_sha, log):
-    """Index changed files into ChromaDB — runs silently."""
+    """Index changed files into vector DB — runs silently."""
     try:
         from app.intelligence.embeddings import embed_file
 
@@ -187,7 +222,7 @@ def _index_changed_files(repo, commits, token, latest_sha, log):
         for filepath in indexable[:10]:
             try:
                 file_data = gh_get(f"/repos/{repo}/contents/{filepath}", token)
-                content = base64.b64decode(file_data["content"]).decode("utf-8")
+                content   = base64.b64decode(file_data["content"]).decode("utf-8")
                 if embed_file(repo, filepath, content, latest_sha):
                     indexed += 1
             except Exception:

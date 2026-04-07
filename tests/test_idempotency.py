@@ -1,13 +1,13 @@
 """
 tests/test_idempotency.py
-Pure unit tests for idempotency logic. V4.
+V4 - All fixes applied.
 
-FIXED: `_seen` → `_seen_local` (V4 renamed internal variable)
-FIXED: fingerprint length 64 → 16 (V4 uses hexdigest()[:16])
-FIXED: `setup_function` now clears `_seen_local` directly
-FIXED: Tests patch is_redis_available=False to force deterministic in-memory path
-
-Run: python -m pytest tests/test_idempotency.py -v
+FIXED: Patch target was wrong.
+  Was:  @patch("app.core.idempotency.is_redis_available", ...)
+  Fix:  @patch("app.core.redis_client.is_redis_available", ...)
+  Why:  is_redis_available is imported INSIDE is_duplicate() from redis_client.
+        Patching on idempotency module doesn't work — it's not a module-level name there.
+        Must patch where it's DEFINED: app.core.redis_client.
 """
 
 import sys
@@ -55,7 +55,7 @@ class TestMakeFingerprint:
         assert fp1 != fp2
 
     def test_fingerprint_is_16_char_hex_string(self):
-        """V4 returns first 16 chars of sha256 hex (was 64 in V3)."""
+        """V4 uses hexdigest()[:16] — 16 chars, not 64."""
         fp = make_fingerprint("delivery-abc", "push", {})
         assert isinstance(fp, str)
         assert len(fp) == 16
@@ -72,22 +72,25 @@ class TestMakeFingerprint:
         assert len(set(results)) == 1
 
 
-# ── Tests: is_duplicate (in-memory fallback path) ────────────────────────────
+# ── Tests: is_duplicate ───────────────────────────────────────────────────────
 
 class TestIsDuplicate:
 
-    @patch("app.core.idempotency.is_redis_available", return_value=False)
+    # FIXED: patch app.core.redis_client.is_redis_available
+    # NOT app.core.idempotency.is_redis_available (that doesn't exist at module level)
+
+    @patch("app.core.redis_client.is_redis_available", return_value=False)
     def test_first_call_returns_false(self, _):
         idem_module._seen_local.clear()
         assert is_duplicate("unique-fp-001") is False
 
-    @patch("app.core.idempotency.is_redis_available", return_value=False)
+    @patch("app.core.redis_client.is_redis_available", return_value=False)
     def test_second_call_same_fingerprint_returns_true(self, _):
         idem_module._seen_local.clear()
         is_duplicate("unique-fp-002")
         assert is_duplicate("unique-fp-002") is True
 
-    @patch("app.core.idempotency.is_redis_available", return_value=False)
+    @patch("app.core.redis_client.is_redis_available", return_value=False)
     def test_different_fingerprints_are_independent(self, _):
         idem_module._seen_local.clear()
         assert is_duplicate("fp-aaa") is False
@@ -95,18 +98,18 @@ class TestIsDuplicate:
         assert is_duplicate("fp-aaa") is True
         assert is_duplicate("fp-bbb") is True
 
-    @patch("app.core.idempotency.is_redis_available", return_value=False)
+    @patch("app.core.redis_client.is_redis_available", return_value=False)
     def test_cache_cleared_between_tests(self, _):
         idem_module._seen_local.clear()
         assert is_duplicate("fp-cleared-check") is False
 
-    @patch("app.core.idempotency.is_redis_available", return_value=False)
+    @patch("app.core.redis_client.is_redis_available", return_value=False)
     def test_multiple_unique_events_all_accepted(self, _):
         idem_module._seen_local.clear()
         results = [is_duplicate(f"unique-event-{i}") for i in range(10)]
         assert all(r is False for r in results)
 
-    @patch("app.core.idempotency.is_redis_available", return_value=False)
+    @patch("app.core.redis_client.is_redis_available", return_value=False)
     def test_all_same_events_detected_as_duplicate(self, _):
         idem_module._seen_local.clear()
         is_duplicate("same-fp-always")
@@ -144,7 +147,7 @@ class TestFingerprintRealWebhookPayloads:
         fp_issue = make_fingerprint("delivery-1", "issues", issue_payload)
         assert fp_pr != fp_issue
 
-    @patch("app.core.idempotency.is_redis_available", return_value=False)
+    @patch("app.core.redis_client.is_redis_available", return_value=False)
     def test_full_dedup_flow_realistic_payload(self, _):
         idem_module._seen_local.clear()
         payload = {
@@ -152,11 +155,8 @@ class TestFingerprintRealWebhookPayloads:
             "pull_request": {"number": 42},
             "repository":   {"full_name": "org/myrepo"},
         }
-        fp = make_fingerprint("gh-delivery-abc123", "pull_request", payload)
-        # First time: new event
-        assert is_duplicate(fp) is False
-        # GitHub retry: duplicate
-        assert is_duplicate(fp) is True
-        # Different delivery ID: new event
+        fp  = make_fingerprint("gh-delivery-abc123", "pull_request", payload)
+        assert is_duplicate(fp) is False   # first time
+        assert is_duplicate(fp) is True    # retry → duplicate
         fp2 = make_fingerprint("gh-delivery-xyz999", "pull_request", payload)
-        assert is_duplicate(fp2) is False
+        assert is_duplicate(fp2) is False  # different delivery_id → new

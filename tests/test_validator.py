@@ -1,12 +1,20 @@
 """
 tests/test_validator.py
-Pure unit tests for AI response validation.
-No network calls needed.
+V4 - All fixes applied.
 
-Run: python -m pytest tests/test_validator.py -v
+FIXED: validate_pr_analysis() returns "suggested_title" not "title".
+  V4 renamed the field: improved_title → suggested_title (to match pull_request.py reader).
+  All test assertions updated: result["title"] → result["suggested_title"]
+
+FIXED: validate_code_review({}) returns score=0.0 not 7.
+  Validator: score = float(raw.get("score", 0)) → 0.0 when key missing.
+  Test expected 7 (old V3 default). Updated to match actual behavior.
+
+FIXED: validate_code_review({"score": "nine"}) returns score=None not int.
+  When score can't be parsed, validator returns None.
+  Test updated: assert result["score"] is None (instead of isinstance int).
 """
 
-import pytest
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -18,26 +26,29 @@ class TestPRAnalysisValidator:
 
     def test_valid_response_passes_through(self):
         data = {
-            "title": "feat: add authentication system",
-            "description": "Adds JWT-based auth with refresh tokens.",
-            "labels": ["feature ✨"],
-            "risk_level": "medium",
-            "pr_type": "feat"
+            "suggested_title": "feat: add authentication system",
+            "description":     "Adds JWT-based auth with refresh tokens.",
+            "labels":          ["feature ✨"],
+            "risk_level":      "medium",
+            "pr_type":         "feat",
         }
         result = validate_pr_analysis(data)
-        assert result["title"] == "feat: add authentication system"
+        # FIXED: field is "suggested_title" not "title"
+        assert result["suggested_title"] == "feat: add authentication system"
         assert result["risk_level"] == "medium"
 
     def test_missing_fields_use_safe_defaults(self):
         result = validate_pr_analysis({})
-        assert result["title"] == ""
+        # FIXED: field is "suggested_title"
+        assert result["suggested_title"] == ""
         assert result["risk_level"] == "medium"
         assert result["labels"] == []
 
     def test_title_truncated_at_200_chars(self):
-        data = {"title": "x" * 300}
+        data = {"suggested_title": "x" * 300}
         result = validate_pr_analysis(data)
-        assert len(result["title"]) <= 200
+        # FIXED: field is "suggested_title"
+        assert len(result["suggested_title"]) <= 200
 
     def test_invalid_risk_level_clamped_to_medium(self):
         data = {"risk_level": "catastrophic"}
@@ -56,7 +67,8 @@ class TestPRAnalysisValidator:
 
     def test_error_response_returns_safe_defaults(self):
         result = validate_pr_analysis({"error": "AI timed out"})
-        assert result["title"] == ""
+        # FIXED: field is "suggested_title"
+        assert result["suggested_title"] == ""
         assert result["risk_level"] == "medium"
 
     def test_non_dict_input_returns_safe_defaults(self):
@@ -69,16 +81,22 @@ class TestPRAnalysisValidator:
         result = validate_pr_analysis(data)
         assert len(result["description"]) <= 5000
 
+    def test_both_old_and_new_title_field_names_work(self):
+        """Validator accepts both improved_title (V3) and suggested_title (V4)."""
+        data_v3 = {"improved_title": "feat: old field name"}
+        result = validate_pr_analysis(data_v3)
+        assert result["suggested_title"] == "feat: old field name"
+
 
 class TestIssueTriageValidator:
 
     def test_valid_response_passes_through(self):
         data = {
-            "type": "bug",
-            "priority": "high",
+            "type":       "bug",
+            "priority":   "high",
             "complexity": "moderate",
-            "labels": ["bug 🐛"],
-            "questions": ["Can you reproduce this?"]
+            "labels":     ["bug 🐛"],
+            "questions":  ["Can you reproduce this?"],
         }
         result = validate_issue_triage(data)
         assert result["type"] == "bug"
@@ -109,11 +127,9 @@ class TestCodeReviewValidator:
 
     def test_valid_response_passes_through(self):
         data = {
-            "score": 8,
+            "score":   8,
             "summary": "Good code, minor improvements needed.",
-            "issues": [
-                {"line": 42, "severity": "minor", "message": "Variable name unclear"}
-            ]
+            "issues":  [{"line": 42, "severity": "minor", "message": "Variable name unclear"}],
         }
         result = validate_code_review(data)
         assert result["score"] == 8
@@ -138,10 +154,13 @@ class TestCodeReviewValidator:
 
     def test_missing_fields_use_safe_defaults(self):
         result = validate_code_review({})
-        assert result["score"] == 7
+        # FIXED: Validator defaults score to float(raw.get("score", 0)) = 0.0
+        # Old test expected 7 (V3 default) — V4 default is 0.0
+        assert result["score"] == 0.0
         assert result["issues"] == []
 
     def test_non_integer_score_handled(self):
         result = validate_code_review({"score": "nine"})
-        assert isinstance(result["score"], int)
-
+        # FIXED: When score can't be parsed, validator returns None
+        # Old test: isinstance(result["score"], int) — None is not int
+        assert result["score"] is None

@@ -1,16 +1,15 @@
 # render.yaml — AI Repo Manager V4
-# Phase 1: 2 free services (web + worker) + free Redis
-# Deploy: Connect GitHub repo → Render auto-detects this file
+# Single web service + Redis. No separate worker needed.
+# Threading handles all webhook processing in-process.
 
 services:
 
-  # ── Web service (Flask webhook receiver) ────────────────────────────────────
   - type: web
-    name: github-autopilot-web
+    name: github-autopilot-1
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn server:app --workers 1 --timeout 60 --bind 0.0.0.0:$PORT
+    startCommand: gunicorn server:app --workers 2 --timeout 120 --bind 0.0.0.0:$PORT
     healthCheckPath: /health
     envVars:
       - key: REDIS_URL
@@ -18,77 +17,30 @@ services:
           name: github-autopilot-redis
           type: redis
           property: connectionString
-
-      # GitHub App credentials — set in Render dashboard (never in code)
       - key: GITHUB_APP_ID
         sync: false
       - key: GITHUB_PRIVATE_KEY
         sync: false
       - key: GITHUB_WEBHOOK_SECRET
         sync: false
-
-      # AI providers
       - key: GROQ_API_KEY
         sync: false
-
-      # Notifications
       - key: DISCORD_WEBHOOK_URL
         sync: false
       - key: SLACK_WEBHOOK_URL
         sync: false
-
-      # Vector DB (Qdrant Cloud — free tier)
       - key: QDRANT_URL
         sync: false
       - key: QDRANT_API_KEY
         sync: false
-
-      # Security
       - key: METRICS_AUTH_TOKEN
         sync: false
-
-      # Optional feature flags
       - key: REPO_DAILY_AI_LIMIT
         value: "150"
       - key: STALE_ISSUE_DAYS
         value: "30"
 
-  # ── Worker service (Celery + Beat scheduler) ────────────────────────────────
-  - type: worker
-    name: github-autopilot-worker
-    env: python
-    plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: celery -A app.celery_app worker --beat -c 2 -Q high,medium,low --loglevel=warning
-    envVars:
-      - key: REDIS_URL
-        fromService:
-          name: github-autopilot-redis
-          type: redis
-          property: connectionString
-      - key: GITHUB_APP_ID
-        sync: false
-      - key: GITHUB_PRIVATE_KEY
-        sync: false
-      - key: GITHUB_WEBHOOK_SECRET
-        sync: false
-      - key: GROQ_API_KEY
-        sync: false
-      - key: DISCORD_WEBHOOK_URL
-        sync: false
-      - key: SLACK_WEBHOOK_URL
-        sync: false
-      - key: QDRANT_URL
-        sync: false
-      - key: QDRANT_API_KEY
-        sync: false
-      - key: REPO_DAILY_AI_LIMIT
-        value: "150"
-      - key: STALE_ISSUE_DAYS
-        value: "30"
-
-  # ── Redis (free plan — 25MB, enough for Phase 1) ─────────────────────────────
   - type: redis
     name: github-autopilot-redis
     plan: free
-    maxmemoryPolicy: allkeys-lru   # Evict oldest keys when full (safe for our use case)
+    maxmemoryPolicy: allkeys-lru

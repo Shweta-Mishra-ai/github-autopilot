@@ -1,17 +1,18 @@
 """
 Push Handler - app/handlers/push.py
-V4: Fixed duplicate issue creation.
+V4: Dedup fix — no more duplicate issues on every push.
 
-FIXED: _scan_dependencies() was creating a new issue on EVERY push
-  that touched requirements.txt — even if an identical issue already exists.
-  Fix: Check Redis for a recent issue fingerprint (24h TTL).
-       If same vulnerabilities reported recently → skip (no duplicate).
+FIXED: _scan_dependencies() creates issue on EVERY push touching requirements.txt
+  → Same vulnerabilities → new issue every time → spam.
+  Fix: Redis key with 24h TTL. Same finding → skip.
 
 FIXED: _lint_commits() same problem — duplicate commit convention issues.
-  Fix: Same Redis dedup with 6h TTL per repo.
+  Fix: Redis key with 6h TTL per repo.
 """
 
 import base64
+import re
+
 from app.github.auth import get_installation_token
 from app.github.client import gh_get, gh_post, GitHubError
 from app.github.notifications import notify_secret_detected
@@ -70,21 +71,26 @@ def handle(payload: dict):
     _index_changed_files(repo, commits, token, latest_sha, log)
 
 
+# ── Dedup helper ──────────────────────────────────────────────────────────────
+
 def _already_reported(repo: str, report_type: str, ttl_seconds: int = 86400) -> bool:
     """
-    Returns True if we already created this type of issue recently.
-    Uses Redis with TTL to prevent duplicate issues.
-    ttl_seconds: how long to suppress duplicate reports (default 24h).
+    Returns True if same report was already created recently.
+    Uses Redis NX key with TTL.
+    First call → sets key → returns False (not duplicate).
+    Second call within TTL → key exists → returns True (duplicate → skip).
     """
     try:
         from app.core.redis_client import get_redis
-        r   = get_redis()
-        key = f"push_reported:{repo}:{report_type}"
+        r      = get_redis()
+        key    = f"push_reported:{repo}:{report_type}"
         result = r.set(key, "1", nx=True, ex=ttl_seconds)
-        return result is None  # None = key existed = already reported
+        return result is None   # None = key existed = already reported
     except Exception:
-        return False  # If Redis unavailable, allow (better than missing alerts)
+        return False  # Redis unavailable → allow (better missing nothing than spamming)
 
+
+# ── Handlers ──────────────────────────────────────────────────────────────────
 
 def _scan_secrets(repo, commits, token, config, log):
     all_findings = []
@@ -102,11 +108,10 @@ def _scan_secrets(repo, commits, token, config, log):
             log.error(f"Secret scan failed for {sha[:7]}: {e}")
 
     if all_findings:
-        comment = format_secret_findings(all_findings, repo)
         try:
             gh_post(f"/repos/{repo}/issues", token, {
-                "title": f"🚨 Secret detected in push — {len(all_findings)} finding(s)",
-                "body":   comment,
+                "title":  f"🚨 Secret detected in push — {len(all_findings)} finding(s)",
+                "body":   format_secret_findings(all_findings, repo),
                 "labels": ["security", "critical"]
             })
             notify_secret_detected(repo, len(all_findings))
@@ -133,9 +138,10 @@ def _scan_dependencies(repo, commits, token, config, log):
             if not findings:
                 continue
 
-            # FIXED: Skip if we already reported this in last 24 hours
-            if _already_reported(repo, f"dep_scan_{dep_file}", ttl_seconds=86400):
-                log.info(f"push.dep_scan_skipped repo={repo} file={dep_file} (already reported today)")
+            # ✅ DEDUP FIX: Skip if same dep scan reported in last 24 hours
+            report_key = f"dep_scan_{dep_file}"
+            if _already_reported(repo, report_key, ttl_seconds=86400):
+                log.info(f"push.dep_scan_skipped file={dep_file} (reported in last 24h)")
                 continue
 
             gh_post(f"/repos/{repo}/issues", token, {
@@ -162,9 +168,9 @@ def _lint_commits(repo, commits, token, config, log):
         log.info(f"push | {len(bad_commits)} non-conventional — below threshold")
         return
 
-    # FIXED: Skip if we already reported commit lint in last 6 hours
+    # ✅ DEDUP FIX: Skip if commit lint issue reported in last 6 hours
     if _already_reported(repo, "commit_lint", ttl_seconds=21600):
-        log.info(f"push.commit_lint_skipped repo={repo} (already reported in last 6h)")
+        log.info(f"push.commit_lint_skipped (reported in last 6h)")
         return
 
     rows = "\n".join(f"| `{c['sha']}` | {c['message']} |" for c in bad_commits)
@@ -200,7 +206,7 @@ type(scope): description
 
 
 def _index_changed_files(repo, commits, token, latest_sha, log):
-    """Index changed files into vector DB — runs silently."""
+    """Index changed files into vector DB — silent."""
     try:
         from app.intelligence.embeddings import embed_file
 
@@ -238,6 +244,5 @@ def _index_changed_files(repo, commits, token, latest_sha, log):
 def _is_conventional(msg: str) -> bool:
     if not msg:
         return False
-    import re
     pattern = r'^(' + '|'.join(CONVENTIONAL_TYPES) + r')(\([^)]+\))?!?:\s.+'
     return bool(re.match(pattern, msg))

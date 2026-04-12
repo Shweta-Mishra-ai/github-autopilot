@@ -170,7 +170,7 @@ def _lint_commits(repo, commits, token, config, log):
 
     # ✅ DEDUP FIX: Skip if commit lint issue reported in last 6 hours
     if _already_reported(repo, "commit_lint", ttl_seconds=21600):
-        log.info(f"push.commit_lint_skipped (reported in last 6h)")
+        log.info("push.commit_lint_skipped (reported in last 6h)")
         return
 
     rows = "\n".join(f"| `{c['sha']}` | {c['message']} |" for c in bad_commits)

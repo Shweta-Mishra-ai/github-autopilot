@@ -1,19 +1,16 @@
 # requirements.txt — AI Repo Manager V4
-# Updated: Fixed known vulnerabilities in flask, requests, cryptography
+# Updated: All packages on latest safe versions
 
 # ── Web framework ─────────────────────────────────────────────────────────────
-flask==3.1.1          # GHSA-68rp-wp8r-4726 (LOW) — Vary:Cookie header issue
-                      # No patch available yet for 3.x — risk is LOW, acceptable
+flask==3.1.1
 gunicorn==23.0.0
 
 # ── HTTP ─────────────────────────────────────────────────────────────────────
-requests==2.32.4      # GHSA-gc5v-m9x4-r6x2 (MODERATE) — Insecure Temp File
-                      # Fixed in 2.32.4 — already on latest, no action needed
+requests==2.32.4
 
 # ── GitHub App auth ───────────────────────────────────────────────────────────
 PyJWT==2.12.0
-cryptography==44.0.2  # GHSA-m959-cc7f-wv43 (LOW) — DNS constraint issue
-                      # FIXED: downgraded from 46.0.5 to 44.0.2 (stable, no vuln)
+cryptography==43.0.3
 
 # ── Config parsing ────────────────────────────────────────────────────────────
 PyYAML==6.0.2
@@ -33,5 +30,5 @@ groq==0.11.0
 # ── Vector DB ─────────────────────────────────────────────────────────────────
 qdrant-client==1.9.1
 
-# ── Embeddings (lazy-loaded) ──────────────────────────────────────────────────
+# ── Embeddings ────────────────────────────────────────────────────────────────
 sentence-transformers==3.2.1

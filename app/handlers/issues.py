@@ -8,7 +8,7 @@ FIXED (ruff F401): Removed unused `gh_get` from github client import.
 from app.github.auth import get_installation_token
 from app.github.client import gh_post, GitHubError
 from app.github.notifications import notify_new_issue
-from app.ai.client import groq_ask
+from app.ai.router import router
 from app.ai.validator import validate_issue_triage
 from app.core.config import load_config
 from app.core.guardrails import check_auto_label
@@ -55,7 +55,7 @@ def handle(payload: dict):
         except Exception:
             pass
 
-    raw = groq_ask(
+    raw, _meta = router.ask(
         "You are an expert open source maintainer. Triage issues. Return valid JSON only.",
         f"""Triage this issue:
 Repo: {repo}
@@ -72,7 +72,8 @@ Return JSON:
   "needs_info": false,
   "questions": ["clarifying question if needed"],
   "complexity": "trivial|simple|moderate|complex"
-}}"""
+}}""",
+        task="issue_triage"
     )
 
     result = validate_issue_triage(raw)

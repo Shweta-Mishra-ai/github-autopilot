@@ -10,7 +10,7 @@ FIXED (ruff E702 lines 363,366,371,373,378,384): Split semicolons to separate li
 import re
 from app.github.auth import get_installation_token
 from app.github.client import gh_get, gh_post, gh_put, gh_delete, GitHubError
-from app.ai.client import groq_ask, groq_text
+from app.ai.router import router
 from app.core.config import load_config
 from app.core.logger import EventLogger
 from app.core.confidence import ConfidenceGate
@@ -132,7 +132,7 @@ def handle(payload: dict):
 # ── Command implementations ───────────────────────────────────────────────────
 
 def _cmd_fix(ctx_title: str, context: str, gate=None) -> str:
-    r = groq_ask(
+    r, _meta = router.ask(
         "Senior engineer. Give precise, working fix. JSON only.",
         f"""Fix this issue:
 Title: {ctx_title}
@@ -146,7 +146,7 @@ Return JSON:
   "test": "test to verify fix",
   "confidence": 0.85
 }}""",
-        fast=True
+        task="fix_command"
     )
 
     confidence_note = ""
@@ -180,7 +180,7 @@ def _cmd_apply(repo: str, issue_number: int, ctx_title: str,
             for c in commits[:15]
         )
 
-        r = groq_ask(
+        r, _meta = router.ask(
             "Git expert. Identify non-conventional commits. JSON only.",
             f"""Issue: {ctx_title}
 Recent commits:
@@ -192,7 +192,7 @@ Return JSON:
     {{"sha": "full_sha", "old_message": "original", "new_message": "conventional: message"}}
   ]
 }}""",
-            fast=True
+            task="commit_lint"
         )
 
         commits_to_fix = r.get("commits", [])
@@ -277,15 +277,16 @@ Return JSON:
 
 
 def _cmd_explain(context: str) -> str:
-    text = groq_text(
+    text, _meta = router.ask_text(
         "Senior engineer. Explain clearly in plain English.",
-        f"Explain this:\n{context[:2000]}"
+        f"Explain this:\n{context[:2000]}",
+        task="explain"
     )
     return f"## 💡 Explanation\n\n{text}"
 
 
 def _cmd_improve(context: str, gate=None) -> str:
-    r = groq_ask(
+    r, _meta = router.ask(
         "Staff engineer. Suggest concrete improvements. JSON only.",
         f"""Suggest improvements for:
 {context[:2000]}
@@ -297,7 +298,7 @@ Return JSON:
     {{"area": "performance|security|readability|structure", "suggestion": "what to change", "example": "code example"}}
   ]
 }}""",
-        fast=True
+        task="improve"
     )
     lines = [f"## ✨ Improvements\n\n**{r.get('summary', '')}**\n"]
     for i, imp in enumerate(r.get("improvements", [])[:4], 1):
@@ -308,7 +309,7 @@ Return JSON:
 
 
 def _cmd_test(context: str) -> str:
-    r = groq_ask(
+    r, _meta = router.ask(
         "Senior QA engineer. Generate tests. JSON only.",
         f"""Write tests for:
 {context[:2000]}
@@ -318,7 +319,7 @@ Return JSON:
   "framework": "pytest",
   "tests": [{{"name": "test_name", "type": "unit", "desc": "what it tests", "code": "full test code"}}]
 }}""",
-        fast=True
+        task="test_generation"
     )
     lines = [f"## 🧪 Tests ({r.get('framework', 'pytest')})\n"]
     for t in r.get("tests", [])[:3]:
@@ -327,14 +328,14 @@ Return JSON:
 
 
 def _cmd_docs(context: str) -> str:
-    r = groq_ask(
+    r, _meta = router.ask(
         "Technical writer. Generate documentation. JSON only.",
         f"""Generate docs for:
 {context[:2000]}
 
 Return JSON:
 {{"docstring": "complete docstring", "usage": "usage example", "readme_section": "markdown section"}}""",
-        fast=True
+        task="docs"
     )
     return (
         f"## 📚 Documentation\n\n"
@@ -345,7 +346,7 @@ Return JSON:
 
 
 def _cmd_refactor(context: str) -> str:
-    r = groq_ask(
+    r, _meta = router.ask(
         "Principal engineer. Suggest refactoring. JSON only.",
         f"""Suggest refactoring for:
 {context[:2500]}
@@ -354,7 +355,8 @@ Return JSON:
 {{
   "summary": "assessment",
   "refactors": [{{"type": "extract_function", "description": "what and why", "before": "snippet", "after": "refactored", "benefit": "benefit"}}]
-}}"""
+}}""",
+        task="refactor"
     )
     lines = [f"## ♻️ Refactor\n\n**{r.get('summary','')}**\n"]
     for i, ref in enumerate(r.get("refactors", [])[:4], 1):
@@ -503,9 +505,10 @@ def _cmd_summarize(repo: str, issue_number: int, token: str) -> str:
             f"@{c['user']['login']}: {c['body'][:300]}"
             for c in comments[:20]
         )
-        summary = groq_text(
+        summary, _meta = router.ask_text(
             "Senior engineer. Summarize GitHub discussions concisely.",
-            f"Summarize this discussion thread:\n\n{thread[:3000]}"
+            f"Summarize this discussion thread:\n\n{thread[:3000]}",
+            task="explain"
         )
         return f"## 📝 Thread Summary\n\n{summary}"
     except Exception as e:
@@ -513,7 +516,7 @@ def _cmd_summarize(repo: str, issue_number: int, token: str) -> str:
 
 
 def _cmd_ci(context: str) -> str:
-    r = groq_ask(
+    r, _meta = router.ask(
         "DevOps expert. Analyze CI failures. JSON only.",
         f"""Analyze this CI failure:
 {context[:3000]}
@@ -525,7 +528,7 @@ Return JSON:
   "prevention": "how to prevent this in future",
   "confidence": 0.85
 }}""",
-        fast=True
+        task="ci_analysis"
     )
     return (
         f"## 🔴 CI Failure Analysis\n\n"
@@ -573,7 +576,7 @@ def _cmd_security(repo: str, issue_number: int, issue: dict, token: str) -> str:
 
 
 def _cmd_gaps(context: str) -> str:
-    r = groq_ask(
+    r, _meta = router.ask(
         "Senior QA engineer. Identify test gaps. JSON only.",
         f"""Analyze this code for test coverage gaps:
 {context[:2500]}
@@ -585,7 +588,7 @@ Return JSON:
     {{"area": "what is not tested", "risk": "high|medium|low", "suggested_test": "test to add"}}
   ]
 }}""",
-        fast=True
+        task="gaps"
     )
     lines = [f"## 🔍 Test Coverage Gaps\n\n**{r.get('coverage_assessment', '')}**\n"]
     for i, gap in enumerate(r.get("gaps", [])[:5], 1):
@@ -607,7 +610,7 @@ def _cmd_changelog(repo: str, token: str) -> str:
             for c in commits[:15]
         )
 
-        changelog = groq_text(
+        changelog, _meta = router.ask_text(
             "Technical writer. Generate a clean CHANGELOG entry in Keep a Changelog format.",
             f"""Generate a CHANGELOG.md entry for version after {latest_tag}.
 
@@ -618,7 +621,8 @@ Format:
 ## [X.Y.Z] - YYYY-MM-DD
 ### Added
 ### Changed
-### Fixed"""
+### Fixed""",
+            task="changelog"
         )
 
         return f"## 📋 CHANGELOG Entry\n\n```markdown\n{changelog}\n```"
@@ -628,46 +632,9 @@ Format:
 
 
 def _cmd_budget() -> str:
-    """Show today's LLM usage per provider."""
+    """Show today's LLM usage per provider — powered by metrics module."""
     try:
-        import datetime
-        from app.core.redis_client import get_redis
-        from app.ai.circuit_breaker import status_all
-
-        r     = get_redis()
-        today = datetime.date.today().isoformat()
-
-        LIMITS = {
-            "groq_70b": {"requests": 6_000,   "tokens": 100_000},
-            "groq_8b":  {"requests": 14_400,  "tokens": 500_000},
-            "gemini":   {"requests": 1_500,   "tokens": 1_000_000},
-            "openrouter": {"requests": None,   "tokens": None},
-        }
-
-        rows = []
-        for provider, limits in LIMITS.items():
-            tokens   = int(r.get(f"llm:tokens:{provider}:{today}") or 0)
-            requests = int(r.get(f"llm:requests:{provider}:{today}") or 0)
-            req_limit = limits["requests"]
-            pct = f"{round(requests/req_limit*100)}%" if req_limit else "∞"
-            emoji = "🟢" if req_limit and requests/req_limit < 0.7 else "🟡" if req_limit and requests/req_limit < 0.9 else "🔴"
-            rows.append(f"| {provider} | {requests} | {tokens:,} | {emoji} {pct} |")
-
-        breakers = status_all()
-        cb_lines = "\n".join(
-            f"- **{name}**: {s['state']}" for name, s in breakers.items()
-        )
-
-        return f"""## 💰 LLM Budget — Today
-
-| Provider | Requests | Tokens | Limit Used |
-|----------|----------|--------|------------|
-{chr(10).join(rows)}
-
-### Circuit Breaker Status
-{cb_lines}
-
-🟢 < 70% · 🟡 70–90% · 🔴 > 90%"""
-
+        from app.ai.metrics import format_budget_comment
+        return format_budget_comment()
     except Exception as e:
         return f"## ⚠️ Budget check failed: `{str(e)[:200]}`"

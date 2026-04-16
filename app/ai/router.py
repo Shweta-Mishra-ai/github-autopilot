@@ -1,26 +1,21 @@
 """
 app/ai/router.py
-V4 Sprint 2: Smart LLM task router.
+V4 Sprint 2: Smart LLM router — 4 providers, safety, cost tracking.
 
-Routes each task to the best available provider based on:
-  1. Task type (fast vs deep vs long context)
-  2. Live provider usage % (avoids hitting free tier limits)
-  3. Circuit breaker state (skips broken providers instantly)
+Provider chain (free tier, priority order):
+  1. Groq 70B   — best quality, 6K req/day
+  2. Groq 8B    — fast + cheap, 14K req/day
+  3. Gemini Flash — long context, 1.5K req/day
+  4. OpenRouter  — free models emergency fallback, 200 req/day
 
-Usage (replaces direct groq_ask / groq_text calls):
-  from app.ai.router import router
-
-  result, meta = router.ask("system prompt", "user prompt", task="pr_analysis")
-  text,   meta = router.ask_text("system", "user", task="changelog")
-
-  # meta has: model, provider, tokens, latency_ms, cost_usd
+Safety: Input sanitization before every call.
+Cost: Every call tracked in Redis → /budget shows live stats.
+Context: All state in Redis (survives restarts on Render free tier).
 """
 
 import datetime
 import logging
 import os
-import time
-from enum import Enum
 
 from app.ai.circuit_breaker import AllProvidersDown, get_breaker
 from app.ai.providers.base import LLMProvider, LLMResponse
@@ -30,68 +25,75 @@ log = logging.getLogger(__name__)
 
 # ── Task classification ───────────────────────────────────────────────────────
 
-class TaskType(Enum):
-    FAST    = "fast"     # < 500 tokens, < 1s — labels, classification, short
-    STANDARD = "standard" # 500-1500 tokens, < 3s — code review, fix, explain
-    DEEP    = "deep"     # 1500-3000 tokens, < 6s — PR analysis, security, arch
-    LONG    = "long"     # > 3000 tokens — full file, large PR, Gemini only
+TASK_MAP: dict[str, str] = {
+    # fast → 8B preferred
+    "issue_label":       "fast",
+    "commit_lint":       "fast",
+    "pr_summary":        "fast",
+    "is_duplicate":      "fast",
+    "budget":            "fast",
 
-# Task name → TaskType
-TASK_MAP: dict[str, TaskType] = {
-    # Fast (8B is enough)
-    "issue_label":       TaskType.FAST,
-    "commit_lint":       TaskType.FAST,
-    "pr_summary":        TaskType.FAST,
-    "is_duplicate":      TaskType.FAST,
+    # standard → 70B preferred
+    "pr_title_rewrite":  "standard",
+    "code_review":       "standard",
+    "fix_command":       "standard",
+    "test_generation":   "standard",
+    "explain":           "standard",
+    "improve":           "standard",
+    "refactor":          "standard",
+    "ci_analysis":       "standard",
+    "gaps":              "standard",
+    "perf":              "standard",
+    "arch":              "standard",
+    "changelog":         "standard",
+    "docs":              "standard",
 
-    # Standard (70B preferred)
-    "pr_title_rewrite":  TaskType.STANDARD,
-    "code_review":       TaskType.STANDARD,
-    "fix_command":       TaskType.STANDARD,
-    "test_generation":   TaskType.STANDARD,
-    "explain":           TaskType.STANDARD,
-    "improve":           TaskType.STANDARD,
-    "refactor":          TaskType.STANDARD,
-    "ci_analysis":       TaskType.STANDARD,
-    "gaps":              TaskType.STANDARD,
-    "perf":              TaskType.STANDARD,
-    "arch":              TaskType.STANDARD,
-    "changelog":         TaskType.STANDARD,
-    "docs":              TaskType.STANDARD,
-    "budget":            TaskType.FAST,
+    # deep → 70B, more tokens
+    "pr_analysis":       "deep",
+    "security_report":   "deep",
+    "issue_triage":      "deep",
+    "health_report":     "deep",
 
-    # Deep (70B, more tokens)
-    "pr_analysis":       TaskType.DEEP,
-    "security_report":   TaskType.DEEP,
-    "issue_triage":      TaskType.DEEP,
-    "health_report":     TaskType.DEEP,
-
-    # Long context → Gemini
-    "full_file_analysis": TaskType.LONG,
-    "large_pr_review":    TaskType.LONG,
+    # long → Gemini preferred
+    "full_file_analysis": "long",
+    "large_pr_review":    "long",
 }
 
-# Free tier daily limits
+# Conservative daily limits (80% of actual free tier)
 DAILY_LIMITS = {
-    "groq_70b": {"tokens": 80_000,  "requests": 5_000},   # 80% of actual limit
-    "groq_8b":  {"tokens": 400_000, "requests": 12_000},
-    "gemini":   {"tokens": 800_000, "requests": 1_200},
+    "groq_70b":   {"tokens": 80_000,  "requests": 5_000},
+    "groq_8b":    {"tokens": 400_000, "requests": 12_000},
+    "gemini":     {"tokens": 800_000, "requests": 1_200},
+    "openrouter": {"tokens": 50_000,  "requests": 200},
+}
+
+# Input safety limits
+MAX_SYSTEM_CHARS = 3_000
+MAX_USER_CHARS   = 8_000
+
+# Cost per 1K tokens (USD) — for tracking only, Groq/Gemini/OpenRouter are $0 on free
+COST_PER_1K = {
+    "groq_70b":   0.0009,  # approximate — free tier is $0
+    "groq_8b":    0.00006,
+    "gemini":     0.0,
+    "openrouter": 0.0,
 }
 
 
 class LLMRouter:
     """
-    Central router. One instance per app (module-level singleton).
-    All handlers call router.ask() / router.ask_text() — never providers directly.
+    Central LLM router — single instance, all handlers use this.
+    Handles: provider selection, safety, fallback, cost tracking.
     """
 
     def __init__(self):
-        self._groq_70b = GroqProvider("llama-3.3-70b-versatile")
-        self._groq_8b  = GroqProvider("llama-3.1-8b-instant")
-        self._gemini   = None   # Lazy-loaded only if GEMINI_API_KEY set
+        self._groq_70b    = GroqProvider("llama-3.3-70b-versatile")
+        self._groq_8b     = GroqProvider("llama-3.1-8b-instant")
+        self._gemini      = None
+        self._openrouter  = None
 
     def _get_gemini(self):
-        if self._gemini is None:
+        if self._gemini is None and os.environ.get("GEMINI_API_KEY"):
             try:
                 from app.ai.providers.gemini import GeminiProvider
                 self._gemini = GeminiProvider()
@@ -99,8 +101,17 @@ class LLMRouter:
                 pass
         return self._gemini
 
+    def _get_openrouter(self):
+        if self._openrouter is None and os.environ.get("OPENROUTER_API_KEY"):
+            try:
+                from app.ai.providers.openrouter import OpenRouterProvider
+                self._openrouter = OpenRouterProvider()
+            except Exception:
+                pass
+        return self._openrouter
+
     def _usage_pct(self, provider_key: str) -> float:
-        """Returns 0.0-1.0 usage fraction for today."""
+        """Returns 0.0–1.0 usage fraction for today."""
         try:
             from app.core.redis_client import get_redis
             r     = get_redis()
@@ -111,53 +122,84 @@ class LLMRouter:
         except Exception:
             return 0.0
 
+    def _sanitize(self, text: str, max_chars: int) -> str:
+        """
+        Safety: Remove prompt injection patterns, cap length.
+        Common injection patterns in GitHub issues/comments.
+        """
+        if not text:
+            return ""
+
+        # Cap length
+        text = text[:max_chars]
+
+        # Remove common injection attempts
+        injections = [
+            "ignore previous instructions",
+            "ignore all instructions",
+            "disregard your system prompt",
+            "you are now",
+            "act as",
+            "jailbreak",
+            "DAN mode",
+            "developer mode",
+        ]
+        text_lower = text.lower()
+        for pattern in injections:
+            if pattern in text_lower:
+                # Replace with sanitized version — don't block entirely
+                log.warning(f"router.injection_attempt_detected pattern='{pattern}'")
+                text = text[:text_lower.index(pattern)] + "[FILTERED]" + text[text_lower.index(pattern) + len(pattern):]
+                text_lower = text.lower()
+
+        return text.strip()
+
     def _select_provider(self, task: str, context_tokens: int = 0) -> LLMProvider:
-        """
-        Select best available provider for task.
-        Priority: task type → usage % → circuit state.
-        """
-        task_type = TASK_MAP.get(task, TaskType.STANDARD)
+        """Select best available provider."""
+        task_type = TASK_MAP.get(task, "standard")
 
-        # Long context → Gemini only
-        if task_type == TaskType.LONG or context_tokens > 6000:
-            gemini = self._get_gemini()
-            if gemini and get_breaker("gemini").is_available():
-                return gemini
-            # Gemini unavailable → try 70B with truncation
-            task_type = TaskType.DEEP
+        # Long context → Gemini first
+        if task_type == "long" or context_tokens > 6000:
+            g = self._get_gemini()
+            if g and get_breaker("gemini").is_available() and self._usage_pct("gemini") < 0.85:
+                return g
+            task_type = "deep"  # degrade to deep
 
-        # Fast tasks → 8B first
-        if task_type == TaskType.FAST:
-            if (get_breaker("groq_8b").is_available()
-                    and self._usage_pct("groq_8b") < 0.85):
+        # Fast → 8B first
+        if task_type == "fast":
+            if get_breaker("groq_8b").is_available() and self._usage_pct("groq_8b") < 0.85:
                 return self._groq_8b
-            # 8B overloaded → try Gemini
-            gemini = self._get_gemini()
-            if gemini and get_breaker("gemini").is_available():
-                return gemini
-            # Last resort: 70B
+            g = self._get_gemini()
+            if g and get_breaker("gemini").is_available():
+                return g
             if get_breaker("groq_70b").is_available():
                 return self._groq_70b
 
-        # Standard / Deep → 70B preferred
-        groq_70b_pct = self._usage_pct("groq_70b")
-
-        if get_breaker("groq_70b").is_available() and groq_70b_pct < 0.80:
+        # Standard / Deep → 70B first
+        pct_70b = self._usage_pct("groq_70b")
+        if get_breaker("groq_70b").is_available() and pct_70b < 0.80:
             return self._groq_70b
 
-        if groq_70b_pct >= 0.80:
-            log.warning(f"router.groq_70b_high_usage pct={groq_70b_pct:.0%}")
-            # Degrade: Standard → 8B, Deep → Gemini
-            if task_type == TaskType.STANDARD and get_breaker("groq_8b").is_available():
-                return self._groq_8b
-            gemini = self._get_gemini()
-            if gemini and get_breaker("gemini").is_available():
-                return gemini
+        # 70B busy → degrade
+        if pct_70b >= 0.80:
+            log.warning(f"router.groq_70b_high_usage pct={pct_70b:.0%} task={task}")
+
+        if task_type == "standard" and get_breaker("groq_8b").is_available():
+            return self._groq_8b
+
+        g = self._get_gemini()
+        if g and get_breaker("gemini").is_available():
+            return g
 
         if get_breaker("groq_8b").is_available():
             return self._groq_8b
 
-        # Nothing available
+        # Emergency: OpenRouter
+        or_p = self._get_openrouter()
+        if or_p and get_breaker("openrouter").is_available():
+            log.warning("router.emergency_fallback provider=openrouter")
+            return or_p
+
         raise AllProvidersDown()
 
     def ask(
@@ -171,25 +213,26 @@ class LLMRouter:
         context_tokens: int = 0,
     ) -> tuple[dict, LLMResponse]:
         """
-        Route to best provider, return (parsed_json, meta).
-        Handles fallback automatically.
+        Route to best provider → return (parsed_json, meta).
+        Input is sanitized before sending.
+        Fallback to next provider on failure.
         """
-        provider   = self._select_provider(task, context_tokens)
+        # Safety: sanitize inputs
+        system = self._sanitize(system, MAX_SYSTEM_CHARS)
+        user   = self._sanitize(user,   MAX_USER_CHARS)
+
+        provider     = self._select_provider(task, context_tokens)
         result, meta = provider.ask(system, user, max_tokens, temperature, timeout)
 
-        # If primary failed, try next provider
-        if meta.error and not result.get("raw"):
-            log.warning(f"router.primary_failed provider={meta.provider} error={meta.error}")
-            meta = self._try_fallback(
-                system, user, max_tokens, temperature, timeout,
-                failed_provider=meta.provider
-            )
-            if meta:
-                result, meta = meta
+        if meta.error:
+            log.warning(f"router.primary_failed provider={meta.provider} error={meta.error} task={task}")
+            fallback = self._try_fallback(system, user, max_tokens, temperature, timeout, meta.provider)
+            if fallback:
+                result, meta = fallback
             else:
                 raise AllProvidersDown()
 
-        self._log_call(task, meta)
+        self._log_and_track(task, meta)
         return result, meta
 
     def ask_text(
@@ -201,68 +244,85 @@ class LLMRouter:
         timeout: int = 30,
         context_tokens: int = 0,
     ) -> tuple[str, LLMResponse]:
-        """Route to best provider, return (plain_text, meta)."""
-        provider      = self._select_provider(task, context_tokens)
-        text, meta    = provider.ask_text(system, user, max_tokens, timeout)
+        """Route to best provider → return (plain_text, meta)."""
+        system = self._sanitize(system, MAX_SYSTEM_CHARS)
+        user   = self._sanitize(user,   MAX_USER_CHARS)
+
+        provider  = self._select_provider(task, context_tokens)
+        text, meta = provider.ask_text(system, user, max_tokens, timeout)
 
         if meta.error:
             log.warning(f"router.primary_failed provider={meta.provider} error={meta.error}")
-            fallback = self._try_fallback_text(
-                system, user, max_tokens, timeout,
-                failed_provider=meta.provider
-            )
+            fallback = self._try_fallback_text(system, user, max_tokens, timeout, meta.provider)
             if fallback:
                 text, meta = fallback
             else:
                 raise AllProvidersDown()
 
-        self._log_call(task, meta)
+        self._log_and_track(task, meta)
         return text, meta
 
-    def _try_fallback(self, system, user, max_tokens, temperature, timeout,
-                      failed_provider: str):
-        """Try next available provider after primary fails."""
-        candidates = [self._groq_70b, self._groq_8b, self._get_gemini()]
-        for provider in candidates:
-            if provider is None:
+    def _try_fallback(self, system, user, max_tokens, temperature, timeout, failed_key):
+        candidates = [
+            self._groq_70b,
+            self._groq_8b,
+            self._get_gemini(),
+            self._get_openrouter(),
+        ]
+        for p in candidates:
+            if p is None or p.provider_key == failed_key:
                 continue
-            if provider.provider_key == failed_provider:
+            if not get_breaker(p.provider_key).is_available():
                 continue
-            if not get_breaker(provider.provider_key).is_available():
-                continue
-            result, meta = provider.ask(system, user, max_tokens, temperature, timeout)
+            result, meta = p.ask(system, user, max_tokens, temperature, timeout)
             meta.used_fallback = True
             if not meta.error:
                 return result, meta
         return None
 
-    def _try_fallback_text(self, system, user, max_tokens, timeout,
-                           failed_provider: str):
-        """Try next available provider for text response."""
-        candidates = [self._groq_70b, self._groq_8b, self._get_gemini()]
-        for provider in candidates:
-            if provider is None:
+    def _try_fallback_text(self, system, user, max_tokens, timeout, failed_key):
+        candidates = [
+            self._groq_70b,
+            self._groq_8b,
+            self._get_gemini(),
+            self._get_openrouter(),
+        ]
+        for p in candidates:
+            if p is None or p.provider_key == failed_key:
                 continue
-            if provider.provider_key == failed_provider:
+            if not get_breaker(p.provider_key).is_available():
                 continue
-            if not get_breaker(provider.provider_key).is_available():
-                continue
-            text, meta = provider.ask_text(system, user, max_tokens, timeout)
+            text, meta = p.ask_text(system, user, max_tokens, timeout)
             meta.used_fallback = True
             if not meta.error:
                 return text, meta
         return None
 
-    def _log_call(self, task: str, meta: LLMResponse):
+    def _log_and_track(self, task: str, meta: LLMResponse):
+        """Log call + track cost in Redis."""
+        cost_est = (meta.total_tokens / 1000) * COST_PER_1K.get(meta.provider, 0)
+
         log.info(
             f"router.call task={task} provider={meta.provider} "
-            f"model={meta.model} tokens={meta.total_tokens} "
-            f"latency={meta.latency_ms}ms cost=${meta.cost_usd:.5f} "
-            f"fallback={meta.used_fallback}"
+            f"model={meta.model.split('/')[-1]} "
+            f"tokens={meta.total_tokens} latency={meta.latency_ms}ms "
+            f"cost_est=${cost_est:.5f} fallback={meta.used_fallback}"
         )
 
+        # Track cost in Redis
+        try:
+            from app.core.redis_client import get_redis
+            r     = get_redis()
+            today = datetime.date.today().isoformat()
+            # Store cost in millicents (int) to avoid float precision issues
+            cost_mc = int(cost_est * 100_000)
+            if cost_mc > 0:
+                r.incr(f"llm:cost_mc:{meta.provider}:{today}")
+                r.expire(f"llm:cost_mc:{meta.provider}:{today}", 86400)
+        except Exception:
+            pass
+
     def status(self) -> dict:
-        """Used by /budget command and /health endpoint."""
         from app.ai.circuit_breaker import status_all
         today = datetime.date.today().isoformat()
         usage = {}
@@ -270,25 +330,28 @@ class LLMRouter:
             from app.core.redis_client import get_redis
             r = get_redis()
             for pk, limits in DAILY_LIMITS.items():
-                req_used = int(r.get(f"llm:requests:{pk}:{today}") or 0)
-                tok_used = int(r.get(f"llm:tokens:{pk}:{today}") or 0)
-                req_pct  = round(req_used / limits["requests"] * 100) if limits["requests"] else 0
+                req  = int(r.get(f"llm:requests:{pk}:{today}") or 0)
+                tok  = int(r.get(f"llm:tokens:{pk}:{today}") or 0)
+                cost = int(r.get(f"llm:cost_mc:{pk}:{today}") or 0) / 100_000
                 usage[pk] = {
-                    "requests_today": req_used,
-                    "requests_limit": limits["requests"],
-                    "requests_pct":   req_pct,
-                    "tokens_today":   tok_used,
-                    "tokens_limit":   limits["tokens"],
+                    "requests_today": req,
+                    "requests_pct":   round(req / limits["requests"] * 100) if limits["requests"] else 0,
+                    "tokens_today":   tok,
+                    "cost_usd_today": round(cost, 5),
                 }
         except Exception:
             pass
+
         return {
             "circuit_breakers": status_all(),
             "daily_usage":      usage,
-            "gemini_available": bool(os.environ.get("GEMINI_API_KEY")),
+            "providers_enabled": {
+                "groq":        bool(os.environ.get("GROQ_API_KEY")),
+                "gemini":      bool(os.environ.get("GEMINI_API_KEY")),
+                "openrouter":  bool(os.environ.get("OPENROUTER_API_KEY")),
+            },
         }
 
 
-# ── Module-level singleton ────────────────────────────────────────────────────
-# All handlers import and use this single instance.
+# Module-level singleton — all handlers import this
 router = LLMRouter()

@@ -9,7 +9,6 @@ Free tier limits (daily):
 
 import logging
 import os
-import time
 
 import requests as http_requests
 

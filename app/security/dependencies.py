@@ -119,9 +119,9 @@ def format_dep_findings(findings: list[DepFinding]) -> str:
 
     def _render(group: list[DepFinding]):
         for f in group:
-            emoji = {"HIGH": "🔴", "CRITICAL": "🚨", "MODERATE": "🟡", "LOW": "🟢"}.get(f.severity, "⚠️")
+            sev_emoji = {"HIGH": "🔴", "CRITICAL": "🚨", "MODERATE": "🟡", "LOW": "🟢"}.get(f.severity, "⚠️")
             lines.append(f"\n`{f.package}=={f.version}`")
-            lines.append(f"- [{f.cve_id}](https://github.com/advisories/{f.cve_id}) "
+            lines.append(f"- {sev_emoji} [{f.cve_id}](https://github.com/advisories/{f.cve_id}) "
                          f"({f.severity}): {f.description}")
 
     if high:

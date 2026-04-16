@@ -11,7 +11,6 @@ Get key: https://aistudio.google.com/app/apikey
 
 import logging
 import os
-import time
 
 import requests as http_requests
 

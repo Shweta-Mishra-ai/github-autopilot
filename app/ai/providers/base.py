@@ -12,7 +12,7 @@ That's it. Zero changes to handlers or commands.
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import time
 
 

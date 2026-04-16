@@ -10,7 +10,7 @@ FIXED (ruff F401 line 16): Removed unused `check_pr_description_update` import.
 from app.github.auth import get_installation_token
 from app.github.client import gh_get, gh_post, gh_put, GitHubError
 from app.github.notifications import notify_high_risk_pr, notify_pr_opened
-from app.ai.client import groq_ask, groq_text
+from app.ai.router import router
 from app.ai.validator import validate_pr_analysis, validate_code_review
 from app.core.config import load_config
 from app.core.logger import EventLogger
@@ -95,7 +95,7 @@ def _analyze_pr(pr, repo, pr_number, files, token, config, gate, context, log):
         for f in files[:8]
     )
 
-    r = groq_ask(
+    r, _meta = router.ask(
         "Senior engineer. Analyze GitHub PRs. JSON only.",
         f"""Analyze this Pull Request:
 
@@ -117,7 +117,8 @@ Return JSON:
   "risk_reason": "why this risk level",
   "review_focus": ["area1", "area2"],
   "confidence": 0.85
-}}"""
+}}""",
+        task="pr_analysis"
     )
 
     r      = validate_pr_analysis(r)
@@ -181,7 +182,7 @@ def _post_pr_summary(pr, repo, pr_number, files, token, config, log):
         total_additions = sum(f.get("additions", 0) for f in files)
         total_deletions = sum(f.get("deletions", 0) for f in files)
 
-        summary = groq_text(
+        summary, _meta = router.ask_text(
             "Senior engineer. Write clear, concise PR summaries for reviewers.",
             f"""Write a reviewer-friendly summary for this Pull Request.
 
@@ -197,7 +198,8 @@ Write 3-5 sentences covering:
 1. What this PR accomplishes
 2. Key technical changes made
 3. What reviewers should focus on
-Keep it concise and helpful."""
+Keep it concise and helpful.""",
+            task="pr_summary"
         )
 
         comment = f"""## 📋 PR Summary
@@ -243,7 +245,7 @@ def _detect_test_gaps(pr, repo, pr_number, files, token, config, log):
             f"- {f['filename']}" for f in test_files
         ) or "No test files changed in this PR."
 
-        r = groq_ask(
+        r, _meta = router.ask(
             "Senior QA engineer. Identify test gaps precisely. JSON only.",
             f"""Analyze these code changes for test coverage gaps:
 
@@ -269,7 +271,7 @@ Return JSON:
 }}
 
 Only report real gaps. If tests are adequate, set has_gaps to false.""",
-            fast=True
+            task="gaps"
         )
 
         if not r.get("has_gaps", False):
@@ -329,7 +331,7 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
         filename = f["filename"]
         patch    = f.get("patch", "")[:1500]
 
-        r = groq_ask(
+        r, _meta = router.ask(
             "Senior code reviewer. Give precise, actionable feedback. JSON only.",
             f"""Review this code change:
 
@@ -355,7 +357,7 @@ Return JSON:
   "summary": "overall assessment",
   "confidence": 0.80
 }}""",
-            fast=True
+            task="code_review"
         )
 
         r      = validate_code_review(r)

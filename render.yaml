@@ -1,6 +1,5 @@
 # render.yaml — AI Repo Manager V4
-# Single web service + Redis. No separate worker needed.
-# Threading handles all webhook processing in-process.
+# Sprint 2: Added GEMINI_API_KEY for Gemini Flash fallback provider
 
 services:
 
@@ -24,6 +23,9 @@ services:
       - key: GITHUB_WEBHOOK_SECRET
         sync: false
       - key: GROQ_API_KEY
+        sync: false
+      # NEW Sprint 2: Gemini Flash fallback (free at aistudio.google.com)
+      - key: GEMINI_API_KEY
         sync: false
       - key: DISCORD_WEBHOOK_URL
         sync: false

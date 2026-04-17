@@ -215,4 +215,3 @@ def _is_plausible_file(ref: str, known_files: set[str]) -> bool:
     """
     basename = ref.split("/")[-1]
     return any(f.endswith(basename) for f in known_files)
-

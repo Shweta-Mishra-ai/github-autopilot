@@ -11,6 +11,7 @@ import re
 from app.github.auth import get_installation_token
 from app.github.client import gh_get, gh_post, gh_put, gh_delete, GitHubError
 from app.ai.router import router
+from app.ai.hallucination import check_response, add_confidence_footer
 from app.core.config import load_config
 from app.core.logger import EventLogger
 from app.core.confidence import ConfidenceGate
@@ -115,6 +116,8 @@ def handle(payload: dict):
             response = _cmd_changelog(repo, token)
         elif cmd == "/budget":
             response = _cmd_budget()
+        elif cmd == "/rollback":
+            response = _cmd_rollback(repo, issue_number, token, context_text, author)
 
     except Exception as e:
         log.error(f"Command {cmd} failed: {e}")
@@ -149,20 +152,15 @@ Return JSON:
         task="fix_command"
     )
 
-    confidence_note = ""
-    if gate:
-        result = gate.evaluate("fix_command", r)
-        if not result["auto_apply"]:
-            confidence_note = f"\n\n> ⚠️ {result['confidence_note']}"
-
-    return (
+    comment = (
         f"## 🔧 Fix\n\n"
         f"**Root cause:** {r.get('root_cause', 'See fix below')}\n\n"
         f"**Fix:**\n```\n{r.get('fix', '')}\n```\n\n"
         f"**Why:** {r.get('explanation', '')}\n\n"
         f"**Test:**\n```\n{r.get('test', '')}\n```"
-        f"{confidence_note}"
     )
+    hal = check_response(r, response_type="fix")
+    return add_confidence_footer(comment, hal)
 
 
 def _cmd_apply(repo: str, issue_number: int, ctx_title: str,
@@ -638,3 +636,78 @@ def _cmd_budget() -> str:
         return format_budget_comment()
     except Exception as e:
         return f"## ⚠️ Budget check failed: `{str(e)[:200]}`"
+
+def _cmd_rollback(repo: str, issue_number: int, token: str,
+                  cmd_args: str, author: str) -> str:
+    """
+    /rollback        → show available snapshots
+    /rollback 2      → restore snapshot #2
+    """
+    from app.core.snapshot import (
+        list_snapshots, get_snapshot_by_number,
+        format_snapshot_list, format_rollback_result, take_snapshot,
+    )
+
+    # No args → list snapshots
+    if not cmd_args:
+        return format_snapshot_list(repo)
+
+    # With number → restore
+    try:
+        n = int(cmd_args.strip())
+    except ValueError:
+        return (
+            f"## ⚠️ Invalid Snapshot Number\n\n"
+            f"`{cmd_args}` is not a valid number.\n\n"
+            "Use `/rollback` to see available snapshots."
+        )
+
+    snap = get_snapshot_by_number(repo, n)
+    if not snap:
+        return (
+            f"## ⚠️ Snapshot #{n} Not Found\n\n"
+            "Use `/rollback` to see available snapshots (max 10, expire after 7 days)."
+        )
+
+    # Safety snapshot before restoring
+    take_snapshot(repo, token, trigger=f"pre_rollback_by_{author}")
+
+    restored = []
+    failed   = []
+    bot_actions = snap.get("bot_actions", [])
+
+    for action in reversed(bot_actions):
+        action_type = action.get("type", "")
+        try:
+            if action_type == "create_issue":
+                number = action.get("number")
+                if number:
+                    gh_put(f"/repos/{repo}/issues/{number}", token, {"state": "closed"})
+                    restored.append(f"Closed issue #{number}: {action.get('title','')[:50]}")
+
+            elif action_type == "edit_pr_title":
+                number    = action.get("number")
+                old_title = action.get("old_title", "")
+                if number and old_title:
+                    gh_put(f"/repos/{repo}/pulls/{number}", token, {"title": old_title})
+                    restored.append(f"Reverted PR #{number} title to: {old_title[:50]}")
+
+            elif action_type == "add_labels":
+                number = action.get("number")
+                labels = action.get("labels", [])
+                if number and labels:
+                    for lbl in labels:
+                        try:
+                            from app.github.client import gh_delete
+                            gh_delete(f"/repos/{repo}/issues/{number}/labels/{lbl}", token)
+                        except Exception:
+                            pass
+                    restored.append(f"Removed labels {labels} from #{number}")
+
+        except Exception as exc:
+            failed.append(f"{action_type} #{action.get('number','?')}: {str(exc)[:60]}")
+
+    if not bot_actions:
+        restored.append("No automated actions to undo in this snapshot")
+
+    return format_rollback_result(repo, snap, restored, failed)

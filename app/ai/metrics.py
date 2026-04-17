@@ -1,12 +1,11 @@
 """
 app/ai/metrics.py
-V4 Sprint 2: LLM usage tracker + /budget command formatter.
+V4 Sprint 3: LLM usage tracker + /budget formatter.
 
-Tracks per-provider daily usage in Redis.
-Used by:
-  - router.py   → logs every call
-  - comments.py → /budget command response
-  - /health     → shows provider status
+FIXED (Sprint 3 — bot review):
+  - Variable `r` renamed to `redis_client` (more descriptive)
+  - Added try/except inside get_usage_today() inner loop
+  - Added None/missing key check before division
 """
 
 import datetime
@@ -14,7 +13,6 @@ import logging
 
 log = logging.getLogger(__name__)
 
-# Free tier daily limits (conservative — 80% of actual)
 PROVIDER_LIMITS = {
     "groq_70b": {
         "requests": 5_000,
@@ -46,30 +44,35 @@ PROVIDER_LIMITS = {
 def get_usage_today() -> dict:
     """
     Returns per-provider usage for today.
-    Format: {provider_key: {requests, tokens, req_pct, tok_pct}}
+    FIXED: renamed `r` → `redis_client`, added inner try/except per provider.
     """
     today  = datetime.date.today().isoformat()
     result = {}
 
     try:
         from app.core.redis_client import get_redis
-        r = get_redis()
+        redis_client = get_redis()  # FIXED: was `r`
 
         for pk, limits in PROVIDER_LIMITS.items():
-            req_used = int(r.get(f"llm:requests:{pk}:{today}") or 0)
-            tok_used = int(r.get(f"llm:tokens:{pk}:{today}") or 0)
+            try:
+                req_used = int(redis_client.get(f"llm:requests:{pk}:{today}") or 0)
+                tok_used = int(redis_client.get(f"llm:tokens:{pk}:{today}") or 0)
+            except Exception as inner_e:
+                log.warning(f"metrics.get_usage_failed provider={pk}: {inner_e}")
+                req_used = 0
+                tok_used = 0
 
-            req_limit = limits["requests"]
-            tok_limit = limits["tokens"]
+            req_limit = limits.get("requests") or 1  # FIXED: avoid div by zero
+            tok_limit = limits.get("tokens") or 1
 
             result[pk] = {
                 "label":          limits["label"],
                 "requests_used":  req_used,
                 "requests_limit": req_limit,
-                "requests_pct":   round(req_used / req_limit * 100, 1) if req_limit else 0,
+                "requests_pct":   round(req_used / req_limit * 100, 1),
                 "tokens_used":    tok_used,
                 "tokens_limit":   tok_limit,
-                "tokens_pct":     round(tok_used / tok_limit * 100, 1) if tok_limit else 0,
+                "tokens_pct":     round(tok_used / tok_limit * 100, 1),
                 "cost":           limits["cost"],
             }
 
@@ -80,10 +83,7 @@ def get_usage_today() -> dict:
 
 
 def format_budget_comment() -> str:
-    """
-    Formats /budget command GitHub comment.
-    Shows per-provider usage with visual bars.
-    """
+    """Formats /budget command GitHub comment."""
     from app.ai.circuit_breaker import status_all
     import os
 
@@ -93,7 +93,6 @@ def format_budget_comment() -> str:
 
     lines = [f"## 💰 LLM Budget — {today}\n"]
 
-    # Provider table
     lines.append("| Provider | Requests | Tokens | Status |")
     lines.append("|----------|----------|--------|--------|")
 
@@ -101,7 +100,6 @@ def format_budget_comment() -> str:
         req_pct = data["requests_pct"]
         tok_pct = data["tokens_pct"]
 
-        # Status emoji
         if req_pct >= 90 or tok_pct >= 90:
             status_emoji = "🔴 Critical"
         elif req_pct >= 70 or tok_pct >= 70:
@@ -109,7 +107,6 @@ def format_budget_comment() -> str:
         else:
             status_emoji = "🟢 OK"
 
-        # Circuit breaker state
         cb = breakers.get(pk, {})
         if cb.get("state") == "open":
             status_emoji = "⛔ Circuit Open"
@@ -123,7 +120,6 @@ def format_budget_comment() -> str:
             f"{status_emoji} |"
         )
 
-    # Circuit breaker section
     lines.append("\n### Circuit Breakers\n")
     all_ok = True
     for pk, state in breakers.items():
@@ -144,12 +140,10 @@ def format_budget_comment() -> str:
     if all_ok:
         lines.append("\n_All providers healthy_ 🎉")
 
-    # Gemini availability
-    gemini_key = os.environ.get("GEMINI_API_KEY", "")
-    if not gemini_key:
+    if not os.environ.get("GEMINI_API_KEY"):
         lines.append(
             "\n> ⚠️ **Gemini not configured** — add `GEMINI_API_KEY` in Render env "
-            "for long-context fallback. Free at https://aistudio.google.com/app/apikey"
+            "for long-context fallback."
         )
 
     lines.append("\n---")
@@ -159,21 +153,18 @@ def format_budget_comment() -> str:
 
 
 def record_call(provider_key: str, tokens: int):
-    """
-    Manual usage recording (used when providers don't self-report).
-    router.py calls this automatically — handlers don't need to.
-    """
+    """Manual usage recording."""
     try:
         from app.core.redis_client import get_redis
         if tokens <= 0:
             return
-        r     = get_redis()
+        redis_client = get_redis()  # FIXED: was `r`
         today = datetime.date.today().isoformat()
         for k in (
             f"llm:tokens:{provider_key}:{today}",
             f"llm:requests:{provider_key}:{today}",
         ):
-            r.incr(k)
-            r.expire(k, 86400)
+            redis_client.incr(k)
+            redis_client.expire(k, 86400)
     except Exception:
         pass

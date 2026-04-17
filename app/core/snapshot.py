@@ -257,4 +257,3 @@ def format_rollback_result(
 
     result += "\n---\n*State before rollback is saved as a new snapshot automatically.*"
     return result
-

@@ -202,8 +202,9 @@ def format_snapshot_list(repo: str) -> str:
 {table}
 
 ### How to restore
-/rollback 1  
-/rollback 2  
+- `/rollback 1`
+- `/rollback 2`
+
 > ⚠️ Rollback does NOT revert code commits.
 
 ---

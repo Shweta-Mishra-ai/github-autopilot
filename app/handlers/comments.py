@@ -644,7 +644,7 @@ def _cmd_rollback(repo: str, issue_number: int, token: str,
     /rollback 2      → restore snapshot #2
     """
     from app.core.snapshot import (
-        list_snapshots, get_snapshot_by_number,
+        get_snapshot_by_number,
         format_snapshot_list, format_rollback_result, take_snapshot,
     )
 

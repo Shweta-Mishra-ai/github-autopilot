@@ -218,4 +218,3 @@ class TestGeminiProvider:
         assert resp.error == ""
         assert resp.text == "Analysis complete"
         assert resp.total_tokens == 150
-

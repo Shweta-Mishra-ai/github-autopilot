@@ -215,4 +215,3 @@ class TestFallbackChain:
             mock_cb.return_value = cb
             result = router._try_fallback("sys", "user", 500, 0.2, 30, "nonexistent")
         assert result is None
-

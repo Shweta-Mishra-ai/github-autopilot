@@ -1,16 +1,14 @@
 """
 app/ai/router.py
-V4 Sprint 2: Smart LLM router — 4 providers, safety, cost tracking.
+V4: Smart LLM router — 4 providers, safety, cost tracking.
 
-Provider chain (free tier, priority order):
-  1. Groq 70B   — best quality, 6K req/day
-  2. Groq 8B    — fast + cheap, 14K req/day
-  3. Gemini Flash — long context, 1.5K req/day
-  4. OpenRouter  — free models emergency fallback, 200 req/day
+Provider chain (free tier):
+  1. Groq 70B   — best quality
+  2. Groq 8B    — fast
+  3. Gemini Flash — long context
+  4. OpenRouter  — emergency fallback
 
-Safety: Input sanitization before every call.
-Cost: Every call tracked in Redis → /budget shows live stats.
-Context: All state in Redis (survives restarts on Render free tier).
+AllProvidersDown IS raised when all breakers are OPEN and no fallback exists.
 """
 
 import datetime
@@ -23,43 +21,33 @@ from app.ai.providers.groq import GroqProvider
 
 log = logging.getLogger(__name__)
 
-# ── Task classification ───────────────────────────────────────────────────────
-
 TASK_MAP: dict[str, str] = {
-    # fast → 8B preferred
-    "issue_label":       "fast",
-    "commit_lint":       "fast",
-    "pr_summary":        "fast",
-    "is_duplicate":      "fast",
-    "budget":            "fast",
-
-    # standard → 70B preferred
-    "pr_title_rewrite":  "standard",
-    "code_review":       "standard",
-    "fix_command":       "standard",
-    "test_generation":   "standard",
-    "explain":           "standard",
-    "improve":           "standard",
-    "refactor":          "standard",
-    "ci_analysis":       "standard",
-    "gaps":              "standard",
-    "perf":              "standard",
-    "arch":              "standard",
-    "changelog":         "standard",
-    "docs":              "standard",
-
-    # deep → 70B, more tokens
-    "pr_analysis":       "deep",
-    "security_report":   "deep",
-    "issue_triage":      "deep",
-    "health_report":     "deep",
-
-    # long → Gemini preferred
+    "issue_label":        "fast",
+    "commit_lint":        "fast",
+    "pr_summary":         "fast",
+    "is_duplicate":       "fast",
+    "budget":             "fast",
+    "pr_title_rewrite":   "standard",
+    "code_review":        "standard",
+    "fix_command":        "standard",
+    "test_generation":    "standard",
+    "explain":            "standard",
+    "improve":            "standard",
+    "refactor":           "standard",
+    "ci_analysis":        "standard",
+    "gaps":               "standard",
+    "perf":               "standard",
+    "arch":               "standard",
+    "changelog":          "standard",
+    "docs":               "standard",
+    "pr_analysis":        "deep",
+    "security_report":    "deep",
+    "issue_triage":       "deep",
+    "health_report":      "deep",
     "full_file_analysis": "long",
     "large_pr_review":    "long",
 }
 
-# Conservative daily limits (80% of actual free tier)
 DAILY_LIMITS = {
     "groq_70b":   {"tokens": 80_000,  "requests": 5_000},
     "groq_8b":    {"tokens": 400_000, "requests": 12_000},
@@ -67,13 +55,11 @@ DAILY_LIMITS = {
     "openrouter": {"tokens": 50_000,  "requests": 200},
 }
 
-# Input safety limits
 MAX_SYSTEM_CHARS = 3_000
 MAX_USER_CHARS   = 8_000
 
-# Cost per 1K tokens (USD) — for tracking only, Groq/Gemini/OpenRouter are $0 on free
 COST_PER_1K = {
-    "groq_70b":   0.0009,  # approximate — free tier is $0
+    "groq_70b":   0.0009,
     "groq_8b":    0.00006,
     "gemini":     0.0,
     "openrouter": 0.0,
@@ -81,16 +67,12 @@ COST_PER_1K = {
 
 
 class LLMRouter:
-    """
-    Central LLM router — single instance, all handlers use this.
-    Handles: provider selection, safety, fallback, cost tracking.
-    """
 
     def __init__(self):
-        self._groq_70b    = GroqProvider("llama-3.3-70b-versatile")
-        self._groq_8b     = GroqProvider("llama-3.1-8b-instant")
-        self._gemini      = None
-        self._openrouter  = None
+        self._groq_70b   = GroqProvider("llama-3.3-70b-versatile")
+        self._groq_8b    = GroqProvider("llama-3.1-8b-instant")
+        self._gemini     = None
+        self._openrouter = None
 
     def _get_gemini(self):
         if self._gemini is None and os.environ.get("GEMINI_API_KEY"):
@@ -111,7 +93,6 @@ class LLMRouter:
         return self._openrouter
 
     def _usage_pct(self, provider_key: str) -> float:
-        """Returns 0.0–1.0 usage fraction for today."""
         try:
             from app.core.redis_client import get_redis
             r     = get_redis()
@@ -123,17 +104,9 @@ class LLMRouter:
             return 0.0
 
     def _sanitize(self, text: str, max_chars: int) -> str:
-        """
-        Safety: Remove prompt injection patterns, cap length.
-        Common injection patterns in GitHub issues/comments.
-        """
         if not text:
             return ""
-
-        # Cap length
         text = text[:max_chars]
-
-        # Remove common injection attempts
         injections = [
             "ignore previous instructions",
             "ignore all instructions",
@@ -147,15 +120,17 @@ class LLMRouter:
         text_lower = text.lower()
         for pattern in injections:
             if pattern in text_lower:
-                # Replace with sanitized version — don't block entirely
-                log.warning(f"router.injection_attempt_detected pattern='{pattern}'")
-                text = text[:text_lower.index(pattern)] + "[FILTERED]" + text[text_lower.index(pattern) + len(pattern):]
+                log.warning(f"router.injection_attempt pattern='{pattern}'")
+                idx        = text_lower.index(pattern)
+                text       = text[:idx] + "[FILTERED]" + text[idx + len(pattern):]
                 text_lower = text.lower()
-
         return text.strip()
 
     def _select_provider(self, task: str, context_tokens: int = 0) -> LLMProvider:
-        """Select best available provider."""
+        """
+        Select best available provider.
+        GUARANTEED to raise AllProvidersDown if nothing is available.
+        """
         task_type = TASK_MAP.get(task, "standard")
 
         # Long context → Gemini first
@@ -163,7 +138,7 @@ class LLMRouter:
             g = self._get_gemini()
             if g and get_breaker("gemini").is_available() and self._usage_pct("gemini") < 0.85:
                 return g
-            task_type = "deep"  # degrade to deep
+            task_type = "deep"
 
         # Fast → 8B first
         if task_type == "fast":
@@ -174,13 +149,16 @@ class LLMRouter:
                 return g
             if get_breaker("groq_70b").is_available():
                 return self._groq_70b
+            or_p = self._get_openrouter()
+            if or_p and get_breaker("openrouter").is_available():
+                return or_p
+            raise AllProvidersDown()
 
         # Standard / Deep → 70B first
         pct_70b = self._usage_pct("groq_70b")
         if get_breaker("groq_70b").is_available() and pct_70b < 0.80:
             return self._groq_70b
 
-        # 70B busy → degrade
         if pct_70b >= 0.80:
             log.warning(f"router.groq_70b_high_usage pct={pct_70b:.0%} task={task}")
 
@@ -194,12 +172,12 @@ class LLMRouter:
         if get_breaker("groq_8b").is_available():
             return self._groq_8b
 
-        # Emergency: OpenRouter
         or_p = self._get_openrouter()
         if or_p and get_breaker("openrouter").is_available():
             log.warning("router.emergency_fallback provider=openrouter")
             return or_p
 
+        # Nothing available → raise
         raise AllProvidersDown()
 
     def ask(
@@ -212,20 +190,13 @@ class LLMRouter:
         timeout: int = 45,
         context_tokens: int = 0,
     ) -> tuple[dict, LLMResponse]:
-        """
-        Route to best provider → return (parsed_json, meta).
-        Input is sanitized before sending.
-        Fallback to next provider on failure.
-        """
-        # Safety: sanitize inputs
-        system = self._sanitize(system, MAX_SYSTEM_CHARS)
-        user   = self._sanitize(user,   MAX_USER_CHARS)
-
-        provider     = self._select_provider(task, context_tokens)
+        system   = self._sanitize(system, MAX_SYSTEM_CHARS)
+        user     = self._sanitize(user,   MAX_USER_CHARS)
+        provider = self._select_provider(task, context_tokens)
         result, meta = provider.ask(system, user, max_tokens, temperature, timeout)
 
         if meta.error:
-            log.warning(f"router.primary_failed provider={meta.provider} error={meta.error} task={task}")
+            log.warning(f"router.primary_failed provider={meta.provider} error={meta.error}")
             fallback = self._try_fallback(system, user, max_tokens, temperature, timeout, meta.provider)
             if fallback:
                 result, meta = fallback
@@ -244,15 +215,12 @@ class LLMRouter:
         timeout: int = 30,
         context_tokens: int = 0,
     ) -> tuple[str, LLMResponse]:
-        """Route to best provider → return (plain_text, meta)."""
-        system = self._sanitize(system, MAX_SYSTEM_CHARS)
-        user   = self._sanitize(user,   MAX_USER_CHARS)
-
+        system    = self._sanitize(system, MAX_SYSTEM_CHARS)
+        user      = self._sanitize(user,   MAX_USER_CHARS)
         provider  = self._select_provider(task, context_tokens)
         text, meta = provider.ask_text(system, user, max_tokens, timeout)
 
         if meta.error:
-            log.warning(f"router.primary_failed provider={meta.provider} error={meta.error}")
             fallback = self._try_fallback_text(system, user, max_tokens, timeout, meta.provider)
             if fallback:
                 text, meta = fallback
@@ -263,12 +231,7 @@ class LLMRouter:
         return text, meta
 
     def _try_fallback(self, system, user, max_tokens, temperature, timeout, failed_key):
-        candidates = [
-            self._groq_70b,
-            self._groq_8b,
-            self._get_gemini(),
-            self._get_openrouter(),
-        ]
+        candidates = [self._groq_70b, self._groq_8b, self._get_gemini(), self._get_openrouter()]
         for p in candidates:
             if p is None or p.provider_key == failed_key:
                 continue
@@ -281,12 +244,7 @@ class LLMRouter:
         return None
 
     def _try_fallback_text(self, system, user, max_tokens, timeout, failed_key):
-        candidates = [
-            self._groq_70b,
-            self._groq_8b,
-            self._get_gemini(),
-            self._get_openrouter(),
-        ]
+        candidates = [self._groq_70b, self._groq_8b, self._get_gemini(), self._get_openrouter()]
         for p in candidates:
             if p is None or p.provider_key == failed_key:
                 continue
@@ -299,22 +257,16 @@ class LLMRouter:
         return None
 
     def _log_and_track(self, task: str, meta: LLMResponse):
-        """Log call + track cost in Redis."""
         cost_est = (meta.total_tokens / 1000) * COST_PER_1K.get(meta.provider, 0)
-
         log.info(
             f"router.call task={task} provider={meta.provider} "
-            f"model={meta.model.split('/')[-1]} "
             f"tokens={meta.total_tokens} latency={meta.latency_ms}ms "
-            f"cost_est=${cost_est:.5f} fallback={meta.used_fallback}"
+            f"cost=${cost_est:.5f} fallback={meta.used_fallback}"
         )
-
-        # Track cost in Redis
         try:
             from app.core.redis_client import get_redis
             r     = get_redis()
             today = datetime.date.today().isoformat()
-            # Store cost in millicents (int) to avoid float precision issues
             cost_mc = int(cost_est * 100_000)
             if cost_mc > 0:
                 r.incr(f"llm:cost_mc:{meta.provider}:{today}")
@@ -341,17 +293,16 @@ class LLMRouter:
                 }
         except Exception:
             pass
-
         return {
             "circuit_breakers": status_all(),
             "daily_usage":      usage,
             "providers_enabled": {
-                "groq":        bool(os.environ.get("GROQ_API_KEY")),
-                "gemini":      bool(os.environ.get("GEMINI_API_KEY")),
-                "openrouter":  bool(os.environ.get("OPENROUTER_API_KEY")),
+                "groq":       bool(os.environ.get("GROQ_API_KEY")),
+                "gemini":     bool(os.environ.get("GEMINI_API_KEY")),
+                "openrouter": bool(os.environ.get("OPENROUTER_API_KEY")),
             },
         }
 
 
-# Module-level singleton — all handlers import this
+# Module-level singleton
 router = LLMRouter()

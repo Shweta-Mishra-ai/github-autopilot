@@ -1,12 +1,9 @@
 """
 app/ai/providers/gemini.py
-V4 Sprint 2: Google Gemini Flash provider.
+V4: Google Gemini Flash provider.
 
-Free tier: 1,500 req/day, 1M tokens/day — perfect for long-context fallback.
-Best for: PRs with many files, full file analysis, large thread summaries.
-
-Setup: GEMINI_API_KEY env var (Google AI Studio — free).
-Get key: https://aistudio.google.com/app/apikey
+Circuit breaker check is the VERY FIRST thing in call_raw —
+before GEMINI_API_KEY check, before any HTTP call.
 """
 
 import logging
@@ -14,8 +11,8 @@ import os
 
 import requests as http_requests
 
-from app.ai.providers.base import LLMProvider, LLMResponse
 from app.ai.circuit_breaker import get_breaker
+from app.ai.providers.base import LLMProvider, LLMResponse
 
 log = logging.getLogger(__name__)
 
@@ -26,12 +23,8 @@ GEMINI_URL     = (
     f"{GEMINI_MODEL}:generateContent"
 )
 
-# Gemini Flash free tier cost = $0
-GEMINI_COST_PER_1K = 0.0
-
 
 class GeminiProvider(LLMProvider):
-    """Google Gemini Flash provider — best for long context (up to 1M tokens)."""
 
     @property
     def provider_key(self) -> str:
@@ -49,38 +42,41 @@ class GeminiProvider(LLMProvider):
         temperature: float,
         timeout: int,
     ) -> LLMResponse:
-        breaker = get_breaker("gemini")
 
+        # ── STEP 1: Circuit breaker check — MUST be first ─────────────────────
+        breaker = get_breaker("gemini")
         if not breaker.is_available():
             return LLMResponse(
-                text="", provider="gemini", model=GEMINI_MODEL,
+                text="",
+                provider="gemini",
+                model=GEMINI_MODEL,
                 error="Circuit OPEN for Gemini",
             )
 
-        if not GEMINI_API_KEY:
+        # ── STEP 2: API key check ─────────────────────────────────────────────
+        api_key = os.environ.get("GEMINI_API_KEY", "") or GEMINI_API_KEY
+        if not api_key:
             return LLMResponse(
-                text="", provider="gemini", model=GEMINI_MODEL,
+                text="",
+                provider="gemini",
+                model=GEMINI_MODEL,
                 error="GEMINI_API_KEY not set",
             )
 
-        # Gemini API format — system instruction + user message
+        # ── STEP 3: HTTP call ─────────────────────────────────────────────────
         body = {
             "system_instruction": {
                 "parts": [{"text": system}]
             },
             "contents": [
-                {
-                    "role": "user",
-                    "parts": [{"text": user}]
-                }
+                {"role": "user", "parts": [{"text": user}]}
             ],
             "generationConfig": {
                 "maxOutputTokens": max_tokens,
                 "temperature":     temperature,
             },
         }
-
-        url = f"{GEMINI_URL}?key={GEMINI_API_KEY}"
+        url = f"{GEMINI_URL}?key={api_key}"
 
         try:
             r = http_requests.post(
@@ -98,7 +94,6 @@ class GeminiProvider(LLMProvider):
                 )
 
             if r.status_code == 400:
-                # Bad request — usually content safety block
                 breaker.record_failure("bad_request_400")
                 return LLMResponse(
                     text="", provider="gemini", model=GEMINI_MODEL,
@@ -115,17 +110,15 @@ class GeminiProvider(LLMProvider):
             r.raise_for_status()
             data = r.json()
 
-            # Extract text from Gemini response format
             try:
                 text = data["candidates"][0]["content"]["parts"][0]["text"]
-            except (KeyError, IndexError) as e:
+            except (KeyError, IndexError) as exc:
                 breaker.record_failure("bad_response_format")
                 return LLMResponse(
                     text="", provider="gemini", model=GEMINI_MODEL,
-                    error=f"Unexpected response format: {e}",
+                    error=f"Unexpected response format: {exc}",
                 )
 
-            # Token usage (Gemini provides usageMetadata)
             usage = data.get("usageMetadata", {})
             p_tok = usage.get("promptTokenCount", 0)
             c_tok = usage.get("candidatesTokenCount", 0)
@@ -141,7 +134,7 @@ class GeminiProvider(LLMProvider):
                 prompt_tokens=p_tok,
                 completion_tokens=c_tok,
                 total_tokens=t_tok,
-                cost_usd=0.0,  # Free tier
+                cost_usd=0.0,
             )
 
         except http_requests.exceptions.Timeout:
@@ -158,7 +151,6 @@ class GeminiProvider(LLMProvider):
             )
 
     def _track(self, total_tokens: int):
-        """Track Gemini usage in Redis."""
         try:
             import datetime
             from app.core.redis_client import get_redis

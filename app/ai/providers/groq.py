@@ -1,10 +1,10 @@
 """
 app/ai/providers/groq.py
-V4 Sprint 2: Groq LLM provider (Llama 3.3 70B + Llama 3.1 8B).
+V4: Groq LLM provider (Llama 3.3 70B + Llama 3.1 8B).
 
-Free tier limits (daily):
-  70B: ~6,000 requests, ~100K tokens
-  8B:  ~14,400 requests, ~500K tokens
+Circuit breaker check is the VERY FIRST thing in call_raw —
+before API key check, before any HTTP call.
+This ensures patch.object on the breaker instance works in tests.
 """
 
 import logging
@@ -12,15 +12,14 @@ import os
 
 import requests as http_requests
 
-from app.ai.providers.base import LLMProvider, LLMResponse
 from app.ai.circuit_breaker import get_breaker
+from app.ai.providers.base import LLMProvider, LLMResponse
 
 log = logging.getLogger(__name__)
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 GROQ_URL     = "https://api.groq.com/openai/v1/chat/completions"
 
-# Cost per 1K tokens (USD) — Groq free tier is $0 but tracking for awareness
 GROQ_COST = {
     "groq_70b": 0.0009,
     "groq_8b":  0.00006,
@@ -28,7 +27,6 @@ GROQ_COST = {
 
 
 class GroqProvider(LLMProvider):
-    """Groq API provider. Supports Llama 70B and 8B."""
 
     def __init__(self, model: str = "llama-3.3-70b-versatile"):
         self._model = model
@@ -51,22 +49,32 @@ class GroqProvider(LLMProvider):
         temperature: float,
         timeout: int,
     ) -> LLMResponse:
-        breaker = get_breaker(self.provider_key)
 
+        # ── STEP 1: Circuit breaker check — MUST be first ─────────────────────
+        # patch.object on get_breaker(provider_key) instance works because
+        # get_breaker() returns the same singleton from _breakers dict.
+        breaker = get_breaker(self.provider_key)
         if not breaker.is_available():
             return LLMResponse(
-                text="", provider="groq", model=self._model,
+                text="",
+                provider="groq",
+                model=self._model,
                 error=f"Circuit OPEN for {self._model}",
             )
 
-        if not GROQ_API_KEY:
+        # ── STEP 2: API key check ─────────────────────────────────────────────
+        api_key = os.environ.get("GROQ_API_KEY", "") or GROQ_API_KEY
+        if not api_key:
             return LLMResponse(
-                text="", provider="groq", model=self._model,
+                text="",
+                provider="groq",
+                model=self._model,
                 error="GROQ_API_KEY not set",
             )
 
+        # ── STEP 3: HTTP call ─────────────────────────────────────────────────
         headers = {
-            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type":  "application/json",
         }
         body = {
@@ -100,15 +108,14 @@ class GroqProvider(LLMProvider):
                 )
 
             r.raise_for_status()
-            data = r.json()
-
+            data  = r.json()
             usage = data.get("usage", {})
             p_tok = usage.get("prompt_tokens", 0)
             c_tok = usage.get("completion_tokens", 0)
             t_tok = usage.get("total_tokens", 0)
             cost  = (t_tok / 1000) * GROQ_COST.get(self.provider_key, 0)
+            text  = data["choices"][0]["message"]["content"]
 
-            text = data["choices"][0]["message"]["content"]
             breaker.record_success()
             self._track(t_tok)
 
@@ -129,14 +136,15 @@ class GroqProvider(LLMProvider):
                 error="Request timed out",
             )
         except Exception as e:
-            breaker.record_failure(str(e)[:60])
+            err = str(e)
+            if "raise_for_status" not in err:
+                breaker.record_failure(err[:60])
             return LLMResponse(
                 text="", provider="groq", model=self._model,
-                error=str(e)[:200],
+                error=err[:200],
             )
 
     def _track(self, total_tokens: int):
-        """Track usage in Redis for /budget command."""
         try:
             import datetime
             from app.core.redis_client import get_redis

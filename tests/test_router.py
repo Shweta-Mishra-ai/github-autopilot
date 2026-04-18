@@ -103,20 +103,24 @@ class TestProviderSelection:
             assert "70b" in provider.provider_key or "70b" in provider.model_name
 
     def test_all_providers_down_raises(self):
+        from app.ai import circuit_breaker as cb_module
         router = LLMRouter()
-        with patch("app.ai.circuit_breaker.get_breaker") as mock_breaker:
-            mock_cb = MagicMock()
-            mock_cb.is_available.return_value = False
-            mock_breaker.return_value = mock_cb
-            with patch.dict(os.environ, {}, clear=False):
-                # Remove optional providers
-                os.environ.pop("GEMINI_API_KEY", None)
-                os.environ.pop("OPENROUTER_API_KEY", None)
-                try:
-                    router._select_provider("pr_analysis")
-                    assert False, "Should have raised AllProvidersDown"
-                except AllProvidersDown:
-                    pass
+        router._gemini     = None
+        router._openrouter = None
+        # Replace all breaker instances with mocks
+        original = dict(cb_module._breakers)
+        try:
+            for pk in list(cb_module._breakers.keys()):
+                mock_cb = MagicMock()
+                mock_cb.is_available.return_value = False
+                cb_module._breakers[pk] = mock_cb
+            try:
+                router._select_provider("pr_analysis")
+                assert False, "Should have raised AllProvidersDown"
+            except AllProvidersDown:
+                pass
+        finally:
+            cb_module._breakers.update(original)
 
 
 class TestUsagePct:

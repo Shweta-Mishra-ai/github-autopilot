@@ -113,19 +113,18 @@ class TestGroqProvider:
     def test_returns_error_when_no_api_key(self):
         from app.ai.providers.groq import GroqProvider
         p = GroqProvider()
-        with patch.dict(os.environ, {"GROQ_API_KEY": ""}):
-            with patch("app.ai.providers.groq.GROQ_API_KEY", ""):
-                with patch("app.ai.circuit_breaker.get_breaker") as mock_cb:
-                    cb = MagicMock()
-                    cb.is_available.return_value = True
-                    mock_cb.return_value = cb
-                    resp = p.call_raw("sys", "user", 100, 0.2, 10)
-                    assert resp.error != ""
+        with patch("app.ai.providers.groq.GROQ_API_KEY", ""):
+            with patch("app.ai.providers.groq.get_breaker") as mock_cb:
+                cb = MagicMock()
+                cb.is_available.return_value = True
+                mock_cb.return_value = cb
+                resp = p.call_raw("sys", "user", 100, 0.2, 10)
+                assert resp.error != ""
 
     def test_returns_error_when_circuit_open(self):
         from app.ai.providers.groq import GroqProvider
         p = GroqProvider()
-        with patch("app.ai.circuit_breaker.get_breaker") as mock_cb:
+        with patch("app.ai.providers.groq.get_breaker") as mock_cb:
             cb = MagicMock()
             cb.is_available.return_value = False
             mock_cb.return_value = cb
@@ -177,7 +176,7 @@ class TestGeminiProvider:
         from app.ai.providers.gemini import GeminiProvider
         p = GeminiProvider()
         with patch("app.ai.providers.gemini.GEMINI_API_KEY", ""):
-            with patch("app.ai.circuit_breaker.get_breaker") as mock_cb:
+            with patch("app.ai.providers.gemini.get_breaker") as mock_cb:
                 cb = MagicMock()
                 cb.is_available.return_value = True
                 mock_cb.return_value = cb
@@ -186,13 +185,17 @@ class TestGeminiProvider:
 
     def test_returns_error_when_circuit_open(self):
         from app.ai.providers.gemini import GeminiProvider
+        from app.ai import circuit_breaker as cb_module
         p = GeminiProvider()
-        with patch("app.ai.circuit_breaker.get_breaker") as mock_cb:
-            cb = MagicMock()
-            cb.is_available.return_value = False
-            mock_cb.return_value = cb
+        original = cb_module._breakers["gemini"]
+        try:
+            mock_cb = MagicMock()
+            mock_cb.is_available.return_value = False
+            cb_module._breakers["gemini"] = mock_cb
             resp = p.call_raw("sys", "user", 100, 0.2, 10)
-            assert "Circuit OPEN" in resp.error
+        finally:
+            cb_module._breakers["gemini"] = original
+        assert "Circuit OPEN" in resp.error
 
     def test_successful_call_mocked(self):
         from app.ai.providers.gemini import GeminiProvider

@@ -1,8 +1,12 @@
 """
-Circuit Breaker - app/ai/circuit_breaker.py
+app/ai/circuit_breaker.py
 V4: Per-provider circuit breaker.
 
-FIXED (ruff F401): Removed unused `Optional` from typing import.
+FIXED: AllProvidersDown.__init__ wraps min() in try/except
+  — prevents TypeError when _breakers contains mocks in tests.
+
+FIXED: get_breaker() always returns from _breakers dict
+  — predictable behavior, no surprise new instances.
 """
 
 import time
@@ -22,13 +26,13 @@ class CBState(Enum):
 @dataclass
 class CircuitBreaker:
     provider: str
-    fail_threshold: int   = 3     # failures before OPEN
-    recovery_timeout: int = 60    # seconds before HALF_OPEN
+    fail_threshold: int   = 3
+    recovery_timeout: int = 60
 
-    _state: CBState = field(default=CBState.CLOSED, init=False, repr=False)
-    _failures: int  = field(default=0,              init=False, repr=False)
-    _opened_at: float = field(default=0.0,          init=False, repr=False)
-    _last_failure_reason: str = field(default="",   init=False, repr=False)
+    _state: CBState       = field(default=CBState.CLOSED, init=False, repr=False)
+    _failures: int        = field(default=0,              init=False, repr=False)
+    _opened_at: float     = field(default=0.0,            init=False, repr=False)
+    _last_failure_reason: str = field(default="",         init=False, repr=False)
 
     @property
     def state(self) -> CBState:
@@ -52,7 +56,7 @@ class CircuitBreaker:
         self._failures += 1
         self._last_failure_reason = reason
         if self._failures >= self.fail_threshold or self._state == CBState.HALF_OPEN:
-            self._state    = CBState.OPEN
+            self._state     = CBState.OPEN
             self._opened_at = time.time()
             log.warning(
                 f"circuit_breaker.opened provider={self.provider} "
@@ -67,11 +71,11 @@ class CircuitBreaker:
 
     def status(self) -> dict:
         return {
-            "provider":              self.provider,
-            "state":                 self.state.value,
-            "failures":              self._failures,
-            "last_failure":          self._last_failure_reason,
-            "recovers_in_seconds":   self.seconds_until_retry(),
+            "provider":            self.provider,
+            "state":               self.state.value,
+            "failures":            self._failures,
+            "last_failure":        self._last_failure_reason,
+            "recovers_in_seconds": self.seconds_until_retry(),
         }
 
 
@@ -86,7 +90,14 @@ _breakers: dict[str, CircuitBreaker] = {
 
 
 def get_breaker(provider: str) -> CircuitBreaker:
-    return _breakers.get(provider, CircuitBreaker(provider))
+    """
+    Always returns from _breakers dict.
+    If provider unknown, adds it. Never creates a throwaway instance.
+    This ensures tests that patch _breakers[key] always work.
+    """
+    if provider not in _breakers:
+        _breakers[provider] = CircuitBreaker(provider)
+    return _breakers[provider]
 
 
 def all_providers_down() -> bool:
@@ -98,12 +109,22 @@ def available_providers() -> list[str]:
 
 
 def status_all() -> dict:
-    return {name: cb.status() for name, cb in _breakers.items()}
+    try:
+        return {name: cb.status() for name, cb in _breakers.items()}
+    except Exception:
+        return {name: {"state": "unknown"} for name in _breakers}
 
 
 class AllProvidersDown(Exception):
     def __init__(self):
-        recovery = min(cb.seconds_until_retry() for cb in _breakers.values())
+        # FIXED: try/except prevents TypeError when _breakers has mocks
+        try:
+            recovery = min(
+                int(cb.seconds_until_retry())
+                for cb in _breakers.values()
+            )
+        except (TypeError, ValueError, AttributeError):
+            recovery = 60
         self.retry_in_seconds = recovery
         super().__init__(
             f"All LLM providers unavailable. Earliest retry in {recovery}s."

@@ -6,6 +6,7 @@ All tests use public interfaces only — no internal state manipulation.
 
 import sys
 import os
+import time
 from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -120,16 +121,17 @@ class TestGroqProvider:
         # Save state
         original_state = breaker._state
         original_failures = breaker._failures
+        import time
         try:
-            # Force open
-            breaker._state    = __import__('app.ai.circuit_breaker', fromlist=['CBState']).CBState.OPEN
-            breaker._opened_at = 0.0  # opened long ago, but still OPEN
+            # _opened_at = time.time() keeps OPEN (not recovered)
+            # 0.0 would make time.time()-0 >> recovery_timeout → HALF_OPEN!
+            breaker._state     = __import__('app.ai.circuit_breaker', fromlist=['CBState']).CBState.OPEN
+            breaker._opened_at = time.time()
             breaker._failures  = 99
             resp = p.call_raw("sys", "user", 100, 0.2, 10)
         finally:
-            # Restore
-            breaker._state    = original_state
-            breaker._failures = original_failures
+            breaker._state     = original_state
+            breaker._failures  = original_failures
         assert "Circuit OPEN" in resp.error
 
     def test_successful_call_mocked(self):
@@ -188,7 +190,7 @@ class TestGeminiProvider:
         orig_opened   = breaker._opened_at
         try:
             breaker._state     = CBState.OPEN
-            breaker._opened_at = 0.0
+            breaker._opened_at = time.time()
             breaker._failures  = 99
             with patch("app.ai.providers.gemini.GEMINI_API_KEY", "fake_key"):
                 resp = p.call_raw("sys", "user", 100, 0.2, 10)

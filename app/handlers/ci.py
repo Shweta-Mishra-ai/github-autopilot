@@ -9,7 +9,7 @@ On success: posts encouragement only if previously failed.
 
 import logging
 from app.github.auth import get_installation_token
-from app.github.client import gh_get, gh_post, GitHubError
+from app.github.client import gh_post
 from app.ai.router import router
 from app.core.config import load_config
 from app.core.logger import EventLogger
@@ -17,7 +17,6 @@ from app.core.logger import EventLogger
 log = logging.getLogger(__name__)
 
 SKIP_CONCLUSIONS = {"skipped", "neutral", "cancelled"}
-
 
 def handle(payload: dict):
     action = payload.get("action")
@@ -37,7 +36,6 @@ def handle(payload: dict):
 
     log_ctx = EventLogger("ci", repo=repo)
 
-    # Only handle failures
     if conclusion != "failure":
         return
 
@@ -53,43 +51,24 @@ def handle(payload: dict):
     if not config.get("ci", "enabled", default=True):
         return
 
-    # Get check run details — logs, output
-    check_id   = check_run.get("id", "")
     output     = check_run.get("output", {})
     title      = output.get("title", "")
     summary    = output.get("summary", "")[:2000]
     details    = output.get("text", "")[:3000]
 
-    # Find associated PR
     pull_requests = check_run.get("pull_requests", [])
     if not pull_requests:
-        log_ctx.info(f"No PR associated with check run — skipping comment")
+        log_ctx.info("No PR associated with check run — skipping comment")
         return
 
     pr_number = pull_requests[0]["number"]
 
-    # Build context for AI
-    failure_context = f"""CI Check: {check_name}
-Conclusion: {conclusion}
-Title: {title}
-Summary: {summary}
-Details: {details}"""
+    failure_context = f"""CI Check: {check_name}\nConclusion: {conclusion}\nTitle: {title}\nSummary: {summary}\nDetails: {details}"""
 
     try:
         r, _meta = router.ask(
             "Senior DevOps engineer. Analyze CI failures concisely. JSON only.",
-            f"""Analyze this CI failure and suggest a fix:
-
-{failure_context}
-
-Return JSON:
-{{
-  "root_cause": "one sentence — exact reason",
-  "category": "test_failure|build_error|lint_error|dependency|timeout|other",
-  "fix": "concrete steps to fix — 2-4 bullet points",
-  "is_flaky": false,
-  "confidence": 0.8
-}}""",
+            f"Analyze this CI failure and suggest a fix:\n\n{failure_context}\n\nReturn JSON:\n{{\n  \"root_cause\": \"one sentence — exact reason\",\n  \"category\": \"test_failure|build_error|lint_error|dependency|timeout|other\",\n  \"fix\": \"concrete steps to fix — 2-4 bullet points\",\n  \"is_flaky\": false,\n  \"confidence\": 0.8\n}}",
             task="ci_analysis",
         )
 
@@ -111,21 +90,10 @@ Return JSON:
         if fix_text and not fix_text.startswith("-"):
             fix_text = "- " + fix_text.replace("\n", "\n- ")
 
-        comment = f"""## {cat_emoji} CI Failure — `{check_name}`
+        comment = f"## {cat_emoji} CI Failure — `{check_name}`\n\n**Root cause:** {r.get('root_cause', 'See details below')}\n\n### Fix\n{fix_text}\n{flaky_note}\n\n---\n*🤖 AI Repo Manager V4 — CI Analysis*{config.footer}"
 
-**Root cause:** {r.get('root_cause', 'See details below')}
-
-### Fix
-{fix_text}
-{flaky_note}
-
----
-*🤖 AI Repo Manager V4 — CI Analysis*{config.footer}"""
-
-        gh_post(f"/repos/{repo}/issues/{pr_number}/comments", token,
-                {"body": comment})
+        gh_post(f"/repos/{repo}/issues/{pr_number}/comments", token, {"body": comment})
         log_ctx.done(f"CI failure comment posted PR #{pr_number}")
 
     except Exception as e:
         log_ctx.error(f"CI handler failed: {e}")
-

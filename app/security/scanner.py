@@ -21,16 +21,15 @@ from dataclasses import dataclass, field
 
 log = logging.getLogger(__name__)
 
-
 @dataclass
 class SecurityFinding:
-    source: str           # "dependabot" | "codeql" | "secret_scanning"
-    severity: str         # "critical" | "high" | "medium" | "low"
+    source: str
+    severity: str
     title: str
     description: str
-    package: str = ""     # for dependabot
+    package: str = ""
     cve_id: str  = ""
-    file_path: str = ""   # for codeql
+    file_path: str = ""
     line_number: int = 0
     url: str = ""
 
@@ -39,7 +38,6 @@ class SecurityFinding:
         return {"critical": 4, "high": 3, "medium": 2, "low": 1}.get(
             self.severity.lower(), 0
         )
-
 
 @dataclass
 class SecurityReport:
@@ -67,7 +65,6 @@ class SecurityReport:
         return len(self.all_findings)
 
     def to_markdown(self, include_low: bool = False) -> str:
-        """Format full security report as GitHub comment."""
         if self.total_count == 0 and not self.errors:
             return (
                 "## 🔒 Security Report — All Clear\n\n"
@@ -78,28 +75,26 @@ class SecurityReport:
 
         lines = [f"## 🔒 Security Report — `{self.repo}`\n"]
 
-        # Summary
         total = self.total_count
         crit  = self.critical_count
         high  = self.high_count
         sev_line = []
-        if crit: sev_line.append(f"🚨 {crit} critical")
-        if high: sev_line.append(f"🔴 {high} high")
+        if crit:
+            sev_line.append(f"🚨 {crit} critical")
+        if high:
+            sev_line.append(f"🔴 {high} high")
+            
         lines.append(f"**{total} finding(s)** — {', '.join(sev_line) if sev_line else 'low/medium only'}\n")
         lines.append("| Source | Critical | High | Medium | Low |")
         lines.append("|--------|----------|------|--------|-----|")
-        for source_name, findings in [
-            ("Dependabot", self.dependabot),
-            ("CodeQL", self.codeql),
-            ("Secret Scanning", self.secrets),
-        ]:
+        
+        for source_name, findings in [("Dependabot", self.dependabot), ("CodeQL", self.codeql), ("Secret Scanning", self.secrets)]:
             c = sum(1 for f in findings if f.severity == "critical")
             h = sum(1 for f in findings if f.severity == "high")
             m = sum(1 for f in findings if f.severity == "medium")
             low = sum(1 for f in findings if f.severity == "low")
             lines.append(f"| {source_name} | {c} | {h} | {m} | {low} |")
 
-        # Dependabot
         if self.dependabot:
             lines.append("\n### 📦 Dependabot Alerts")
             for f in self.dependabot:
@@ -110,7 +105,6 @@ class SecurityReport:
                 cve_str = f" ([{f.cve_id}]({f.url}))" if f.cve_id else ""
                 lines.append(f"- {sev_emoji} **{f.severity.upper()}**{pkg_str}{cve_str}: {f.title}")
 
-        # CodeQL
         if self.codeql:
             lines.append("\n### 🔍 CodeQL Findings")
             for f in self.codeql:
@@ -120,13 +114,11 @@ class SecurityReport:
                 loc = f" `{f.file_path}:{f.line_number}`" if f.file_path else ""
                 lines.append(f"- {sev_emoji} **{f.severity.upper()}**{loc}: {f.title}")
 
-        # Secret Scanning
         if self.secrets:
             lines.append("\n### 🗝️ Secret Scanning")
             for f in self.secrets:
                 lines.append(f"- 🚨 **{f.title}**: {f.description[:100]}")
 
-        # Errors
         if self.errors:
             lines.append(f"\n> ⚠️ Some APIs unavailable: {', '.join(self.errors)}")
 
@@ -134,52 +126,31 @@ class SecurityReport:
         lines.append("*🤖 AI Repo Manager V4 — GitHub Security APIs*")
         return "\n".join(lines)
 
-
 def run_security_scan(repo: str, token: str) -> SecurityReport:
-    """
-    Run full security scan using all 3 GitHub Security APIs.
-    Returns SecurityReport — never raises.
-    """
     report = SecurityReport(repo=repo)
-
     report.dependabot = _scan_dependabot(repo, token, report.errors)
     report.codeql     = _scan_codeql(repo, token, report.errors)
     report.secrets    = _scan_secrets(repo, token, report.errors)
 
-    log.info(
-        f"security.scan_complete repo={repo} "
-        f"total={report.total_count} critical={report.critical_count}"
-    )
+    log.info(f"security.scan_complete repo={repo} total={report.total_count} critical={report.critical_count}")
     return report
 
-
 def run_pr_security_scan(repo: str, pr_number: int, token: str) -> SecurityReport:
-    """
-    Targeted scan for a specific PR — checks files changed in PR against
-    open security alerts.
-    """
     from app.github.client import gh_get
-
     report = SecurityReport(repo=repo)
 
-    # Get PR files
     try:
         pr_files = gh_get(f"/repos/{repo}/pulls/{pr_number}/files", token)
         changed_paths = {f["filename"] for f in pr_files}
     except Exception:
         changed_paths = set()
 
-    # Run full scan
     all_dep    = _scan_dependabot(repo, token, report.errors)
     all_codeql = _scan_codeql(repo, token, report.errors)
     all_sec    = _scan_secrets(repo, token, report.errors)
 
-    # Filter CodeQL to PR files only
     if changed_paths:
-        report.codeql = [
-            f for f in all_codeql
-            if not f.file_path or f.file_path in changed_paths
-        ]
+        report.codeql = [f for f in all_codeql if not f.file_path or f.file_path in changed_paths]
     else:
         report.codeql = all_codeql
 
@@ -188,18 +159,13 @@ def run_pr_security_scan(repo: str, pr_number: int, token: str) -> SecurityRepor
 
     return report
 
-
 def _scan_dependabot(repo: str, token: str, errors: list) -> list[SecurityFinding]:
     try:
         from app.github.client import gh_get
-        alerts = gh_get(
-            f"/repos/{repo}/dependabot/alerts?state=open&per_page=30",
-            token
-        )
+        alerts = gh_get(f"/repos/{repo}/dependabot/alerts?state=open&per_page=30", token)
         findings = []
         for alert in alerts:
             adv       = alert.get("security_advisory", {})
-            vuln      = alert.get("security_vulnerability", {})
             dep       = alert.get("dependency", {})
             pkg       = dep.get("package", {}).get("name", "")
             severity  = adv.get("severity", "medium").lower()
@@ -218,7 +184,6 @@ def _scan_dependabot(repo: str, token: str, errors: list) -> list[SecurityFindin
                 url=url,
             ))
         return findings
-
     except Exception as e:
         err = str(e)
         if "403" in err or "404" in err:
@@ -227,14 +192,10 @@ def _scan_dependabot(repo: str, token: str, errors: list) -> list[SecurityFindin
             log.warning(f"dependabot scan failed: {e}")
         return []
 
-
 def _scan_codeql(repo: str, token: str, errors: list) -> list[SecurityFinding]:
     try:
         from app.github.client import gh_get
-        alerts = gh_get(
-            f"/repos/{repo}/code-scanning/alerts?state=open&per_page=30",
-            token
-        )
+        alerts = gh_get(f"/repos/{repo}/code-scanning/alerts?state=open&per_page=30", token)
         findings = []
         for alert in alerts:
             rule     = alert.get("rule", {})
@@ -257,7 +218,6 @@ def _scan_codeql(repo: str, token: str, errors: list) -> list[SecurityFinding]:
                 url=alert.get("html_url", ""),
             ))
         return findings
-
     except Exception as e:
         err = str(e)
         if "403" in err or "404" in err:
@@ -266,14 +226,10 @@ def _scan_codeql(repo: str, token: str, errors: list) -> list[SecurityFinding]:
             log.warning(f"codeql scan failed: {e}")
         return []
 
-
 def _scan_secrets(repo: str, token: str, errors: list) -> list[SecurityFinding]:
     try:
         from app.github.client import gh_get
-        alerts = gh_get(
-            f"/repos/{repo}/secret-scanning/alerts?state=open&per_page=30",
-            token
-        )
+        alerts = gh_get(f"/repos/{repo}/secret-scanning/alerts?state=open&per_page=30", token)
         findings = []
         for alert in alerts:
             secret_type = alert.get("secret_type_display_name", alert.get("secret_type", "Secret"))
@@ -285,7 +241,6 @@ def _scan_secrets(repo: str, token: str, errors: list) -> list[SecurityFinding]:
                 url=alert.get("html_url", ""),
             ))
         return findings
-
     except Exception as e:
         err = str(e)
         if "403" in err or "404" in err:
@@ -293,4 +248,3 @@ def _scan_secrets(repo: str, token: str, errors: list) -> list[SecurityFinding]:
         else:
             log.warning(f"secret scanning failed: {e}")
         return []
-

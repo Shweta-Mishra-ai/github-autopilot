@@ -83,11 +83,11 @@ class SecurityReport:
             sev_line.append(f"🚨 {crit} critical")
         if high:
             sev_line.append(f"🔴 {high} high")
-            
+
         lines.append(f"**{total} finding(s)** — {', '.join(sev_line) if sev_line else 'low/medium only'}\n")
         lines.append("| Source | Critical | High | Medium | Low |")
         lines.append("|--------|----------|------|--------|-----|")
-        
+
         for source_name, findings in [("Dependabot", self.dependabot), ("CodeQL", self.codeql), ("Secret Scanning", self.secrets)]:
             c = sum(1 for f in findings if f.severity == "critical")
             h = sum(1 for f in findings if f.severity == "high")

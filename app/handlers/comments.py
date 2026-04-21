@@ -16,7 +16,7 @@ from app.core.config import load_config
 from app.core.logger import EventLogger
 from app.core.confidence import ConfidenceGate
 from app.security.secrets import scan_diff, format_findings as format_secret_findings
-from app.security.dependencies import scan_requirements_txt, format_findings as format_dep_findings
+from app.security.dependencies import scan_requirements_txt, format_dep_findings
 
 SKIP_AUTHORS = {"dependabot[bot]", "renovate[bot]", "github-actions[bot]", "ai-repo-manager[bot]"}
 

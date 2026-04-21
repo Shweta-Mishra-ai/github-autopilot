@@ -21,6 +21,7 @@ from app.security.dependencies import scan_requirements_txt, format_findings as 
 SKIP_AUTHORS = {"dependabot[bot]", "renovate[bot]", "github-actions[bot]", "ai-repo-manager[bot]"}
 
 ALL_COMMANDS = [
+    "/impact", "/secfull",
     "/fix", "/apply", "/explain", "/improve", "/test", "/docs",
     "/refactor", "/health", "/version", "/merge",
     "/summarize", "/ci", "/security", "/gaps", "/changelog",
@@ -118,6 +119,10 @@ def handle(payload: dict):
             response = _cmd_budget()
         elif cmd == "/rollback":
             response = _cmd_rollback(repo, issue_number, token, context_text, author)
+        elif cmd == "/impact":
+            response = _cmd_impact(repo, issue_number, issue, token)
+        elif cmd == "/secfull":
+            response = _cmd_secfull(repo, token)
 
     except Exception as e:
         log.error(f"Command {cmd} failed: {e}")
@@ -711,3 +716,75 @@ def _cmd_rollback(repo: str, issue_number: int, token: str,
         restored.append("No automated actions to undo in this snapshot")
 
     return format_rollback_result(repo, snap, restored, failed)
+
+def _cmd_impact(repo: str, issue_number: int, issue: dict, token: str) -> str:
+    """
+    /impact — Show blast radius: which layers/modules this PR affects.
+    Works on Pull Requests only.
+    """
+    if "pull_request" not in issue:
+        return "## ℹ️ `/impact` only works on Pull Requests."
+
+    try:
+        from app.github.client import gh_get
+        from app.handlers.pull_request import _blast_radius
+        from app.ai.router import router
+
+        files = gh_get(f"/repos/{repo}/pulls/{issue_number}/files", token)
+        blast = _blast_radius(files)
+
+        filenames = [f["filename"] for f in files[:15]]
+        r, _meta = router.ask(
+            "Senior architect. Analyze PR impact on system. JSON only.",
+            f"""Analyze the blast radius of these file changes:
+{chr(10).join(filenames)}
+
+Return JSON:
+{{
+  "summary": "one sentence overall impact",
+  "affected_systems": ["system1", "system2"],
+  "breaking_change_risk": "low|medium|high",
+  "requires_migration": false,
+  "review_priority": "low|medium|high",
+  "notes": "any important considerations"
+}}""",
+            task="arch",
+        )
+
+        bc_risk  = r.get("breaking_change_risk", "low")
+        bc_emoji = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(bc_risk, "🟡")
+        migration = "⚠️ Yes" if r.get("requires_migration") else "✅ No"
+        systems   = ", ".join(f"`{s}`" for s in r.get("affected_systems", [])[:5])
+
+        return f"""## 💥 Blast Radius — PR #{issue_number}
+
+**Summary:** {r.get("summary", "")}
+
+### Layers Affected
+{blast}
+
+### Impact Assessment
+| | |
+|---|---|
+| **Breaking Change Risk** | {bc_emoji} {bc_risk.capitalize()} |
+| **Requires Migration** | {migration} |
+| **Review Priority** | `{r.get("review_priority", "medium")}` |
+| **Affected Systems** | {systems or "none identified"} |
+
+{f"> ℹ️ {r.get('notes', '')}" if r.get("notes") else ""}"""
+
+    except Exception as e:
+        return f"## ⚠️ Impact analysis failed: `{str(e)[:200]}`"
+
+
+def _cmd_secfull(repo: str, token: str) -> str:
+    """
+    /secfull — Full security report using all 3 GitHub Security APIs:
+    Dependabot Alerts + CodeQL + Secret Scanning.
+    """
+    try:
+        from app.security.scanner import run_security_scan
+        report = run_security_scan(repo, token)
+        return report.to_markdown(include_low=True)
+    except Exception as e:
+        return f"## ⚠️ Security scan failed: `{str(e)[:200]}`"

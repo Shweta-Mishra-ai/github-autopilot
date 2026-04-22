@@ -154,9 +154,9 @@ class TestCodeReviewValidator:
 
     def test_missing_fields_use_safe_defaults(self):
         result = validate_code_review({})
-        # FIXED: Validator defaults score to float(raw.get("score", 0)) = 0.0
-        # Old test expected 7 (V3 default) — V4 default is 0.0
-        assert result["score"] == 0.0
+        # Default score is 7.0 — reasonable quality baseline
+        # Better than 0.0 which caused confusing "0/10" displays
+        assert result["score"] == 7.0
         assert result["issues"] == []
 
     def test_non_integer_score_handled(self):

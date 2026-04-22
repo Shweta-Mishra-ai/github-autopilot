@@ -38,11 +38,12 @@ def update_from_headers(headers: dict):
             _try_redis_set(f"gh_rl_{resource}_remaining", remaining)
 
         if reset_at is not None:
-            _state["reset_at"] = int(reset_at)
+            _state["reset_at"]  = int(reset_at)
             _try_redis_set(f"gh_rl_{resource}_reset", reset_at)
 
+        # Always update these regardless
         _state["last_checked"] = time.time()
-        _state["resource"]     = resource
+        _state["resource"]     = resource  # track which resource was last checked
 
     except Exception:
         pass

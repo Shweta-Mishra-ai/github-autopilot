@@ -153,7 +153,7 @@ def validate_code_review(raw: dict) -> dict:
     # Score: float 0-10
     score = None
     try:
-        score = float(raw.get("score", 0))
+        score = float(raw.get("score", 7.0))  # default 7 = acceptable quality
         score = max(0.0, min(10.0, score))
     except (TypeError, ValueError):
         score = None

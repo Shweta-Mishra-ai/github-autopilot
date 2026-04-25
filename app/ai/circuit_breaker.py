@@ -18,21 +18,21 @@ log = logging.getLogger(__name__)
 
 
 class CBState(Enum):
-    CLOSED    = "closed"
-    OPEN      = "open"
+    CLOSED = "closed"
+    OPEN = "open"
     HALF_OPEN = "half_open"
 
 
 @dataclass
 class CircuitBreaker:
     provider: str
-    fail_threshold: int   = 3
+    fail_threshold: int = 3
     recovery_timeout: int = 60
 
-    _state: CBState       = field(default=CBState.CLOSED, init=False, repr=False)
-    _failures: int        = field(default=0,              init=False, repr=False)
-    _opened_at: float     = field(default=0.0,            init=False, repr=False)
-    _last_failure_reason: str = field(default="",         init=False, repr=False)
+    _state: CBState = field(default=CBState.CLOSED, init=False, repr=False)
+    _failures: int = field(default=0, init=False, repr=False)
+    _opened_at: float = field(default=0.0, init=False, repr=False)
+    _last_failure_reason: str = field(default="", init=False, repr=False)
 
     @property
     def state(self) -> CBState:
@@ -49,14 +49,14 @@ class CircuitBreaker:
         if self._state != CBState.CLOSED:
             log.info(f"circuit_breaker.recovered provider={self.provider}")
         self._failures = 0
-        self._state    = CBState.CLOSED
+        self._state = CBState.CLOSED
         self._last_failure_reason = ""
 
     def record_failure(self, reason: str = ""):
         self._failures += 1
         self._last_failure_reason = reason
         if self._failures >= self.fail_threshold or self._state == CBState.HALF_OPEN:
-            self._state     = CBState.OPEN
+            self._state = CBState.OPEN
             self._opened_at = time.time()
             log.warning(
                 f"circuit_breaker.opened provider={self.provider} "
@@ -71,10 +71,10 @@ class CircuitBreaker:
 
     def status(self) -> dict:
         return {
-            "provider":            self.provider,
-            "state":               self.state.value,
-            "failures":            self._failures,
-            "last_failure":        self._last_failure_reason,
+            "provider": self.provider,
+            "state": self.state.value,
+            "failures": self._failures,
+            "last_failure": self._last_failure_reason,
             "recovers_in_seconds": self.seconds_until_retry(),
         }
 
@@ -82,9 +82,9 @@ class CircuitBreaker:
 # ── Module-level singletons ───────────────────────────────────────────────────
 
 _breakers: dict[str, CircuitBreaker] = {
-    "groq_70b":   CircuitBreaker("groq_70b",   fail_threshold=3, recovery_timeout=60),
-    "groq_8b":    CircuitBreaker("groq_8b",    fail_threshold=5, recovery_timeout=30),
-    "gemini":     CircuitBreaker("gemini",     fail_threshold=3, recovery_timeout=90),
+    "groq_70b": CircuitBreaker("groq_70b", fail_threshold=3, recovery_timeout=60),
+    "groq_8b": CircuitBreaker("groq_8b", fail_threshold=5, recovery_timeout=30),
+    "gemini": CircuitBreaker("gemini", fail_threshold=3, recovery_timeout=90),
     "openrouter": CircuitBreaker("openrouter", fail_threshold=5, recovery_timeout=120),
 }
 
@@ -119,10 +119,7 @@ class AllProvidersDown(Exception):
     def __init__(self):
         # FIXED: try/except prevents TypeError when _breakers has mocks
         try:
-            recovery = min(
-                int(cb.seconds_until_retry())
-                for cb in _breakers.values()
-            )
+            recovery = min(int(cb.seconds_until_retry()) for cb in _breakers.values())
         except (TypeError, ValueError, AttributeError):
             recovery = 60
         self.retry_in_seconds = recovery

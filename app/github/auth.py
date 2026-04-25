@@ -22,19 +22,19 @@ import requests
 
 log = logging.getLogger(__name__)
 
-APP_ID      = os.environ.get("GITHUB_APP_ID", "")
+APP_ID = os.environ.get("GITHUB_APP_ID", "")
 PRIVATE_KEY = os.environ.get("GITHUB_PRIVATE_KEY", "").replace("\\n", "\n")
 
 # ✅ FIXED: Lock prevents race condition (LOOPHOLE 5)
 _token_cache: dict = {}
-_cache_lock  = threading.Lock()
+_cache_lock = threading.Lock()
 
 
 def get_jwt() -> str:
     """Generate a short-lived JWT for authenticating as the GitHub App."""
     now = int(time.time())
     payload = {
-        "iat": now - 60,   # Issued 60s ago (clock skew tolerance)
+        "iat": now - 60,  # Issued 60s ago (clock skew tolerance)
         "exp": now + 540,  # Expires in 9 min (GitHub allows max 10 min)
         "iss": APP_ID,
     }
@@ -66,12 +66,12 @@ def get_installation_token(installation_id: int) -> str:
             timeout=15,
         )
         r.raise_for_status()
-        data  = r.json()
+        data = r.json()
         token = data["token"]
 
         # Cache for 50 min (GitHub tokens last 60 min)
         _token_cache[installation_id] = {
-            "token":   token,
+            "token": token,
             "expires": time.time() + 3000,  # 50 * 60 = 3000 seconds
         }
         log.info(f"auth.token_fetched installation_id={installation_id}")

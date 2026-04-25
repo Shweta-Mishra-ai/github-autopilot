@@ -13,10 +13,15 @@ PYPI_API = "https://pypi.org/pypi/{package}/json"
 
 # Permissive licenses - safe for all projects
 PERMISSIVE = {
-    "MIT", "MIT License",
-    "Apache-2.0", "Apache Software License",
-    "BSD-2-Clause", "BSD-3-Clause", "BSD License",
-    "ISC", "ISC License",
+    "MIT",
+    "MIT License",
+    "Apache-2.0",
+    "Apache Software License",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSD License",
+    "ISC",
+    "ISC License",
     "Python Software Foundation License",
     "Public Domain",
     "Unlicense",
@@ -24,21 +29,26 @@ PERMISSIVE = {
 
 # Copyleft licenses - may have restrictions
 COPYLEFT = {
-    "GPL-2.0", "GPL-3.0", "GNU General Public License v2",
-    "GNU General Public License v3", "GPLv2", "GPLv3",
-    "LGPL-2.0", "LGPL-2.1", "LGPL-3.0",
-    "AGPL-3.0", "GNU Affero General Public License v3",
-    "MPL-2.0", "Mozilla Public License 2.0",
+    "GPL-2.0",
+    "GPL-3.0",
+    "GNU General Public License v2",
+    "GNU General Public License v3",
+    "GPLv2",
+    "GPLv3",
+    "LGPL-2.0",
+    "LGPL-2.1",
+    "LGPL-3.0",
+    "AGPL-3.0",
+    "GNU Affero General Public License v3",
+    "MPL-2.0",
+    "Mozilla Public License 2.0",
 }
 
 
 def check_package_license(package: str) -> dict:
     """Get license info for a PyPI package."""
     try:
-        resp = requests.get(
-            PYPI_API.format(package=package),
-            timeout=5
-        )
+        resp = requests.get(PYPI_API.format(package=package), timeout=5)
         if resp.status_code != 200:
             return {"package": package, "license": "Unknown", "risk": "unknown"}
 
@@ -71,6 +81,7 @@ def check_package_license(package: str) -> dict:
 def scan_requirements(content: str) -> list[dict]:
     """Scan requirements.txt and check all package licenses."""
     from app.security.dependencies import parse_requirements
+
     packages = parse_requirements(content)
     results = []
     for pkg in packages[:20]:  # Limit to 20 to avoid rate limits
@@ -94,6 +105,7 @@ def format_findings(findings: list[dict]) -> str:
         emoji = "🔴" if f["risk"] == "copyleft" else "🟡"
         lines.append(f"| `{f['package']}` | {f['license']} | {emoji} `{f['risk']}` |")
 
-    lines.append("\n> Review copyleft licenses carefully — they may require you to open-source your code.")
+    lines.append(
+        "\n> Review copyleft licenses carefully — they may require you to open-source your code."
+    )
     return "\n".join(lines)
-

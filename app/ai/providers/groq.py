@@ -18,16 +18,15 @@ from app.ai.providers.base import LLMProvider, LLMResponse
 log = logging.getLogger(__name__)
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-GROQ_URL     = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 GROQ_COST = {
     "groq_70b": 0.0009,
-    "groq_8b":  0.00006,
+    "groq_8b": 0.00006,
 }
 
 
 class GroqProvider(LLMProvider):
-
     def __init__(self, model: str = "llama-3.3-70b-versatile"):
         self._model = model
 
@@ -49,7 +48,6 @@ class GroqProvider(LLMProvider):
         temperature: float,
         timeout: int,
     ) -> LLMResponse:
-
         # ── STEP 1: Circuit breaker check — MUST be first ─────────────────────
         # patch.object on get_breaker(provider_key) instance works because
         # get_breaker() returns the same singleton from _breakers dict.
@@ -75,15 +73,15 @@ class GroqProvider(LLMProvider):
         # ── STEP 3: HTTP call ─────────────────────────────────────────────────
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "Content-Type":  "application/json",
+            "Content-Type": "application/json",
         }
         body = {
-            "model":       self._model,
-            "max_tokens":  max_tokens,
+            "model": self._model,
+            "max_tokens": max_tokens,
             "temperature": temperature,
             "messages": [
                 {"role": "system", "content": system},
-                {"role": "user",   "content": user},
+                {"role": "user", "content": user},
             ],
         }
 
@@ -96,25 +94,29 @@ class GroqProvider(LLMProvider):
                 retry_after = int(r.headers.get("Retry-After", 30))
                 breaker.record_failure(f"rate_limit retry_after={retry_after}s")
                 return LLMResponse(
-                    text="", provider="groq", model=self._model,
+                    text="",
+                    provider="groq",
+                    model=self._model,
                     error=f"RATE_LIMIT:{retry_after}",
                 )
 
             if r.status_code >= 500:
                 breaker.record_failure(f"server_error_{r.status_code}")
                 return LLMResponse(
-                    text="", provider="groq", model=self._model,
+                    text="",
+                    provider="groq",
+                    model=self._model,
                     error=f"Server error {r.status_code}",
                 )
 
             r.raise_for_status()
-            data  = r.json()
+            data = r.json()
             usage = data.get("usage", {})
             p_tok = usage.get("prompt_tokens", 0)
             c_tok = usage.get("completion_tokens", 0)
             t_tok = usage.get("total_tokens", 0)
-            cost  = (t_tok / 1000) * GROQ_COST.get(self.provider_key, 0)
-            text  = data["choices"][0]["message"]["content"]
+            cost = (t_tok / 1000) * GROQ_COST.get(self.provider_key, 0)
+            text = data["choices"][0]["message"]["content"]
 
             breaker.record_success()
             self._track(t_tok)
@@ -132,7 +134,9 @@ class GroqProvider(LLMProvider):
         except http_requests.exceptions.Timeout:
             breaker.record_failure("timeout")
             return LLMResponse(
-                text="", provider="groq", model=self._model,
+                text="",
+                provider="groq",
+                model=self._model,
                 error="Request timed out",
             )
         except Exception as e:
@@ -140,7 +144,9 @@ class GroqProvider(LLMProvider):
             if "raise_for_status" not in err:
                 breaker.record_failure(err[:60])
             return LLMResponse(
-                text="", provider="groq", model=self._model,
+                text="",
+                provider="groq",
+                model=self._model,
                 error=err[:200],
             )
 
@@ -148,9 +154,10 @@ class GroqProvider(LLMProvider):
         try:
             import datetime
             from app.core.redis_client import get_redis
+
             if total_tokens <= 0:
                 return
-            r     = get_redis()
+            r = get_redis()
             today = datetime.date.today().isoformat()
             for k in (
                 f"llm:tokens:{self.provider_key}:{today}",

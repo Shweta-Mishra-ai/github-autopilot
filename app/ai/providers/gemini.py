@@ -17,15 +17,14 @@ from app.ai.providers.base import LLMProvider, LLMResponse
 log = logging.getLogger(__name__)
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL   = "gemini-1.5-flash"
-GEMINI_URL     = (
+GEMINI_MODEL = "gemini-1.5-flash"
+GEMINI_URL = (
     f"https://generativelanguage.googleapis.com/v1beta/models/"
     f"{GEMINI_MODEL}:generateContent"
 )
 
 
 class GeminiProvider(LLMProvider):
-
     @property
     def provider_key(self) -> str:
         return "gemini"
@@ -42,7 +41,6 @@ class GeminiProvider(LLMProvider):
         temperature: float,
         timeout: int,
     ) -> LLMResponse:
-
         # ── STEP 1: Circuit breaker check — MUST be first ─────────────────────
         breaker = get_breaker("gemini")
         if not breaker.is_available():
@@ -65,15 +63,11 @@ class GeminiProvider(LLMProvider):
 
         # ── STEP 3: HTTP call ─────────────────────────────────────────────────
         body = {
-            "system_instruction": {
-                "parts": [{"text": system}]
-            },
-            "contents": [
-                {"role": "user", "parts": [{"text": user}]}
-            ],
+            "system_instruction": {"parts": [{"text": system}]},
+            "contents": [{"role": "user", "parts": [{"text": user}]}],
             "generationConfig": {
                 "maxOutputTokens": max_tokens,
-                "temperature":     temperature,
+                "temperature": temperature,
             },
         }
         url = f"{GEMINI_URL}?key={api_key}"
@@ -89,21 +83,27 @@ class GeminiProvider(LLMProvider):
             if r.status_code == 429:
                 breaker.record_failure("rate_limit_429")
                 return LLMResponse(
-                    text="", provider="gemini", model=GEMINI_MODEL,
+                    text="",
+                    provider="gemini",
+                    model=GEMINI_MODEL,
                     error="RATE_LIMIT:60",
                 )
 
             if r.status_code == 400:
                 breaker.record_failure("bad_request_400")
                 return LLMResponse(
-                    text="", provider="gemini", model=GEMINI_MODEL,
+                    text="",
+                    provider="gemini",
+                    model=GEMINI_MODEL,
                     error=f"Bad request: {r.text[:100]}",
                 )
 
             if r.status_code >= 500:
                 breaker.record_failure(f"server_error_{r.status_code}")
                 return LLMResponse(
-                    text="", provider="gemini", model=GEMINI_MODEL,
+                    text="",
+                    provider="gemini",
+                    model=GEMINI_MODEL,
                     error=f"Server error {r.status_code}",
                 )
 
@@ -115,7 +115,9 @@ class GeminiProvider(LLMProvider):
             except (KeyError, IndexError) as exc:
                 breaker.record_failure("bad_response_format")
                 return LLMResponse(
-                    text="", provider="gemini", model=GEMINI_MODEL,
+                    text="",
+                    provider="gemini",
+                    model=GEMINI_MODEL,
                     error=f"Unexpected response format: {exc}",
                 )
 
@@ -140,13 +142,17 @@ class GeminiProvider(LLMProvider):
         except http_requests.exceptions.Timeout:
             breaker.record_failure("timeout")
             return LLMResponse(
-                text="", provider="gemini", model=GEMINI_MODEL,
+                text="",
+                provider="gemini",
+                model=GEMINI_MODEL,
                 error="Request timed out",
             )
         except Exception as e:
             breaker.record_failure(str(e)[:60])
             return LLMResponse(
-                text="", provider="gemini", model=GEMINI_MODEL,
+                text="",
+                provider="gemini",
+                model=GEMINI_MODEL,
                 error=str(e)[:200],
             )
 
@@ -154,9 +160,10 @@ class GeminiProvider(LLMProvider):
         try:
             import datetime
             from app.core.redis_client import get_redis
+
             if total_tokens <= 0:
                 return
-            r     = get_redis()
+            r = get_redis()
             today = datetime.date.today().isoformat()
             for k in (
                 f"llm:tokens:gemini:{today}",

@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 
 # ── Cache (5-minute TTL) ──────────────────────────────────────────────────────
 _config_cache: dict[str, tuple] = {}  # {repo: (Config, timestamp)}
-_CONFIG_TTL   = 300  # 5 minutes in seconds
+_CONFIG_TTL = 300  # 5 minutes in seconds
 
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
@@ -37,58 +37,58 @@ DEFAULTS: dict = {
         ),
     },
     "pull_requests": {
-        "enabled":              True,
-        "auto_polish_title":    True,
+        "enabled": True,
+        "auto_polish_title": True,
         "auto_fill_description": True,
-        "code_review":          True,
-        "max_files_reviewed":   6,
-        "detect_test_gaps":     True,
+        "code_review": True,
+        "max_files_reviewed": 6,
+        "detect_test_gaps": True,
     },
     "issues": {
-        "enabled":     True,
+        "enabled": True,
         "auto_triage": True,
-        "auto_label":  True,
+        "auto_label": True,
     },
     "push": {
-        "enabled":                      True,
+        "enabled": True,
         "enforce_conventional_commits": True,
-        "create_issue_threshold":       3,
-        "scan_secrets":                 True,
-        "scan_dependencies":            True,
+        "create_issue_threshold": 3,
+        "scan_secrets": True,
+        "scan_dependencies": True,
     },
     "auto_merge": {
-        "enabled":                    False,
-        "require_passing_checks":     True,
+        "enabled": False,
+        "require_passing_checks": True,
         "require_no_blocking_reviews": True,
-        "allow_protected_branches":   False,
-        "allowed_risk_levels":        ["low"],
+        "allow_protected_branches": False,
+        "allowed_risk_levels": ["low"],
     },
     "ai": {
-        "primary_model":  "llama-3.3-70b-versatile",
+        "primary_model": "llama-3.3-70b-versatile",
         "fallback_model": "llama-3.1-8b-instant",
-        "max_tokens":     1500,
-        "temperature":    0.2,
+        "max_tokens": 1500,
+        "temperature": 0.2,
         "timeout_seconds": 45,
     },
     "confidence": {
         "thresholds": {
             "pr_title_rewrite": 0.80,
-            "pr_description":   0.75,
-            "issue_label":      0.70,
-            "auto_merge":       0.95,
-            "fix_command":      0.75,
-            "auto_apply":       0.92,
-            "code_review":      0.75,
+            "pr_description": 0.75,
+            "issue_label": 0.70,
+            "auto_merge": 0.95,
+            "fix_command": 0.75,
+            "auto_apply": 0.92,
+            "code_review": 0.75,
             "security_finding": 0.85,
-            "issue_triage":     0.75,
+            "issue_triage": 0.75,
         }
     },
     "notifications": {
-        "slack":                False,
-        "discord":              False,
-        "on_secret_detected":   True,
-        "on_high_risk_pr":      True,
-        "on_health_degraded":   True,
+        "slack": False,
+        "discord": False,
+        "on_secret_detected": True,
+        "on_high_risk_pr": True,
+        "on_health_degraded": True,
         "on_all_providers_down": True,
     },
     "labels": {
@@ -97,13 +97,32 @@ DEFAULTS: dict = {
     "commands": {
         "enabled": [
             # V2.1
-            "fix", "apply", "explain", "improve", "test", "docs",
-            "refactor", "health", "version", "merge",
+            "fix",
+            "apply",
+            "explain",
+            "improve",
+            "test",
+            "docs",
+            "refactor",
+            "health",
+            "version",
+            "merge",
             # V3
-            "summarize", "ci", "security", "gaps", "changelog",
+            "summarize",
+            "ci",
+            "security",
+            "gaps",
+            "changelog",
             # V4
-            "rollback", "autofix", "impact", "perf", "arch",
-            "release", "runtests", "secfull", "budget",
+            "rollback",
+            "autofix",
+            "impact",
+            "perf",
+            "arch",
+            "release",
+            "runtests",
+            "secfull",
+            "budget",
         ],
         "permissions": {
             "maintainer_only": ["merge", "release", "rollback"],
@@ -113,6 +132,7 @@ DEFAULTS: dict = {
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _deep_merge(base: dict, override: dict) -> dict:
     result = base.copy()
@@ -184,10 +204,11 @@ def _validate_config(data: dict) -> dict:
 
 # ── Config class ──────────────────────────────────────────────────────────────
 
+
 class Config:
     def __init__(self, data: dict):
-        validated   = _validate_config(data)
-        self._data  = _deep_merge(DEFAULTS, validated)
+        validated = _validate_config(data)
+        self._data = _deep_merge(DEFAULTS, validated)
 
     def get(self, *keys: str, default: Any = None) -> Any:
         node = self._data
@@ -229,6 +250,7 @@ class Config:
 
 # ── Loader ────────────────────────────────────────────────────────────────────
 
+
 def load_config(repo: str, token: str) -> Config:
     """
     Load .ai-repo-manager.yml from repo with 5-minute cache.
@@ -245,10 +267,12 @@ def load_config(repo: str, token: str) -> Config:
     # Cache miss — fetch from GitHub
     try:
         from app.github.client import gh_get
-        data    = gh_get(f"/repos/{repo}/contents/.ai-repo-manager.yml", token)
+
+        data = gh_get(f"/repos/{repo}/contents/.ai-repo-manager.yml", token)
         content = base64.b64decode(data["content"]).decode("utf-8")
 
         import yaml
+
         parsed = yaml.safe_load(content) or {}
         if not isinstance(parsed, dict):
             log.warning(f"config.invalid_yaml repo={repo} — using defaults")

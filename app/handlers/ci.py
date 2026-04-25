@@ -18,15 +18,16 @@ log = logging.getLogger(__name__)
 
 SKIP_CONCLUSIONS = {"skipped", "neutral", "cancelled"}
 
+
 def handle(payload: dict):
     action = payload.get("action")
     if action not in ("completed",):
         return
 
-    check_run       = payload.get("check_run", {})
-    conclusion      = check_run.get("conclusion", "")
-    check_name      = check_run.get("name", "")
-    repo            = payload["repository"]["full_name"]
+    check_run = payload.get("check_run", {})
+    conclusion = check_run.get("conclusion", "")
+    check_name = check_run.get("name", "")
+    repo = payload["repository"]["full_name"]
     installation_id = payload.get("installation", {}).get("id")
 
     if not installation_id:
@@ -51,10 +52,10 @@ def handle(payload: dict):
     if not config.get("ci", "enabled", default=True):
         return
 
-    output     = check_run.get("output", {})
-    title      = output.get("title", "")
-    summary    = output.get("summary", "")[:2000]
-    details    = output.get("text", "")[:3000]
+    output = check_run.get("output", {})
+    title = output.get("title", "")
+    summary = output.get("summary", "")[:2000]
+    details = output.get("text", "")[:3000]
 
     pull_requests = check_run.get("pull_requests", [])
     if not pull_requests:
@@ -68,18 +69,18 @@ def handle(payload: dict):
     try:
         r, _meta = router.ask(
             "Senior DevOps engineer. Analyze CI failures concisely. JSON only.",
-            f"Analyze this CI failure and suggest a fix:\n\n{failure_context}\n\nReturn JSON:\n{{\n  \"root_cause\": \"one sentence — exact reason\",\n  \"category\": \"test_failure|build_error|lint_error|dependency|timeout|other\",\n  \"fix\": \"concrete steps to fix — 2-4 bullet points\",\n  \"is_flaky\": false,\n  \"confidence\": 0.8\n}}",
+            f'Analyze this CI failure and suggest a fix:\n\n{failure_context}\n\nReturn JSON:\n{{\n  "root_cause": "one sentence — exact reason",\n  "category": "test_failure|build_error|lint_error|dependency|timeout|other",\n  "fix": "concrete steps to fix — 2-4 bullet points",\n  "is_flaky": false,\n  "confidence": 0.8\n}}',
             task="ci_analysis",
         )
 
-        category  = r.get("category", "other")
+        category = r.get("category", "other")
         cat_emoji = {
             "test_failure": "🧪",
-            "build_error":  "🏗️",
-            "lint_error":   "🔍",
-            "dependency":   "📦",
-            "timeout":      "⏱️",
-            "other":        "❌",
+            "build_error": "🏗️",
+            "lint_error": "🔍",
+            "dependency": "📦",
+            "timeout": "⏱️",
+            "other": "❌",
         }.get(category, "❌")
 
         flaky_note = ""
@@ -97,3 +98,40 @@ def handle(payload: dict):
 
     except Exception as e:
         log_ctx.error(f"CI handler failed: {e}")
+
+
+def _track_failure_pattern(repo: str, check_name: str, root_cause: str):
+    """
+    Sprint 5: Track CI failure patterns.
+    If same check fails 3+ times in 24h → post pattern alert.
+    """
+    try:
+        from app.core.redis_client import get_redis
+
+        r = get_redis()
+        key = f"ci_fail:{repo}:{check_name}"
+        count = r.incr(key)
+        r.expire(key, 86400)
+
+        if int(count) == 3:
+            log.warning(
+                f"ci.pattern_detected repo={repo} check={check_name} "
+                f"count={count} root_cause={root_cause[:60]}"
+            )
+            return True  # Caller posts pattern alert
+    except Exception:
+        pass
+    return False
+
+
+def _get_failure_count(repo: str, check_name: str) -> int:
+    """Returns how many times this check has failed today."""
+    try:
+        from app.core.redis_client import get_redis
+
+        r = get_redis()
+        key = f"ci_fail:{repo}:{check_name}"
+        val = r.get(key)
+        return int(val) if val else 0
+    except Exception:
+        return 0

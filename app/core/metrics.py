@@ -37,7 +37,7 @@ class MetricsCollector:
             return {
                 "uptime_seconds": uptime_seconds,
                 "uptime_human": _format_uptime(uptime_seconds),
-                **dict(self._counters)
+                **dict(self._counters),
             }
 
     def reset(self):
@@ -56,4 +56,3 @@ def _format_uptime(seconds: int) -> str:
 
 # Singleton — import this everywhere
 metrics = MetricsCollector()
-

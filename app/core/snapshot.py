@@ -131,16 +131,20 @@ def list_snapshots(repo: str) -> list[dict]:
 
             snap = json.loads(raw)
 
-            summaries.append({
-                "id": snap_id,
-                "number": len(summaries) + 1,
-                "trigger": snap.get("trigger", "unknown"),
-                "timestamp": snap.get("timestamp", ""),
-                "issues_count": snap["state"]["open_issues_count"],
-                "prs_count": snap["state"]["open_prs_count"],
-                "commit": snap["state"]["latest_commit"][:7] if snap["state"].get("latest_commit") else "—",
-                "bot_actions": len(snap.get("bot_actions", [])),
-            })
+            summaries.append(
+                {
+                    "id": snap_id,
+                    "number": len(summaries) + 1,
+                    "trigger": snap.get("trigger", "unknown"),
+                    "timestamp": snap.get("timestamp", ""),
+                    "issues_count": snap["state"]["open_issues_count"],
+                    "prs_count": snap["state"]["open_prs_count"],
+                    "commit": snap["state"]["latest_commit"][:7]
+                    if snap["state"].get("latest_commit")
+                    else "—",
+                    "bot_actions": len(snap.get("bot_actions", [])),
+                }
+            )
 
         return summaries
 
@@ -211,7 +215,9 @@ def format_snapshot_list(repo: str) -> str:
 *Snapshots expire after 7 days. Last {len(snapshots)} shown.*"""
 
 
-def format_rollback_result(repo: str, snap: dict, restored: list[str], failed: list[str]) -> str:
+def format_rollback_result(
+    repo: str, snap: dict, restored: list[str], failed: list[str]
+) -> str:
     snap_ts = snap.get("timestamp", "")[:16].replace("T", " ")
 
     success_lines = "\n".join(f"- ✅ {r}" for r in restored) or "- Nothing to restore"
@@ -220,7 +226,7 @@ def format_rollback_result(repo: str, snap: dict, restored: list[str], failed: l
     result = f"""## ↩️ Rollback Complete
 
 **Restored to snapshot from:** `{snap_ts} UTC`
-**Trigger:** `{snap.get('trigger', 'unknown')}`
+**Trigger:** `{snap.get("trigger", "unknown")}`
 
 ### Actions Taken
 {success_lines}

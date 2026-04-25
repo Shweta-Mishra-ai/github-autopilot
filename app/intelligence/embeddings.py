@@ -29,6 +29,7 @@ def _get_model():
     global _model
     if _model is None:
         from sentence_transformers import SentenceTransformer
+
         _model = SentenceTransformer("all-MiniLM-L6-v2")
         log.info("Embedding model loaded")
     return _model
@@ -39,12 +40,15 @@ def _get_qdrant():
     if _qdrant_client is None:
         from qdrant_client import QdrantClient
         from qdrant_client.models import Distance, VectorParams
+
         _qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
         existing = [c.name for c in _qdrant_client.get_collections().collections]
         if COLLECTION_NAME not in existing:
             _qdrant_client.create_collection(
                 collection_name=COLLECTION_NAME,
-                vectors_config=VectorParams(size=EMBEDDING_DIM, distance=Distance.COSINE)
+                vectors_config=VectorParams(
+                    size=EMBEDDING_DIM, distance=Distance.COSINE
+                ),
             )
     return _qdrant_client
 
@@ -52,11 +56,14 @@ def _get_qdrant():
 def _get_chroma(repo: str):
     global _chroma_client
     import chromadb
+
     if _chroma_client is None:
         os.makedirs(CHROMA_DIR, exist_ok=True)
         _chroma_client = chromadb.PersistentClient(path=CHROMA_DIR)
     name = repo.replace("/", "_").replace("-", "_")[:63]
-    return _chroma_client.get_or_create_collection(name=name, metadata={"hnsw:space": "cosine"})
+    return _chroma_client.get_or_create_collection(
+        name=name, metadata={"hnsw:space": "cosine"}
+    )
 
 
 def embed_file(repo: str, filepath: str, content: str, commit_sha: str = "") -> bool:
@@ -64,7 +71,9 @@ def embed_file(repo: str, filepath: str, content: str, commit_sha: str = "") -> 
         model = _get_model()
         chunks = _chunk_code(content, filepath)
         for i, chunk in enumerate(chunks):
-            doc_id = hashlib.sha256(f"{repo}:{filepath}:{commit_sha}:{i}".encode()).hexdigest()[:32]
+            doc_id = hashlib.sha256(
+                f"{repo}:{filepath}:{commit_sha}:{i}".encode()
+            ).hexdigest()[:32]
             embedding = model.encode(chunk).tolist()
             if USE_QDRANT:
                 _store_qdrant(doc_id, embedding, chunk, repo, filepath, commit_sha, i)
@@ -80,15 +89,23 @@ def embed_file(repo: str, filepath: str, content: str, commit_sha: str = "") -> 
 
 def _store_qdrant(doc_id, embedding, chunk, repo, filepath, commit_sha, idx):
     from qdrant_client.models import PointStruct
+
     client = _get_qdrant()
     point_id = int(doc_id[:16], 16)
     client.upsert(
         collection_name=COLLECTION_NAME,
-        points=[PointStruct(
-            id=point_id,
-            vector=embedding,
-            payload={"repo": repo, "filepath": filepath, "commit_sha": commit_sha, "content": chunk[:500]}
-        )]
+        points=[
+            PointStruct(
+                id=point_id,
+                vector=embedding,
+                payload={
+                    "repo": repo,
+                    "filepath": filepath,
+                    "commit_sha": commit_sha,
+                    "content": chunk[:500],
+                },
+            )
+        ],
     )
 
 
@@ -98,7 +115,7 @@ def _store_chroma(repo, doc_id, embedding, chunk, filepath, commit_sha, idx):
         ids=[doc_id],
         embeddings=[embedding],
         documents=[chunk],
-        metadatas=[{"repo": repo, "filepath": filepath, "commit_sha": commit_sha}]
+        metadatas=[{"repo": repo, "filepath": filepath, "commit_sha": commit_sha}],
     )
 
 
@@ -121,10 +138,17 @@ def _search_qdrant(query_embedding, repo, top_k):
         collection_name=COLLECTION_NAME,
         query_vector=query_embedding,
         query_filter={"must": [{"key": "repo", "match": {"value": repo}}]},
-        limit=top_k
+        limit=top_k,
     )
-    return [{"filepath": r.payload.get("filepath", ""), "content": r.payload.get("content", ""), "score": r.score}
-            for r in results if r.score > 0.3]
+    return [
+        {
+            "filepath": r.payload.get("filepath", ""),
+            "content": r.payload.get("content", ""),
+            "score": r.score,
+        }
+        for r in results
+        if r.score > 0.3
+    ]
 
 
 def _search_chroma(repo, query_embedding, top_k):
@@ -133,11 +157,20 @@ def _search_chroma(repo, query_embedding, top_k):
         count = collection.count()
         if count == 0:
             return []
-        results = collection.query(query_embeddings=[query_embedding], n_results=min(top_k, count),
-                                   include=["documents", "metadatas", "distances"])
-        return [{"filepath": m.get("filepath", ""), "content": d[:500], "score": 1 - dist}
-                for d, m, dist in zip(results["documents"][0], results["metadatas"][0], results["distances"][0])
-                if (1 - dist) > 0.3]
+        results = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=min(top_k, count),
+            include=["documents", "metadatas", "distances"],
+        )
+        return [
+            {"filepath": m.get("filepath", ""), "content": d[:500], "score": 1 - dist}
+            for d, m, dist in zip(
+                results["documents"][0],
+                results["metadatas"][0],
+                results["distances"][0],
+            )
+            if (1 - dist) > 0.3
+        ]
     except Exception:
         return []
 
@@ -156,8 +189,9 @@ def _chunk_code(content: str, filepath: str, max_chars: int = 1500) -> list:
     lines = content.splitlines()
     chunks, current, current_len = [], [f"File: {filepath}"], len(filepath)
     for line in lines:
-        if (current_len > max_chars * 0.7 and
-                any(line.startswith(p) for p in ("def ", "class ", "async def "))):
+        if current_len > max_chars * 0.7 and any(
+            line.startswith(p) for p in ("def ", "class ", "async def ")
+        ):
             chunks.append("\n".join(current))
             current = [f"File: {filepath}", line]
             current_len = len(filepath) + len(line)

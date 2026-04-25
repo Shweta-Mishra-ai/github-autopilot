@@ -18,7 +18,11 @@ def capture(event_type: str, payload: dict, label: str = ""):
     """Save a real webhook payload as a named fixture."""
     os.makedirs(FIXTURES_DIR, exist_ok=True)
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    name = f"{event_type}_{label}_{timestamp}.json" if label else f"{event_type}_{timestamp}.json"
+    name = (
+        f"{event_type}_{label}_{timestamp}.json"
+        if label
+        else f"{event_type}_{timestamp}.json"
+    )
     path = os.path.join(FIXTURES_DIR, name)
     with open(path, "w") as f:
         json.dump({"event_type": event_type, "payload": payload}, f, indent=2)
@@ -41,4 +45,3 @@ def list_fixtures(event_type: str = "") -> list:
     if event_type:
         files = [f for f in files if f.startswith(event_type)]
     return sorted(files)
-

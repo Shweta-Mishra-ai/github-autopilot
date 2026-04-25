@@ -19,16 +19,17 @@ import time
 @dataclass
 class LLMResponse:
     """Structured response from any LLM provider."""
-    text: str                          # Raw text output
-    provider: str                      # "groq" | "gemini" | "openrouter"
-    model: str                         # e.g. "llama-3.3-70b-versatile"
-    prompt_tokens: int     = 0
+
+    text: str  # Raw text output
+    provider: str  # "groq" | "gemini" | "openrouter"
+    model: str  # e.g. "llama-3.3-70b-versatile"
+    prompt_tokens: int = 0
     completion_tokens: int = 0
-    total_tokens: int      = 0
-    latency_ms: int        = 0         # Wall clock time
-    cost_usd: float        = 0.0       # Estimated cost
-    used_fallback: bool    = False     # Was a fallback model used?
-    error: str             = ""        # Non-empty if call failed
+    total_tokens: int = 0
+    latency_ms: int = 0  # Wall clock time
+    cost_usd: float = 0.0  # Estimated cost
+    used_fallback: bool = False  # Was a fallback model used?
+    error: str = ""  # Non-empty if call failed
 
 
 class LLMProvider(ABC):
@@ -80,7 +81,7 @@ class LLMProvider(ABC):
         On parse failure → returns ({"raw": text}, meta).
         """
         start = time.time()
-        resp  = self.call_raw(system, user, max_tokens, temperature, timeout)
+        resp = self.call_raw(system, user, max_tokens, temperature, timeout)
         resp.latency_ms = int((time.time() - start) * 1000)
 
         if resp.error:
@@ -100,7 +101,7 @@ class LLMProvider(ABC):
         Call provider → return (plain_text, response_meta).
         """
         start = time.time()
-        resp  = self.call_raw(system, user, max_tokens, 0.3, timeout)
+        resp = self.call_raw(system, user, max_tokens, 0.3, timeout)
         resp.latency_ms = int((time.time() - start) * 1000)
 
         if resp.error:
@@ -127,6 +128,7 @@ def _extract_json(text: str) -> dict:
     # Strip markdown fences
     if "```" in stripped:
         import re
+
         stripped = re.sub(r"```(?:json)?\n?", "", stripped).strip()
         try:
             return json.loads(stripped)
@@ -145,7 +147,7 @@ def _extract_json(text: str) -> dict:
             elif c == "}":
                 depth -= 1
             if depth == 0:
-                candidate = text[start_idx: end_idx + 1]
+                candidate = text[start_idx : end_idx + 1]
                 try:
                     return json.loads(candidate)
                 except json.JSONDecodeError:

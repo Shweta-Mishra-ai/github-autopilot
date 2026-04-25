@@ -18,10 +18,10 @@ from app.ai.circuit_breaker import AllProvidersDown, available_providers, get_br
 log = logging.getLogger(__name__)
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-GROQ_URL     = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-MODEL_70B   = "llama-3.3-70b-versatile"
-MODEL_8B    = "llama-3.1-8b-instant"
+MODEL_70B = "llama-3.3-70b-versatile"
+MODEL_8B = "llama-3.1-8b-instant"
 MAX_RETRIES = 2
 
 
@@ -39,22 +39,22 @@ def _call_groq(
 ) -> str:
     """Single Groq API call. Returns raw text. Raises AIError on failure."""
     provider_key = "groq_70b" if ("70b" in model or "versatile" in model) else "groq_8b"
-    breaker      = get_breaker(provider_key)
+    breaker = get_breaker(provider_key)
 
     if not breaker.is_available():
         raise AIError(f"Circuit OPEN for {model}")
 
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type":  "application/json",
+        "Content-Type": "application/json",
     }
     payload = {
-        "model":       model,
-        "max_tokens":  max_tokens,
+        "model": model,
+        "max_tokens": max_tokens,
         "temperature": temperature,
         "messages": [
             {"role": "system", "content": system},
-            {"role": "user",   "content": user},
+            {"role": "user", "content": user},
         ],
     }
 
@@ -72,7 +72,7 @@ def _call_groq(
 
         r.raise_for_status()
 
-        data   = r.json()
+        data = r.json()
         result = data["choices"][0]["message"]["content"]
 
         breaker.record_success()
@@ -99,7 +99,7 @@ def _track_usage(provider_key: str, usage: dict):
         if total <= 0:
             return
 
-        r     = get_redis()
+        r = get_redis()
         today = datetime.date.today().isoformat()
 
         for key in (
@@ -129,6 +129,7 @@ def _extract_json(text: str) -> dict:
     # Step 2: Strip markdown fences if present
     if "```" in stripped:
         import re
+
         stripped = re.sub(r"```(?:json)?\n?", "", stripped).strip()
         try:
             return json.loads(stripped)
@@ -147,7 +148,7 @@ def _extract_json(text: str) -> dict:
             elif c == "}":
                 depth -= 1
             if depth == 0:
-                candidate = text[start_idx: end_idx + 1]
+                candidate = text[start_idx : end_idx + 1]
                 try:
                     return json.loads(candidate)
                 except json.JSONDecodeError:
@@ -179,7 +180,7 @@ def groq_ask(
     for model in models:
         for attempt in range(MAX_RETRIES):
             try:
-                text   = _call_groq(model, system, user, max_tokens, temperature, timeout)
+                text = _call_groq(model, system, user, max_tokens, temperature, timeout)
                 return _extract_json(text)
 
             except AIError as e:
@@ -191,16 +192,18 @@ def groq_ask(
                     break
                 log.warning(f"groq_ask.error model={model} attempt={attempt + 1}: {e}")
                 if attempt < MAX_RETRIES - 1:
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
 
             except json.JSONDecodeError:
                 log.warning(f"groq_ask.json_error model={model}")
                 return {"raw": ""}
 
             except Exception as e:
-                log.warning(f"groq_ask.unexpected model={model} attempt={attempt + 1}: {e}")
+                log.warning(
+                    f"groq_ask.unexpected model={model} attempt={attempt + 1}: {e}"
+                )
                 if attempt < MAX_RETRIES - 1:
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
 
     if not available_providers():
         raise AllProvidersDown()
@@ -233,12 +236,12 @@ def groq_text(
                     time.sleep(15)
                     break
                 if attempt < MAX_RETRIES - 1:
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
 
             except Exception as e:
                 log.warning(f"groq_text attempt={attempt + 1} model={model}: {e}")
                 if attempt < MAX_RETRIES - 1:
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
 
     if not available_providers():
         raise AllProvidersDown()

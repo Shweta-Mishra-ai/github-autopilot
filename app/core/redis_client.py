@@ -40,7 +40,7 @@ def get_redis() -> redis_lib.Redis:
             socket_connect_timeout=5,
             socket_timeout=5,
             retry_on_timeout=True,
-            decode_responses=True,   # Always return strings, not bytes
+            decode_responses=True,  # Always return strings, not bytes
         )
         _client = redis_lib.Redis(connection_pool=_pool)
         _client.ping()  # Verify connection works at startup
@@ -70,14 +70,17 @@ class _FakeRedis:
     Supports only the methods we actually use.
     Data is lost on restart — acceptable for dev only.
     """
+
     def __init__(self):
         self._store: dict = {}
         self._expiry: dict = {}
         import threading
+
         self._lock = threading.Lock()
 
     def _is_expired(self, key: str) -> bool:
         import time
+
         exp = self._expiry.get(key)
         return exp is not None and time.time() > exp
 
@@ -91,6 +94,7 @@ class _FakeRedis:
 
     def set(self, key: str, value, ex: int = None, nx: bool = False):
         import time
+
         with self._lock:
             if nx and key in self._store and not self._is_expired(key):
                 return None  # Key exists, nx=True means don't overwrite
@@ -107,6 +111,7 @@ class _FakeRedis:
 
     def expire(self, key: str, seconds: int):
         import time
+
         with self._lock:
             if key in self._store:
                 self._expiry[key] = time.time() + seconds
@@ -140,13 +145,13 @@ class _FakeRedis:
                 return []
             if end == -1:
                 return lst[start:]
-            return lst[start:end + 1]
+            return lst[start : end + 1]
 
     def ltrim(self, key: str, start: int, end: int):
         with self._lock:
             lst = self._store.get(key, [])
             if isinstance(lst, list):
-                self._store[key] = lst[start:end + 1]
+                self._store[key] = lst[start : end + 1]
 
     def ping(self):
         return True
@@ -168,7 +173,7 @@ class _FakeRedis:
             if end == -1:
                 sliced = sorted_items[start:]
             else:
-                sliced = sorted_items[start:end + 1]
+                sliced = sorted_items[start : end + 1]
             if withscores:
                 return sliced
             return [item[0] for item in sliced]
@@ -179,7 +184,7 @@ class _FakeRedis:
             if not isinstance(zset, dict):
                 return
             sorted_keys = sorted(zset.items(), key=lambda x: x[1])
-            to_remove = sorted_keys[start:end + 1]
+            to_remove = sorted_keys[start : end + 1]
             for k, _ in to_remove:
                 zset.pop(k, None)
 
@@ -204,4 +209,3 @@ class _FakeRedis:
         with self._lock:
             h = self._store.get(key, {})
             return h if isinstance(h, dict) else {}
-

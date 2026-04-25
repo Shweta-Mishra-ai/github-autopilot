@@ -11,7 +11,7 @@ import logging
 
 log = logging.getLogger(__name__)
 
-DEFAULT_TOP_K    = 5
+DEFAULT_TOP_K = 5
 MAX_CONTEXT_CHARS = 4000
 
 
@@ -35,21 +35,21 @@ def get_relevant_context(
             return ""
 
         context_parts = []
-        total_chars   = 0
-        exclude_set   = set(exclude_files or [])
+        total_chars = 0
+        exclude_set = set(exclude_files or [])
 
         for item in results:
             filepath = item.get("filepath", "unknown")
             if filepath in exclude_set:
                 continue
 
-            score   = item.get("score", 1.0)
+            score = item.get("score", 1.0)
             # Skip low relevance (lower score = less similar in some DBs)
             if score < 0.2:
                 continue
 
             content = item.get("content", item.get("text", ""))[:800]
-            part    = f"### {filepath}\n```\n{content}\n```\n"
+            part = f"### {filepath}\n```\n{content}\n```\n"
 
             if total_chars + len(part) > MAX_CONTEXT_CHARS:
                 break
@@ -80,12 +80,12 @@ def get_context_for_pr(repo: str, changed_files: list[dict]) -> str:
     if not changed_files:
         return ""
 
-    query_parts   = []
+    query_parts = []
     changed_paths = []
 
     for f in changed_files[:5]:
         filepath = f.get("filename", "")
-        patch    = f.get("patch", "")[:200]
+        patch = f.get("patch", "")[:200]
         changed_paths.append(filepath)
         if filepath:
             query_parts.append(filepath)

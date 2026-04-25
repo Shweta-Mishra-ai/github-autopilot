@@ -4,7 +4,14 @@ Handles all GitHub events: PRs, Issues, Comments, Push
 """
 
 import logging
-from app.auth import get_installation_token, gh_get, gh_post, gh_patch, groq_ask, groq_text
+from app.auth import (
+    get_installation_token,
+    gh_get,
+    gh_post,
+    gh_patch,
+    groq_ask,
+    groq_text,
+)
 
 log = logging.getLogger(__name__)
 
@@ -15,6 +22,7 @@ SKIP_AUTHORS = {"dependabot[bot]", "renovate[bot]", "github-actions[bot]"}
 # ─────────────────────────────────────────────────────
 # PULL REQUEST HANDLER
 # ─────────────────────────────────────────────────────
+
 
 def handle_pull_request(payload: dict):
     action = payload.get("action")
@@ -52,9 +60,9 @@ def handle_pull_request(payload: dict):
         "You are a principal engineer. Analyze PRs and respond with valid JSON only — no markdown.",
         f"""Analyze this PR:
 Title: {title}
-Branch: {pr['head']['ref']} → {pr['base']['ref']}
+Branch: {pr["head"]["ref"]} → {pr["base"]["ref"]}
 Author: {author}
-Body: {body[:500] or '(empty)'}
+Body: {body[:500] or "(empty)"}
 Files:\n{files_str}
 Patches:\n{patches_str[:2000]}
 
@@ -67,7 +75,7 @@ Return JSON:
   "risk_reason": "why",
   "reviewer_focus": "what to review",
   "pr_type": "feat"
-}}"""
+}}""",
     )
 
     patch_data = {}
@@ -86,22 +94,28 @@ Return JSON:
     risk = result.get("risk_level", "low")
     if labels:
         try:
-            gh_post(f"/repos/{repo}/issues/{pr_number}/labels", token, {"labels": labels})
+            gh_post(
+                f"/repos/{repo}/issues/{pr_number}/labels", token, {"labels": labels}
+            )
         except Exception:
             pass
 
     risk_emoji = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(risk, "🟡")
     was_updated = bool(patch_data)
-    update_note = f"\n\n> 📝 Auto-improved: {'title + description' if 'body' in patch_data else 'title'}" if was_updated else ""
+    update_note = (
+        f"\n\n> 📝 Auto-improved: {'title + description' if 'body' in patch_data else 'title'}"
+        if was_updated
+        else ""
+    )
 
     comment = f"""## 🚀 GitHub Autopilot — PR Analysis
 
 | | |
 |---|---|
-| **Risk** | {risk_emoji} {risk.capitalize()} — {result.get('risk_reason', '')} |
-| **Type** | `{result.get('pr_type', 'unknown')}` |
+| **Risk** | {risk_emoji} {risk.capitalize()} — {result.get("risk_reason", "")} |
+| **Type** | `{result.get("pr_type", "unknown")}` |
 | **Files** | {len(file_names)} changed |
-| **Review Focus** | {result.get('reviewer_focus', 'General review')} |
+| **Review Focus** | {result.get("reviewer_focus", "General review")} |
 {update_note}{BOT_FOOTER}"""
 
     gh_post(f"/repos/{repo}/issues/{pr_number}/comments", token, {"body": comment})
@@ -112,7 +126,8 @@ def _run_code_review(repo, pr_number, token, files, author):
     """AI code review on PR files."""
     REVIEWABLE = {".py", ".js", ".ts", ".jsx", ".tsx", ".go", ".java", ".sql", ".rs"}
     reviewable = [
-        f for f in files
+        f
+        for f in files
         if any(f["filename"].endswith(ext) for ext in REVIEWABLE)
         and f.get("status") != "removed"
         and f.get("changes", 0) > 0
@@ -140,7 +155,7 @@ Return JSON:
   "positives": ["..."]
 }}""",
             max_tokens=800,
-            fast=True
+            fast=True,
         )
         if result.get("score"):
             reviews.append((fname, result))
@@ -155,12 +170,20 @@ Return JSON:
 
     critical = [i for i in all_issues if i.get("severity") == "critical"]
     score_bar = "█" * int(avg) + "░" * (10 - int(avg))
-    verdict = "✅ Good to merge" if avg >= 7.5 else "🟡 Review needed" if avg >= 5 else "🔴 Issues found"
+    verdict = (
+        "✅ Good to merge"
+        if avg >= 7.5
+        else "🟡 Review needed"
+        if avg >= 5
+        else "🔴 Issues found"
+    )
 
     issues_md = ""
     for issue in all_issues[:6]:
         sev = issue.get("severity", "minor")
-        emoji = {"critical": "🚨", "major": "⚠️", "minor": "💡", "nit": "📌"}.get(sev, "💡")
+        emoji = {"critical": "🚨", "major": "⚠️", "minor": "💡", "nit": "📌"}.get(
+            sev, "💡"
+        )
         issues_md += f"\n{emoji} **{sev.upper()}** — {issue.get('issue', '')}"
         if issue.get("fix"):
             issues_md += f"\n```\n{issue['fix'][:200]}\n```"
@@ -184,8 +207,11 @@ Return JSON:
     try:
         gh_post(f"/repos/{repo}/issues/{pr_number}/comments", token, {"body": comment})
         if critical:
-            gh_post(f"/repos/{repo}/issues/{pr_number}/labels", token,
-                    {"labels": ["excellence: critical 🚨"]})
+            gh_post(
+                f"/repos/{repo}/issues/{pr_number}/labels",
+                token,
+                {"labels": ["excellence: critical 🚨"]},
+            )
     except Exception as e:
         log.warning(f"Review comment failed: {e}")
 
@@ -193,6 +219,7 @@ Return JSON:
 # ─────────────────────────────────────────────────────
 # ISSUES HANDLER
 # ─────────────────────────────────────────────────────
+
 
 def handle_issues(payload: dict):
     action = payload.get("action")
@@ -220,7 +247,7 @@ def handle_issues(payload: dict):
 Repo: {repo}
 Title: {title}
 Author: {author}
-Body: {body[:1500] or '(empty)'}
+Body: {body[:1500] or "(empty)"}
 
 Return JSON:
 {{
@@ -231,7 +258,7 @@ Return JSON:
   "needs_info": false,
   "questions": ["clarifying question if needed"],
   "complexity": "trivial|simple|moderate|complex"
-}}"""
+}}""",
     )
 
     labels = result.get("labels", [])
@@ -239,29 +266,40 @@ Return JSON:
     p_emoji = {"high": "🔥", "medium": "📌", "low": "💤"}.get(priority, "📌")
     labels.append(f"priority: {priority} {p_emoji}")
     try:
-        gh_post(f"/repos/{repo}/issues/{issue_number}/labels", token, {"labels": labels})
+        gh_post(
+            f"/repos/{repo}/issues/{issue_number}/labels", token, {"labels": labels}
+        )
     except Exception:
         pass
 
-    t_emoji = {"bug": "🐛", "feature": "✨", "question": "❓", "docs": "📚",
-               "performance": "⚡", "security": "🔒"}.get(result.get("type", ""), "📋")
+    t_emoji = {
+        "bug": "🐛",
+        "feature": "✨",
+        "question": "❓",
+        "docs": "📚",
+        "performance": "⚡",
+        "security": "🔒",
+    }.get(result.get("type", ""), "📋")
     c_emoji = {"trivial": "⚡", "simple": "🟢", "moderate": "🟡", "complex": "🔴"}.get(
-        result.get("complexity", "moderate"), "🟡")
+        result.get("complexity", "moderate"), "🟡"
+    )
 
     questions = result.get("questions", [])
     q_section = ""
     if result.get("needs_info") and questions:
-        q_section = "\n\n### ❓ Quick questions\n" + "\n".join(f"- {q}" for q in questions[:2])
+        q_section = "\n\n### ❓ Quick questions\n" + "\n".join(
+            f"- {q}" for q in questions[:2]
+        )
 
     comment = f"""## {t_emoji} Thanks for the issue!
 
-{result.get('welcome', 'Thank you for reporting this!')}
+{result.get("welcome", "Thank you for reporting this!")}
 
 | | |
 |---|---|
-| **Type** | {t_emoji} {result.get('type', 'issue').capitalize()} |
+| **Type** | {t_emoji} {result.get("type", "issue").capitalize()} |
 | **Priority** | {p_emoji} {priority.capitalize()} |
-| **Complexity** | {c_emoji} {result.get('complexity', 'moderate').capitalize()} |
+| **Complexity** | {c_emoji} {result.get("complexity", "moderate").capitalize()} |
 {q_section}{BOT_FOOTER}"""
 
     gh_post(f"/repos/{repo}/issues/{issue_number}/comments", token, {"body": comment})
@@ -270,6 +308,7 @@ Return JSON:
 # ─────────────────────────────────────────────────────
 # ISSUE COMMENT HANDLER (Bot Commands)
 # ─────────────────────────────────────────────────────
+
 
 def handle_issue_comment(payload: dict):
     action = payload.get("action")
@@ -302,9 +341,10 @@ def handle_issue_comment(payload: dict):
         ctx_title, ctx_body = "", ""
 
     import re
-    code_match = re.search(r'```[\w]*\n([\s\S]*?)\n```', body)
+
+    code_match = re.search(r"```[\w]*\n([\s\S]*?)\n```", body)
     code = code_match.group(1) if code_match else ""
-    context = re.sub(r'```[\s\S]*?```', '', body).replace(cmd, "").strip()
+    context = re.sub(r"```[\s\S]*?```", "", body).replace(cmd, "").strip()
     full_context = code or context or ctx_body or ctx_title
 
     response = ""
@@ -312,25 +352,30 @@ def handle_issue_comment(payload: dict):
     if cmd == "/fix":
         r = groq_ask(
             "Senior engineer. Give precise fix. JSON only.",
-            f"Fix:\nContext: {ctx_title}\n{full_context[:2000]}\n\nReturn: {{\"root_cause\":\"...\",\"fix\":\"code\",\"explanation\":\"why\",\"test\":\"test code\"}}",
-            fast=True
+            f'Fix:\nContext: {ctx_title}\n{full_context[:2000]}\n\nReturn: {{"root_cause":"...","fix":"code","explanation":"why","test":"test code"}}',
+            fast=True,
         )
-        response = f"## 🔧 Fix\n\n**Root cause:** {r.get('root_cause','')}\n\n**Fix:**\n```\n{r.get('fix','')}\n```\n\n**Why:** {r.get('explanation','')}\n\n**Test:**\n```\n{r.get('test','')}\n```"
+        response = f"## 🔧 Fix\n\n**Root cause:** {r.get('root_cause', '')}\n\n**Fix:**\n```\n{r.get('fix', '')}\n```\n\n**Why:** {r.get('explanation', '')}\n\n**Test:**\n```\n{r.get('test', '')}\n```"
 
     elif cmd == "/explain":
-        text = groq_text("Senior engineer and teacher. Explain clearly.", f"Explain:\n{full_context[:2000]}")
+        text = groq_text(
+            "Senior engineer and teacher. Explain clearly.",
+            f"Explain:\n{full_context[:2000]}",
+        )
         response = f"## 💡 Explanation\n\n{text}"
 
     elif cmd == "/improve":
         r = groq_ask(
             "Staff engineer. Suggest improvements. JSON only.",
-            f"Improve:\n{full_context[:2000]}\n\nReturn: {{\"improvements\":[{{\"area\":\"performance\",\"suggestion\":\"...\",\"example\":\"code\"}}],\"summary\":\"...\"}}",
-            fast=True
+            f'Improve:\n{full_context[:2000]}\n\nReturn: {{"improvements":[{{"area":"performance","suggestion":"...","example":"code"}}],"summary":"..."}}',
+            fast=True,
         )
         imps = r.get("improvements", [])
-        lines = [f"## ✨ Improvements\n\n**{r.get('summary','')}**\n"]
+        lines = [f"## ✨ Improvements\n\n**{r.get('summary', '')}**\n"]
         for i, imp in enumerate(imps[:4], 1):
-            lines.append(f"### {i}. `{imp.get('area','').upper()}` — {imp.get('suggestion','')}")
+            lines.append(
+                f"### {i}. `{imp.get('area', '').upper()}` — {imp.get('suggestion', '')}"
+            )
             if imp.get("example"):
                 lines.append(f"```\n{imp['example'][:300]}\n```")
         response = "\n\n".join(lines)
@@ -338,22 +383,24 @@ def handle_issue_comment(payload: dict):
     elif cmd == "/test":
         r = groq_ask(
             "Senior QA engineer. Generate tests. JSON only.",
-            f"Tests for:\n{full_context[:2000]}\n\nReturn: {{\"framework\":\"pytest\",\"tests\":[{{\"name\":\"...\",\"type\":\"unit\",\"code\":\"...\",\"desc\":\"...\"}}]}}",
-            fast=True
+            f'Tests for:\n{full_context[:2000]}\n\nReturn: {{"framework":"pytest","tests":[{{"name":"...","type":"unit","code":"...","desc":"..."}}]}}',
+            fast=True,
         )
         tests = r.get("tests", [])
-        lines = [f"## 🧪 Tests ({r.get('framework','pytest')})\n"]
+        lines = [f"## 🧪 Tests ({r.get('framework', 'pytest')})\n"]
         for t in tests[:3]:
-            lines.append(f"### `{t.get('name','test')}` ({t.get('type','unit')})\n*{t.get('desc','')}*\n```python\n{t.get('code','')[:400]}\n```")
+            lines.append(
+                f"### `{t.get('name', 'test')}` ({t.get('type', 'unit')})\n*{t.get('desc', '')}*\n```python\n{t.get('code', '')[:400]}\n```"
+            )
         response = "\n\n".join(lines)
 
     elif cmd == "/docs":
         r = groq_ask(
             "Technical writer. Generate docs. JSON only.",
-            f"Docs for:\n{full_context[:2000]}\n\nReturn: {{\"docstring\":\"...\",\"usage\":\"...\",\"readme_section\":\"...\"}}",
-            fast=True
+            f'Docs for:\n{full_context[:2000]}\n\nReturn: {{"docstring":"...","usage":"...","readme_section":"..."}}',
+            fast=True,
         )
-        response = f"## 📚 Documentation\n\n**Docstring:**\n```\n{r.get('docstring','')}\n```\n\n**Usage:**\n```\n{r.get('usage','')}\n```\n\n**README section:**\n{r.get('readme_section','')}"
+        response = f"## 📚 Documentation\n\n**Docstring:**\n```\n{r.get('docstring', '')}\n```\n\n**Usage:**\n```\n{r.get('usage', '')}\n```\n\n**README section:**\n{r.get('readme_section', '')}"
 
     elif cmd == "/review":
         response = "## 🔄 Re-running review...\n\nFull AI review will post shortly."
@@ -366,6 +413,7 @@ def handle_issue_comment(payload: dict):
 # ─────────────────────────────────────────────────────
 # PUSH HANDLER
 # ─────────────────────────────────────────────────────
+
 
 def handle_push(payload: dict):
     """Check commit messages on push to main."""
@@ -380,15 +428,18 @@ def handle_push(payload: dict):
         return
 
     import re
+
     CONVENTIONAL = re.compile(
-        r'^(feat|fix|docs|style|refactor|perf|test|chore|ci|build|revert)(\(.+\))?(!)?: .+',
-        re.IGNORECASE
+        r"^(feat|fix|docs|style|refactor|perf|test|chore|ci|build|revert)(\(.+\))?(!)?: .+",
+        re.IGNORECASE,
     )
 
-    bad = [(c["id"][:7], c["message"].split("\n")[0])
-           for c in commits[:10]
-           if not CONVENTIONAL.match(c["message"].split("\n")[0])
-           and not c["message"].startswith("Merge")]
+    bad = [
+        (c["id"][:7], c["message"].split("\n")[0])
+        for c in commits[:10]
+        if not CONVENTIONAL.match(c["message"].split("\n")[0])
+        and not c["message"].startswith("Merge")
+    ]
 
     if not bad:
         return
@@ -399,9 +450,12 @@ def handle_push(payload: dict):
     try:
         if len(bad) >= 3:
             rows = "\n".join(f"| `{sha}` | `{msg[:60]}` |" for sha, msg in bad)
-            gh_post(f"/repos/{repo}/issues", token, {
-                "title": f"⚡ {len(bad)} non-conventional commits pushed to main",
-                "body": f"""## Commit Quality Alert
+            gh_post(
+                f"/repos/{repo}/issues",
+                token,
+                {
+                    "title": f"⚡ {len(bad)} non-conventional commits pushed to main",
+                    "body": f"""## Commit Quality Alert
 
 These commits don't follow [Conventional Commits](https://conventionalcommits.org) spec:
 
@@ -414,8 +468,9 @@ These commits don't follow [Conventional Commits](https://conventionalcommits.or
 
 Use `/fix` command or the GitHub Autopilot dashboard to fix them.
 {BOT_FOOTER}""",
-                "labels": ["help wanted 🙏"]
-            })
+                    "labels": ["help wanted 🙏"],
+                },
+            )
     except Exception as e:
         log.warning(f"Push handler error: {e}")
 
@@ -423,6 +478,7 @@ Use `/fix` command or the GitHub Autopilot dashboard to fix them.
 # ─────────────────────────────────────────────────────
 # HELPER: Ensure labels exist
 # ─────────────────────────────────────────────────────
+
 
 def _ensure_labels(repo: str, token: str):
     LABELS = [

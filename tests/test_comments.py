@@ -78,10 +78,14 @@ def _mock_gh_get(data=None):
 
 
 def _mock_context():
+    """
+    ContextManager is imported INSIDE functions (lazy), not at module level.
+    Patch at source module, not at comments module.
+    """
     ctx = MagicMock()
     ctx.get_history.return_value = ""
     ctx.add.return_value = None
-    return patch("app.handlers.comments.ContextManager", return_value=ctx)
+    return patch("app.core.context_manager.ContextManager", return_value=ctx)
 
 
 # ── Command Parsing Tests ─────────────────────────────────────────────────────
@@ -154,14 +158,14 @@ class TestFixCommand:
             "test": "def test_fix():\n    assert process(None) is None",
             "confidence": 0.9,
         }
-        with _mock_router_ask(fix_resp), _mock_context():
+        with _mock_router_ask(fix_resp):
             result = _cmd_fix("Bug: crashes on None input", "def process(data):\n    return data.strip()")
         assert "🔧" in result or "Fix" in result
         assert "Null check" in result or "root_cause" in result.lower() or result
 
     def test_fix_handles_empty_context(self):
         from app.handlers.comments import _cmd_fix
-        with _mock_router_ask(), _mock_context():
+        with _mock_router_ask():
             result = _cmd_fix("Title", "")
         assert result  # Should return something, not crash
 
@@ -174,7 +178,7 @@ class TestFixCommand:
             "test": "test code",
             "confidence": 0.8,
         }
-        with _mock_router_ask(fix_resp), _mock_context():
+        with _mock_router_ask(fix_resp):
             result = _cmd_fix("Issue title", "context code")
         assert "Missing null check" in result
 
@@ -183,14 +187,14 @@ class TestExplainCommand:
 
     def test_explain_returns_text(self):
         from app.handlers.comments import _cmd_explain
-        with _mock_router_text("This is an explanation of the code."), _mock_context():
+        with _mock_router_text("This is an explanation of the code."):
             result = _cmd_explain("def auth(): pass")
         assert "Explanation" in result or "explanation" in result.lower()
         assert "This is an explanation" in result
 
     def test_explain_handles_empty_context(self):
         from app.handlers.comments import _cmd_explain
-        with _mock_router_text("Empty context explanation"), _mock_context():
+        with _mock_router_text("Empty context explanation"):
             result = _cmd_explain("")
         assert result
 
@@ -230,7 +234,7 @@ class TestImproveCommand:
                 }
             ]
         }
-        with _mock_router_ask(improve_resp), _mock_context():
+        with _mock_router_ask(improve_resp):
             result = _cmd_improve("def process(): return data.strip()")
         assert "Improvements" in result or result
         assert "7" in result or result

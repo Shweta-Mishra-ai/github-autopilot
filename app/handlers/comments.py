@@ -12,6 +12,8 @@ from app.github.auth import get_installation_token
 from app.github.client import gh_get, gh_post, gh_put, gh_delete, GitHubError
 from app.ai.router import router
 from app.ai.hallucination import check_response, add_confidence_footer
+from app.core.context_manager import ContextManager
+from app.core.safe_import import safe_call
 from app.core.config import load_config
 from app.core.logger import EventLogger
 from app.core.confidence import ConfidenceGate
@@ -141,46 +143,28 @@ def handle(payload: dict):
 
 def _cmd_fix(ctx_title: str, context: str, gate=None) -> str:
     r, _meta = router.ask(
-        "You are a principal engineer with 15+ years experience. "
-        "Give precise, production-ready fixes. JSON only.",
-        f"""Fix this GitHub issue with a complete, working solution:
-
-Issue Title: {ctx_title}
-Code/Context:
-{context[:2000]}
-
-Requirements:
-- Root cause must be specific (not vague like "bug in code")
-- Fix must be complete, runnable code — not pseudocode
-- Explanation must cover WHY this caused the issue
-- Test must be specific pytest/jest code that verifies the fix
-- Confidence: your actual confidence 0.0-1.0
+        "Senior engineer. Give precise, working fix. JSON only.",
+        f"""Fix this issue:
+Title: {ctx_title}
+Context: {context[:2000]}
 
 Return JSON:
 {{
-  "root_cause": "specific technical reason — e.g. 'Missing null check before calling .strip() on line 42'",
-  "fix": "# Complete working code\ndef fixed_function():\n    ...",
-  "explanation": "Why this fix works: the original code failed because...",
-  "test": "def test_fixed():\n    result = fixed_function(None)\n    assert result == ...",
-  "affected_files": ["app/auth.py"],
-  "breaking_change": false,
+  "root_cause": "exact reason",
+  "fix": "working code or commit fixes",
+  "explanation": "why this fix works",
+  "test": "test to verify fix",
   "confidence": 0.85
 }}""",
-        task="fix_command",
-        max_tokens=1500,
+        task="fix_command"
     )
 
-    breaking = " ⚠️ **Breaking change**" if r.get("breaking_change") else ""
-    files_str = ", ".join(f"`{f}`" for f in r.get("affected_files", [])[:3])
-    files_row = f"\n**Affected files:** {files_str}" if files_str else ""
-
     comment = (
-        f"## 🔧 Fix{breaking}\n\n"
-        f"**Root cause:** {r.get('root_cause', 'See fix below')}\n"
-        f"{files_row}\n\n"
-        f"**Fix:**\n```python\n{r.get('fix', '')}\n```\n\n"
-        f"**Why this works:** {r.get('explanation', '')}\n\n"
-        f"**Test:**\n```python\n{r.get('test', '')}\n```"
+        f"## 🔧 Fix\n\n"
+        f"**Root cause:** {r.get('root_cause', 'See fix below')}\n\n"
+        f"**Fix:**\n```\n{r.get('fix', '')}\n```\n\n"
+        f"**Why:** {r.get('explanation', '')}\n\n"
+        f"**Test:**\n```\n{r.get('test', '')}\n```"
     )
     hal = check_response(r, response_type="fix")
     return add_confidence_footer(comment, hal)
@@ -299,67 +283,33 @@ Return JSON:
 
 def _cmd_explain(context: str) -> str:
     text, _meta = router.ask_text(
-        "You are an expert technical educator. Explain code and concepts "
-        "with clarity, examples, and depth. Structure your explanation well.",
-        f"""Explain this clearly for a developer:
-
-{context[:2000]}
-
-Structure your explanation:
-1. **What it does** — high-level purpose
-2. **How it works** — key mechanisms
-3. **Why it matters** — practical implications
-4. **Example** — concrete usage example if applicable
-5. **Common pitfalls** — what to watch out for""",
-        task="explain",
-        max_tokens=1000,
+        "Senior engineer. Explain clearly in plain English.",
+        f"Explain this:\n{context[:2000]}",
+        task="explain"
     )
     return f"## 💡 Explanation\n\n{text}"
 
 
 def _cmd_improve(context: str, gate=None) -> str:
     r, _meta = router.ask(
-        "You are a staff engineer doing a thorough code review. "
-        "Suggest impactful, prioritized improvements. JSON only.",
-        f"""Review this code and suggest concrete improvements:
-
+        "Staff engineer. Suggest concrete improvements. JSON only.",
+        f"""Suggest improvements for:
 {context[:2000]}
-
-Prioritize by impact. For each improvement include working code.
 
 Return JSON:
 {{
-  "overall_score": 7,
-  "summary": "honest overall assessment in 1-2 sentences",
+  "summary": "overall assessment",
   "improvements": [
-    {{
-      "priority": "high|medium|low",
-      "area": "performance|security|readability|structure|testing|error_handling",
-      "problem": "what is currently wrong",
-      "suggestion": "exactly what to change",
-      "example": "# Before\nold_code()\n\n# After\nnew_code()"
-    }}
+    {{"area": "performance|security|readability|structure", "suggestion": "what to change", "example": "code example"}}
   ]
 }}""",
-        task="improve",
-        max_tokens=1500,
+        task="improve"
     )
-    score = r.get("overall_score", 7)
-    score_bar = "█" * int(score) + "░" * (10 - int(score))
-    lines = [
-        f"## ✨ Improvements\n\n"
-        f"**Score: {score}/10** `{score_bar}`\n\n"
-        f"**{r.get('summary', '')}**\n"
-    ]
-    for i, imp in enumerate(r.get("improvements", [])[:5], 1):
-        p_emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(imp.get("priority","medium"), "🟡")
-        lines.append(
-            f"### {i}. {p_emoji} `{imp.get('area','').upper()}` — {imp.get('suggestion','')}"
-        )
-        if imp.get("problem"):
-            lines.append(f"**Problem:** {imp['problem']}")
+    lines = [f"## ✨ Improvements\n\n**{r.get('summary', '')}**\n"]
+    for i, imp in enumerate(r.get("improvements", [])[:4], 1):
+        lines.append(f"### {i}. `{imp.get('area','').upper()}` — {imp.get('suggestion','')}")
         if imp.get("example"):
-            lines.append(f"```python\n{imp['example'][:400]}\n```")
+            lines.append(f"```\n{imp['example'][:300]}\n```")
     return "\n\n".join(lines)
 
 

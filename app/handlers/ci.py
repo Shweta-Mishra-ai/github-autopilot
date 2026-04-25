@@ -97,3 +97,38 @@ def handle(payload: dict):
 
     except Exception as e:
         log_ctx.error(f"CI handler failed: {e}")
+
+
+def _track_failure_pattern(repo: str, check_name: str, root_cause: str):
+    """
+    Sprint 5: Track CI failure patterns.
+    If same check fails 3+ times in 24h → post pattern alert.
+    """
+    try:
+        from app.core.redis_client import get_redis
+        r   = get_redis()
+        key = f"ci_fail:{repo}:{check_name}"
+        count = r.incr(key)
+        r.expire(key, 86400)
+
+        if int(count) == 3:
+            log.warning(
+                f"ci.pattern_detected repo={repo} check={check_name} "
+                f"count={count} root_cause={root_cause[:60]}"
+            )
+            return True  # Caller posts pattern alert
+    except Exception:
+        pass
+    return False
+
+
+def _get_failure_count(repo: str, check_name: str) -> int:
+    """Returns how many times this check has failed today."""
+    try:
+        from app.core.redis_client import get_redis
+        r   = get_redis()
+        key = f"ci_fail:{repo}:{check_name}"
+        val = r.get(key)
+        return int(val) if val else 0
+    except Exception:
+        return 0

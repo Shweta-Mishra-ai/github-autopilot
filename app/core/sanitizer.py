@@ -59,7 +59,9 @@ def sanitize_user_input(
     original_len = len(text)
     text = text[:max_chars]
     if original_len > max_chars:
-        log.debug(f"sanitizer.truncated source={source} from={original_len} to={max_chars}")
+        log.debug(
+            f"sanitizer.truncated source={source} from={original_len} to={max_chars}"
+        )
 
     # Step 2: Remove injection patterns
     injections_found = 0
@@ -132,4 +134,3 @@ def safe_truncate_for_llm(
 
     log.debug(f"sanitizer.llm_truncate label={label} tokens_approx={max_tokens}")
     return truncated + suffix
-

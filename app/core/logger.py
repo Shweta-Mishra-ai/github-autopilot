@@ -43,6 +43,7 @@ class EventLogger:
     Wrapper around structlog for handler-level logging.
     NOTE: Never pass event= as a kwarg. Use webhook_event=, evt=, or event_name= instead.
     """
+
     def __init__(self, name: str, **ctx):
         self._log = structlog.get_logger(name).bind(**ctx)
 

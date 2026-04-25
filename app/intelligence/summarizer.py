@@ -15,7 +15,7 @@ def summarize_pr(
     description: str,
     changed_files: list[dict],
     comments: list[dict],
-    context: str = ""
+    context: str = "",
 ) -> str:
     """
     Generate a concise PR summary with key changes and decisions.
@@ -51,8 +51,7 @@ Write a 3-5 sentence summary covering:
 
     try:
         summary = groq_text(
-            "Senior engineer. Write clear, concise PR summaries.",
-            prompt
+            "Senior engineer. Write clear, concise PR summaries.", prompt
         )
         log.info("summarizer.pr_done")
         return summary
@@ -61,11 +60,7 @@ Write a 3-5 sentence summary covering:
         return "Could not generate summary."
 
 
-def summarize_issue_thread(
-    title: str,
-    body: str,
-    comments: list[dict]
-) -> str:
+def summarize_issue_thread(title: str, body: str, comments: list[dict]) -> str:
     """
     Summarize a long issue discussion thread.
     """
@@ -90,8 +85,7 @@ Write a summary covering:
 
     try:
         summary = groq_text(
-            "Senior engineer. Summarize GitHub discussions clearly.",
-            prompt
+            "Senior engineer. Summarize GitHub discussions clearly.", prompt
         )
         log.info("summarizer.issue_done")
         return summary
@@ -113,11 +107,7 @@ CI Logs:
 {logs[:3000]}
 """
     try:
-        return groq_text(
-            "DevOps expert. Diagnose CI failures precisely.",
-            prompt
-        )
+        return groq_text("DevOps expert. Diagnose CI failures precisely.", prompt)
     except Exception as e:
         log.error("summarizer.ci_failed", error=str(e))
         return "Could not analyze CI failure."
-

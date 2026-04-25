@@ -20,8 +20,10 @@ from app.core.guardrails import check_auto_label
 from app.core.logger import EventLogger
 
 SKIP_AUTHORS = {
-    "dependabot[bot]", "renovate[bot]",
-    "github-actions[bot]", "ai-repo-manager[bot]"
+    "dependabot[bot]",
+    "renovate[bot]",
+    "github-actions[bot]",
+    "ai-repo-manager[bot]",
 }
 
 
@@ -34,12 +36,12 @@ def handle(payload: dict):
     if "pull_request" in issue:
         return
 
-    repo            = payload["repository"]["full_name"]
-    issue_number    = issue["number"]
-    author          = issue["user"]["login"]
+    repo = payload["repository"]["full_name"]
+    issue_number = issue["number"]
+    author = issue["user"]["login"]
     installation_id = payload["installation"]["id"]
-    title           = issue.get("title", "")
-    body            = (issue.get("body") or "")[:2000]
+    title = issue.get("title", "")
+    body = (issue.get("body") or "")[:2000]
 
     log = EventLogger("issues", repo=repo)
 
@@ -116,30 +118,30 @@ Return JSON:
     priority = result["priority"]
     p_map = {
         "critical": ("🚨", "priority: critical 🚨"),
-        "high":     ("🔥", "priority: high 🔥"),
-        "medium":   ("📌", "priority: medium 📌"),
-        "low":      ("💤", "priority: low 💤"),
+        "high": ("🔥", "priority: high 🔥"),
+        "medium": ("📌", "priority: medium 📌"),
+        "low": ("💤", "priority: low 💤"),
     }
     p_emoji, p_label = p_map.get(priority, ("📌", "priority: medium 📌"))
 
     # Type → emoji
     t_emoji = {
-        "bug":         "🐛",
-        "feature":     "✨",
-        "question":    "❓",
-        "docs":        "📚",
+        "bug": "🐛",
+        "feature": "✨",
+        "question": "❓",
+        "docs": "📚",
         "performance": "⚡",
-        "security":    "🔒",
-        "refactor":    "♻️",
+        "security": "🔒",
+        "refactor": "♻️",
     }.get(result["type"], "📋")
 
     # Complexity → emoji
     c_emoji = {
-        "trivial":  "⚡",
-        "simple":   "🟢",
+        "trivial": "⚡",
+        "simple": "🟢",
         "moderate": "🟡",
-        "complex":  "🔴",
-        "epic":     "🏔️",
+        "complex": "🔴",
+        "epic": "🏔️",
     }.get(result["complexity"], "🟡")
 
     # Labels
@@ -148,8 +150,11 @@ Return JSON:
     label_guard = check_auto_label(issue, all_labels, config)
     if label_guard.passed:
         try:
-            gh_post(f"/repos/{repo}/issues/{issue_number}/labels", token,
-                    {"labels": all_labels})
+            gh_post(
+                f"/repos/{repo}/issues/{issue_number}/labels",
+                token,
+                {"labels": all_labels},
+            )
         except GitHubError:
             pass
 
@@ -179,16 +184,18 @@ Return JSON:
 {config.footer}"""
 
     try:
-        gh_post(f"/repos/{repo}/issues/{issue_number}/comments", token,
-                {"body": comment})
+        gh_post(
+            f"/repos/{repo}/issues/{issue_number}/comments", token, {"body": comment}
+        )
         log.done(f"Issue #{issue_number} triaged: {result['type']}/{priority}")
     except GitHubError as e:
         log.error(f"Comment failed: {e}")
 
     # Notification
     try:
-        notify_new_issue(repo=repo, issue_number=issue_number,
-                        title=title, labels=all_labels)
+        notify_new_issue(
+            repo=repo, issue_number=issue_number, title=title, labels=all_labels
+        )
     except Exception:
         pass
 

@@ -43,6 +43,7 @@ def _enqueue_memory(item: dict) -> bool:
 def _enqueue_redis(item: dict) -> bool:
     try:
         import redis
+
         r = redis.from_url(os.environ["REDIS_URL"])
         r.xadd("ai_repo_manager:events", {"data": json.dumps(item)})
         log.debug("queue_enqueued_redis", webhook_event=item["event_type"])

@@ -26,6 +26,7 @@ def consume_events() -> Generator[Tuple[str, dict], None, None]:
 
 def _consume_memory() -> Generator[Tuple[str, dict], None, None]:
     from app.queue.producer import get_memory_queue
+
     q = get_memory_queue()
     log.info("consumer_started_memory")
     while True:
@@ -40,6 +41,7 @@ def _consume_memory() -> Generator[Tuple[str, dict], None, None]:
 
 def _consume_redis() -> Generator[Tuple[str, dict], None, None]:
     import redis
+
     r = redis.from_url(os.environ["REDIS_URL"])
     stream = "ai_repo_manager:events"
     consumer_group = "workers"
@@ -55,8 +57,7 @@ def _consume_redis() -> Generator[Tuple[str, dict], None, None]:
     while True:
         try:
             results = r.xreadgroup(
-                consumer_group, consumer_name,
-                {stream: ">"}, count=1, block=1000
+                consumer_group, consumer_name, {stream: ">"}, count=1, block=1000
             )
             if not results:
                 continue

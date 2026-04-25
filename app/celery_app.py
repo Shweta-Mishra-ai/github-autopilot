@@ -25,39 +25,34 @@ celery.conf.update(
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",
-    result_expires=3600,          # Results kept 1 hour
+    result_expires=3600,  # Results kept 1 hour
     timezone="UTC",
     enable_utc=True,
-
     # Reliability
-    task_acks_late=True,          # Ack AFTER task completes (not on receive)
-    task_reject_on_worker_lost=True,   # Re-queue if worker crashes mid-task
-    worker_prefetch_multiplier=1,      # One task at a time per worker (prevents starvation)
-
+    task_acks_late=True,  # Ack AFTER task completes (not on receive)
+    task_reject_on_worker_lost=True,  # Re-queue if worker crashes mid-task
+    worker_prefetch_multiplier=1,  # One task at a time per worker (prevents starvation)
     # Retry defaults (per-task can override)
     task_annotations={
         "*": {
             "max_retries": 3,
-            "default_retry_delay": 60,   # 60s base delay
+            "default_retry_delay": 60,  # 60s base delay
         }
     },
-
     # Task routing — 3 priority queues
     # high:   PR events, comment commands (user is waiting)
     # medium: Push events, issue triage
     # low:    Scheduled reports (no one waiting)
     task_routes={
-        "app.tasks.handle_pull_request":   {"queue": "high"},
-        "app.tasks.handle_issue_comment":  {"queue": "high"},
-        "app.tasks.handle_issue":          {"queue": "medium"},
-        "app.tasks.handle_push":           {"queue": "medium"},
-        "app.tasks.handle_check_run":      {"queue": "medium"},
-        "app.tasks.run_scheduled_tasks":   {"queue": "low"},
+        "app.tasks.handle_pull_request": {"queue": "high"},
+        "app.tasks.handle_issue_comment": {"queue": "high"},
+        "app.tasks.handle_issue": {"queue": "medium"},
+        "app.tasks.handle_push": {"queue": "medium"},
+        "app.tasks.handle_check_run": {"queue": "medium"},
+        "app.tasks.run_scheduled_tasks": {"queue": "low"},
     },
-
     # Default queue if route not matched
     task_default_queue="medium",
-
     # Beat schedule (replaces APScheduler)
     beat_schedule={
         # Stale issue check — daily at 9 AM UTC
@@ -89,9 +84,7 @@ celery.conf.update(
             "options": {"queue": "low"},
         },
     },
-
     # Logging
     worker_log_format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     worker_task_log_format="%(asctime)s [%(levelname)s] %(task_name)s[%(task_id)s]: %(message)s",
 )
-

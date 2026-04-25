@@ -19,6 +19,7 @@ log = logging.getLogger(__name__)
 
 # ── Webhook event tasks ───────────────────────────────────────────────────────
 
+
 @celery.task(
     bind=True,
     name="app.tasks.handle_pull_request",
@@ -29,11 +30,14 @@ def handle_pull_request(self, payload: dict):
     """Process pull_request webhook events."""
     try:
         from app.handlers.pull_request import handle
+
         handle(payload)
     except AllProvidersDown as exc:
         _handle_all_providers_down(self, payload, exc, "PR analysis")
     except Exception as exc:
-        log.error(f"handle_pull_request failed attempt={self.request.retries + 1}: {exc}")
+        log.error(
+            f"handle_pull_request failed attempt={self.request.retries + 1}: {exc}"
+        )
         try:
             raise self.retry(exc=exc, countdown=_retry_countdown(self.request.retries))
         except MaxRetriesExceededError:
@@ -50,11 +54,14 @@ def handle_issue_comment(self, payload: dict):
     """Process issue_comment webhook events (slash commands)."""
     try:
         from app.handlers.comments import handle
+
         handle(payload)
     except AllProvidersDown as exc:
         _handle_all_providers_down(self, payload, exc, "command")
     except Exception as exc:
-        log.error(f"handle_issue_comment failed attempt={self.request.retries + 1}: {exc}")
+        log.error(
+            f"handle_issue_comment failed attempt={self.request.retries + 1}: {exc}"
+        )
         try:
             raise self.retry(exc=exc, countdown=_retry_countdown(self.request.retries))
         except MaxRetriesExceededError:
@@ -71,6 +78,7 @@ def handle_issue(self, payload: dict):
     """Process issues webhook events (issue opened → triage)."""
     try:
         from app.handlers.issues import handle
+
         handle(payload)
     except AllProvidersDown as exc:
         _handle_all_providers_down(self, payload, exc, "issue triage")
@@ -92,9 +100,12 @@ def handle_push(self, payload: dict):
     """Process push webhook events."""
     try:
         from app.handlers.push import handle
+
         handle(payload)
     except AllProvidersDown as exc:
-        log.warning(f"Push handler: all providers down, retry in {exc.retry_in_seconds}s")
+        log.warning(
+            f"Push handler: all providers down, retry in {exc.retry_in_seconds}s"
+        )
         raise self.retry(exc=exc, countdown=exc.retry_in_seconds)
     except Exception as exc:
         log.error(f"handle_push failed: {exc}")
@@ -114,6 +125,7 @@ def handle_check_run(self, payload: dict):
     """Process check_run webhook events (CI pass/fail)."""
     try:
         from app.handlers.ci import handle
+
         handle(payload)
     except AllProvidersDown as exc:
         raise self.retry(exc=exc, countdown=exc.retry_in_seconds)
@@ -126,6 +138,7 @@ def handle_check_run(self, payload: dict):
 
 
 # ── Scheduled tasks ───────────────────────────────────────────────────────────
+
 
 @celery.task(
     bind=True,
@@ -159,14 +172,17 @@ def run_scheduled_tasks(self, task_name: str):
         try:
             if task_name == "stale_check":
                 from app.handlers.schedule import run_stale_check
+
                 run_stale_check(repo, installation_id)
 
             elif task_name == "health_report":
                 from app.handlers.schedule import run_health_report
+
                 run_health_report(repo, installation_id)
 
             elif task_name == "dependency_report":
                 from app.handlers.schedule import run_dependency_report
+
                 run_dependency_report(repo, installation_id)
 
         except Exception as e:
@@ -180,15 +196,14 @@ def cleanup_token_counters():
         import datetime
         from app.core.redis_client import get_redis
 
-        r     = get_redis()
+        r = get_redis()
         today = datetime.date.today().isoformat()
 
         for provider in ("groq_70b", "groq_8b", "gemini", "openrouter"):
             tokens = r.get(f"llm:tokens:{provider}:{today}") or 0
-            reqs   = r.get(f"llm:requests:{provider}:{today}") or 0
+            reqs = r.get(f"llm:requests:{provider}:{today}") or 0
             log.info(
-                f"token_counter provider={provider} "
-                f"tokens={tokens} requests={reqs}"
+                f"token_counter provider={provider} tokens={tokens} requests={reqs}"
             )
     except Exception as e:
         log.warning(f"cleanup_token_counters: {e}")
@@ -196,9 +211,10 @@ def cleanup_token_counters():
 
 # ── Private helpers ───────────────────────────────────────────────────────────
 
+
 def _retry_countdown(retries: int) -> int:
     """Exponential backoff: 60s → 120s → 240s."""
-    return 60 * (2 ** retries)
+    return 60 * (2**retries)
 
 
 def _handle_max_retries(payload: dict, task_desc: str):
@@ -241,26 +257,29 @@ def _post_queued_message(payload: dict, retry_in: int, task_desc: str):
 
         installation_id = payload.get("installation", {}).get("id")
         repo = payload.get("repository", {}).get("full_name", "")
-        issue_number = (
-            payload.get("issue", {}).get("number")
-            or payload.get("pull_request", {}).get("number")
-        )
+        issue_number = payload.get("issue", {}).get("number") or payload.get(
+            "pull_request", {}
+        ).get("number")
         if not (installation_id and repo and issue_number):
             return
 
-        token    = get_installation_token(installation_id)
+        token = get_installation_token(installation_id)
         wait_min = max(1, retry_in // 60)
 
-        gh_post(f"/repos/{repo}/issues/{issue_number}/comments", token, {
-            "body": (
-                f"## ⏳ AI Request Queued\n\n"
-                f"All AI providers are temporarily busy (rate limited).\n\n"
-                f"Your **{task_desc}** request has been queued and will be "
-                f"processed automatically in **~{wait_min} minute(s)**.\n\n"
-                "No need to type the command again — I'll post the result here.\n\n"
-                "---\n*🤖 AI Repo Manager V4*"
-            )
-        })
+        gh_post(
+            f"/repos/{repo}/issues/{issue_number}/comments",
+            token,
+            {
+                "body": (
+                    f"## ⏳ AI Request Queued\n\n"
+                    f"All AI providers are temporarily busy (rate limited).\n\n"
+                    f"Your **{task_desc}** request has been queued and will be "
+                    f"processed automatically in **~{wait_min} minute(s)**.\n\n"
+                    "No need to type the command again — I'll post the result here.\n\n"
+                    "---\n*🤖 AI Repo Manager V4*"
+                )
+            },
+        )
     except Exception as e:
         log.warning(f"_post_queued_message failed: {e}")
 
@@ -274,31 +293,38 @@ def _post_failure_message(payload: dict, task_desc: str):
 
         installation_id = payload.get("installation", {}).get("id")
         repo = payload.get("repository", {}).get("full_name", "")
-        issue_number = (
-            payload.get("issue", {}).get("number")
-            or payload.get("pull_request", {}).get("number")
-        )
+        issue_number = payload.get("issue", {}).get("number") or payload.get(
+            "pull_request", {}
+        ).get("number")
         if not (installation_id and repo and issue_number):
             return
 
-        token    = get_installation_token(installation_id)
+        token = get_installation_token(installation_id)
         statuses = status_all()
         status_lines = "\n".join(
             f"- **{name}**: {s['state']}"
-            + (f" (recovers in {s['recovers_in_seconds']}s)" if s["recovers_in_seconds"] else "")
+            + (
+                f" (recovers in {s['recovers_in_seconds']}s)"
+                if s["recovers_in_seconds"]
+                else ""
+            )
             for name, s in statuses.items()
         )
 
-        gh_post(f"/repos/{repo}/issues/{issue_number}/comments", token, {
-            "body": (
-                f"## ⚠️ AI Temporarily Unavailable\n\n"
-                f"Your **{task_desc}** request could not be completed "
-                f"after multiple retries.\n\n"
-                f"**Provider Status:**\n{status_lines}\n\n"
-                "Please try again in **30 minutes**.\n\n"
-                "---\n*🤖 AI Repo Manager V4*"
-            )
-        })
+        gh_post(
+            f"/repos/{repo}/issues/{issue_number}/comments",
+            token,
+            {
+                "body": (
+                    f"## ⚠️ AI Temporarily Unavailable\n\n"
+                    f"Your **{task_desc}** request could not be completed "
+                    f"after multiple retries.\n\n"
+                    f"**Provider Status:**\n{status_lines}\n\n"
+                    "Please try again in **30 minutes**.\n\n"
+                    "---\n*🤖 AI Repo Manager V4*"
+                )
+            },
+        )
     except Exception as e:
         log.warning(f"_post_failure_message failed: {e}")
 
@@ -307,6 +333,7 @@ def _notify_providers_down():
     """Alert Discord/Slack that all providers are down."""
     try:
         from app.github.notifications import notify_all_providers_down
+
         notify_all_providers_down()
     except Exception:
         pass

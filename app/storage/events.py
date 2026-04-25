@@ -46,11 +46,14 @@ def init_db():
 def save_event(delivery_id: str, event_type: str, repo: str, payload: dict):
     try:
         with _get_conn() as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT OR IGNORE INTO events
                 (delivery_id, event_type, repo, payload)
                 VALUES (?, ?, ?, ?)
-            """, (delivery_id, event_type, repo, json.dumps(payload)))
+            """,
+                (delivery_id, event_type, repo, json.dumps(payload)),
+            )
             conn.commit()
     except Exception as e:
         log.error("storage.save_failed", error=str(e))
@@ -59,10 +62,13 @@ def save_event(delivery_id: str, event_type: str, repo: str, payload: dict):
 def mark_processed(delivery_id: str, status: str = "done"):
     try:
         with _get_conn() as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 UPDATE events SET status=?, processed_at=datetime('now')
                 WHERE delivery_id=?
-            """, (status, delivery_id))
+            """,
+                (status, delivery_id),
+            )
             conn.commit()
     except Exception as e:
         log.error("storage.mark_failed", error=str(e))
@@ -71,11 +77,14 @@ def mark_processed(delivery_id: str, status: str = "done"):
 def get_recent(repo: str, limit: int = 20) -> list:
     try:
         with _get_conn() as conn:
-            rows = conn.execute("""
+            rows = conn.execute(
+                """
                 SELECT delivery_id, event_type, status, created_at
                 FROM events WHERE repo=?
                 ORDER BY created_at DESC LIMIT ?
-            """, (repo, limit)).fetchall()
+            """,
+                (repo, limit),
+            ).fetchall()
             return [dict(r) for r in rows]
     except Exception as e:
         log.error("storage.get_recent_failed", error=str(e))

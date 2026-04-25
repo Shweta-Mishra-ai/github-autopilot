@@ -36,6 +36,7 @@ def _list_of_str(val: Any, max_items: int = 10, max_item_len: int = 100) -> list
 
 # ── PR Analysis ───────────────────────────────────────────────────────────────
 
+
 def validate_pr_analysis(raw: dict) -> dict:
     """
     Validate and sanitize PR analysis response.
@@ -43,23 +44,31 @@ def validate_pr_analysis(raw: dict) -> dict:
     ✅ FIXED (LOOPHOLE 18): Returns "suggested_title" (was "improved_title").
     pull_request.py reads r.get("suggested_title") — field name now matches.
     """
-    VALID_RISK  = {"low", "medium", "high"}
+    VALID_RISK = {"low", "medium", "high"}
     VALID_TYPES = {
-        "feat", "fix", "docs", "refactor", "test",
-        "chore", "perf", "ci", "style", "build",
+        "feat",
+        "fix",
+        "docs",
+        "refactor",
+        "test",
+        "chore",
+        "perf",
+        "ci",
+        "style",
+        "build",
     }
 
     if not isinstance(raw, dict) or raw.get("error"):
         log.warning(f"validate_pr_analysis: invalid response — {raw}")
         return {
-            "suggested_title": "",          # ✅ FIXED field name
-            "description":     "",
-            "labels":          [],
-            "risk_level":      "medium",
-            "risk_reason":     "Could not analyze — using safe defaults",
-            "review_focus":    [],
-            "pr_type":         "chore",
-            "confidence":      0.5,
+            "suggested_title": "",  # ✅ FIXED field name
+            "description": "",
+            "labels": [],
+            "risk_level": "medium",
+            "risk_reason": "Could not analyze — using safe defaults",
+            "review_focus": [],
+            "pr_type": "chore",
+            "confidence": 0.5,
         }
 
     risk = _get(raw, "risk_level", "medium").lower()
@@ -85,33 +94,36 @@ def validate_pr_analysis(raw: dict) -> dict:
         pass
 
     return {
-        "suggested_title": _str(raw.get("suggested_title") or raw.get("improved_title", ""), 200),
-        "description":     _str(raw.get("description", ""), 5000),
-        "labels":          labels,
-        "risk_level":      risk,
-        "risk_reason":     _str(raw.get("risk_reason", ""), 300),
-        "review_focus":    review_focus,
-        "pr_type":         pr_type,
-        "confidence":      confidence,
+        "suggested_title": _str(
+            raw.get("suggested_title") or raw.get("improved_title", ""), 200
+        ),
+        "description": _str(raw.get("description", ""), 5000),
+        "labels": labels,
+        "risk_level": risk,
+        "risk_reason": _str(raw.get("risk_reason", ""), 300),
+        "review_focus": review_focus,
+        "pr_type": pr_type,
+        "confidence": confidence,
     }
 
 
 # ── Issue Triage ──────────────────────────────────────────────────────────────
 
+
 def validate_issue_triage(raw: dict) -> dict:
     """Validate and sanitize issue triage response."""
-    VALID_TYPES      = {"bug", "feature", "question", "docs", "performance", "security"}
+    VALID_TYPES = {"bug", "feature", "question", "docs", "performance", "security"}
     VALID_PRIORITIES = {"high", "medium", "low"}
     VALID_COMPLEXITY = {"trivial", "simple", "moderate", "complex"}
 
     if not isinstance(raw, dict) or raw.get("error"):
         return {
-            "type":       "question",
-            "priority":   "medium",
-            "labels":     [],
-            "welcome":    "Thanks for reporting this! We'll look into it.",
+            "type": "question",
+            "priority": "medium",
+            "labels": [],
+            "welcome": "Thanks for reporting this! We'll look into it.",
             "needs_info": False,
-            "questions":  [],
+            "questions": [],
             "complexity": "moderate",
         }
 
@@ -133,17 +145,18 @@ def validate_issue_triage(raw: dict) -> dict:
     questions = [str(q)[:200] for q in questions if q][:3]
 
     return {
-        "type":       issue_type,
-        "priority":   priority,
-        "labels":     _list_of_str(raw.get("labels"), max_items=8, max_item_len=50),
-        "welcome":    _str(raw.get("welcome", "Thanks for reporting this!"), 500),
+        "type": issue_type,
+        "priority": priority,
+        "labels": _list_of_str(raw.get("labels"), max_items=8, max_item_len=50),
+        "welcome": _str(raw.get("welcome", "Thanks for reporting this!"), 500),
         "needs_info": bool(raw.get("needs_info", False)),
-        "questions":  questions,
+        "questions": questions,
         "complexity": complexity,
     }
 
 
 # ── Code Review ───────────────────────────────────────────────────────────────
+
 
 def validate_code_review(raw: dict) -> dict:
     """Validate code review for a single file."""
@@ -171,12 +184,14 @@ def validate_code_review(raw: dict) -> dict:
         sev = str(item.get("severity", "minor")).lower()
         if sev not in VALID_SEVERITIES:
             sev = "minor"
-        clean_issues.append({
-            "severity": sev,
-            "line":     _str(item.get("line", ""), 20),
-            "issue":    _str(item.get("issue", ""), 300),
-            "fix":      _str(item.get("fix", ""), 500),
-        })
+        clean_issues.append(
+            {
+                "severity": sev,
+                "line": _str(item.get("line", ""), 20),
+                "issue": _str(item.get("issue", ""), 300),
+                "fix": _str(item.get("fix", ""), 500),
+            }
+        )
 
     confidence = 0.5
     try:
@@ -186,9 +201,9 @@ def validate_code_review(raw: dict) -> dict:
         pass
 
     return {
-        "score":     score,
-        "verdict":   _str(raw.get("verdict") or raw.get("summary", ""), 200),
-        "issues":    clean_issues,
+        "score": score,
+        "verdict": _str(raw.get("verdict") or raw.get("summary", ""), 200),
+        "issues": clean_issues,
         "positives": _list_of_str(raw.get("positives"), max_items=5, max_item_len=200),
         "confidence": confidence,
         "refactor_opportunity": _str(raw.get("refactor_opportunity", ""), 300),

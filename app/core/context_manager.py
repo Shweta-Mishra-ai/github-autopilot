@@ -29,18 +29,18 @@ import time
 
 log = logging.getLogger(__name__)
 
-CONTEXT_TTL    = 86400   # 24 hours
-MAX_ENTRIES    = 10      # Max history entries per issue
-MAX_ENTRY_CHARS = 500    # Truncate long entries
+CONTEXT_TTL = 86400  # 24 hours
+MAX_ENTRIES = 10  # Max history entries per issue
+MAX_ENTRY_CHARS = 500  # Truncate long entries
 
 
 class ContextManager:
     """Manages per-issue conversation context in Redis."""
 
     def __init__(self, repo: str, issue_number: int):
-        self.repo         = repo
+        self.repo = repo
         self.issue_number = issue_number
-        self._key         = f"ctx:{repo}:{issue_number}"
+        self._key = f"ctx:{repo}:{issue_number}"
 
     def add(self, command: str, response_summary: str, author: str = ""):
         """
@@ -49,16 +49,19 @@ class ContextManager:
         """
         try:
             from app.core.redis_client import get_redis
-            r       = get_redis()
-            raw     = r.get(self._key)
+
+            r = get_redis()
+            raw = r.get(self._key)
             entries = json.loads(raw) if raw else []
 
-            entries.append({
-                "command":  command,
-                "summary":  response_summary[:MAX_ENTRY_CHARS],
-                "author":   author,
-                "time":     int(time.time()),
-            })
+            entries.append(
+                {
+                    "command": command,
+                    "summary": response_summary[:MAX_ENTRY_CHARS],
+                    "author": author,
+                    "time": int(time.time()),
+                }
+            )
 
             # Keep last N entries
             entries = entries[-MAX_ENTRIES:]
@@ -74,8 +77,9 @@ class ContextManager:
         """
         try:
             from app.core.redis_client import get_redis
-            r       = get_redis()
-            raw     = r.get(self._key)
+
+            r = get_redis()
+            raw = r.get(self._key)
             if not raw:
                 return ""
 
@@ -85,8 +89,8 @@ class ContextManager:
 
             parts = []
             for e in entries:
-                cmd      = e.get("command", "command")
-                summary  = e.get("summary", "")
+                cmd = e.get("command", "command")
+                summary = e.get("summary", "")
                 parts.append(f"Previous /{cmd}: {summary}")
 
             return "## Prior Context\n" + "\n".join(parts) + "\n"
@@ -98,7 +102,8 @@ class ContextManager:
         """Returns list of commands used on this issue."""
         try:
             from app.core.redis_client import get_redis
-            r   = get_redis()
+
+            r = get_redis()
             raw = r.get(self._key)
             if not raw:
                 return []
@@ -110,6 +115,7 @@ class ContextManager:
         """Clear context for this issue."""
         try:
             from app.core.redis_client import get_redis
+
             get_redis().delete(self._key)
         except Exception:
             pass

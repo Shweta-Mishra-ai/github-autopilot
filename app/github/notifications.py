@@ -14,40 +14,40 @@ import requests
 
 log = logging.getLogger(__name__)
 
-SLACK_WEBHOOK_URL   = os.environ.get("SLACK_WEBHOOK_URL", "")
+SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
-SLACK_ENABLED       = bool(SLACK_WEBHOOK_URL)
-DISCORD_ENABLED     = bool(DISCORD_WEBHOOK_URL)
+SLACK_ENABLED = bool(SLACK_WEBHOOK_URL)
+DISCORD_ENABLED = bool(DISCORD_WEBHOOK_URL)
 
 NOTIFY_FILTER: dict[str, bool] = {
-    "secret_detected":     True,
-    "vulnerability_high":  True,
-    "auto_merge":          True,
-    "high_risk_pr":        True,
-    "pr_opened":           True,
-    "new_issue":           True,
-    "health_degraded":     True,
-    "ci_failure":          True,
-    "stale_closed":        True,
-    "all_providers_down":  True,
-    "vulnerability_low":   False,
-    "commit_lint":         False,
-    "pr_reviewed":         False,
-    "every_push":          False,
+    "secret_detected": True,
+    "vulnerability_high": True,
+    "auto_merge": True,
+    "high_risk_pr": True,
+    "pr_opened": True,
+    "new_issue": True,
+    "health_degraded": True,
+    "ci_failure": True,
+    "stale_closed": True,
+    "all_providers_down": True,
+    "vulnerability_low": False,
+    "commit_lint": False,
+    "pr_reviewed": False,
+    "every_push": False,
 }
 
 _COLORS: dict[str, int] = {
     "critical": 15158332,
-    "warning":  15105570,
-    "info":     3447003,
-    "success":  3066993,
+    "warning": 15105570,
+    "info": 3447003,
+    "success": 3066993,
 }
 
 _EMOJIS: dict[str, str] = {
     "critical": "🚨",
-    "warning":  "⚠️",
-    "info":     "ℹ️",
-    "success":  "✅",
+    "warning": "⚠️",
+    "info": "ℹ️",
+    "success": "✅",
 }
 
 
@@ -68,7 +68,7 @@ def notify(
         log.debug("notification.skipped no_webhooks_configured")
         return
 
-    emoji      = _EMOJIS.get(severity, "ℹ️")
+    emoji = _EMOJIS.get(severity, "ℹ️")
     full_title = f"{emoji} {title}"
     if repo:
         full_title += f" — `{repo}`"
@@ -98,19 +98,21 @@ def notify(
 def _send_slack(title: str, message: str, severity: str):
     color_map = {
         "critical": "#E74C3C",
-        "warning":  "#E67E22",
-        "info":     "#3498DB",
-        "success":  "#2ECC71",
+        "warning": "#E67E22",
+        "info": "#3498DB",
+        "success": "#2ECC71",
     }
     try:
         payload = {
-            "attachments": [{
-                "color":  color_map.get(severity, "#3498DB"),
-                "title":  title,
-                "text":   message[:1000],
-                "footer": "AI Repo Manager V4",
-                "ts":     int(datetime.now(timezone.utc).timestamp()),
-            }]
+            "attachments": [
+                {
+                    "color": color_map.get(severity, "#3498DB"),
+                    "title": title,
+                    "text": message[:1000],
+                    "footer": "AI Repo Manager V4",
+                    "ts": int(datetime.now(timezone.utc).timestamp()),
+                }
+            ]
         }
         resp = requests.post(SLACK_WEBHOOK_URL, json=payload, timeout=5)
         if resp.status_code == 200:
@@ -131,19 +133,19 @@ def _send_discord(
     try:
         color = _COLORS.get(severity, _COLORS["info"])
         embed: dict = {
-            "title":       title[:256],
+            "title": title[:256],
             "description": message[:4096],
-            "color":       color,
-            "timestamp":   datetime.now(timezone.utc).isoformat(),
-            "footer":      {"text": "AI Repo Manager V4"},
+            "color": color,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "footer": {"text": "AI Repo Manager V4"},
         }
         if url:
             embed["url"] = url
         if fields:
             embed["fields"] = [
                 {
-                    "name":   str(f.get("name", ""))[:256],
-                    "value":  str(f.get("value", "\u200b"))[:1024],
+                    "name": str(f.get("name", ""))[:256],
+                    "value": str(f.get("value", "\u200b"))[:1024],
                     "inline": bool(f.get("inline", True)),
                 }
                 for f in fields[:25]
@@ -159,7 +161,9 @@ def _send_discord(
         if resp.status_code in (200, 204):
             log.info("notification.discord_sent")
         else:
-            log.warning(f"notification.discord_failed status={resp.status_code} body={resp.text[:200]}")
+            log.warning(
+                f"notification.discord_failed status={resp.status_code} body={resp.text[:200]}"
+            )
     except Exception as e:
         log.error(f"notification.discord_error: {e}")
 
@@ -172,8 +176,8 @@ def notify_secret_detected(repo: str, findings_count: int):
         repo=repo,
         event_type="secret_detected",
         fields=[
-            {"name": "Findings",    "value": str(findings_count), "inline": True},
-            {"name": "Repository",  "value": repo,                "inline": True},
+            {"name": "Findings", "value": str(findings_count), "inline": True},
+            {"name": "Repository", "value": repo, "inline": True},
         ],
     )
 
@@ -186,8 +190,8 @@ def notify_high_risk_pr(repo: str, pr_number: int, title: str):
         repo=repo,
         event_type="high_risk_pr",
         fields=[
-            {"name": "PR",    "value": f"#{pr_number}", "inline": True},
-            {"name": "Risk",  "value": "🔴 HIGH",       "inline": True},
+            {"name": "PR", "value": f"#{pr_number}", "inline": True},
+            {"name": "Risk", "value": "🔴 HIGH", "inline": True},
             {"name": "Title", "value": title[:200]},
         ],
         url=f"https://github.com/{repo}/pull/{pr_number}",
@@ -202,8 +206,8 @@ def notify_health_degraded(repo: str, grade: str, score: int):
         repo=repo,
         event_type="health_degraded",
         fields=[
-            {"name": "Grade", "value": grade,         "inline": True},
-            {"name": "Score", "value": f"{score}/100","inline": True},
+            {"name": "Grade", "value": grade, "inline": True},
+            {"name": "Score", "value": f"{score}/100", "inline": True},
         ],
     )
 
@@ -229,15 +233,17 @@ def notify_new_issue(repo: str, issue_number: int, title: str, labels: list):
         repo=repo,
         event_type="new_issue",
         fields=[
-            {"name": "Issue",  "value": f"#{issue_number}", "inline": True},
-            {"name": "Labels", "value": label_str,           "inline": True},
+            {"name": "Issue", "value": f"#{issue_number}", "inline": True},
+            {"name": "Labels", "value": label_str, "inline": True},
         ],
         url=f"https://github.com/{repo}/issues/{issue_number}",
     )
 
 
 def notify_pr_opened(repo: str, pr_number: int, title: str, risk: str = "unknown"):
-    risk_emoji = {"low": "🟢", "medium": "🟡", "high": "🔴", "unknown": "⏳"}.get(risk, "⏳")
+    risk_emoji = {"low": "🟢", "medium": "🟡", "high": "🔴", "unknown": "⏳"}.get(
+        risk, "⏳"
+    )
     notify(
         title="New PR Opened",
         message=f"PR #{pr_number}: {title[:200]}",
@@ -245,8 +251,12 @@ def notify_pr_opened(repo: str, pr_number: int, title: str, risk: str = "unknown
         repo=repo,
         event_type="pr_opened",
         fields=[
-            {"name": "PR",   "value": f"#{pr_number}",                      "inline": True},
-            {"name": "Risk", "value": f"{risk_emoji} {risk.capitalize()}", "inline": True},
+            {"name": "PR", "value": f"#{pr_number}", "inline": True},
+            {
+                "name": "Risk",
+                "value": f"{risk_emoji} {risk.capitalize()}",
+                "inline": True,
+            },
         ],
         url=f"https://github.com/{repo}/pull/{pr_number}",
     )
@@ -260,9 +270,9 @@ def notify_stale_closed(repo: str, issue_number: int, title: str, days_inactive:
         repo=repo,
         event_type="stale_closed",
         fields=[
-            {"name": "Issue",    "value": f"#{issue_number}",      "inline": True},
+            {"name": "Issue", "value": f"#{issue_number}", "inline": True},
             {"name": "Inactive", "value": f"{days_inactive} days", "inline": True},
-            {"name": "Title",    "value": title[:200]},
+            {"name": "Title", "value": title[:200]},
         ],
         url=f"https://github.com/{repo}/issues/{issue_number}",
     )
@@ -278,8 +288,8 @@ def notify_vulnerability(repo: str, package: str, severity: str, cve_id: str):
         event_type=f"vulnerability_{level}",
         fields=[
             {"name": "Package", "value": f"`{package}`", "inline": True},
-            {"name": "CVE",     "value": cve_id,          "inline": True},
-            {"name": "Fix",     "value": f"`pip install --upgrade {package}`"},
+            {"name": "CVE", "value": cve_id, "inline": True},
+            {"name": "Fix", "value": f"`pip install --upgrade {package}`"},
         ],
     )
 
@@ -287,11 +297,14 @@ def notify_vulnerability(repo: str, package: str, severity: str, cve_id: str):
 def notify_all_providers_down():
     try:
         from app.ai.circuit_breaker import status_all
+
         statuses = status_all()
         fields = [
             {
-                "name":   name,
-                "value":  f"{s['state']} — recovers in {s['recovers_in_seconds']}s" if s["recovers_in_seconds"] else s["state"],
+                "name": name,
+                "value": f"{s['state']} — recovers in {s['recovers_in_seconds']}s"
+                if s["recovers_in_seconds"]
+                else s["state"],
                 "inline": True,
             }
             for name, s in statuses.items()
@@ -314,17 +327,19 @@ def test_discord() -> tuple[bool, str]:
 
     try:
         payload = {
-            "embeds": [{
-                "title":       "✅ AI Repo Manager V4 — Discord Test",
-                "description": "Discord webhook is connected and working correctly!",
-                "color":       _COLORS["success"],
-                "timestamp":   datetime.now(timezone.utc).isoformat(),
-                "footer":      {"text": "AI Repo Manager V4"},
-                "fields": [
-                    {"name": "Status",  "value": "Connected", "inline": True},
-                    {"name": "Version", "value": "V4.0",      "inline": True},
-                ],
-            }]
+            "embeds": [
+                {
+                    "title": "✅ AI Repo Manager V4 — Discord Test",
+                    "description": "Discord webhook is connected and working correctly!",
+                    "color": _COLORS["success"],
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "footer": {"text": "AI Repo Manager V4"},
+                    "fields": [
+                        {"name": "Status", "value": "Connected", "inline": True},
+                        {"name": "Version", "value": "V4.0", "inline": True},
+                    ],
+                }
+            ]
         }
         resp = requests.post(
             DISCORD_WEBHOOK_URL,

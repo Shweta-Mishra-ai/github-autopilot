@@ -20,8 +20,8 @@ from collections import OrderedDict
 
 log = logging.getLogger(__name__)
 
-_TTL_SECONDS  = 3600   # Remember events for 1 hour
-_MAX_LOCAL    = 2000   # In-memory fallback max size
+_TTL_SECONDS = 3600  # Remember events for 1 hour
+_MAX_LOCAL = 2000  # In-memory fallback max size
 
 # In-memory fallback (used when Redis is unavailable)
 _seen_local: OrderedDict = OrderedDict()
@@ -34,9 +34,9 @@ def make_fingerprint(delivery_id: str, event_type: str, payload: dict) -> str:
     """
     key_fields = {
         "delivery": delivery_id,
-        "event":    event_type,
-        "action":   payload.get("action", ""),
-        "repo":     payload.get("repository", {}).get("full_name", ""),
+        "event": event_type,
+        "action": payload.get("action", ""),
+        "repo": payload.get("repository", {}).get("full_name", ""),
         "number": (
             payload.get("pull_request", {}).get("number")
             or payload.get("issue", {}).get("number")
@@ -61,7 +61,7 @@ def is_duplicate(fingerprint: str) -> bool:
         from app.core.redis_client import get_redis, is_redis_available
 
         if is_redis_available():
-            r   = get_redis()
+            r = get_redis()
             key = f"idem:{fingerprint}"
 
             # SET key "1" NX EX 3600

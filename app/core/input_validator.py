@@ -11,7 +11,10 @@ import logging
 from dataclasses import dataclass
 
 from app.core.command_specs import (
-    CommandSpec, get_spec, find_similar, commands_for_context
+    CommandSpec,
+    get_spec,
+    find_similar,
+    commands_for_context,
 )
 
 log = logging.getLogger(__name__)
@@ -41,13 +44,13 @@ def validate_command(
     Full validation pipeline for a slash command.
     Returns ValidationResult with valid=True if OK to proceed.
     """
-    cmd          = raw_cmd.lower().strip()
+    cmd = raw_cmd.lower().strip()
     context_type = "pr" if is_pr else "issue"
 
     # Step 1: Command recognized?
     spec = get_spec(cmd)
     if spec is None:
-        similar   = find_similar(cmd)
+        similar = find_similar(cmd)
         available = commands_for_context(context_type)[:8]
         suggestion = f"\n\n💡 Did you mean **{similar}**?" if similar else ""
         return ValidationResult(
@@ -128,7 +131,9 @@ def validate_command(
                 title=f"Invalid Subcommand: `{cmd} {cmd_subcommand}`",
                 body=(
                     "**Valid subcommands:** "
-                    + ", ".join(f"`{s}`" if s else "*(none)*" for s in spec.valid_subcommands)
+                    + ", ".join(
+                        f"`{s}`" if s else "*(none)*" for s in spec.valid_subcommands
+                    )
                     + f"\n\n**Example:**\n```\n{spec.example}\n```"
                 ),
             ),
@@ -163,7 +168,7 @@ def validate_command(
 
     # Step 5: Context length check
     combined_context = code_context or text_context or ""
-    context_len      = len(combined_context.strip())
+    context_len = len(combined_context.strip())
 
     if spec.min_context_chars > 0 and context_len < spec.min_context_chars:
         return ValidationResult(
@@ -180,7 +185,7 @@ def validate_command(
         )
 
     if spec.max_context_chars > 0 and context_len > spec.max_context_chars:
-        combined_context = combined_context[:spec.max_context_chars]
+        combined_context = combined_context[: spec.max_context_chars]
 
     log.info(f"input_validator.passed cmd={cmd} context={context_type} author={author}")
     return ValidationResult(
@@ -195,7 +200,7 @@ def validate_command(
 
 def _extract_args(body: str, cmd: str) -> tuple[str, str]:
     pattern = re.escape(cmd) + r"\s*([^\n]*)"
-    match   = re.search(pattern, body, re.IGNORECASE)
+    match = re.search(pattern, body, re.IGNORECASE)
     if not match:
         return "", ""
 
@@ -203,7 +208,7 @@ def _extract_args(body: str, cmd: str) -> tuple[str, str]:
 
     if cmd in ("/docs", "/rollback", "/release"):
         parts = rest.split()
-        arg   = parts[0] if parts else ""
+        arg = parts[0] if parts else ""
         return arg, arg if cmd == "/docs" else ""
 
     return rest, ""
@@ -223,10 +228,8 @@ def _fmt_error(title: str, body: str) -> str:
 def check_maintainer_role(repo: str, username: str, token: str) -> bool:
     try:
         from app.github.client import gh_get
-        data = gh_get(
-            f"/repos/{repo}/collaborators/{username}/permission",
-            token
-        )
+
+        data = gh_get(f"/repos/{repo}/collaborators/{username}/permission", token)
         role = data.get("permission", "read")
         return role in ("write", "maintain", "admin")
     except Exception:

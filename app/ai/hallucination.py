@@ -33,44 +33,41 @@ log = logging.getLogger(__name__)
 # Patterns that indicate hallucination
 _HALLUCINATION_PATTERNS = [
     # LLM uncertainty phrases — should not appear in confident responses
-    (r"\bi'm not sure\b",           "uncertainty", 0.3),
-    (r"\bi don't know\b",           "uncertainty", 0.3),
-    (r"\bas an ai\b",               "ai_disclosure", 0.2),
-    (r"\bi cannot access\b",        "access_claim", 0.4),
-    (r"\bi don't have access\b",    "access_claim", 0.4),
-    (r"\bI apologize\b",            "apology", 0.1),
-
+    (r"\bi'm not sure\b", "uncertainty", 0.3),
+    (r"\bi don't know\b", "uncertainty", 0.3),
+    (r"\bas an ai\b", "ai_disclosure", 0.2),
+    (r"\bi cannot access\b", "access_claim", 0.4),
+    (r"\bi don't have access\b", "access_claim", 0.4),
+    (r"\bI apologize\b", "apology", 0.1),
     # Fabricated CVE patterns (real CVEs: GHSA-xxxx-xxxx-xxxx or CVE-YYYY-NNNNN)
-    (r"\bCVE-\d{4}-\d{4,}\b",      "cve_reference", 0.0),  # valid — no penalty
+    (r"\bCVE-\d{4}-\d{4,}\b", "cve_reference", 0.0),  # valid — no penalty
     (r"\bGHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}\b", "ghsa_reference", 0.0),
-
     # Placeholder text that should have been filled
-    (r"\[insert [^\]]+\]",          "placeholder", 0.5),
-    (r"\[your [^\]]+\]",            "placeholder", 0.5),
-    (r"\bTODO\b",                   "todo_in_response", 0.2),
-    (r"\bXXX\b",                    "xxx_placeholder", 0.3),
-
+    (r"\[insert [^\]]+\]", "placeholder", 0.5),
+    (r"\[your [^\]]+\]", "placeholder", 0.5),
+    (r"\bTODO\b", "todo_in_response", 0.2),
+    (r"\bXXX\b", "xxx_placeholder", 0.3),
     # Overly confident claims about runtime behavior
-    (r"\bthis will definitely\b",   "overconfidence", 0.1),
-    (r"\bguaranteed to\b",          "overconfidence", 0.1),
-    (r"\balways works\b",           "overconfidence", 0.1),
+    (r"\bthis will definitely\b", "overconfidence", 0.1),
+    (r"\bguaranteed to\b", "overconfidence", 0.1),
+    (r"\balways works\b", "overconfidence", 0.1),
 ]
 
 # Minimum field lengths — too short = likely hallucinated
 _MIN_LENGTHS = {
-    "fix":         20,
-    "root_cause":  10,
+    "fix": 20,
+    "root_cause": 10,
     "explanation": 15,
-    "summary":     10,
+    "summary": 10,
     "description": 20,
 }
 
 
 @dataclass
 class HallucinationResult:
-    confidence: float           # 0.0 = definitely hallucinated, 1.0 = looks clean
-    warnings: list[str]         = field(default_factory=list)
-    is_acceptable: bool         = True
+    confidence: float  # 0.0 = definitely hallucinated, 1.0 = looks clean
+    warnings: list[str] = field(default_factory=list)
+    is_acceptable: bool = True
     penalized_fields: list[str] = field(default_factory=list)
 
     @property
@@ -95,10 +92,10 @@ def check_response(
     Returns:
         HallucinationResult with confidence score and warnings
     """
-    warnings        = []
-    penalty         = 0.0
+    warnings = []
+    penalty = 0.0
     penalized_fields = []
-    context         = context or {}
+    context = context or {}
 
     # 1. Check for empty/error response
     if not response or response.get("error"):
@@ -129,7 +126,9 @@ def check_response(
     for field_name, min_len in _MIN_LENGTHS.items():
         val = response.get(field_name, "")
         if val and isinstance(val, str) and len(val.strip()) < min_len:
-            warnings.append(f"Field '{field_name}' suspiciously short ({len(val.strip())} chars)")
+            warnings.append(
+                f"Field '{field_name}' suspiciously short ({len(val.strip())} chars)"
+            )
             penalty += 0.15
             penalized_fields.append(field_name)
 
@@ -146,7 +145,7 @@ def check_response(
     # 5. SHA validation (if commits provided)
     known_shas = set(context.get("commits", []))
     if known_shas:
-        referenced_shas = re.findall(r'\b[0-9a-f]{7,40}\b', text_content)
+        referenced_shas = re.findall(r"\b[0-9a-f]{7,40}\b", text_content)
         for sha in referenced_shas:
             if sha not in known_shas and not any(s.startswith(sha) for s in known_shas):
                 warnings.append(f"References unknown commit SHA: {sha[:7]}")
@@ -205,7 +204,7 @@ def _extract_text(response: dict) -> str:
 def _extract_file_refs(text: str) -> list[str]:
     """Extract likely file references from text."""
     # Match things like app/auth.py, src/utils.ts, tests/test_foo.py
-    return re.findall(r'\b[\w/]+\.\w{2,4}\b', text)
+    return re.findall(r"\b[\w/]+\.\w{2,4}\b", text)
 
 
 def _is_plausible_file(ref: str, known_files: set[str]) -> bool:

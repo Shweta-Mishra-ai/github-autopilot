@@ -25,7 +25,6 @@ class CommandSpec:
 
 
 COMMAND_SPECS: dict[str, CommandSpec] = {
-
     "/fix": CommandSpec(
         name="/fix",
         contexts=["pr", "issue"],
@@ -35,7 +34,6 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         min_context_chars=20,
         max_context_chars=4000,
     ),
-
     "/apply": CommandSpec(
         name="/apply",
         contexts=["issue"],
@@ -44,7 +42,6 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         example="/apply",
         min_context_chars=0,
     ),
-
     "/explain": CommandSpec(
         name="/explain",
         contexts=["pr", "issue"],
@@ -54,7 +51,6 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         min_context_chars=10,
         max_context_chars=4000,
     ),
-
     "/improve": CommandSpec(
         name="/improve",
         contexts=["pr", "issue"],
@@ -64,7 +60,6 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         min_context_chars=20,
         max_context_chars=4000,
     ),
-
     "/test": CommandSpec(
         name="/test",
         contexts=["pr", "issue"],
@@ -74,7 +69,6 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         min_context_chars=20,
         max_context_chars=4000,
     ),
-
     "/docs": CommandSpec(
         name="/docs",
         contexts=["pr", "issue"],
@@ -84,7 +78,6 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         min_context_chars=0,
         valid_subcommands=["readme", "api", ""],
     ),
-
     "/refactor": CommandSpec(
         name="/refactor",
         contexts=["pr", "issue"],
@@ -94,7 +87,6 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         min_context_chars=30,
         max_context_chars=4000,
     ),
-
     "/health": CommandSpec(
         name="/health",
         contexts=["pr", "issue"],
@@ -102,7 +94,6 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         hint="No arguments needed.",
         example="/health",
     ),
-
     "/version": CommandSpec(
         name="/version",
         contexts=["pr", "issue"],
@@ -110,7 +101,6 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         hint="No arguments needed.",
         example="/version",
     ),
-
     "/merge": CommandSpec(
         name="/merge",
         contexts=["pr"],
@@ -119,7 +109,6 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         example="/merge",
         maintainer_only=True,
     ),
-
     "/summarize": CommandSpec(
         name="/summarize",
         contexts=["pr", "issue"],
@@ -127,7 +116,6 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         hint="No arguments needed. Works best on long threads.",
         example="/summarize",
     ),
-
     "/ci": CommandSpec(
         name="/ci",
         contexts=["pr", "issue"],
@@ -137,7 +125,6 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         min_context_chars=20,
         max_context_chars=8000,
     ),
-
     "/security": CommandSpec(
         name="/security",
         contexts=["pr"],
@@ -145,7 +132,6 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         hint="Works on Pull Requests. Reads Dependabot, CodeQL, and Secret Scanning.",
         example="/security",
     ),
-
     "/gaps": CommandSpec(
         name="/gaps",
         contexts=["pr", "issue"],
@@ -155,7 +141,6 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         min_context_chars=20,
         max_context_chars=4000,
     ),
-
     "/changelog": CommandSpec(
         name="/changelog",
         contexts=["pr", "issue"],
@@ -163,17 +148,15 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         hint="No arguments needed.",
         example="/changelog",
     ),
-
     "/rollback": CommandSpec(
         name="/rollback",
         contexts=["pr", "issue"],
         description="Show snapshot history or restore a previous state",
         hint="Without number = show history. With number = restore that snapshot.",
         example="/rollback\n\nOR to restore:\n\n/rollback 2",
-        valid_args=["1","2","3","4","5","6","7","8","9","10"],
+        valid_args=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
         maintainer_only=True,
     ),
-
     "/autofix": CommandSpec(
         name="/autofix",
         contexts=["issue"],
@@ -182,7 +165,6 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         example="/autofix",
         min_context_chars=20,
     ),
-
     "/impact": CommandSpec(
         name="/impact",
         contexts=["pr"],
@@ -190,7 +172,6 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         hint="Works on Pull Requests only.",
         example="/impact",
     ),
-
     "/perf": CommandSpec(
         name="/perf",
         contexts=["pr", "issue"],
@@ -200,7 +181,6 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         min_context_chars=20,
         max_context_chars=5000,
     ),
-
     "/arch": CommandSpec(
         name="/arch",
         contexts=["pr", "issue"],
@@ -210,7 +190,6 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         min_context_chars=20,
         max_context_chars=5000,
     ),
-
     "/release": CommandSpec(
         name="/release",
         contexts=["pr", "issue"],
@@ -221,7 +200,6 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         valid_args=["patch", "minor", "major"],
         maintainer_only=True,
     ),
-
     "/runtests": CommandSpec(
         name="/runtests",
         contexts=["pr", "issue"],
@@ -229,7 +207,6 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         hint="No arguments needed. Requires GitHub Actions CI to be configured.",
         example="/runtests",
     ),
-
     "/secfull": CommandSpec(
         name="/secfull",
         contexts=["pr", "issue"],
@@ -237,7 +214,6 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         hint="No arguments needed. Reads all GitHub Security APIs.",
         example="/secfull",
     ),
-
     "/budget": CommandSpec(
         name="/budget",
         contexts=["pr", "issue"],
@@ -270,7 +246,4 @@ def find_similar(cmd: str) -> str | None:
 
 
 def commands_for_context(context: str) -> list[str]:
-    return [
-        name for name, spec in COMMAND_SPECS.items()
-        if context in spec.contexts
-    ]
+    return [name for name, spec in COMMAND_SPECS.items() if context in spec.contexts]

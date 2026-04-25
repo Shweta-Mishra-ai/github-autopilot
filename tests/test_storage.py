@@ -18,7 +18,14 @@ class TestEventStorage:
         self.tmp.close()
 
     def teardown_method(self):
-        os.unlink(self.tmp.name)
+        # Close any open SQLite connections before deleting (Windows fix)
+        import sqlite3, gc
+        gc.collect()  # Force garbage collection to close connections
+        try:
+            os.unlink(self.tmp.name)
+        except (PermissionError, OSError):
+            # Windows: file still locked — ignore, temp dir will clean up
+            pass
 
     def test_init_db_creates_table(self):
         with patch("app.storage.events.DB_PATH", self.tmp.name):
@@ -94,4 +101,3 @@ class TestFixtures:
             with patch("app.storage.fixtures.FIXTURES_DIR", tmpdir):
                 from app.storage.fixtures import list_fixtures
                 assert list_fixtures() == []
-

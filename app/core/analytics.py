@@ -6,6 +6,7 @@ Tracks PR velocity, issue resolution, bot usage, review scores.
 
 import logging
 from datetime import datetime, timezone, timedelta
+from app.core.redis_client import get_redis  # noqa: F401
 
 log = logging.getLogger(__name__)
 

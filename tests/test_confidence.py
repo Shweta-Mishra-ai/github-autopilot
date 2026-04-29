@@ -3,7 +3,6 @@ Tests - tests/test_confidence.py
 V3: Unit tests for confidence scoring system.
 """
 
-import pytest
 from app.core.confidence import ConfidenceGate, DEFAULT_THRESHOLDS
 
 

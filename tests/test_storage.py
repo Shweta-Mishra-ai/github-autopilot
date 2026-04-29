@@ -3,9 +3,7 @@ Tests - tests/test_storage.py
 V3: Unit tests for event storage and fixture system.
 """
 
-import pytest
 import os
-import json
 import tempfile
 from unittest.mock import patch
 
@@ -19,7 +17,7 @@ class TestEventStorage:
 
     def teardown_method(self):
         # Close any open SQLite connections before deleting (Windows fix)
-        import sqlite3, gc
+        import gc
         gc.collect()  # Force garbage collection to close connections
         try:
             os.unlink(self.tmp.name)
@@ -75,7 +73,7 @@ class TestFixtures:
     def test_capture_and_load(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch("app.storage.fixtures.FIXTURES_DIR", tmpdir):
-                from app.storage.fixtures import capture, load, list_fixtures
+                from app.storage.fixtures import capture, load
                 path = capture("push", {"ref": "main"}, "test")
                 assert os.path.exists(path)
 

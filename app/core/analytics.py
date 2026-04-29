@@ -4,10 +4,9 @@ V4 Sprint 6: Repo analytics tracker.
 Tracks PR velocity, issue resolution, bot usage, review scores.
 """
 
-import json
 import logging
 from datetime import datetime, timezone, timedelta
-from app.core.redis_client import get_redis
+
 log = logging.getLogger(__name__)
 
 
@@ -175,10 +174,14 @@ def _avg(values: list) -> float:
 
 
 def _score_to_grade(score: float) -> str:
-    if score >= 9: return "A"
-    if score >= 8: return "B"
-    if score >= 7: return "C"
-    if score >= 5: return "D"
+    if score >= 9:
+        return "A"
+    if score >= 8:
+        return "B"
+    if score >= 7:
+        return "C"
+    if score >= 5:
+        return "D"
     return "F"
 
 

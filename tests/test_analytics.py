@@ -2,7 +2,8 @@
 tests/test_analytics.py
 Sprint 6: Tests for app/core/analytics.py and app/core/cache.py
 """
-import sys, os
+import sys
+import os
 from unittest.mock import patch, MagicMock
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -138,7 +139,7 @@ class TestWeeklyReport:
 class TestCache:
 
     def test_cache_hit_returns_data(self):
-        from app.core.cache import _get, _set, _make_key
+        from app.core.cache import _get
         mock_r = MagicMock()
         mock_r.get.return_value = b'{"key": "value"}'
         mock_r.incr = MagicMock()

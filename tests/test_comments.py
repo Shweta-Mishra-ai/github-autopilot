@@ -111,7 +111,7 @@ class TestCommandParsing:
     def test_handle_skips_non_command(self):
         from app.handlers.comments import handle
         payload = _make_payload(body="This is a regular comment")
-        with _mock_token(), _mock_config(), _mock_gh_post() as mock_post:
+        with _mock_token(), _mock_config(), _mock_gh_post():
             handle(payload)
         # gh_post should not have been called with a bot response
         # (no command to dispatch)
@@ -119,7 +119,7 @@ class TestCommandParsing:
     def test_unknown_command_returns_help(self):
         from app.handlers.comments import handle
         payload = _make_payload(body="/unknowncommand123")
-        with _mock_token(), _mock_config(), _mock_gh_post() as mock_post:
+        with _mock_token(), _mock_config(), _mock_gh_post():
             handle(payload)
         # Should post "unknown command" or help message
 

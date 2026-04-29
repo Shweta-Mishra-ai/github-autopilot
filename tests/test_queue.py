@@ -8,8 +8,6 @@ FIXED: In CI, REDIS_URL=redis://localhost:6379/0 is set.
   Fix: Patch app.queue.producer._use_redis = False to force in-memory path.
 """
 
-import threading
-import time
 from unittest.mock import patch
 from app.queue.producer import enqueue_event, get_memory_queue
 

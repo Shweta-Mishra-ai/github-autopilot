@@ -8,8 +8,7 @@ FIXED: test_detects_github_token used a 35-char token after ghp_ prefix.
   Fix: Use 36 chars after ghp_ → added one more digit.
 """
 
-import pytest
-from app.security.secrets import scan_diff, _entropy, SecretFinding
+from app.security.secrets import scan_diff, _entropy
 
 
 class TestSecretDetection:

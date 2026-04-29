@@ -8,7 +8,6 @@ Reduces redundant API calls. Same PR files fetched 3x → fetched 1x cached.
 import hashlib
 import json
 import logging
-from app.core.redis_client import get_redis
 
 log = logging.getLogger(__name__)
 

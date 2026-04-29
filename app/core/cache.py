@@ -8,7 +8,7 @@ Reduces redundant API calls. Same PR files fetched 3x → fetched 1x cached.
 import hashlib
 import json
 import logging
-from app.core.redis_client import get_redis  # noqa: F401
+from app.core import redis_client
 
 log = logging.getLogger(__name__)
 
@@ -43,8 +43,7 @@ def invalidate(path: str, token: str):
 
 def invalidate_repo(repo: str):
     try:
-        from app.core.redis_client import get_redis
-        r    = get_redis()
+        r    = redis_client.get_redis()
         keys = r.keys(f"ghcache:*{repo}*")
         if keys:
             r.delete(*keys)
@@ -54,8 +53,7 @@ def invalidate_repo(repo: str):
 
 def get_stats() -> dict:
     try:
-        from app.core.redis_client import get_redis
-        r = get_redis()
+        r = redis_client.get_redis()
         return {
             "hits":   int(r.get("ghcache:stats:hits") or 0),
             "misses": int(r.get("ghcache:stats:misses") or 0),
@@ -80,8 +78,7 @@ def _get_ttl(path: str) -> int:
 
 def _get(key: str):
     try:
-        from app.core.redis_client import get_redis
-        r   = get_redis()
+        r   = redis_client.get_redis()
         raw = r.get(key)
         if raw:
             r.incr("ghcache:stats:hits")
@@ -94,15 +91,13 @@ def _get(key: str):
 
 def _set(key: str, data, ttl: int):
     try:
-        from app.core.redis_client import get_redis
-        get_redis().set(key, json.dumps(data), ex=ttl)
+        redis_client.get_redis().set(key, json.dumps(data), ex=ttl)
     except Exception:
         pass
 
 
 def _delete(key: str):
     try:
-        from app.core.redis_client import get_redis
-        get_redis().delete(key)
+        redis_client.get_redis().delete(key)
     except Exception:
         pass

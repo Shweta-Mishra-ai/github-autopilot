@@ -91,7 +91,7 @@ class TestWeeklyReport:
     def test_get_weekly_report_structure(self):
         from app.core.analytics import get_weekly_report
         mock_r = self._mock_redis_empty()
-        with patch("app.core.analytics.get_redis", return_value=mock_r):
+        with patch("app.core.redis_client.get_redis", return_value=mock_r):
             report = get_weekly_report("test/repo")
         assert "repo" in report
         assert "prs" in report
@@ -102,14 +102,14 @@ class TestWeeklyReport:
     def test_report_repo_name_correct(self):
         from app.core.analytics import get_weekly_report
         mock_r = self._mock_redis_empty()
-        with patch("app.core.analytics.get_redis", return_value=mock_r):
+        with patch("app.core.redis_client.get_redis", return_value=mock_r):
             report = get_weekly_report("myorg/myrepo")
         assert report["repo"] == "myorg/myrepo"
 
     def test_report_defaults_to_zero(self):
         from app.core.analytics import get_weekly_report
         mock_r = self._mock_redis_empty()
-        with patch("app.core.analytics.get_redis", return_value=mock_r):
+        with patch("app.core.redis_client.get_redis", return_value=mock_r):
             report = get_weekly_report("test/repo")
         assert report["prs"]["merged_today"] == 0
         assert report["prs"]["avg_merge_hours"] == 0.0
@@ -117,7 +117,7 @@ class TestWeeklyReport:
     def test_format_report_comment_contains_repo(self):
         from app.core.analytics import format_report_comment
         mock_r = self._mock_redis_empty()
-        with patch("app.core.analytics.get_redis", return_value=mock_r):
+        with patch("app.core.redis_client.get_redis", return_value=mock_r):
             comment = format_report_comment("test/repo")
         assert "test/repo" in comment
         assert "##" in comment
@@ -125,13 +125,13 @@ class TestWeeklyReport:
     def test_format_report_comment_has_grade(self):
         from app.core.analytics import format_report_comment
         mock_r = self._mock_redis_empty()
-        with patch("app.core.analytics.get_redis", return_value=mock_r):
+        with patch("app.core.redis_client.get_redis", return_value=mock_r):
             comment = format_report_comment("test/repo")
         assert "Grade" in comment
 
     def test_redis_failure_returns_defaults(self):
         from app.core.analytics import get_weekly_report
-        with patch("app.core.analytics.get_redis", side_effect=Exception("Redis down")):
+        with patch("app.core.redis_client.get_redis", side_effect=Exception("Redis down")):
             report = get_weekly_report("test/repo")
         assert report["prs"]["merged_today"] == 0
 
@@ -152,7 +152,7 @@ class TestCache:
         from app.core.cache import _get
         mock_r = MagicMock()
         mock_r.get.return_value = None
-        with patch("app.core.cache.get_redis", return_value=mock_r):
+        with patch("app.core.redis_client.get_redis", return_value=mock_r):
             result = _get("missing_key")
         assert result is None
 
@@ -184,7 +184,7 @@ class TestCache:
 
     def test_get_stats_redis_failure(self):
         from app.core.cache import get_stats
-        with patch("app.core.cache.get_redis", side_effect=Exception("down")):
+        with patch("app.core.redis_client.get_redis", side_effect=Exception("down")):
             stats = get_stats()
         assert stats["hits"] == 0
         assert stats["misses"] == 0

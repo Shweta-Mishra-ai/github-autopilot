@@ -6,7 +6,7 @@ Tracks PR velocity, issue resolution, bot usage, review scores.
 
 import logging
 from datetime import datetime, timezone, timedelta
-from app.core.redis_client import get_redis  # noqa: F401
+from app.core import redis_client
 
 log = logging.getLogger(__name__)
 
@@ -133,8 +133,7 @@ def _week() -> str:
 
 def _incr(key: str, ttl: int = 604800):
     try:
-        from app.core.redis_client import get_redis
-        r = get_redis()
+        r = redis_client.get_redis()
         r.incr(key)
         r.expire(key, ttl)
     except Exception:
@@ -143,8 +142,7 @@ def _incr(key: str, ttl: int = 604800):
 
 def _lpush(key: str, value, ttl: int = 604800):
     try:
-        from app.core.redis_client import get_redis
-        r = get_redis()
+        r = redis_client.get_redis()
         r.lpush(key, str(value))
         r.ltrim(key, 0, 999)
         r.expire(key, ttl)
@@ -154,8 +152,7 @@ def _lpush(key: str, value, ttl: int = 604800):
 
 def _get_int(key: str) -> int:
     try:
-        from app.core.redis_client import get_redis
-        val = get_redis().get(key)
+        val = redis_client.get_redis().get(key)
         return int(val) if val else 0
     except Exception:
         return 0
@@ -163,8 +160,7 @@ def _get_int(key: str) -> int:
 
 def _get_list(key: str) -> list:
     try:
-        from app.core.redis_client import get_redis
-        vals = get_redis().lrange(key, 0, -1)
+        vals = redis_client.get_redis().lrange(key, 0, -1)
         return [float(v) for v in vals if v]
     except Exception:
         return []
@@ -192,8 +188,7 @@ def _get_top_commands(repo: str, top_n: int = 5) -> dict:
                 "report", "budget", "changelog", "refactor", "docs"]
     counts = {}
     try:
-        from app.core.redis_client import get_redis
-        r = get_redis()
+        r = redis_client.get_redis()
         for cmd in commands:
             val = r.get(f"analytics:{repo}:cmd_total:{cmd}")
             if val and int(val) > 0:

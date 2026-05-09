@@ -21,7 +21,7 @@ from app.security.dependencies import scan_requirements_txt, format_dep_findings
 SKIP_AUTHORS = {"dependabot[bot]", "renovate[bot]", "github-actions[bot]", "ai-repo-manager[bot]"}
 
 ALL_COMMANDS = [
-    "/impact", "/secfull", "/autofix", "/report", "/notify",
+    "/impact", "/secfull", "/autofix", "/report", "/notify", "/perf", "/arch",
     "/fix", "/apply", "/explain", "/improve", "/test", "/docs",
     "/refactor", "/health", "/version", "/merge",
     "/summarize", "/ci", "/security", "/gaps", "/changelog",
@@ -129,6 +129,10 @@ def handle(payload: dict):
             response = _cmd_report(repo)
         elif cmd == "/notify":
             response = _cmd_notify(repo, issue_number, issue, token, context_text)
+        elif cmd == "/perf":
+            response = _cmd_perf(full_context)
+        elif cmd == "/arch":
+            response = _cmd_arch(repo, issue_number, issue, token)
 
     except Exception as e:
         log.error(f"Command {cmd} failed: {e}")
@@ -864,3 +868,167 @@ def _cmd_notify(
         return f"## \u26a0\ufe0f Notification Failed\n\n`{msg}`\n\nCheck DISCORD_WEBHOOK_URL in Render env."
     except Exception as e:
         return f"## \u26a0\ufe0f Notify error: `{str(e)[:200]}`"
+
+def _cmd_perf(context: str) -> str:
+    """
+    /perf — Performance analysis.
+    Reviews code for: time complexity, memory usage,
+    unnecessary loops, N+1 queries, blocking I/O.
+    """
+    from app.ai.router import router
+
+    r, _meta = router.ask(
+        "You are a performance engineer. Analyze code for performance issues. JSON only.",
+        f"""Analyze this code for performance problems:
+
+{context[:2500]}
+
+Look for:
+- Time complexity (O(n²), O(n³), nested loops)
+- Memory leaks or excessive allocations
+- N+1 database/API query patterns
+- Blocking I/O in async context
+- Unnecessary recomputation (missing caching)
+- Large objects in memory
+
+Return JSON:
+{{
+  "overall_rating": "fast|acceptable|slow|critical",
+  "complexity_issues": [
+    {{
+      "location": "function or line",
+      "current_complexity": "O(n²)",
+      "issue": "what is slow",
+      "fix": "optimized version",
+      "improvement": "estimated speedup"
+    }}
+  ],
+  "quick_wins": ["easy optimization 1", "easy optimization 2"],
+  "summary": "2 sentence overall assessment"
+}}""",
+        task="perf",
+        max_tokens=1500,
+    )
+
+    rating = r.get("overall_rating", "acceptable")
+    r_emoji = {
+        "fast":       "🟢",
+        "acceptable": "🟡",
+        "slow":       "🟠",
+        "critical":   "🔴",
+    }.get(rating, "🟡")
+
+    issues_md = ""
+    for i, issue in enumerate(r.get("complexity_issues", [])[:4], 1):
+        loc   = issue.get("location", "")
+        curr  = issue.get("current_complexity", "")
+        fix   = issue.get("fix", "")
+        impr  = issue.get("improvement", "")
+        issues_md += (
+            f"\n### {i}. `{loc}` — {curr}\n"
+            f"**Problem:** {issue.get('issue', '')}\n\n"
+            f"**Fix:**\n```python\n{fix[:400]}\n```\n"
+            f"**Improvement:** {impr}\n"
+        )
+
+    quick_wins = r.get("quick_wins", [])
+    qw_md = "\n".join(f"- {w}" for w in quick_wins[:5]) if quick_wins else "_No quick wins found._"
+
+    return (
+        f"## ⚡ Performance Analysis\n\n"
+        f"**Rating:** {r_emoji} {rating.capitalize()}\n\n"
+        f"**Summary:** {r.get('summary', '')}\n"
+        f"{issues_md}\n"
+        f"### 🎯 Quick Wins\n{qw_md}"
+    )
+
+
+def _cmd_arch(repo: str, issue_number: int, issue: dict, token: str) -> str:
+    """
+    /arch — Architecture review.
+    Works on PRs: checks layer violations, circular imports,
+    coupling issues, missing abstractions.
+    """
+    from app.ai.router import router
+    from app.github.client import gh_get
+
+    context = ""
+    files   = []
+
+    if "pull_request" in issue:
+        try:
+            files = gh_get(f"/repos/{repo}/pulls/{issue_number}/files", token)
+            filenames = [f["filename"] for f in files[:15]]
+            context = "Files changed:\n" + "\n".join(filenames)
+        except Exception:
+            pass
+
+    issue_ctx = f"Title: {issue.get('title','')}\nBody: {(issue.get('body') or '')[:500]}"
+
+    r, _meta = router.ask(
+        "You are a software architect with 15+ years experience. "
+        "Review code architecture. JSON only.",
+        f"""Review this for architectural issues:
+
+{context or issue_ctx}
+
+Check for:
+- Layer boundary violations (e.g. core importing from handlers)
+- Circular dependencies
+- God classes/functions (too many responsibilities)
+- Missing abstractions (repeated patterns)
+- Tight coupling (hard to test/replace)
+- Naming inconsistencies
+
+Return JSON:
+{{
+  "health": "excellent|good|needs_work|critical",
+  "violations": [
+    {{
+      "type": "layer_violation|circular_import|god_class|tight_coupling|other",
+      "severity": "high|medium|low",
+      "location": "file or module",
+      "description": "what is wrong",
+      "recommendation": "how to fix"
+    }}
+  ],
+  "positive_patterns": ["good thing 1", "good thing 2"],
+  "refactoring_priority": "immediate|planned|backlog",
+  "summary": "2 sentence assessment"
+}}""",
+        task="arch",
+        max_tokens=1500,
+    )
+
+    health  = r.get("health", "good")
+    h_emoji = {
+        "excellent":   "🟢",
+        "good":        "🟡",
+        "needs_work":  "🟠",
+        "critical":    "🔴",
+    }.get(health, "🟡")
+
+    violations_md = ""
+    for v in r.get("violations", [])[:5]:
+        sev   = v.get("severity", "medium")
+        s_em  = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(sev, "🟡")
+        violations_md += (
+            f"\n- {s_em} **{v.get('type','').replace('_',' ').title()}** "
+            f"— `{v.get('location', '')}`: {v.get('description', '')}\n"
+            f"  → {v.get('recommendation', '')}"
+        )
+
+    positives = r.get("positive_patterns", [])
+    pos_md = "\n".join(f"- ✅ {p}" for p in positives[:3]) if positives else ""
+
+    priority = r.get("refactoring_priority", "planned")
+    p_emoji  = {"immediate": "🔴", "planned": "🟡", "backlog": "🟢"}.get(priority, "🟡")
+
+    return (
+        f"## 🏗️ Architecture Review\n\n"
+        f"**Health:** {h_emoji} {health.replace('_', ' ').capitalize()}\n"
+        f"**Refactoring Priority:** {p_emoji} {priority.capitalize()}\n\n"
+        f"**Summary:** {r.get('summary', '')}\n"
+        f"\n### Issues Found\n{violations_md or '_No violations found._'}\n"
+        f"\n### ✅ Good Patterns\n{pos_md or '_None identified._'}"
+    )

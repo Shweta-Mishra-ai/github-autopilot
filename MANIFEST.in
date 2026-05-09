@@ -1,0 +1,10 @@
+include README.md
+include LICENSE
+include requirements.txt
+include Procfile
+include render.yaml
+recursive-include app *.py *.yml *.yaml
+recursive-include tests *.py
+global-exclude *.pyc
+global-exclude __pycache__
+global-exclude .env

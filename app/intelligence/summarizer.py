@@ -1,113 +1,134 @@
 """
-Summarizer - app/intelligence/summarizer.py
-V3: AI-powered summarization for PRs, issues, and discussions.
-Uses repo context from embeddings for better summaries.
+app/intelligence/summarizer.py
+V4 Sprint 7: Upgraded PR/issue summarizer.
+
+V3 was too generic. V4:
+  - Structured 5-section summary
+  - Risk-aware summary (flags high-risk changes)
+  - Reviewer-specific tips based on file types changed
 """
 
-from app.ai.client import groq_text
-from app.core.logger import get_logger
+import logging
 
-log = get_logger(__name__)
+from app.ai.router import router
+
+log = logging.getLogger(__name__)
 
 
 def summarize_pr(
-    title: str,
-    description: str,
-    changed_files: list[dict],
-    comments: list[dict],
+    pr: dict = None,
+    files: list = None,
     context: str = "",
+    # Support legacy signature: summarize_pr(title, body, files, repo)
+    title: str = None,
+    body: str = "",
+    repo: str = "",
 ) -> str:
     """
-    Generate a concise PR summary with key changes and decisions.
+    Generate a structured, reviewer-friendly PR summary.
+    Returns markdown string.
+
+    Supports two signatures:
+    - summarize_pr(pr={"title": ..., "body": ...}, files=[...], context="...")
+    - summarize_pr(title="...", body="...", files=[...], repo="...")
     """
-    files_list = "\n".join(
-        f"- {f.get('filename', '')} (+{f.get('additions', 0)} -{f.get('deletions', 0)})"
-        for f in changed_files[:10]
-    )
+    # Handle legacy signature
+    if pr is None and title is not None:
+        pr = {"title": title, "body": body}
+    elif pr is None:
+        pr = {}
+    if files is None:
+        files = []
 
-    comments_text = "\n".join(
-        f"@{c.get('user', {}).get('login', '')}: {c.get('body', '')[:150]}"
-        for c in comments[:10]
-    )
+    try:
+        title    = pr.get("title", "")
+        body     = (pr.get("body") or "")[:800]
+        author   = pr.get("user", {}).get("login", "")
+        base     = pr.get("base", {}).get("ref", "main")
+        head     = pr.get("head", {}).get("ref", "")
 
-    prompt = f"""Summarize this Pull Request concisely.
+        total_add = sum(f.get("additions", 0) for f in files)
+        total_del = sum(f.get("deletions", 0) for f in files)
+        file_list = "\n".join(
+            f"  {f['filename']} (+{f.get('additions',0)} -{f.get('deletions',0)})"
+            for f in files[:10]
+        )
+
+        # Classify file types for reviewer tips
+        has_tests    = any("test" in f.get("filename","") for f in files)
+        has_security = any(
+            any(x in f.get("filename","") for x in ["auth", "security", "crypto", "token", "secret"])
+            for f in files
+        )
+        has_deps     = any(f.get("filename","") in ("requirements.txt","package.json","Pipfile")
+                          for f in files)
+
+        text, _meta = router.ask_text(
+            "Senior engineer. Write concise, structured PR summaries for busy reviewers.",
+            f"""Summarize this PR for reviewers:
 
 Title: {title}
-Description: {description[:500]}
+Author: @{author}
+Branch: {head} → {base}
+Description: {body}
 
-Changed files:
-{files_list}
+Files changed ({len(files)} files, +{total_add} -{total_del}):
+{file_list}
 
-Discussion:
-{comments_text[:1000]}
+{f"Codebase context: {context[:400]}" if context else ""}
 
-{context}
+Write a structured summary with these exact sections:
+## 📋 What This PR Does
+(1-2 sentences: the main purpose)
 
-Write a 3-5 sentence summary covering:
-1. What this PR does
-2. Key files changed
-3. Any important decisions or concerns raised
-"""
+## 🔑 Key Changes
+(2-4 bullet points: most important technical changes)
 
-    try:
-        summary = groq_text(
-            "Senior engineer. Write clear, concise PR summaries.", prompt
+## 🎯 Review Focus
+(1-2 things reviewers should pay close attention to)
+
+{"## ⚠️ Security Review Needed" + chr(10) + "(Note security-sensitive files changed)" if has_security else ""}
+{"## ⚠️ Dependency Changes" + chr(10) + "(Note dependency file changes)" if has_deps else ""}
+{"## ✅ Tests Included" if has_tests else "## ⚠️ No Tests Found"}
+(Coverage note)""",
+            task="pr_summary",
+            max_tokens=600,
         )
-        log.info("summarizer.pr_done")
-        return summary
+        return text
+
     except Exception as e:
-        log.error("summarizer.pr_failed", error=str(e))
-        return "Could not generate summary."
+        log.error(f"summarize_pr failed: {e}")
+        return ""
 
 
-def summarize_issue_thread(title: str, body: str, comments: list[dict]) -> str:
-    """
-    Summarize a long issue discussion thread.
-    """
-    thread = "\n\n".join(
-        f"@{c.get('user', {}).get('login', '')}: {c.get('body', '')[:300]}"
-        for c in comments[:20]
-    )
+def summarize_issue_thread(comments: list, issue: dict) -> str:
+    """Summarize a long issue discussion thread."""
+    try:
+        title     = issue.get("title", "")
+        thread    = "\n\n".join(
+            f"@{c.get('user',{}).get('login','?')}: {c.get('body','')[:300]}"
+            for c in comments[:20]
+        )
 
-    prompt = f"""Summarize this GitHub issue discussion.
+        text, _ = router.ask_text(
+            "Senior engineer. Summarize GitHub discussions concisely.",
+            f"""Summarize this issue discussion:
 
 Issue: {title}
-Description: {body[:400]}
 
-Discussion:
-{thread[:2500]}
+Thread:
+{thread[:3000]}
 
-Write a summary covering:
-1. The core problem or request
-2. Key points raised in discussion
-3. Current status or decision reached (if any)
-"""
-
-    try:
-        summary = groq_text(
-            "Senior engineer. Summarize GitHub discussions clearly.", prompt
+Write a brief summary (3-5 sentences):
+- What the issue is about
+- Key points raised
+- Current status / resolution (if any)
+- Any action items""",
+            task="explain",
+            max_tokens=400,
         )
-        log.info("summarizer.issue_done")
-        return summary
+        return text
+
     except Exception as e:
-        log.error("summarizer.issue_failed", error=str(e))
-        return "Could not generate summary."
-
-
-def summarize_ci_failure(logs: str) -> str:
-    """
-    Analyze CI failure logs and explain root cause + fix.
-    """
-    prompt = f"""Analyze this CI failure log and provide:
-1. Root cause (1 sentence)
-2. Exact fix (code or commands)
-3. Prevention tip
-
-CI Logs:
-{logs[:3000]}
-"""
-    try:
-        return groq_text("DevOps expert. Diagnose CI failures precisely.", prompt)
-    except Exception as e:
-        log.error("summarizer.ci_failed", error=str(e))
-        return "Could not analyze CI failure."
+        log.error(f"summarize_issue_thread failed: {e}")
+        return ""

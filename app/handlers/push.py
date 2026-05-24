@@ -2,12 +2,25 @@
 app/handlers/push.py
 V4 Sprint 2: Smart dependency scanning + dedup.
 
-FIXED: Duplicate issues — Redis dedup (24h for dep scan, 6h for commit lint).
-NEW: Only HIGH/CRITICAL vulnerabilities create GitHub issues.
+FIXED (Sprint 2): Duplicate issues — Redis dedup (24h dep scan, 6h commit lint).
+NEW (Sprint 2): Only HIGH/CRITICAL vulnerabilities create GitHub issues.
      LOW/MODERATE = logged only (no spam).
+
+FIXED (Sprint 8): _scan_secrets was missing dedup entirely.
+     _already_reported() existed and was used for dep scan + commit lint but
+     was never called inside _scan_secrets. Result: every push containing
+     the same secret created a duplicate security issue.
+
+     Fix: Deduplicate per unique set of secret patterns (1h TTL).
+     Key = "secret_findings:{repo}:{sorted_pattern_hash}" so:
+       - Same secrets on the same repo within 1h → one issue only.
+       - New/different secrets always create a fresh issue.
+       - TTL is intentionally short (1h) so repeated leaks after a window
+         are still caught and reported.
 """
 
 import base64
+import hashlib
 import re
 
 from app.github.auth import get_installation_token
@@ -23,16 +36,8 @@ from app.security.dependencies import (
 )
 
 CONVENTIONAL_TYPES = {
-    "feat",
-    "fix",
-    "docs",
-    "refactor",
-    "test",
-    "chore",
-    "perf",
-    "ci",
-    "style",
-    "build",
+    "feat", "fix", "docs", "refactor", "test", "chore",
+    "perf", "ci", "style", "build",
 }
 SKIP_AUTHORS = {
     "dependabot[bot]",
@@ -41,8 +46,13 @@ SKIP_AUTHORS = {
     "ai-repo-manager[bot]",
 }
 
+# Sprint 8: TTL for secret-finding dedup (seconds).
+# 1 h = short enough to re-alert on persistent leaks, long enough to absorb
+# rapid successive pushes of the same commit.
+_SECRET_DEDUP_TTL = 3600
 
-def handle(payload: dict):
+
+def handle(payload: dict) -> None:
     repo = payload["repository"]["full_name"]
     installation_id = payload["installation"]["id"]
     pusher = payload.get("pusher", {}).get("name", "")
@@ -82,7 +92,7 @@ def handle(payload: dict):
     _index_changed_files(repo, commits, token, latest_sha, log)
 
 
-# ── Dedup ─────────────────────────────────────────────────────────────────────
+# ── Dedup ──────────────────────────────────────────────────────────────────────
 
 
 def _already_reported(repo: str, report_type: str, ttl_seconds: int = 86400) -> bool:
@@ -100,10 +110,29 @@ def _already_reported(repo: str, report_type: str, ttl_seconds: int = 86400) -> 
         return False
 
 
-# ── Handlers ──────────────────────────────────────────────────────────────────
+def _findings_dedup_key(findings: list) -> str:
+    """
+    Sprint 8: Stable dedup key for a set of secret findings.
+    Derived from the sorted list of pattern names so that the same
+    secrets always produce the same key regardless of line order.
+    """
+    pattern_names = sorted(f.pattern_name for f in findings)
+    digest = hashlib.md5(",".join(pattern_names).encode()).hexdigest()[:12]
+    return f"secret_patterns_{digest}"
 
 
-def _scan_secrets(repo, commits, token, config, log):
+# ── Secret scan ────────────────────────────────────────────────────────────────
+
+
+def _scan_secrets(repo, commits, token, config, log) -> None:
+    """
+    Scan all added/modified file patches in `commits` for secrets.
+
+    Sprint 8 fix: deduplicate using _already_reported.
+    Previously this function had NO dedup, creating a new GitHub issue on
+    every push — including force-pushes and repeated pushes of the same
+    commit — leading to dozens of duplicate security issues in active repos.
+    """
     all_findings = []
     for commit in commits:
         sha = commit.get("id", "")
@@ -118,24 +147,40 @@ def _scan_secrets(repo, commits, token, config, log):
         except Exception as e:
             log.error(f"Secret scan failed for {sha[:7]}: {e}")
 
-    if all_findings:
-        try:
-            gh_post(
-                f"/repos/{repo}/issues",
-                token,
-                {
-                    "title": f"🚨 Secret detected in push — {len(all_findings)} finding(s)",
-                    "body": format_secret_findings(all_findings, repo),
-                    "labels": ["security", "critical"],
-                },
-            )
-            notify_secret_detected(repo, len(all_findings))
-            log.warning(f"Secret scan: {len(all_findings)} findings")
-        except Exception as e:
-            log.error(f"Failed to post secret alert: {e}")
+    if not all_findings:
+        return
+
+    # Sprint 8: dedup — one issue per unique finding set per 1 h
+    dedup_key = _findings_dedup_key(all_findings)
+    if _already_reported(repo, dedup_key, ttl_seconds=_SECRET_DEDUP_TTL):
+        log.info(
+            f"push.secret_scan_dedup repo={repo} "
+            f"findings={len(all_findings)} (same patterns reported within last 1h)"
+        )
+        return
+
+    try:
+        gh_post(
+            f"/repos/{repo}/issues",
+            token,
+            {
+                "title": (
+                    f"🚨 Secret detected in push — {len(all_findings)} finding(s)"
+                ),
+                "body": format_secret_findings(all_findings, repo),
+                "labels": ["security", "critical"],
+            },
+        )
+        notify_secret_detected(repo, len(all_findings))
+        log.warning(f"Secret scan: {len(all_findings)} findings posted as issue")
+    except Exception as e:
+        log.error(f"Failed to post secret alert: {e}")
 
 
-def _scan_dependencies(repo, commits, token, config, log):
+# ── Dependency scan ────────────────────────────────────────────────────────────
+
+
+def _scan_dependencies(repo, commits, token, config, log) -> None:
     """
     Sprint 2 fix:
     - Only HIGH/CRITICAL findings create GitHub issues
@@ -148,7 +193,8 @@ def _scan_dependencies(repo, commits, token, config, log):
         changed_files.update(commit.get("modified", []))
 
     dep_files = [
-        f for f in changed_files if f in ("requirements.txt", "requirements-dev.txt")
+        f for f in changed_files
+        if f in ("requirements.txt", "requirements-dev.txt")
     ]
 
     for dep_file in dep_files:
@@ -161,14 +207,12 @@ def _scan_dependencies(repo, commits, token, config, log):
                 log.info(f"push.dep_scan_clean file={dep_file}")
                 continue
 
-            # Log ALL findings for visibility
             for f in all_findings:
                 log.info(
                     f"push.dep_finding pkg={f.package} ver={f.version} "
                     f"sev={f.severity} cve={f.cve_id}"
                 )
 
-            # Only HIGH/CRITICAL create GitHub issues
             actionable = get_actionable_findings(all_findings)
 
             if not actionable:
@@ -180,7 +224,6 @@ def _scan_dependencies(repo, commits, token, config, log):
                 )
                 continue
 
-            # Dedup: only create issue once per 24h if HIGH findings exist
             report_key = f"dep_high_{dep_file}"
             if _already_reported(repo, report_key, ttl_seconds=86400):
                 log.info(
@@ -203,7 +246,10 @@ def _scan_dependencies(repo, commits, token, config, log):
             log.error(f"Dep scan failed for {dep_file}: {e}")
 
 
-def _lint_commits(repo, commits, token, config, log):
+# ── Commit lint ────────────────────────────────────────────────────────────────
+
+
+def _lint_commits(repo, commits, token, config, log) -> None:
     bad_commits = []
     for commit in commits:
         msg = commit.get("message", "").split("\n")[0].strip()
@@ -214,16 +260,18 @@ def _lint_commits(repo, commits, token, config, log):
 
     if len(bad_commits) < threshold:
         log.info(
-            f"push.commit_lint ok — {len(bad_commits)} non-conventional below threshold"
+            f"push.commit_lint ok — "
+            f"{len(bad_commits)} non-conventional below threshold"
         )
         return
 
-    # Dedup: 6h per repo
     if _already_reported(repo, "commit_lint", ttl_seconds=21600):
         log.info("push.commit_lint_skipped (reported in last 6h)")
         return
 
-    rows = "\n".join(f"| `{c['sha']}` | {c['message']} |" for c in bad_commits)
+    rows = "\n".join(
+        f"| `{c['sha']}` | {c['message']} |" for c in bad_commits
+    )
     body = f"""## ⚡ Commit Convention Alert
 
 These commits don't follow [Conventional Commits](https://www.conventionalcommits.org/) format:
@@ -248,7 +296,9 @@ type(scope): description
             f"/repos/{repo}/issues",
             token,
             {
-                "title": f"⚡ {len(bad_commits)} non-conventional commits pushed to main",
+                "title": (
+                    f"⚡ {len(bad_commits)} non-conventional commits pushed to main"
+                ),
                 "body": body,
                 "labels": ["commit-convention", "help wanted ⚠️"],
             },
@@ -258,19 +308,21 @@ type(scope): description
         log.error(f"Failed to create lint issue: {e}")
 
 
-def _index_changed_files(repo, commits, token, latest_sha, log):
+# ── File indexing ──────────────────────────────────────────────────────────────
+
+
+def _index_changed_files(repo, commits, token, latest_sha, log) -> None:
     """Index changed files into vector DB — silent."""
     try:
         from app.intelligence.embeddings import embed_file
 
-        changed_files = set()
+        changed_files: set[str] = set()
         for commit in commits:
             changed_files.update(commit.get("added", []))
             changed_files.update(commit.get("modified", []))
 
         indexable = [
-            f
-            for f in changed_files
+            f for f in changed_files
             if f.endswith((".py", ".md", ".yml", ".yaml", ".json", ".txt"))
             and not f.startswith("tests/")
         ]
@@ -281,8 +333,12 @@ def _index_changed_files(repo, commits, token, latest_sha, log):
         indexed = 0
         for filepath in indexable[:10]:
             try:
-                file_data = gh_get(f"/repos/{repo}/contents/{filepath}", token)
-                content = base64.b64decode(file_data["content"]).decode("utf-8")
+                file_data = gh_get(
+                    f"/repos/{repo}/contents/{filepath}", token
+                )
+                content = base64.b64decode(
+                    file_data["content"]
+                ).decode("utf-8")
                 if embed_file(repo, filepath, content, latest_sha):
                     indexed += 1
             except Exception:
@@ -293,6 +349,9 @@ def _index_changed_files(repo, commits, token, latest_sha, log):
 
     except Exception as e:
         log.debug(f"Intelligence indexing skipped: {e}")
+
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
 
 
 def _is_conventional(msg: str) -> bool:

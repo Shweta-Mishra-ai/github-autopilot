@@ -1,183 +1,375 @@
-# AI Repo Manager V4
+<div align="center">
 
-> Production-grade GitHub automation bot. Installs as a GitHub App — no polling, no setup beyond configuration.
-> Handles PR analysis, code review, issue triage, auto-fix, security scanning, analytics, and repository health monitoring.
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:6366f1,50:8b5cf6,100:06b6d4&height=220&section=header&text=GitHub%20Autopilot&fontSize=56&fontColor=ffffff&fontAlignY=38&desc=Production-grade%20AI%20automation%20for%20every%20GitHub%20repo&descAlignY=60&descSize=18&animation=fadeIn" width="100%"/>
 
-![version](https://img.shields.io/badge/version-4.0.0-blue)
-![server](https://img.shields.io/badge/server-live-brightgreen)
-![tests](https://img.shields.io/badge/tests-245%2B%20passing-brightgreen)
-![GitHub App](https://img.shields.io/badge/GitHub-App-black)
-![model](https://img.shields.io/badge/LLM-Groq%20%7C%20Gemini%20%7C%20OpenRouter-orange)
-![license](https://img.shields.io/badge/license-MIT-green)
-![author](https://img.shields.io/badge/author-Shweta%20Mishra-purple)
+<br/>
+
+[![Version](https://img.shields.io/badge/version-4.7.0-6366f1?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Shweta-Mishra-ai/github-autopilot)
+[![Tests](https://img.shields.io/badge/tests-306%20passing-22c55e?style=for-the-badge&logo=pytest&logoColor=white)](https://github.com/Shweta-Mishra-ai/github-autopilot/actions)
+[![Live](https://img.shields.io/badge/server-live-22c55e?style=for-the-badge&logo=render&logoColor=white)](https://github-autopilot-1.onrender.com)
+[![Python](https://img.shields.io/badge/python-3.11+-3b82f6?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![Redis](https://img.shields.io/badge/redis-backed-ef4444?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io)
+[![License](https://img.shields.io/badge/license-MIT-a855f7?style=for-the-badge)](LICENSE)
+
+<br/>
+
+[![LLM](https://img.shields.io/badge/LLM-Groq%20%7C%20Gemini%20%7C%20OpenRouter-f97316?style=flat-square&logo=openai&logoColor=white)]()
+[![Flask](https://img.shields.io/badge/Flask-2.x-000000?style=flat-square&logo=flask&logoColor=white)]()
+[![GitHub App](https://img.shields.io/badge/GitHub-App-181717?style=flat-square&logo=github&logoColor=white)](https://github.com/apps/ai-repo-manager)
+[![Ruff](https://img.shields.io/badge/linted-ruff-ef4444?style=flat-square)]()
+[![Security](https://img.shields.io/badge/security-hardened-22c55e?style=flat-square&logo=shield&logoColor=white)]()
+[![Sprints](https://img.shields.io/badge/sprints%20completed-8-8b5cf6?style=flat-square)]()
+
+<br/>
+
+> **GitHub Autopilot** is a self-hosted GitHub App that installs in one click and gives every repository an AI co-pilot.
+> It reviews PRs, triages issues, scans for secrets and vulnerabilities, fixes bugs, and responds to **26 slash commands** —
+> all powered by a multi-provider LLM router with circuit breakers, hallucination detection, and rate limiting.
+>
+> 🏆 Built across **8 sprints** from zero to production — fully solo, fully shipped.
+
+<br/>
+
+| 🚀 [Live Server](https://github-autopilot-1.onrender.com) | 🤖 [Install App](https://github.com/apps/ai-repo-manager) | 📊 [Health Check](https://github-autopilot-1.onrender.com/health) | 📖 [Docs](docs/) |
+|:---:|:---:|:---:|:---:|
+
+</div>
 
 ---
 
-## Quick Links
+## 🏆 8-Sprint Journey — Zero to Production
 
-| Resource | Link |
-|----------|------|
-| 🚀 Live Server | [github-autopilot-1.onrender.com](https://github-autopilot-1.onrender.com) |
-| 🤖 GitHub App | [github.com/apps/ai-repo-manager](https://github.com/apps/ai-repo-manager) |
-| 📦 Repository | [Shweta-Mishra-ai/github-autopilot](https://github.com/Shweta-Mishra-ai/github-autopilot) |
-| 📊 Health Check | [github-autopilot-1.onrender.com/health](https://github-autopilot-1.onrender.com/health) |
+> This project was built sprint-by-sprint, each adding a new layer of intelligence and reliability. Here's the full story:
+
+| Sprint | What Was Built |
+|--------|----------------|
+| **Sprint 1** | 🧱 Foundation — Flask webhook server, threading, bot-spam prevention, event deduplication |
+| **Sprint 2** | 🤖 Multi-provider LLM router, per-provider circuit breakers, Gemini Flash fallback |
+| **Sprint 3** | 🧠 Hallucination detection, LLM quality scoring, `/fix` command v2 |
+| **Sprint 4** | 💥 PR blast radius mapping, `/impact`, `/secfull`, CI failure handler |
+| **Sprint 5** | 🔁 Retry + exponential backoff, `/health` endpoint, repo snapshots + `/rollback` |
+| **Sprint 6** | 📊 Analytics system, `/report`, `/autofix` engine — auto-fix PRs end-to-end |
+| **Sprint 7** | ⚡ `/perf`, `/arch`, vector context (Qdrant), learning system, **26 slash commands** total |
+| **Sprint 8** | 🔐 Full security hardening — webhook fail-closed, HMAC verification, auth enforcement, bounded thread pool, 35+ secret patterns, entropy gating, **306 tests** |
 
 ---
 
-## What V4 Adds Over V3
+## ✨ What It Does
 
-| Feature | Description |
+<table>
+<tr>
+<td width="50%">
+
+**🔍 Automatic PR Review**
+- Rewrites vague PR titles
+- Fills empty descriptions
+- Rates code quality 1–10
+- Detects test coverage gaps
+- Shows blast radius by layer
+
+</td>
+<td width="50%">
+
+**🐛 Issue Triage**
+- Priority: critical → low
+- Complexity + time estimate
+- Auto-labels on open
+- Personalized welcome message
+- Asks targeted follow-up questions
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**🔒 Security Scanning**
+- 35+ secret patterns detected
+- CVE vulnerability scan
+- GitHub Security API integration
+- Deduped alerts (zero spam)
+- Entropy-gated false positives
+
+</td>
+<td width="50%">
+
+**🤖 Slash Commands (26)**
+- `/fix` `/autofix` `/explain`
+- `/improve` `/test` `/docs`
+- `/merge` `/release` `/rollback`
+- `/perf` `/arch` `/secfull`
+- ...and 14 more
+
+</td>
+</tr>
+</table>
+
+---
+
+## 🏗️ Architecture
+
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                           GITHUB WEBHOOK                                    ║
+║              POST /webhook  ·  X-Hub-Signature-256 verified                ║
+╚══════════════════════════════╤═══════════════════════════════════════════════╝
+                               │
+                               ▼
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                         server.py  (Flask)                                  ║
+║                                                                              ║
+║   ① Startup check — refuses to boot without GITHUB_WEBHOOK_SECRET           ║
+║   ② HMAC-SHA256 signature  →  fail closed on empty secret                   ║
+║   ③ IP rate limit  →  100 req/min  ·  Redis-backed sliding window           ║
+║   ④ Replay protection  →  timestamp + idempotency fingerprint               ║
+║   ⑤ Bot loop guard  →  [bot] suffix + sender type check                     ║
+║   ⑥ ACK 202 immediately  →  dispatch to bounded ThreadPoolExecutor          ║
+║                              (6 workers · 50-job queue · drops + logs)       ║
+╚══════════════════════════════╤═══════════════════════════════════════════════╝
+                               │  ThreadPoolExecutor  (max_workers=6)
+          ┌────────────────────┼────────────────────────────┐
+          ▼                    ▼                            ▼
+  pull_request.py         comments.py                   push.py
+  issues.py               (26 slash cmds)               ci.py
+          │                    │                            │
+          │         ┌──────────▼──────────────┐            │
+          │         │  authorization.py        │            │
+          │         │  • check_command_        │            │
+          │         │    permission()          │            │
+          │         │  • write/maintain/admin  │            │
+          │         │  • 5-min cache (RLock)   │            │
+          │         └──────────┬──────────────┘            │
+          └──────────────────┬─┘────────────────────────────┘
+                             │
+                             ▼
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                          AI Router  (app/ai/router.py)                      ║
+║                                                                              ║
+║   Task Classification  ──►  fast · standard · deep · long-context           ║
+║                                                                              ║
+║   ┌────────────────┐   ┌────────────────┐   ┌────────────────┐             ║
+║   │  Groq 70B      │──►│  Groq 8B       │──►│  Gemini Flash  │──► OpenRouter║
+║   │  (primary)     │   │  (fast tasks)  │   │  (long ctx)    │   (fallback) ║
+║   │  5K req/day    │   │  12K req/day   │   │  1.5K req/day  │             ║
+║   └───────┬────────┘   └───────┬────────┘   └───────┬────────┘             ║
+║           └────────────────────┴─────────────────────┘                      ║
+║                                │                                             ║
+║   ┌─────────────────────────────────────────────────────────┐               ║
+║   │  Per-provider Circuit Breaker                           │               ║
+║   │  CLOSED ──► OPEN ──► HALF_OPEN ──► CLOSED              │               ║
+║   │  5 failures → open · 60s cooldown · test one call      │               ║
+║   └─────────────────────────────────────────────────────────┘               ║
+║                                │                                             ║
+║   ┌─────────────────────────────────────────────────────────┐               ║
+║   │  Hallucination Detector                                  │               ║
+║   │  Confidence score · Warning phrases · Placeholder check │               ║
+║   │  Low confidence → fallback provider · never post junk  │               ║
+║   └─────────────────────────────────────────────────────────┘               ║
+╚══════════════════════════════╤═══════════════════════════════════════════════╝
+                               │
+          ┌────────────────────┼──────────────────────────────┐
+          ▼                    ▼                              ▼
+╔══════════════╗    ╔══════════════════════╗    ╔════════════════════════╗
+║    Redis     ║    ║   GitHub REST API    ║    ║  enhanced_secrets.py   ║
+║              ║    ║                      ║    ║                        ║
+║ Idempotency  ║    ║  Issues · PRs        ║    ║  35+ patterns          ║
+║ Circuit state║    ║  Comments · Labels   ║    ║  Entropy gating        ║
+║ Snapshots    ║    ║  Releases · Actions  ║    ║  False-positive filter ║
+║ Analytics    ║    ║  Security APIs       ║    ║  Severity: crit/hi/med ║
+║ Rate limits  ║    ║  Webhooks            ║    ║  No scannable literals ║
+║ Config cache ║    ╚══════════════════════╝    ╚════════════════════════╝
+║ Budget track ║
+╚══════════════╝
+```
+
+---
+
+## ⚡ Quick Start
+
+```bash
+# 1. Clone
+git clone https://github.com/Shweta-Mishra-ai/github-autopilot.git
+cd github-autopilot
+
+# 2. Install
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+
+# 3. Configure
+cp .env.example .env   # fill in your keys
+
+# 4. Run
+flask --app server run --port 5000
+
+# 5. Run tests
+python -m pytest -v    # 306 passing
+```
+
+---
+
+## 🤖 Slash Commands (26 Total)
+
+Comment any command on a GitHub issue or PR to activate it.
+
+### 🔧 Code Quality
+| Command | What it does |
 |---------|-------------|
-| 🧠 Multi-Provider LLM | Groq 70B → Groq 8B → Gemini Flash → OpenRouter fallback chain |
-| 🔁 Auto-Fallback | Circuit breakers per provider — zero downtime when one fails |
-| 🤖 Hallucination Detection | Validates AI responses before posting to GitHub |
-| 📸 Snapshot & Rollback | `/rollback` restores repo state before bot actions |
-| 🔧 Auto-Fix Engine | `/autofix` creates fix branch + PR automatically |
-| 💥 Blast Radius | `/impact` shows which layers a PR affects |
-| 📊 Analytics & Reporting | `/report` — PR velocity, issue resolution, code quality grade |
-| 🔒 GitHub Security APIs | Dependabot + CodeQL + Secret Scanning via `/secfull` |
-| 🔔 Rich Notifications | Color-coded Discord embeds with severity levels |
-| 💾 API Caching | Redis-backed GitHub API cache — 3-5x fewer API calls |
-| 🧵 Conversation Context | Bot remembers previous commands on same issue |
-| 🛡️ Injection Prevention | Input sanitization on every LLM call |
-| ♻️ Retry + Backoff | Auto-retry on GitHub 5xx errors |
-| 🐛 Bot Spam Prevention | Dedup — bot never posts twice on same PR |
+| `/fix` | Root cause analysis + production-ready fix + verification test |
+| `/autofix` | Creates fix branch + commits the fix + opens PR automatically |
+| `/apply` | Auto-rewrites non-conventional commit messages across branch |
+| `/improve` | Scored improvements — performance, security, readability, structure |
+| `/refactor` | Structural refactor suggestions with before/after code |
+| `/perf` | Time complexity analysis, N+1 detection, optimization suggestions |
+
+### 🧠 Understanding
+| Command | What it does |
+|---------|-------------|
+| `/explain` | 5-section plain-English explanation: What / How / Why / Example / Pitfalls |
+| `/summarize` | Condenses long PR/issue discussion threads |
+| `/arch` | Architecture review — layer violations, coupling, god classes |
+| `/impact` | Blast radius map — which system layers this PR touches |
+| `/gaps` | Test coverage gaps with risk-rated suggestions |
+| `/ci` | CI failure root cause + concrete fix steps |
+
+### 📄 Documentation & Release
+| Command | What it does |
+|---------|-------------|
+| `/docs` | Generates docstrings + README section |
+| `/test` | Generates pytest test suite for changed code |
+| `/changelog` | AI-written CHANGELOG entry from commit history |
+| `/release` | Creates GitHub draft release with AI release notes |
+| `/version` | Tag history + semantic versioning status |
+
+### 🔒 Security & Health
+| Command | What it does |
+|---------|-------------|
+| `/security` | Scans PR diff for secrets + vulnerable dependencies |
+| `/secfull` | Full report: Dependabot + CodeQL + Secret Scanning APIs |
+| `/health` | Repo health grade A–F with ranked recommendations |
+
+### ⚙️ Operations
+| Command | What it does |
+|---------|-------------|
+| `/merge` | Merges PR after guardrails pass (CI green, reviews, no conflicts) |
+| `/rollback` | Lists snapshots or restores repo state to pre-bot snapshot |
+| `/runtests` | Triggers GitHub Actions test workflow via workflow_dispatch |
+| `/report` | Weekly analytics: PR velocity, issue resolution, quality grade |
+| `/budget` | Live LLM token usage and cost per provider |
+| `/notify` | Sends issue/PR to Discord with color-coded severity embed |
+
+> 🔐 `/merge` `/rollback` `/release` `/autofix` `/apply` `/secfull` require **write/maintain/admin** access.
+> Rate limit: **10 commands per user per hour** per repo.
 
 ---
 
-## Architecture
+## 🔐 Security Model
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        GitHub Webhook                           │
-│                  POST /webhook (signature verified)             │
-└─────────────────────────┬───────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      server.py (Flask)                          │
-│  • Signature verification (HMAC SHA-256)                       │
-│  • IP rate limiting (100 req/min)                              │
-│  • Idempotency check (SHA-256 fingerprint)                     │
-│  • Dispatch to background thread (< 50ms ack)                  │
-└──────────────┬──────────────────────────────────────────────────┘
-               │ Thread (daemon=False)
-               ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Event Handlers                             │
-│                                                                 │
-│  pull_request.py  →  PR analysis, blast radius, test gaps      │
-│  issues.py        →  Issue triage, labeling, welcome           │
-│  comments.py      →  22 slash commands                         │
-│  push.py          →  Commit lint, dep scan, secret scan        │
-│  ci.py            →  CI failure analysis                       │
-└──────────────┬──────────────────────────────────────────────────┘
-               │
-               ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                       AI Router                                 │
-│                                                                 │
-│  Task Classification  →  fast / standard / deep / long        │
-│                                                                 │
-│  Provider Chain:                                                │
-│  1. Groq Llama 70B   (primary — best quality)                  │
-│  2. Groq Llama 8B    (fast tasks)                              │
-│  3. Gemini Flash     (long context — up to 1M tokens)          │
-│  4. OpenRouter       (emergency free fallback)                  │
-│                                                                 │
-│  Circuit Breaker per provider — auto skip if unhealthy         │
-│  Safety sanitizer — injection detection before every call      │
-│  Hallucination detector — validates response quality           │
-└──────────────┬──────────────────────────────────────────────────┘
-               │
-               ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Redis (Free Tier)                            │
-│                                                                 │
-│  • Idempotency keys      • Circuit breaker state               │
-│  • Snapshot storage      • Conversation context                │
-│  • Analytics buckets     • API response cache                  │
-│  • Rate limit tracking   • Budget tracking                     │
-└─────────────────────────────────────────────────────────────────┘
+Threat                    Mitigation
+─────────────────────     ──────────────────────────────────────────────
+Forged webhooks           HMAC-SHA256  ·  fail closed on empty secret
+                          RuntimeError at boot if secret not configured
+
+Replay attacks            Timestamp header check + SHA-256 delivery dedup
+                          Rejects webhooks older than 5 minutes
+
+Webhook floods            IP rate limit: 100 req/min (Redis sliding window)
+                          ThreadPoolExecutor cap: 6 workers, 50 queue
+
+Privilege escalation      Authorization check before every restricted command
+                          GitHub collaborator API  ·  5-min permission cache
+                          Fail closed on API error (deny if unsure)
+
+Prompt injection          Input sanitization  ·  blocklist + heuristic scan
+                          Max 2000 chars per context field
+
+Secret leaks in code      35+ pattern scanner  ·  entropy gating
+                          Zero scannable literals in source files
+                          Test files / docs automatically skipped
+
+Bot feedback loops        sender.type == Bot  ·  [bot] suffix check
+                          Own app login set  ·  SKIP_AUTHORS list
+
+Command spam              10 commands / user / hour via Redis counter
 ```
 
 ---
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 github-autopilot/
 │
-├── server.py                      # Webhook receiver + thread dispatcher
-├── Procfile                       # gunicorn single-service config
-├── render.yaml                    # Render deployment (web + Redis)
-├── requirements.txt               # All dependencies
+├── server.py                      # Entry point — webhook security + bounded dispatch
+├── Procfile                       # gunicorn config
+├── render.yaml                    # Render deploy (web + Redis)
+├── requirements.txt
 │
 ├── app/
-│   │
 │   ├── ai/                        # LLM Layer
-│   │   ├── router.py              # Smart task router (4 providers)
-│   │   ├── circuit_breaker.py     # Per-provider circuit breakers
-│   │   ├── hallucination.py       # Response quality validator
-│   │   ├── metrics.py             # Usage + cost tracking
+│   │   ├── router.py              # Task router (4 providers, smart classification)
+│   │   ├── circuit_breaker.py     # Per-provider CLOSED/OPEN/HALF_OPEN state machine
+│   │   ├── hallucination.py       # Response quality validator (confidence scoring)
+│   │   ├── metrics.py             # Token usage + cost tracking
 │   │   ├── validator.py           # JSON schema validation
 │   │   └── providers/
-│   │       ├── base.py            # Abstract LLMProvider class
+│   │       ├── base.py            # Abstract LLMProvider + LLMResponse
 │   │       ├── groq.py            # Groq Llama 70B + 8B
 │   │       ├── gemini.py          # Google Gemini Flash
-│   │       └── openrouter.py      # OpenRouter free fallback
+│   │       └── openrouter.py      # OpenRouter emergency fallback
 │   │
-│   ├── core/                      # Foundation (no side effects)
-│   │   ├── config.py              # YAML config with safe defaults
-│   │   ├── analytics.py           # PR/issue/bot usage tracking
+│   ├── core/                      # Foundation — no side effects, no GitHub calls
+│   │   ├── authorization.py       # ✨ Sprint 8: command permission enforcement
+│   │   ├── config.py              # YAML config loader (thread-safe 5-min cache)
+│   │   ├── thread_pool.py         # ✨ Sprint 8: bounded ThreadPoolExecutor
+│   │   ├── webhook_security.py    # ✨ Sprint 8: full webhook verification pipeline
+│   │   ├── analytics.py           # PR/issue/command usage tracking
 │   │   ├── cache.py               # Redis API response cache
 │   │   ├── confidence.py          # Per-action confidence scoring
-│   │   ├── context_manager.py     # Conversation context (Redis)
+│   │   ├── context_manager.py     # Conversation context (Redis-backed)
 │   │   ├── guardrails.py          # Deterministic safety checks
-│   │   ├── health_check.py        # System health + degraded mode
 │   │   ├── idempotency.py         # SHA-256 event deduplication
-│   │   ├── logger.py              # Structured event logging
-│   │   ├── metrics.py             # In-memory counters
-│   │   ├── safe_import.py         # Defensive import wrapper
-│   │   └── snapshot.py            # Repo snapshot + rollback
+│   │   ├── logger.py              # Structured event logger
+│   │   ├── redis_client.py        # Singleton connection pool + FakeRedis fallback
+│   │   └── snapshot.py            # Repo snapshot store + rollback engine
 │   │
 │   ├── github/                    # GitHub API Layer
-│   │   ├── auth.py                # JWT + installation tokens
-│   │   ├── client.py              # HTTP client (retry + backoff)
-│   │   ├── notifications.py       # Discord/Slack rich embeds
-│   │   └── rate_limit.py          # Rate limit tracking + wait
+│   │   ├── auth.py                # JWT + installation token exchange
+│   │   ├── client.py              # HTTP client (retry + exponential backoff)
+│   │   ├── notifications.py       # Discord/Slack rich embed sender
+│   │   └── rate_limit.py          # API quota tracking + wait logic
 │   │
 │   ├── handlers/                  # Event Handlers
-│   │   ├── autofix.py             # Auto-fix engine (creates PRs)
-│   │   ├── ci.py                  # CI failure handler
-│   │   ├── comments.py            # 22 slash commands
-│   │   ├── issues.py              # Issue triage
-│   │   ├── pull_request.py        # PR analysis + blast radius
-│   │   ├── push.py                # Commit lint + security scan
-│   │   └── schedule.py            # Scheduled tasks (weekly digest)
+│   │   ├── autofix.py             # Auto-fix engine (diff → branch → PR)
+│   │   ├── ci.py                  # CI failure handler + pattern tracking
+│   │   ├── comments.py            # 26 slash commands dispatcher
+│   │   ├── issues.py              # Issue triage + labeling
+│   │   ├── pull_request.py        # PR analysis + blast radius + code review
+│   │   └── push.py                # Commit lint + dep scan + secret scan (deduped)
 │   │
 │   ├── intelligence/              # Vector Context Layer
-│   │   ├── embeddings.py          # Code embedding (sentence-transformers)
-│   │   ├── retrieval.py           # Qdrant/ChromaDB vector search
-│   │   └── summarizer.py          # PR/issue summarization
+│   │   ├── embeddings.py          # Code embedding (sentence-transformers, local)
+│   │   ├── retrieval.py           # Qdrant/ChromaDB similarity search
+│   │   └── summarizer.py          # Thread + PR summarization
 │   │
 │   ├── security/                  # Security Layer
-│   │   ├── dependencies.py        # CVE vulnerability scanner
-│   │   ├── licenses.py            # License compliance
-│   │   ├── scanner.py             # GitHub Security APIs
-│   │   └── secrets.py             # Secret detection in diffs
-│   │
-│   ├── queue/                     # Event Queue
-│   │   ├── producer.py            # Enqueue webhook events
-│   │   └── consumer.py            # Dequeue and process
+│   │   ├── enhanced_secrets.py    # ✨ Sprint 8: 35+ patterns, entropy, false-pos guard
+│   │   ├── dependencies.py        # CVE scanner (requirements.txt)
+│   │   ├── licenses.py            # License compliance checker
+│   │   └── scanner.py             # GitHub Security APIs (Dependabot, CodeQL)
 │   │
 │   └── storage/                   # Persistence
 │       ├── events.py              # SQLite event log
-│       └── fixtures.py            # Test fixture capture/replay
+│       └── fixtures.py            # Test fixture capture + replay
 │
-└── tests/                         # 245+ tests (no network required)
+└── tests/                         # 306 tests — zero network calls required
+    ├── test_webhook_security.py   # ✨ Sprint 8: 35 tests
+    ├── test_enhanced_secrets.py   # ✨ Sprint 8: 26 tests
+    ├── test_push.py               # ✨ Sprint 8: 25 tests (incl. dedup regression)
+    ├── test_pull_request.py       # ✨ Sprint 8: 22 tests
+    ├── test_issues.py             # ✨ Sprint 8: 15 tests
+    ├── test_ci.py                 # ✨ Sprint 8: 18 tests
+    ├── test_autofix.py            # 15 tests
     ├── test_analytics.py
-    ├── test_autofix.py
     ├── test_comments.py
     ├── test_confidence.py
     ├── test_guardrails.py
@@ -192,144 +384,55 @@ github-autopilot/
 
 ---
 
-## Slash Commands (22 Total)
-
-| Command | Description |
-|---------|-------------|
-| `/fix` | Root cause + production-ready fix + test |
-| `/autofix` | Create fix branch + PR automatically |
-| `/apply` | Auto-fix non-conventional commit messages |
-| `/explain` | 5-section explanation: What/How/Why/Example/Pitfalls |
-| `/improve` | Scored improvements with priority and before/after |
-| `/test` | Generate pytest/jest test suite |
-| `/docs` | Generate docstrings + README sections |
-| `/refactor` | Structural improvements (behavior unchanged) |
-| `/health` | Repo health graded A–F with recommendations |
-| `/version` | Tag history + semantic versioning guide |
-| `/merge` | Merge PR after guardrail conditions pass |
-| `/summarize` | Summarize long PR/issue thread |
-| `/ci` | Analyze CI failure — root cause + fix |
-| `/security` | Security scan on PR changed files |
-| `/secfull` | Full report: Dependabot + CodeQL + Secret Scanning |
-| `/gaps` | Detect test coverage gaps in changed code |
-| `/changelog` | Generate CHANGELOG entry from commits |
-| `/budget` | Live LLM usage + cost per provider |
-| `/rollback` | Show snapshots / restore repo state |
-| `/impact` | Blast radius: which layers this PR affects |
-| `/report` | Weekly analytics: PR velocity, quality grade |
-| `/notify` | Send issue/PR to Discord |
-
----
-
-## Environment Variables
+## ⚙️ Environment Variables
 
 | Variable | Required | Description |
-|----------|----------|-------------|
+|----------|:--------:|-------------|
 | `GITHUB_APP_ID` | ✅ | Numeric App ID from GitHub App settings |
-| `GITHUB_PRIVATE_KEY` | ✅ | Contents of `.pem` private key file |
-| `GITHUB_WEBHOOK_SECRET` | ✅ | Webhook secret (set in GitHub App) |
+| `GITHUB_PRIVATE_KEY` | ✅ | Contents of `.pem` private key (paste full PEM) |
+| `GITHUB_WEBHOOK_SECRET` | ✅ | Webhook secret — **app refuses to start without this** |
 | `GROQ_API_KEY` | ✅ | Primary LLM — [console.groq.com](https://console.groq.com) (free) |
-| `REDIS_URL` | ✅ | Redis connection string (Render provides this) |
-| `GEMINI_API_KEY` | ⚡ | Gemini Flash fallback — [aistudio.google.com](https://aistudio.google.com/app/apikey) (free) |
-| `OPENROUTER_API_KEY` | ⚡ | Emergency fallback — [openrouter.ai](https://openrouter.ai) (free tier) |
+| `REDIS_URL` | ✅ | Redis connection string — Render provides this |
+| `GEMINI_API_KEY` | ⚡ | Gemini Flash fallback — [aistudio.google.com](https://aistudio.google.com/app/apikey) |
+| `OPENROUTER_API_KEY` | ⚡ | Emergency fallback — [openrouter.ai](https://openrouter.ai) |
 | `DISCORD_WEBHOOK_URL` | 📢 | Discord notifications |
 | `SLACK_WEBHOOK_URL` | 📢 | Slack notifications |
-| `QDRANT_URL` | 🧠 | Vector DB for code context — [qdrant.tech](https://qdrant.tech) (free tier) |
+| `QDRANT_URL` | 🧠 | Vector DB — [qdrant.tech](https://qdrant.tech) free tier |
 | `QDRANT_API_KEY` | 🧠 | Qdrant Cloud API key |
 | `METRICS_AUTH_TOKEN` | 🔒 | Protects `/metrics` endpoint |
+| `MAX_DISPATCH_WORKERS` | ⚙️ | Thread pool size (default: 6) |
 | `REPO_DAILY_AI_LIMIT` | ⚙️ | Max AI calls per repo per day (default: 150) |
 
-> ✅ Required · ⚡ Recommended · 📢 Optional · 🧠 Optional (enables vector context) · 🔒 Optional
+> ✅ Required &nbsp;·&nbsp; ⚡ Recommended &nbsp;·&nbsp; 📢 Optional &nbsp;·&nbsp; 🧠 Enables vector context &nbsp;·&nbsp; 🔒 Security &nbsp;·&nbsp; ⚙️ Tuning
 
 ---
 
-## Local Setup
-
-### Prerequisites
-- Python 3.11+
-- Redis (local or cloud)
-- GitHub App credentials
-
-### Step 1 — Clone & Install
+## 🚀 Deploy to Render (Free Tier)
 
 ```bash
-git clone https://github.com/Shweta-Mishra-ai/github-autopilot.git
-cd github-autopilot
-python -m venv venv
-source venv/bin/activate      # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-```
+# 1. Push to GitHub
 
-### Step 2 — Environment
+# 2. Render → New Web Service → connect repo
+#    Build:  pip install -r requirements.txt
+#    Start:  gunicorn server:app --workers 2 --timeout 120 --bind 0.0.0.0:$PORT
+#    Health: /health
 
-```bash
-cp .env.example .env
-# Edit .env with your credentials
-```
+# 3. Render → New → Redis (free) → copy URL → REDIS_URL env var
 
-`.env` file:
-```env
-GITHUB_APP_ID=your_app_id
-GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
-GITHUB_WEBHOOK_SECRET=your_webhook_secret
-GROQ_API_KEY=gsk_...
-REDIS_URL=redis://localhost:6379/0
-GEMINI_API_KEY=AIza...
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
-```
+# 4. Add all env vars in Render → Environment
 
-### Step 3 — Run
-
-```bash
-# Development
-flask --app server run --port 5000
-
-# Production (same as Render)
-gunicorn server:app --workers 2 --timeout 120 --bind 0.0.0.0:5000
-```
-
-### Step 4 — Create GitHub App
-
-Go to [github.com/settings/apps/new](https://github.com/settings/apps/new):
-
-| Setting | Value |
-|---------|-------|
-| **Webhook URL** | `https://YOUR-SERVER/webhook` |
-| **Webhook Secret** | Your `GITHUB_WEBHOOK_SECRET` |
-| **Permissions** | Contents (R/W), Issues (R/W), Pull requests (R/W), Metadata (R) |
-| **Events** | Pull request, Issues, Issue comment, Push, Check run |
-
-Download the private key → paste into `GITHUB_PRIVATE_KEY`.
-
-### Step 5 — Install App
-
-GitHub App → Install App → select your repositories → Install.
-
----
-
-## Deploy to Render (Free Tier)
-
-```bash
-# 1. Fork/push repo to GitHub
-# 2. Connect to Render: render.com → New Web Service → from GitHub
-
-# 3. Settings:
-#    Build Command: pip install -r requirements.txt
-#    Start Command: gunicorn server:app --workers 2 --timeout 120 --bind 0.0.0.0:$PORT
-#    Health Check:  /health
-
-# 4. Add Redis:
-#    Render Dashboard → New → Redis (free tier)
-#    Copy connection string → REDIS_URL env var
-
-# 5. Add all env vars in Render Dashboard → Environment
+# 5. Create GitHub App at github.com/settings/apps/new
+#    Webhook URL:    https://YOUR-SERVICE.onrender.com/webhook
+#    Permissions:    Contents R/W, Issues R/W, Pull requests R/W,
+#                    Actions R/W, Metadata R
+#    Events:         pull_request, issues, issue_comment, push, check_run
 ```
 
 ---
 
-## Configuration File
+## 🛠️ Configuration (`.ai-repo-manager.yml`)
 
-Place `.ai-repo-manager.yml` in your repo root:
+Place in repo root. All sections optional — safe defaults apply.
 
 ```yaml
 pull_requests:
@@ -343,7 +446,7 @@ push:
   enforce_conventional_commits: true
   scan_secrets: true
   scan_dependencies: true
-  create_issue_threshold: 3
+  create_issue_threshold: 3   # bad commits needed before creating issue
 
 confidence:
   thresholds:
@@ -356,84 +459,98 @@ issues:
   auto_label: true
 
 commands:
+  permissions:
+    maintainer_only:
+      - merge
+      - release
+      - rollback
   enabled:
     - fix
     - autofix
     - explain
     - improve
     - test
-    - docs
-    - refactor
-    - health
     - merge
-    - summarize
-    - ci
     - security
     - secfull
-    - gaps
-    - changelog
-    - budget
     - rollback
-    - impact
     - report
-    - notify
 ```
 
 ---
 
-## Running Tests
+## 🧪 Running Tests
 
 ```bash
-# All tests (245+)
+# Full suite
 python -m pytest -v
+# → 306 passed
 
-# Specific modules
-python -m pytest tests/test_router.py -v
-python -m pytest tests/test_providers.py -v
-python -m pytest tests/test_autofix.py -v
-python -m pytest tests/test_analytics.py -v
+# By module
+python -m pytest tests/test_webhook_security.py -v   # 35 tests
+python -m pytest tests/test_push.py -v               # 25 tests (incl. dedup regression)
+python -m pytest tests/test_pull_request.py -v       # 22 tests
+python -m pytest tests/test_enhanced_secrets.py -v   # 26 tests
 
-# With coverage report
+# With coverage
 python -m pytest --cov=app --cov-report=term-missing tests/
+
+# Lint (matches CI exactly)
+ruff check app/ --select E,F,W --ignore E501
 ```
 
 ---
 
-## Tech Stack
+## 📊 Tech Stack
 
-| Component | Technology | Notes |
-|-----------|------------|-------|
+| Layer | Technology | Notes |
+|-------|------------|-------|
 | Runtime | Python 3.11+ | |
-| Web Framework | Flask + Gunicorn | |
-| Primary LLM | Groq Llama 3.3 70B | Free tier: 5K req/day |
-| Fast LLM | Groq Llama 3.1 8B | Free tier: 12K req/day |
-| Long Context | Gemini Flash 1.5 | Free tier: 1.5K req/day |
-| Emergency LLM | OpenRouter (free models) | Free tier: 200 req/day |
-| Cache/State | Redis | Free tier on Render |
-| Vector DB | Qdrant Cloud | Free tier: 1GB |
-| Embeddings | sentence-transformers | local, no API |
-| Scheduling | APScheduler | in-process |
-| Testing | pytest | 245+ tests |
-| Deployment | Render | free tier |
+| Web | Flask + Gunicorn | 2 workers, 120s timeout |
+| Primary LLM | Groq Llama 3.3 70B | 5K req/day free |
+| Fast LLM | Groq Llama 3.1 8B | 12K req/day free |
+| Long Context | Gemini Flash 1.5 | 1.5K req/day free · 1M token ctx |
+| Fallback LLM | OpenRouter | 200 req/day free |
+| State / Cache | Redis | Connection pool · FakeRedis for dev |
+| Vector DB | Qdrant Cloud | 1GB free tier |
+| Embeddings | sentence-transformers | Runs locally — no API needed |
+| Security | enhanced_secrets.py | 35+ patterns · entropy gating |
+| Testing | pytest | 306 tests · zero network calls |
+| Deploy | Render | Free tier |
+| Lint | Ruff 0.8.0 | E,F,W rules |
 
 ---
 
-## Version History
+## 📜 Version History — 8 Sprints, One Vision
 
-| Version | Key Changes |
-|---------|-------------|
-| **V4.0** | Multi-provider LLM router, hallucination detection, snapshot/rollback, auto-fix engine, analytics, API caching, 22 slash commands, 245+ tests |
-| V3.0 | Queue-based processing, embeddings, security scanning, 15 slash commands, 60+ tests |
-| V2.1 | Async dispatch, metrics endpoint, 40+ tests |
-| V2.0 | Modular architecture, guardrails, idempotency |
-| V1.0 | Single file, basic PR analysis |
+| Version | Sprint | Highlights |
+|---------|--------|------------|
+| **v4.s8** | **Sprint 8** | 🔐 Full security hardening: webhook fail-closed, HMAC verification, auth enforcement, bounded thread pool, 35+ secret patterns, entropy gating, **306 tests** |
+| **v4.7** | **Sprint 7** | ⚡ `/perf`, `/arch`, vector context (Qdrant + ChromaDB), learning system, **26 slash commands** total |
+| **v4.6** | **Sprint 6** | 📊 Analytics dashboard, `/report`, `/autofix` engine — diff → branch → PR, fully automated |
+| **v4.5** | **Sprint 5** | 🔁 Retry + exponential backoff, `/health` endpoint, repo snapshot store + `/rollback` |
+| **v4.4** | **Sprint 4** | 💥 PR blast radius mapping, `/impact`, `/secfull`, CI failure handler + pattern tracking |
+| **v4.3** | **Sprint 3** | 🧠 Hallucination detection, LLM confidence scoring, `/fix` v2 with verification tests |
+| **v4.2** | **Sprint 2** | 🤖 Multi-provider LLM router, per-provider circuit breakers, Gemini Flash fallback |
+| **v4.0** | **Sprint 1** | 🧱 Flask webhook server, threading, bot-spam prevention, SHA-256 event deduplication |
 
 ---
 
-## License
+## 📄 License
 
 MIT — free to use, modify, distribute.
 
-Built by [Shweta Mishra](https://github.com/Shweta-Mishra-ai)
+---
 
-[![Star on GitHub](https://img.shields.io/github/stars/Shweta-Mishra-ai/github-autopilot?style=social)](https://github.com/Shweta-Mishra-ai/github-autopilot)
+<div align="center">
+
+**If this project helped you, a ⭐ means a lot!**
+
+Built with ❤️ across 8 sprints by [Shweta Mishra](https://github.com/Shweta-Mishra-ai)
+
+[![GitHub stars](https://img.shields.io/github/stars/Shweta-Mishra-ai/github-autopilot?style=social)](https://github.com/Shweta-Mishra-ai/github-autopilot)
+[![Follow](https://img.shields.io/github/followers/Shweta-Mishra-ai?style=social)](https://github.com/Shweta-Mishra-ai)
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:06b6d4,50:8b5cf6,100:6366f1&height=120&section=footer" width="100%"/>
+
+</div>

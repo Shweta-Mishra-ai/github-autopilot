@@ -4,7 +4,7 @@
 
 <br/>
 
-[![Version](https://img.shields.io/badge/version-4.7.0-6366f1?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Shweta-Mishra-ai/github-autopilot)
+[![Version](https://img.shields.io/badge/version-4.0-6366f1?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Shweta-Mishra-ai/github-autopilot)
 [![Tests](https://img.shields.io/badge/tests-306%20passing-22c55e?style=for-the-badge&logo=pytest&logoColor=white)](https://github.com/Shweta-Mishra-ai/github-autopilot/actions)
 [![Live](https://img.shields.io/badge/server-live-22c55e?style=for-the-badge&logo=render&logoColor=white)](https://github-autopilot-1.onrender.com)
 [![Python](https://img.shields.io/badge/python-3.11+-3b82f6?style=for-the-badge&logo=python&logoColor=white)](https://python.org)

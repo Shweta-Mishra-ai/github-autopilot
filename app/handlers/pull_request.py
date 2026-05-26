@@ -440,3 +440,50 @@ def _is_generated(filename: str) -> bool:
         ".whl",
     }
     return any(filename.endswith(ext) for ext in skip_extensions)
+
+
+def _blast_radius(files: list) -> str:
+    """
+    Categorize changed files into system layers for blast radius display.
+    Used by /impact command in comments.py.
+    Returns a markdown string summarizing which layers are affected.
+    """
+    categories: dict[str, list[str]] = {
+        "Handlers (API layer)": [],
+        "Core (foundation)": [],
+        "AI (LLM layer)": [],
+        "Security": [],
+        "Tests": [],
+        "Config / Deploy": [],
+        "Documentation": [],
+        "Other": [],
+    }
+
+    for f in files:
+        name = f.get("filename", "")
+        if name.startswith("tests/") or name.startswith("test_"):
+            categories["Tests"].append(name)
+        elif name.startswith("app/handlers/"):
+            categories["Handlers (API layer)"].append(name)
+        elif name.startswith("app/core/"):
+            categories["Core (foundation)"].append(name)
+        elif name.startswith("app/ai/"):
+            categories["AI (LLM layer)"].append(name)
+        elif name.startswith("app/security/"):
+            categories["Security"].append(name)
+        elif name.endswith((".yml", ".yaml", ".toml", "Procfile",
+                             "Dockerfile", "requirements.txt", "render.yaml")):
+            categories["Config / Deploy"].append(name)
+        elif name.endswith((".md", ".rst", ".txt")):
+            categories["Documentation"].append(name)
+        else:
+            categories["Other"].append(name)
+
+    lines = []
+    for layer, layer_files in categories.items():
+        if layer_files:
+            sample = ", ".join(f"`{f.split('/')[-1]}`" for f in layer_files[:3])
+            more   = f" +{len(layer_files) - 3} more" if len(layer_files) > 3 else ""
+            lines.append(f"- **{layer}** — {sample}{more}")
+
+    return "\n".join(lines) if lines else "- No categorized files found"

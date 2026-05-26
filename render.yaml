@@ -1,0 +1,48 @@
+# render.yaml — AI Repo Manager V4
+# Sprint 2: Added GEMINI_API_KEY for Gemini Flash fallback provider
+
+services:
+
+  - type: web
+    name: github-autopilot-1
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn server:app --workers 2 --timeout 120 --bind 0.0.0.0:$PORT
+    healthCheckPath: /health
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          name: github-autopilot-redis
+          type: redis
+          property: connectionString
+      - key: GITHUB_APP_ID
+        sync: false
+      - key: GITHUB_PRIVATE_KEY
+        sync: false
+      - key: GITHUB_WEBHOOK_SECRET
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      # NEW Sprint 2: Gemini Flash fallback (free at aistudio.google.com)
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: DISCORD_WEBHOOK_URL
+        sync: false
+      - key: SLACK_WEBHOOK_URL
+        sync: false
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+      - key: METRICS_AUTH_TOKEN
+        sync: false
+      - key: REPO_DAILY_AI_LIMIT
+        value: "150"
+      - key: STALE_ISSUE_DAYS
+        value: "30"
+
+  - type: redis
+    name: github-autopilot-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru

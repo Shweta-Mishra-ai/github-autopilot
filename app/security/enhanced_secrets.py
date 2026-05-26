@@ -106,7 +106,7 @@ FALSE_POSITIVE_VALUES = {
     "AKIAIOSFODNN7EXAMPLE",          # AWS docs example
     "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",  # AWS docs example
     "ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-    "sk_live_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+    "sk_example_not_real",
     "xoxb-XXXX-XXXX-XXXX",
     "your-api-key-here",
     "your_api_key",

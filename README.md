@@ -530,9 +530,9 @@ ruff check app/ --select E,F,W --ignore E501
 | **v4.6** | **Sprint 6** | 📊 Analytics dashboard, `/report`, `/autofix` engine — diff → branch → PR, fully automated |
 | **v4.5** | **Sprint 5** | 🔁 Retry + exponential backoff, `/health` endpoint, repo snapshot store + `/rollback` |
 | **v4.4** | **Sprint 4** | 💥 PR blast radius mapping, `/impact`, `/secfull`, CI failure handler + pattern tracking |
-| **v4.3** | **Sprint 3** | 🧠 Hallucination detection, LLM confidence scoring, `/fix` v2 with verification tests |
-| **v4.2** | **Sprint 2** | 🤖 Multi-provider LLM router, per-provider circuit breakers, Gemini Flash fallback |
-| **v4.0** | **Sprint 1** | 🧱 Flask webhook server, threading, bot-spam prevention, SHA-256 event deduplication |
+| **v3.3** | **Sprint 3** | 🧠 Hallucination detection, LLM confidence scoring, `/fix` v2 with verification tests |
+| **v2.0** | **Sprint 2** | 🤖 Multi-provider LLM router, per-provider circuit breakers, Gemini Flash fallback |
+| **v1.0** | **Sprint 1** | 🧱 Flask webhook server, threading, bot-spam prevention, SHA-256 event deduplication |
 
 ---
 
@@ -549,7 +549,7 @@ MIT — free to use, modify, distribute.
 Built with ❤️ across 8 sprints by [Shweta Mishra](https://github.com/Shweta-Mishra-ai)
 
 [![GitHub stars](https://img.shields.io/github/stars/Shweta-Mishra-ai/github-autopilot?style=social)](https://github.com/Shweta-Mishra-ai/github-autopilot)
-[![Follow](https://img.shields.io/github/followers/Shweta-Mishra-ai?style=social)](https://github.com/Shweta-Mishra-ai)
+[![Follow](https://img.shields.io/github/followers/Shweta-Mishra-ai?label=Follow&style=social)](https://github.com/Shweta-Mishra-ai)
 
 <img src="https://capsule-render.vercel.app/api?type=waving&color=0:06b6d4,50:8b5cf6,100:6366f1&height=120&section=footer" width="100%"/>
 

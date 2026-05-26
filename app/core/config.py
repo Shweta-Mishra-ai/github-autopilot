@@ -17,14 +17,16 @@ V4 NEW: Extended defaults for all new V4 commands and features.
 
 import base64
 import logging
+import threading
 import time
 from typing import Any
 
 log = logging.getLogger(__name__)
 
-# ── Cache (5-minute TTL) ──────────────────────────────────────────────────────
+# ── Cache (5-minute TTL, thread-safe) ────────────────────────────────────────
 _config_cache: dict[str, tuple] = {}  # {repo: (Config, timestamp)}
-_CONFIG_TTL = 300  # 5 minutes in seconds
+_config_lock  = threading.RLock()     # RLock: reentrant so invalidate can be called inside load
+_CONFIG_TTL   = 300  # 5 minutes in seconds
 
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
@@ -255,20 +257,21 @@ def load_config(repo: str, token: str) -> Config:
     """
     Load .ai-repo-manager.yml from repo with 5-minute cache.
     Falls back to defaults if file missing or invalid.
+    Thread-safe: uses RLock to prevent concurrent cache writes.
     """
     now = time.time()
 
-    # ✅ FIXED (BUG 9): Return cached config if still fresh
-    if repo in _config_cache:
-        cached_config, cached_at = _config_cache[repo]
-        if now - cached_at < _CONFIG_TTL:
-            return cached_config
+    with _config_lock:
+        if repo in _config_cache:
+            cached_config, cached_at = _config_cache[repo]
+            if now - cached_at < _CONFIG_TTL:
+                return cached_config
 
-    # Cache miss — fetch from GitHub
+    # Cache miss — fetch from GitHub (outside lock to avoid blocking other threads)
     try:
         from app.github.client import gh_get
 
-        data = gh_get(f"/repos/{repo}/contents/.ai-repo-manager.yml", token)
+        data    = gh_get(f"/repos/{repo}/contents/.ai-repo-manager.yml", token)
         content = base64.b64decode(data["content"]).decode("utf-8")
 
         import yaml
@@ -285,7 +288,8 @@ def load_config(repo: str, token: str) -> Config:
         log.debug(f"config.using_defaults repo={repo} reason={e}")
         config = Config({})
 
-    _config_cache[repo] = (config, now)
+    with _config_lock:
+        _config_cache[repo] = (config, now)
     return config
 
 
@@ -295,9 +299,10 @@ def invalidate_config_cache(repo: str = None):
     Call when .ai-repo-manager.yml is updated in a push event
     so next webhook picks up the new config immediately.
     """
-    if repo:
-        _config_cache.pop(repo, None)
-        log.debug(f"config.cache_invalidated repo={repo}")
-    else:
-        _config_cache.clear()
+    with _config_lock:
+        if repo:
+            _config_cache.pop(repo, None)
+            log.debug(f"config.cache_invalidated repo={repo}")
+        else:
+            _config_cache.clear()
         log.debug("config.cache_invalidated all")

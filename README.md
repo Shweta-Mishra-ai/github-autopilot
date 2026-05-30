@@ -4,8 +4,8 @@
 
 <br/>
 
-[![Version](https://img.shields.io/badge/version-4.7-6366f1?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Shweta-Mishra-ai/github-autopilot/releases)
-[![Tests](https://img.shields.io/badge/tests-383%20passing-22c55e?style=for-the-badge&logo=pytest&logoColor=white)](https://github.com/Shweta-Mishra-ai/github-autopilot/actions)
+[![Version](https://img.shields.io/badge/version-4.0-6366f1?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Shweta-Mishra-ai/github-autopilot)
+[![Tests](https://img.shields.io/badge/tests-306%20passing-22c55e?style=for-the-badge&logo=pytest&logoColor=white)](https://github.com/Shweta-Mishra-ai/github-autopilot/actions)
 [![Live](https://img.shields.io/badge/server-live-22c55e?style=for-the-badge&logo=render&logoColor=white)](https://github-autopilot-1.onrender.com)
 [![Python](https://img.shields.io/badge/python-3.11+-3b82f6?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Redis](https://img.shields.io/badge/redis-backed-ef4444?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io)
@@ -458,16 +458,16 @@ ruff check app/ --select E,F,W --ignore E501     # lint — matches CI
 
 ## 📖 Documentation
 
-| Document | What's inside |
-|----------|--------------|
-| [System Architecture](docs/architecture/system-architecture.md) | Components, request lifecycle, reliability model, tradeoffs |
-| [Webhook Pipeline](docs/architecture/webhook-pipeline.md) | All 7 security stages with code and timing |
-| [AI Routing](docs/ai-system/ai-routing.md) | Provider selection, circuit breakers, hallucination control |
-| [Autofix Engine](docs/ai-system/autofix-engine.md) | Patch generation, safety guards, failure scenarios |
-| [Threat Model](docs/security/threat-model.md) | 9 attack vectors, mitigations, residual risk |
-| [User Setup Guide](docs/guides/user-setup.md) | Install, configure, first commands |
-| [Testing Guide](docs/testing/testing-guide.md) | Patterns, mocking, known gotchas |
-| [Observability](docs/observability/observability.md) | Health, metrics, Redis key reference |
+| Version | Sprint | Highlights |
+|---------|--------|------------|
+| **v4.s8** | **Sprint 8** | 🔐 Full security hardening: webhook fail-closed, HMAC verification, auth enforcement, bounded thread pool, 35+ secret patterns, entropy gating, **306 tests** |
+| **v4.7** | **Sprint 7** | ⚡ `/perf`, `/arch`, vector context (Qdrant + ChromaDB), learning system, **26 slash commands** total |
+| **v4.6** | **Sprint 6** | 📊 Analytics dashboard, `/report`, `/autofix` engine — diff → branch → PR, fully automated |
+| **v4.5** | **Sprint 5** | 🔁 Retry + exponential backoff, `/health` endpoint, repo snapshot store + `/rollback` |
+| **v4.4** | **Sprint 4** | 💥 PR blast radius mapping, `/impact`, `/secfull`, CI failure handler + pattern tracking |
+| **v3.3** | **Sprint 3** | 🧠 Hallucination detection, LLM confidence scoring, `/fix` v2 with verification tests |
+| **v2.0** | **Sprint 2** | 🤖 Multi-provider LLM router, per-provider circuit breakers, Gemini Flash fallback |
+| **v1.0** | **Sprint 1** | 🧱 Flask webhook server, threading, bot-spam prevention, SHA-256 event deduplication |
 
 ---
 
@@ -484,7 +484,7 @@ MIT — free to use, modify, distribute.
 Built with ❤️ by [Shweta Mishra](https://github.com/Shweta-Mishra-ai)
 
 [![GitHub stars](https://img.shields.io/github/stars/Shweta-Mishra-ai/github-autopilot?style=social)](https://github.com/Shweta-Mishra-ai/github-autopilot)
-[![Follow](https://img.shields.io/github/followers/Shweta-Mishra-ai?label=Follow&style=social)](https://github.com/Shweta-Mishra-ai/github-autopilot)
+[![Follow](https://img.shields.io/github/followers/Shweta-Mishra-ai?label=Follow&style=social)](https://github.com/Shweta-Mishra-ai)
 
 <img src="https://capsule-render.vercel.app/api?type=waving&color=0:06b6d4,50:8b5cf6,100:6366f1&height=120&section=footer" width="100%"/>
 

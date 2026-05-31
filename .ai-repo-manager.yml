@@ -1,18 +1,19 @@
 # .ai-repo-manager.yml
-# AI Repo Manager — Repo-level configuration
+# GitHub Autopilot — Repo-level configuration
 # Place this file in your repo root to customize bot behavior.
-# All settings are optional — safe defaults are used if missing.
+# All settings are optional — safe defaults used if missing.
 # Docs: https://github.com/Shweta-Mishra-ai/github-autopilot
 
 bot:
   enabled: true
-  footer: "AI Repo Manager V3 - AI-powered repo management"
+  footer: "\n\n---\n*🤖 GitHub Autopilot v4.7 — AI-powered repo management*"
 
 pull_requests:
   enabled: true
   auto_polish_title: true
   auto_fill_description: true
   code_review: true
+  detect_test_gaps: true
   max_files_reviewed: 4
 
 issues:
@@ -61,19 +62,40 @@ labels:
   auto_create: true
 
 commands:
+  permissions:
+    maintainer_only:
+      - merge
+      - release
+      - rollback
   enabled:
+    # Code Quality
     - fix
+    - autofix
     - apply
-    - explain
     - improve
-    - test
-    - docs
     - refactor
-    - health
-    - version
-    - merge
+    - perf
+    # Understanding
+    - explain
     - summarize
-    - ci
-    - security
+    - arch
+    - impact
     - gaps
+    - ci
+    # Documentation & Release
+    - docs
+    - test
     - changelog
+    - release
+    - version
+    - runtests
+    # Security & Health
+    - security
+    - secfull
+    - health
+    # Operations
+    - merge
+    - rollback
+    - report
+    - budget
+    - notify

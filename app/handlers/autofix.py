@@ -22,12 +22,10 @@ FIXES vs V4.1:
 
 import base64
 import logging
-import re
 from typing import Optional
 
 from app.github.client import gh_get, gh_post, gh_put, GitHubError
 from app.ai.router import router
-from app.core.logger import EventLogger
 
 log = logging.getLogger(__name__)
 
@@ -90,7 +88,6 @@ def run_autofix(
       6. POST DIFF as comment + ask for '/apply <branch>' confirmation
          (human in the loop — no PR created automatically)
     """
-    log_ctx = EventLogger("autofix", repo=repo)
     title = issue.get("title", "")
     body  = (issue.get("body") or "")[:2000]
 
@@ -140,7 +137,7 @@ def run_autofix(
 
     # ── Step 4: Generate fixed content ────────────────────────────────────
     fixed, tokens_used = _apply_fix(current, fix_plan, title)
-    log_ctx.info(f"autofix LLM tokens used: {tokens_used}")
+    log.info(f"autofix.tokens_used tokens={tokens_used}")
 
     if not fixed or fixed == current:
         return (
@@ -192,7 +189,7 @@ def run_autofix(
     diff_preview = _make_diff_preview(current, fixed, target)
     conf_pct     = int(float(fix_plan.get("confidence", 0.8)) * 100)
 
-    log_ctx.done(f"Autofix branch {branch} ready for review")
+    log.info(f"autofix.branch_ready branch={branch}")
 
     return (
         f"## 🤖 Autofix Ready — Review Required\n\n"
@@ -219,9 +216,6 @@ def _make_diff_preview(original: str, fixed: str, filepath: str) -> str:
     added = removed = 0
 
     # Simple line-by-line diff
-    orig_set  = {(i, l) for i, l in enumerate(orig_lines)}
-    fixed_set = {(i, l) for i, l in enumerate(fixed_lines)}
-
     for i, line in enumerate(orig_lines):
         if i < len(fixed_lines):
             if line != fixed_lines[i]:

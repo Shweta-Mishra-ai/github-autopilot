@@ -35,9 +35,15 @@ class TestIsAllowed:
         from app.handlers.autofix import _is_allowed
         assert _is_allowed("app/github/auth.py") is False
 
-    def test_yaml_allowed(self):
+    def test_ci_workflow_blocked(self):
+        """CI workflow files are blocked to prevent pipeline injection."""
         from app.handlers.autofix import _is_allowed
-        assert _is_allowed(".github/workflows/ci.yml") is True
+        assert _is_allowed(".github/workflows/ci.yml") is False
+
+    def test_non_workflow_yaml_allowed(self):
+        """Non-workflow YAML files (e.g. config) are still allowed."""
+        from app.handlers.autofix import _is_allowed
+        assert _is_allowed("config/settings.yml") is True
 
     def test_empty_path_blocked(self):
         from app.handlers.autofix import _is_allowed
@@ -118,7 +124,7 @@ class TestRunAutofix:
                 "patch": "x", "pr_title": "fix"}
         with patch("app.handlers.autofix.router.ask", return_value=(plan, meta)):
             result = run_autofix("test/repo", 1, self._issue(), "token")
-        assert "Skipped" in result or "skipped" in result.lower()
+        assert "Skipped" in result or "skipped" in result.lower() or "Blocked" in result
 
     def test_full_flow_success(self):
         from app.handlers.autofix import run_autofix
@@ -147,4 +153,7 @@ class TestRunAutofix:
                         ]
                         result = run_autofix("test/repo", 1, self._issue(), "token")
 
-        assert "✅" in result or "Complete" in result or "99" in result
+        # V4.2+: autofix posts diff + confirmation, does NOT auto-create PR
+        assert ("diff" in result.lower() or "Diff" in result
+                or "/apply" in result
+                or "Ready" in result)

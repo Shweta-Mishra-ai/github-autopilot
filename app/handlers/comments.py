@@ -1,4 +1,5 @@
 """
+
 Comments Handler - app/handlers/comments.py
 V4.1 — Security hardened.
 
@@ -22,8 +23,6 @@ from app.core.config import load_config
 from app.core.confidence import ConfidenceGate
 from app.core.logger import EventLogger
 
-import logging
-_log = logging.getLogger(__name__)
 from app.ai.hallucination import add_confidence_footer, check_response
 from app.ai.router import router
 from app.github.auth import get_installation_token
@@ -33,6 +32,8 @@ from app.security.enhanced_secrets import (
     scan_diff,
 )
 from app.security.dependencies import scan_requirements_txt, format_dep_findings
+import logging
+_log = logging.getLogger(__name__)
 
 SKIP_AUTHORS = {
     "dependabot[bot]",
@@ -1047,9 +1048,7 @@ def _cmd_rollback(
         )
 
     # ── Confirmed: take safety snapshot first ────────────────────────────
-    safety_id = None
-    try:
-        safety_id = take_snapshot(
+    try:        take_snapshot(
             repo, token, trigger=f"pre_rollback_by_{author}"
         )
     except Exception as e:
@@ -1232,7 +1231,7 @@ def _cmd_report(repo: str) -> str:
                 "Check your `REDIS_URL` environment variable in Render.\n"
                 "The report will work once Redis is connected."
             )
-        log.error(f"_cmd_report error: {e}")
+        _log.error(f"_cmd_report error: {e}")
         return f"## ⚠️ Report failed: `{str(e)[:200]}`"
 
 
@@ -1261,7 +1260,7 @@ def _cmd_notify(
         )
 
     try:
-        from app.github.notifications import send_rich_discord, notify
+        from app.github.notifications import send_rich_discord
 
         title  = issue.get("title", f"Issue #{issue_number}")
         is_pr  = "pull_request" in issue

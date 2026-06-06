@@ -1048,7 +1048,8 @@ def _cmd_rollback(
         )
 
     # ── Confirmed: take safety snapshot first ────────────────────────────
-    try:        take_snapshot(
+    try:
+        take_snapshot(
             repo, token, trigger=f"pre_rollback_by_{author}"
         )
     except Exception as e:

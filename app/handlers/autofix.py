@@ -68,6 +68,30 @@ _TRUNCATION_MARKER = (
 )
 
 
+
+
+def _get_default_branch(repo: str, token: str) -> str:
+    try:
+        return gh_get(f"/repos/{repo}", token).get("default_branch", "main")
+    except Exception:
+        return "main"
+
+
+def _create_branch(repo: str, token: str, branch: str, base: str) -> None:
+    ref = gh_get(f"/repos/{repo}/git/ref/heads/{base}", token)
+    try:
+        sha = ref["object"]["sha"]
+    except (KeyError, TypeError) as e:
+        raise GitHubError(
+            f"Cannot read SHA for branch '{base}': unexpected API response. "
+            f"Keys: {list(ref.keys()) if isinstance(ref, dict) else type(ref)}"
+        ) from e
+    gh_post(
+        f"/repos/{repo}/git/refs",
+        token,
+        {"ref": f"refs/heads/{branch}", "sha": sha},
+    )
+
 def run_autofix(
     repo: str,
     issue_number: int,
@@ -333,29 +357,6 @@ def _safe_excerpt(content: str) -> tuple[str, bool]:
     truncated  = content[:_MAX_FILE_CHARS]
     truncated += _TRUNCATION_MARKER.format(limit=_MAX_FILE_CHARS)
     return truncated, True
-
-
-def _get_default_branch(repo: str, token: str) -> str:
-    try:
-        return gh_get(f"/repos/{repo}", token).get("default_branch", "main")
-    except Exception:
-        return "main"
-
-
-def _create_branch(repo: str, token: str, branch: str, base: str) -> None:
-    ref = gh_get(f"/repos/{repo}/git/ref/heads/{base}", token)
-    try:
-        sha = ref["object"]["sha"]
-    except (KeyError, TypeError) as e:
-        raise GitHubError(
-            f"Cannot read SHA for branch '{base}': unexpected API response. "
-            f"Raw keys: {list(ref.keys()) if isinstance(ref, dict) else type(ref)}"
-        ) from e
-    gh_post(
-        f"/repos/{repo}/git/refs",
-        token,
-        {"ref": f"refs/heads/{branch}", "sha": sha},
-    )
 
 
 def _build_pr_body(fix_plan: dict, issue_number: int, title: str) -> str:

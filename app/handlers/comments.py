@@ -27,6 +27,7 @@ from app.ai.hallucination import add_confidence_footer, check_response
 from app.ai.router import router
 from app.github.auth import get_installation_token
 from app.github.client import GitHubError, gh_delete, gh_get, gh_post, gh_put
+from app.github.helpers import fmt_error
 from app.security.enhanced_secrets import (
     format_findings as format_secret_findings,
     scan_diff,
@@ -87,6 +88,22 @@ def _extract_command(body: str):
         if re.search(r'(?<![/\w])' + re.escape(cmd) + r'\b', body_lower):
             return cmd
     return None
+
+
+
+
+def _safe_router_ask(system: str, user: str, task: str,
+                     max_tokens: int = 1000) -> tuple[dict, object]:
+    """
+    Wrapper around router.ask() with consistent error handling.
+    Returns (result_dict, meta). On any failure returns ({}, None).
+    Callers check: if not result: return fmt_error(...)
+    """
+    try:
+        return router.ask(system, user, task=task, max_tokens=max_tokens)
+    except Exception as e:
+        _log.error(f"router.ask failed task={task}: {e}")
+        return {}, None
 
 
 # ── Main handler ──────────────────────────────────────────────────────────────
@@ -644,7 +661,7 @@ def _cmd_health(repo: str, token: str) -> str:
         )
 
     except Exception as e:
-        return f"## ⚠️ Health Check Failed\n\n`{str(e)[:200]}`"
+        return fmt_error("Health Check Failed", e)
 
 
 def _cmd_version(repo: str, token: str) -> str:
@@ -676,7 +693,7 @@ def _cmd_version(repo: str, token: str) -> str:
         )
 
     except Exception as e:
-        return f"## ⚠️ Version check failed: `{str(e)[:200]}`"
+        return fmt_error("Version check failed", e)
 
 
 def _cmd_merge(
@@ -727,7 +744,7 @@ def _cmd_merge(
         return f"## ⚠️ Merge failed: {result.get('message','Unknown error')}"
 
     except Exception as e:
-        return f"## ⚠️ Merge error: `{str(e)[:300]}`"
+        return fmt_error("Merge error", e)
 
 
 def _cmd_summarize(repo: str, issue_number: int, token: str) -> str:
@@ -747,7 +764,7 @@ def _cmd_summarize(repo: str, issue_number: int, token: str) -> str:
         )
         return f"## 📝 Thread Summary\n\n{summary}"
     except Exception as e:
-        return f"## ⚠️ Summarize failed: `{str(e)[:200]}`"
+        return fmt_error("Summarize failed", e)
 
 
 def _cmd_ci(context: str, repo: str = "", token: str = "") -> str:
@@ -835,7 +852,7 @@ Return JSON:
 
     except Exception as e:
         _log.error(f"_cmd_ci LLM error: {e}")
-        return f"## ⚠️ CI Analysis Failed\n\n`{str(e)[:200]}`"
+        return fmt_error("CI Analysis Failed", e)
 
 
 def _cmd_security(
@@ -875,7 +892,7 @@ def _cmd_security(
         return "\n\n".join(lines)
 
     except Exception as e:
-        return f"## ⚠️ Security scan failed: `{str(e)[:200]}`"
+        return fmt_error("Security scan failed", e)
 
 
 def _cmd_gaps(context: str) -> str:
@@ -964,10 +981,10 @@ Skip sections with no entries. Use today's date.""",
         )
 
     except GitHubError as e:
-        return f"## ⚠️ Changelog failed (GitHub API): `{str(e)[:200]}`"
+        return fmt_error("Changelog failed (GitHub API)", e)
     except Exception as e:
         _log.error(f"_cmd_changelog error: {e}")
-        return f"## ⚠️ Changelog generation failed: `{str(e)[:200]}`"
+        return fmt_error("Changelog generation failed", e)
 
 
 def _cmd_budget() -> str:
@@ -975,7 +992,7 @@ def _cmd_budget() -> str:
         from app.ai.metrics import format_budget_comment
         return format_budget_comment()
     except Exception as e:
-        return f"## ⚠️ Budget check failed: `{str(e)[:200]}`"
+        return fmt_error("Budget check failed", e)
 
 
 def _cmd_rollback(
@@ -1177,7 +1194,7 @@ Return JSON:
         )
 
     except Exception as e:
-        return f"## ⚠️ Impact analysis failed: `{str(e)[:200]}`"
+        return fmt_error("Impact analysis failed", e)
 
 
 def _cmd_secfull(repo: str, token: str) -> str:
@@ -1186,7 +1203,7 @@ def _cmd_secfull(repo: str, token: str) -> str:
         report = run_security_scan(repo, token)
         return report.to_markdown(include_low=True)
     except Exception as e:
-        return f"## ⚠️ Security scan failed: `{str(e)[:200]}`"
+        return fmt_error("Security scan failed", e)
 
 
 def _cmd_autofix(
@@ -1233,7 +1250,7 @@ def _cmd_report(repo: str) -> str:
                 "The report will work once Redis is connected."
             )
         _log.error(f"_cmd_report error: {e}")
-        return f"## ⚠️ Report failed: `{str(e)[:200]}`"
+        return fmt_error("Report failed", e)
 
 
 def _cmd_notify(

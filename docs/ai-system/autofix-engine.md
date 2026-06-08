@@ -16,7 +16,7 @@
 6. [Stage 3 — Fix Plan Generation](#6-stage-3--fix-plan-generation)
 7. [Stage 4 — Fix Application and Safety Guards](#7-stage-4--fix-application-and-safety-guards)
 8. [Stage 5 — Branch Creation, Commit, and Pull Request](#8-stage-5--branch-creation-commit-and-pull-request)
-9. [The Three Sprint-8 Bug Fixes](#9-the-three-sprint-8-bug-fixes)
+9. [Key Reliability Fixes](#9-key-reliability-fixes)
 10. [Failure Scenarios and Responses](#10-failure-scenarios-and-responses)
 11. [Current Limitations](#11-current-limitations)
 12. [Roadmap to Sandboxed Execution](#12-roadmap-to-sandboxed-execution)
@@ -436,7 +436,7 @@ Closes #{issue_number}
 
 ---
 
-## 9. The Three Sprint-8 Bug Fixes
+## 9. Key Reliability Fixes
 
 ### Bug 1 — Silent File Truncation (Critical)
 

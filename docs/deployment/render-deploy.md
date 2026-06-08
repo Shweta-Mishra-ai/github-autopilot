@@ -32,7 +32,7 @@
 │  │          Web Service                  │                     │
 │  │                                       │                     │
 │  │  gunicorn server:app                  │                     │
-│  │  --workers 2                          │  512MB RAM          │
+│  │  --workers 1 --threads 8              │  512MB RAM          │
 │  │  --timeout 120                        │  0.5 CPU            │
 │  │  --bind 0.0.0.0:$PORT                 │  Spins down after   │
 │  │                                       │  15min inactivity   │
@@ -91,14 +91,14 @@ https://github.com/Shweta-Mishra-ai/github-autopilot
 The repository includes a `Procfile` that Render uses automatically:
 
 ```
-web: gunicorn server:app --workers 2 --timeout 120 --bind 0.0.0.0:$PORT --worker-class sync
+web: gunicorn server:app --workers 1 --threads 8 --timeout 120 --bind 0.0.0.0:$PORT --worker-class gthread
 ```
 
 | Flag | Value | Why |
 |------|-------|-----|
-| `--workers 2` | 2 Gunicorn workers | One worker handles webhook ingress while other processes events |
+| `--workers 1 --threads 8` | 1 worker, 8 threads | Safe for 512 MB RAM; threads handle concurrent requests |
 | `--timeout 120` | 120 seconds | LLM calls + GitHub API can take up to 60s; 120s provides headroom |
-| `--worker-class sync` | Synchronous workers | The app uses threading internally — sync workers are correct |
+| `--worker-class gthread` | Green threaded workers | The app uses threading internally — gthread workers are correct |
 | `--bind 0.0.0.0:$PORT` | Render's dynamic port | Render injects the `PORT` env var automatically |
 
 Do not change `--worker-class` to `gevent` or `eventlet` — the thread-based architecture requires sync workers.
@@ -156,11 +156,11 @@ Do not change `--worker-class` to `gevent` or `eventlet` — the thread-based ar
    | **Root Directory** | *(leave blank)* |
    | **Runtime** | `Python 3` |
    | **Build Command** | `pip install -r requirements.txt` |
-   | **Start Command** | `gunicorn server:app --workers 2 --timeout 120 --bind 0.0.0.0:$PORT --worker-class sync` |
+   | **Start Command** | `gunicorn server:app --workers 1 --threads 8 --timeout 120 --bind 0.0.0.0:$PORT --worker-class gthread` |
 
 4. **Instance Type:** Free
 
-5. **Health Check Path:** `/health`
+5. **Health Check Path:** `/ping` (public liveness check — no auth required)
    - Render pings this path to verify the service is running
    - Returns 200 when healthy, 207 when degraded
 
@@ -326,14 +326,18 @@ RuntimeError: FATAL: GITHUB_WEBHOOK_SECRET is not set.
 ### Check the health endpoint
 
 ```bash
-curl https://your-service-name.onrender.com/health | python -m json.tool
+# Public liveness check (no auth)
+curl https://your-service-name.onrender.com/ping
+
+# Detailed health (requires METRICS_AUTH_TOKEN)
+curl -H "Authorization: Bearer $METRICS_AUTH_TOKEN" https://your-service-name.onrender.com/health | python -m json.tool
 ```
 
 Expected output:
 ```json
 {
   "status": "ok",
-  "version": "4.7.0",
+  "version": "4.2.0",
   "checks": {
     "redis": "ok",
     "github_api": "ok",
@@ -390,7 +394,7 @@ Render free tier spins down after 15 minutes of inactivity. The first webhook af
    ```
 4. Click **Create Monitor**
 
-UptimeRobot pings `/health` every 5 minutes, keeping the service warm indefinitely. It also emails you if the service goes down.
+UptimeRobot pings `/ping` every 5 minutes, keeping the service warm indefinitely. It also emails you if the service goes down.
 
 **Alternative — GitHub Actions keep-alive:**
 ```yaml
@@ -465,8 +469,8 @@ Before paying for more compute, extend LLM capacity at zero cost:
 ### Step 4 — Increase `MAX_DISPATCH_WORKERS`
 Add to environment variables: `MAX_DISPATCH_WORKERS=10`. This allows more concurrent LLM calls — useful if you have more API quota than the default 6 workers can utilise.
 
-### Step 5 — Add Celery workers (significant change)
-When jobs must not be lost across restarts. Requires: Redis as broker (separate from state Redis), a Render Background Worker service, Celery in requirements.txt, refactoring `_dispatch()` to use `celery.send_task()`.
+### Step 5 — Add a task queue (when needed)
+When jobs must not be lost across restarts, consider adding a dedicated task queue. The codebase has Celery wiring in `archive/tasks.py` that can be activated. This requires a separate worker process and a Redis broker instance.
 
 ---
 

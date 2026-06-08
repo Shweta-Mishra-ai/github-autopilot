@@ -451,7 +451,7 @@ Analytics written                CI failure tracked
 ## Diagram 7 — Version Timeline v1 → v4
 
 ```
-   v1.0                v2.0                v3.0                    v4.0
+   Initial             AI Layer            Intelligence            Current
     │                   │                   │                        │
     ▼                   ▼                   ▼                        ▼
 ────●───────────────────●───────────────────●────────────────────────●────────►
@@ -479,7 +479,7 @@ Analytics written                CI failure tracked
     │                   │                   │                        │ auth enforce
     │                   │                   │                        │ thread pool
     │                   │                   │                        │ 35+ patterns
-    │                   │                   │                        │ 383 tests
+    │                   │                   │                        │ Full test suite
     │                   │                   │                        │
    "it works"          "it's smart"        "it's reliable"         "it's production"
 ```
@@ -615,3 +615,4 @@ stateDiagram-v2
         Outcome determines next state
     end note
 ```
+

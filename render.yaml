@@ -1,0 +1,51 @@
+# render.yaml — AI Repo Manager
+services:
+
+  - type: web
+    name: github-autopilot-1
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: >-
+      gunicorn server:app
+      --workers 1
+      --threads 8
+      --timeout 120
+      --bind 0.0.0.0:$PORT
+      --worker-class gthread
+    healthCheckPath: /ping
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          name: github-autopilot-redis
+          type: redis
+          property: connectionString
+      - key: GITHUB_APP_ID
+        sync: false
+      - key: GITHUB_PRIVATE_KEY
+        sync: false
+      - key: GITHUB_WEBHOOK_SECRET
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: DISCORD_WEBHOOK_URL
+        sync: false
+      - key: SLACK_WEBHOOK_URL
+        sync: false
+      - key: METRICS_AUTH_TOKEN
+        sync: false
+      - key: MAX_DISPATCH_WORKERS
+        value: "6"
+      - key: REPO_DAILY_AI_LIMIT
+        value: "150"
+      - key: STALE_ISSUE_DAYS
+        value: "30"
+
+  - type: redis
+    name: github-autopilot-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru

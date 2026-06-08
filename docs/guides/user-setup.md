@@ -61,7 +61,7 @@ https://github.com/Shweta-Mishra-ai/github-autopilot
    | **Branch** | `main` |
    | **Runtime** | `Python 3` |
    | **Build Command** | `pip install -r requirements.txt` |
-   | **Start Command** | `gunicorn server:app --workers 2 --timeout 120 --bind 0.0.0.0:$PORT` |
+   | **Start Command** | `gunicorn server:app --workers 1 --threads 8 --timeout 120 --bind 0.0.0.0:$PORT --worker-class gthread` |
 
 4. **Plan:** Free
 5. Click **Create Web Service**
@@ -223,7 +223,7 @@ Expected response:
 ```json
 {
   "status": "ok",
-  "version": "4.7.0",
+  "version": "4.2.0",
   "uptime_seconds": 142,
   "checks": {
     "redis": "ok",
@@ -558,4 +558,5 @@ Render → Redis → Settings → Delete Redis
 GitHub → Settings → Developer Settings → GitHub Apps → Edit → Delete GitHub App (at the bottom)
 
 All data (Redis state, analytics, snapshots) is automatically deleted when the Redis instance is deleted.
+
 

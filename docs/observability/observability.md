@@ -30,7 +30,7 @@
 ```json
 {
   "status": "ok",
-  "version": "4.7.0",
+  "version": "4.2.0",
   "uptime_seconds": 86412,
   "mode": "bounded-threadpool",
 
@@ -404,7 +404,7 @@ Post `/report` on any issue or PR to get a weekly analytics summary.
 ### LLM Budget
 | Provider | Used | Limit | % |
 |----------|------|-------|---|
-| Groq 70B | 1,240 req | 5,000/day | 24.8% |
+| Groq 70B | 1,240 req | 14,400/day | 8.6% |
 | Groq 8B  | 830 req  | 12,000/day | 6.9% |
 ```
 
@@ -436,7 +436,7 @@ Post `/budget` on any issue for a live LLM usage snapshot.
 *Limits reset at midnight UTC.*
 ```
 
-Use `/budget` proactively before a busy day (sprint planning, code review crunch) to check available capacity.
+Use `/budget` proactively before a busy period to check available capacity.
 
 ---
 

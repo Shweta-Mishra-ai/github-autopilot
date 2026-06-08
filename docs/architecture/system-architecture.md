@@ -452,7 +452,7 @@ Redis is single-threaded internally. `SET NX` is one command. Two concurrent cal
 ## 12. Future Architecture
 
 ```
-Current (v4.7)                       Target (v5.x)
+Current Architecture                 Future Scaling Target
 ────────────────────────────────     ─────────────────────────────────────────
 Flask sync + Gunicorn                FastAPI async + uvicorn
 ThreadPoolExecutor                   Celery workers + Redis broker

@@ -244,7 +244,7 @@ def _entropy(s: str) -> float:
 | Common placeholder text (`your-api-key`) | 3.2–3.8 | Placeholder — skip |
 | AWS documentation example key | ~4.0 | Known example — whitelisted |
 | Random hex string (28+ chars) | 4.2–4.5 | Borderline |
-| Real-format Stripe key | 4.7–5.0 | Real credential |
+| Real-format Stripe key | High entropy | Real credential |
 | Cryptographically random token | 5.0+ | Almost certainly real |
 
 **Threshold:** `HIGH_ENTROPY_THRESHOLD = 4.5`
@@ -331,7 +331,7 @@ def _is_test_line(line: str) -> bool:
 
 The substring `fake` appears inside legitimate variable names like `p4ssw0rd_not_fake@example.com` — a password format used in some test fixtures that still need scanning. Word-boundary regex `\bfake\b` matches `fake` only as a standalone word (surrounded by non-word characters), not as part of a larger compound token.
 
-This exact bug was found during Sprint 8 test writing. The `_connection_string()` test helper returned a postgres URL containing `_not_fake` in the password segment. The original substring check `_fake` caused `_is_test_line()` to return `True`, silently skipping the connection string scan in tests.
+This bug was identified during test writing. The `_connection_string()` test helper returned a postgres URL containing `_not_fake` in the password segment. The original substring check `_fake` caused `_is_test_line()` to return `True`, silently skipping the connection string scan in tests.
 
 ### 4. Placeholder regex detection
 
@@ -483,7 +483,7 @@ def _slack_bot_token() -> str:
 
 **Why split at the prefix boundary?** Credential scanners match on specific prefix patterns (`sk_live_`, `ghp_`, etc.) followed by high-entropy content. Splitting `"sk_live_"` into `"sk" + "_live_"` means no source line contains the triggering prefix as a single token.
 
-**The Sprint 8 incident:** When the original `test_enhanced_secrets.py` was pushed, GitHub Secret Scanning flagged it for containing a Stripe-format string literal used as a test input value. GitHub created a security alert, the alert required manual dismissal, and the file required a forced rewrite. This incident is why the `_fp()` pattern and helper function approach was established as mandatory for all credential-like strings.
+**Important:** When `test_enhanced_secrets.py` was first pushed, GitHub Secret Scanning flagged it for containing a Stripe-format string literal used as a test input value. GitHub created a security alert, the alert required manual dismissal, and the file required a forced rewrite. This incident is why the `_fp()` pattern and helper function approach was established as mandatory for all credential-like strings.
 
 ---
 

@@ -185,7 +185,7 @@ def _verify_signature(payload_bytes: bytes, signature: str) -> bool:
     if not WEBHOOK_SECRET:
         log.error(
             "GITHUB_WEBHOOK_SECRET is empty — REJECTING all webhooks. "
-            "This was a bypass (returned True) in the original code. Fixed in v4."
+            "This was a bypass (returned True) in the original code. Now correctly returns False."
         )
         return False   # was originally `return True` — a critical security bug
 

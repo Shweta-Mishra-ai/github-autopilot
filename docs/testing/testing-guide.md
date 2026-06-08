@@ -27,7 +27,7 @@
 ## 1. Overview
 
 ```
-383 tests across 18 files
+Tests across 18 files (count updated automatically by CI)
 Zero network calls — all GitHub API and LLM calls mocked
 Zero environment variables required
 Execution time: ~2 seconds
@@ -236,7 +236,7 @@ string-based `patch()` for all handler tests.
 Python's `or` operator treats an empty list as falsy. This causes a
 common fixture bug when testing empty-list edge cases.
 
-**The bug — found during Sprint 8 test writing:**
+**Example bug caught during test writing:**
 
 ```python
 # WRONG — empty list is falsy, falls through to default
@@ -348,7 +348,7 @@ patterns against raw file contents. A test input string like a Stripe
 live key format stored as a literal will trigger a GitHub security
 alert on the test file itself — even though it is not a real key.
 
-**This happened in Sprint 8:** A literal Stripe-format string in
+**Note:** A literal Stripe-format string in
 `test_enhanced_secrets.py` caused GitHub to create a "Publicly leaked
 secret" alert, requiring a forced commit and manual alert dismissal.
 
@@ -651,7 +651,7 @@ fake_redis.set.return_value = True    # SET returns True on success
 
 See [Pattern 6](#9-critical-pattern-6--secret-scanner-source-safety).
 Every credential-like test input must be assembled by a helper
-function. The Sprint 8 incident: a literal Stripe-format string in a
+function. A literal Stripe-format string in a
 test file caused a GitHub security alert that required a forced commit
 and manual dismissal to resolve.
 
@@ -694,13 +694,13 @@ jobs:
           python-version: "3.11"
       - run: pip install -r requirements.txt
       - run: python -m pytest tests/ -q
-        # 383 tests, zero network, < 30s
+        # Zero network calls, runs in < 30s
 
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: pip install ruff==0.8.0
+      - run: pip install ruff
       - run: |
           ruff check app/ \
             --select E,F,W \
@@ -718,7 +718,7 @@ jobs:
 
 ```bash
 python -m pytest tests/ -q
-pip install ruff==0.8.0
+pip install ruff
 ruff check app/ --select E,F,W --ignore E501
 ```
 

@@ -1,4 +1,5 @@
 """
+
 Comments Handler - app/handlers/comments.py
 V4.1 — Security hardened.
 
@@ -21,15 +22,19 @@ from app.core.authorization import check_command_permission
 from app.core.config import load_config
 from app.core.confidence import ConfidenceGate
 from app.core.logger import EventLogger
+
 from app.ai.hallucination import add_confidence_footer, check_response
 from app.ai.router import router
 from app.github.auth import get_installation_token
 from app.github.client import GitHubError, gh_delete, gh_get, gh_post, gh_put
+from app.github.helpers import fmt_error
 from app.security.enhanced_secrets import (
     format_findings as format_secret_findings,
     scan_diff,
 )
 from app.security.dependencies import scan_requirements_txt, format_dep_findings
+import logging
+_log = logging.getLogger(__name__)
 
 SKIP_AUTHORS = {
     "dependabot[bot]",
@@ -70,6 +75,37 @@ def _check_user_rate_limit(repo: str, author: str) -> bool:
         return True  # Redis unavailable → allow
 
 
+
+
+def _extract_command(body: str):
+    """
+    Word-boundary command extraction.
+    Fixes substring bug: '/autofix' previously matched '/apply' first.
+    Uses negative lookbehind so '/fix' won't match 'prefix' or 'proactive'.
+    """
+    body_lower = body.lower()
+    for cmd in ALL_COMMANDS:
+        if re.search(r'(?<![/\w])' + re.escape(cmd) + r'\b', body_lower):
+            return cmd
+    return None
+
+
+
+
+def _safe_router_ask(system: str, user: str, task: str,
+                     max_tokens: int = 1000) -> tuple[dict, object]:
+    """
+    Wrapper around router.ask() with consistent error handling.
+    Returns (result_dict, meta). On any failure returns ({}, None).
+    Callers check: if not result: return fmt_error(...)
+    """
+    try:
+        return router.ask(system, user, task=task, max_tokens=max_tokens)
+    except Exception as e:
+        _log.error(f"router.ask failed task={task}: {e}")
+        return {}, None
+
+
 # ── Main handler ──────────────────────────────────────────────────────────────
 
 def handle(payload: dict):
@@ -87,7 +123,7 @@ def handle(payload: dict):
     if author in SKIP_AUTHORS or author.endswith("[bot]"):
         return
 
-    cmd = next((c for c in ALL_COMMANDS if c in body.lower()), None)
+    cmd = _extract_command(body)
     if not cmd:
         return
 
@@ -192,7 +228,7 @@ def handle(payload: dict):
         elif cmd == "/summarize":
             response = _cmd_summarize(repo, issue_number, token)
         elif cmd == "/ci":
-            response = _cmd_ci(full_context)
+            response = _cmd_ci(full_context, repo=repo, token=token)
         elif cmd == "/security":
             response = _cmd_security(repo, issue_number, issue, token)
         elif cmd == "/gaps":
@@ -247,6 +283,39 @@ def handle(payload: dict):
 
 # ── Command implementations ───────────────────────────────────────────────────
 
+
+# ── Shared helpers (used by multiple commands) ─────────────────────────────
+
+def _fetch_commits_since_tag(
+    repo: str, token: str, per_page: int = 20
+) -> tuple[list, str]:
+    """
+    Fetch recent commits and the latest tag name.
+    Returns (commits_list, latest_tag_str).
+    Shared by /changelog and /release to avoid duplicated GitHub API calls.
+    """
+    tags       = gh_get(f"/repos/{repo}/tags?per_page=1", token)
+    commits    = gh_get(f"/repos/{repo}/commits?per_page={per_page}", token)
+    latest_tag = tags[0]["name"] if (isinstance(tags, list) and tags) else "v0.0.0"
+    return (commits if isinstance(commits, list) else []), latest_tag
+
+
+def _bump_version(version: str) -> str:
+    """
+    Increment the patch segment of a semver string.
+    "v1.2.3" → "v1.2.4"
+    Falls back to "v0.1.0" if parsing fails.
+    """
+    try:
+        m = re.match(r"^(v?)(\d+)\.(\d+)\.(\d+)", version.strip())
+        if m:
+            prefix, major, minor, patch = m.group(1), m.group(2), m.group(3), m.group(4)
+            return f"{prefix}{major}.{minor}.{int(patch) + 1}"
+    except Exception:
+        pass
+    return "v0.1.0"
+
+
 def _cmd_fix(ctx_title: str, context: str, gate=None) -> str:
     r, _meta = router.ask(
         "Senior engineer. Give precise, working fix. JSON only.",
@@ -280,128 +349,124 @@ def _cmd_apply(
     repo: str, issue_number: int, ctx_title: str,
     context: str, token: str
 ) -> str:
+    """
+    /apply <branch> — Create a PR from an autofix branch to default branch.
+
+    Usage:
+      /apply                     -> lists available fix/bot-issue-* branches
+      /apply fix/bot-issue-42    -> opens a PR from that branch
+    """
+    branch = context.strip()
+
+    # Guard: reject obviously unsafe branch names
+    if branch and (
+        ".." in branch
+        or branch.startswith("/")
+        or " " in branch
+        or len(branch) > 200
+    ):
+        return (
+            "## \u26a0\ufe0f Invalid Branch Name\n\n"
+            f"`{branch[:80]}` is not a valid branch name.\n\n"
+            "Usage: `/apply fix/bot-issue-42`"
+        )
+
     try:
         repo_data      = gh_get(f"/repos/{repo}", token)
         default_branch = repo_data.get("default_branch", "main")
-        commits        = gh_get(
-            f"/repos/{repo}/commits?sha={default_branch}&per_page=20", token
-        )
 
-        if not commits:
-            return "## ⚠️ No commits found."
-
-        commit_list = "\n".join(
-            f"- SHA: {c['sha']} | Message: {c['commit']['message'].split(chr(10))[0]}"
-            for c in commits[:15]
-        )
-
-        r, _meta = router.ask(
-            "Git expert. Identify non-conventional commits. JSON only.",
-            f"""Issue: {ctx_title}
-Recent commits:
-{commit_list}
-
-Return JSON:
-{{
-  "commits": [
-    {{"sha": "full_sha", "old_message": "original", "new_message": "conventional: message"}}
-  ]
-}}""",
-            task="commit_lint"
-        )
-
-        commits_to_fix = r.get("commits", [])
-        if not commits_to_fix:
-            return (
-                "## ✅ Nothing to Fix\n\n"
-                "All commits already follow Conventional Commits! 🎉"
-            )
-
-        sha_map = {c["sha"][:7]: c["sha"] for c in commits}
-        sha_map.update({c["sha"]: c["sha"] for c in commits})
-
-        fix_branch = f"autopilot/fix-commits-{int(_time.time())}"
-        ref_data   = gh_get(
-            f"/repos/{repo}/git/ref/heads/{default_branch}", token
-        )
-        base_sha   = ref_data["object"]["sha"]
-
-        try:
-            gh_post(f"/repos/{repo}/git/refs", token, {
-                "ref": f"refs/heads/{fix_branch}",
-                "sha": base_sha
-            })
-        except Exception as e:
-            return f"## ⚠️ Could not create fix branch\n\n`{str(e)[:200]}`"
-
-        last_sha = base_sha
-        fixed, failed = [], []
-
-        for c in commits_to_fix:
-            sha     = c.get("sha", "").strip()
-            new_msg = c.get("new_message", "").strip()
-            old_msg = c.get("old_message", sha[:7])
-            if not sha or not new_msg:
-                continue
-
-            full_sha = sha_map.get(sha, sha_map.get(sha[:7], sha))
-
-            try:
-                commit_data = gh_get(f"/repos/{repo}/git/commits/{full_sha}", token)
-                new_commit  = gh_post(f"/repos/{repo}/git/commits", token, {
-                    "message": new_msg,
-                    "tree":    commit_data["tree"]["sha"],
-                    "parents": [p["sha"] for p in commit_data.get("parents", [])]
-                })
-                last_sha = new_commit["sha"]
-                fixed.append(
-                    f"✅ `{sha[:7]}` → `{new_msg}`\n   *(was: `{old_msg[:50]}`)*"
-                )
-            except Exception as e:
-                failed.append(f"❌ `{sha[:7]}` — {str(e)[:80]}")
-
-        if fixed:
-            try:
-                from app.github.client import gh_patch
-                gh_patch(f"/repos/{repo}/git/refs/heads/{fix_branch}", token, {
-                    "sha": last_sha
-                })
-            except Exception as e:
+        # No branch given: list available autofix branches
+        if not branch:
+            branches   = gh_get(f"/repos/{repo}/branches?per_page=100", token)
+            fix_branches = [
+                b["name"] for b in (branches if isinstance(branches, list) else [])
+                if b.get("name", "").startswith("fix/bot-issue-")
+            ]
+            if not fix_branches:
                 return (
-                    f"## ⚠️ Commits created but branch update failed\n\n"
-                    f"`{str(e)[:200]}`"
+                    "## \u2139\ufe0f No Autofix Branches Found\n\n"
+                    "No `fix/bot-issue-*` branches exist yet.\n\n"
+                    "Run `/autofix` on an issue first, then use "
+                    "`/apply <branch>` to create the PR."
                 )
-
-        if fixed:
-            try:
-                gh_post(f"/repos/{repo}/pulls", token, {
-                    "title": f"fix: apply conventional commits (issue #{issue_number})",
-                    "head":  fix_branch,
-                    "base":  default_branch,
-                    "body": (
-                        f"Fixes #{issue_number}\n\n"
-                        "AI-applied conventional commit fixes. "
-                        "Please review before merging."
-                    )
-                })
-            except Exception:
-                pass
-
-        lines = ["## 🔧 Auto-Apply Results\n"]
-        if fixed:
-            lines.append(f"### ✅ Fixed ({len(fixed)} commits)\n")
-            lines.extend(fixed)
-        if failed:
-            lines.append(f"\n### ❌ Failed ({len(failed)} commits)\n")
-            lines.extend(failed)
-        if fixed:
-            lines.append(
-                f"\n✨ Fix branch `{fix_branch}` created — PR opened for review!"
+            branch_list = "\n".join(f"- `{b}`" for b in fix_branches[:10])
+            return (
+                "## \U0001f331 Available Autofix Branches\n\n"
+                f"{branch_list}\n\n"
+                "Reply with `/apply <branch-name>` to open a PR."
             )
-        return "\n".join(lines)
 
+        # Branch given: verify it exists
+        try:
+            gh_get(f"/repos/{repo}/branches/{branch}", token)
+        except GitHubError as e:
+            if e.status_code == 404:
+                return (
+                    f"## \u26a0\ufe0f Branch Not Found\n\n"
+                    f"`{branch}` does not exist in `{repo}`.\n\n"
+                    "Use `/apply` (no args) to see available branches."
+                )
+            raise
+
+        # Check if PR already exists for this branch
+        owner = repo.split("/")[1] if "/" in repo else repo
+        existing_prs = gh_get(
+            f"/repos/{repo}/pulls?head={owner}:{branch}&state=open&per_page=5",
+            token,
+        )
+        if isinstance(existing_prs, list) and existing_prs:
+            pr = existing_prs[0]
+            return (
+                f"## \u2139\ufe0f PR Already Exists\n\n"
+                f"A PR for `{branch}` is already open: "
+                f"[#{pr['number']} \u2014 {pr['title'][:60]}]({pr['html_url']})"
+            )
+
+        # Derive issue number from branch name (fix/bot-issue-42)
+        issue_ref = ""
+        m = re.search(r"issue-(\d+)", branch)
+        if m:
+            issue_ref = f"\n\nCloses #{m.group(1)}"
+
+        # Create the PR
+        pr = gh_post(f"/repos/{repo}/pulls", token, {
+            "title": f"fix: autofix for issue #{issue_number}",
+            "head":  branch,
+            "base":  default_branch,
+            "body": (
+                f"## \U0001f916 Autofix PR\n\n"
+                f"Requested by `/apply` on issue #{issue_number}.\n"
+                f"Branch: `{branch}` \u2192 `{default_branch}`"
+                f"{issue_ref}\n\n"
+                "> \u26a0\ufe0f AI-generated \u2014 please review all changes before merging."
+            ),
+            "draft": False,
+        })
+
+        pr_url    = pr.get("html_url", "")
+        pr_number = pr.get("number", "?")
+
+        return (
+            f"## \u2705 PR Created\n\n"
+            f"**PR #{pr_number}:** [{pr.get('title','')}]({pr_url})\n\n"
+            f"**Branch:** `{branch}` \u2192 `{default_branch}`\n\n"
+            f"> Review the changes carefully before merging."
+        )
+
+    except GitHubError as e:
+        if e.status_code == 422:
+            return (
+                f"## \u26a0\ufe0f Cannot Create PR\n\n"
+                f"GitHub returned 422: `{str(e)[:200]}`\n\n"
+                "Possible reasons:\n"
+                "- Branch is already up to date with base\n"
+                "- A closed PR already exists for this branch\n"
+                "- No commits between branch and base"
+            )
+        return f"## \u26a0\ufe0f Apply Failed\n\n`{str(e)[:200]}`"
     except Exception as e:
-        return f"## ⚠️ Apply Failed\n\n`{str(e)[:300]}`"
+        _log.error(f"_cmd_apply unexpected error: {e}")
+        return f"## \u26a0\ufe0f Apply Failed\n\nUnexpected error: `{str(e)[:200]}`"
 
 
 def _cmd_explain(context: str) -> str:
@@ -596,7 +661,7 @@ def _cmd_health(repo: str, token: str) -> str:
         )
 
     except Exception as e:
-        return f"## ⚠️ Health Check Failed\n\n`{str(e)[:200]}`"
+        return fmt_error("Health Check Failed", e)
 
 
 def _cmd_version(repo: str, token: str) -> str:
@@ -628,7 +693,7 @@ def _cmd_version(repo: str, token: str) -> str:
         )
 
     except Exception as e:
-        return f"## ⚠️ Version check failed: `{str(e)[:200]}`"
+        return fmt_error("Version check failed", e)
 
 
 def _cmd_merge(
@@ -679,7 +744,7 @@ def _cmd_merge(
         return f"## ⚠️ Merge failed: {result.get('message','Unknown error')}"
 
     except Exception as e:
-        return f"## ⚠️ Merge error: `{str(e)[:300]}`"
+        return fmt_error("Merge error", e)
 
 
 def _cmd_summarize(repo: str, issue_number: int, token: str) -> str:
@@ -699,30 +764,95 @@ def _cmd_summarize(repo: str, issue_number: int, token: str) -> str:
         )
         return f"## 📝 Thread Summary\n\n{summary}"
     except Exception as e:
-        return f"## ⚠️ Summarize failed: `{str(e)[:200]}`"
+        return fmt_error("Summarize failed", e)
 
 
-def _cmd_ci(context: str) -> str:
-    r, _meta = router.ask(
-        "DevOps expert. Analyze CI failures. JSON only.",
-        f"""Analyze this CI failure:
-{context[:3000]}
+def _cmd_ci(context: str, repo: str = "", token: str = "") -> str:
+    """
+    /ci [context] — Analyze a CI failure.
+
+    If context is provided (e.g. pasted error log): analyze it directly.
+    If no context: fetch the latest failed workflow run from GitHub API.
+    """
+    ci_context = context.strip() if context else ""
+
+    # ── No context: fetch latest failed run from GitHub ──────────────────
+    if not ci_context and repo and token:
+        try:
+            runs = gh_get(
+                f"/repos/{repo}/actions/runs?status=failure&per_page=5",
+                token,
+            )
+            run_list = runs.get("workflow_runs", []) if isinstance(runs, dict) else []
+            if not run_list:
+                return (
+                    "## ℹ️ No Recent CI Failures\n\n"
+                    "No failed workflow runs found in the last 5 runs.\n\n"
+                    "To analyze a specific failure, paste the error log after `/ci`:\n"
+                    "```\n/ci\n<paste error output here>\n```"
+                )
+            latest = run_list[0]
+            ci_context = (
+                f"Workflow: {latest.get('name', 'unknown')}\n"
+                f"Branch: {latest.get('head_branch', 'unknown')}\n"
+                f"Status: {latest.get('conclusion', 'unknown')}\n"
+                f"URL: {latest.get('html_url', '')}\n"
+                f"Commit: {latest.get('head_sha', '')[:12]}\n"
+                f"Message: {latest.get('head_commit', {}).get('message', '')[:200]}"
+            )
+        except Exception as e:
+            return (
+                f"## ⚠️ Could not fetch CI runs\n\n"
+                f"`{str(e)[:200]}`\n\n"
+                "To analyze a specific failure, paste the error log after `/ci`."
+            )
+    elif not ci_context:
+        return (
+            "## ℹ️ No CI Context\n\n"
+            "To analyze a CI failure, either:\n"
+            "1. Paste the error log after `/ci`\n"
+            "2. Use `/ci` in a repo with GitHub Actions configured\n\n"
+            "```\n/ci\n<paste error output here>\n```"
+        )
+
+    # ── Analyze the context ───────────────────────────────────────────────
+    try:
+        r, _meta = router.ask(
+            "DevOps expert. Analyze CI failures precisely. JSON only.",
+            f"""Analyze this CI failure and provide actionable fixes:
+
+{ci_context[:3000]}
 
 Return JSON:
 {{
-  "root_cause": "exact reason for failure",
-  "fix": "exact steps to fix",
+  "root_cause": "exact reason for failure in one sentence",
+  "fix": "step-by-step commands or config changes to fix this",
   "prevention": "how to prevent this in future",
   "confidence": 0.85
 }}""",
-        task="ci_analysis"
-    )
-    return (
-        f"## 🔴 CI Failure Analysis\n\n"
-        f"**Root Cause:** {r.get('root_cause', 'See below')}\n\n"
-        f"**Fix:**\n```\n{r.get('fix', '')}\n```\n\n"
-        f"**Prevention:** {r.get('prevention', '')}"
-    )
+            task="ci_analysis",
+        )
+
+        if not isinstance(r, dict) or "root_cause" not in r:
+            return (
+                "## ⚠️ CI Analysis Incomplete\n\n"
+                "Could not parse a structured response. "
+                "Raw output:\n\n"
+                f"```\n{str(r)[:500]}\n```"
+            )
+
+        conf_pct = int(float(r.get("confidence", 0.85)) * 100)
+        return (
+            f"## 🔴 CI Failure Analysis\n\n"
+            f"**Root Cause:** {r.get('root_cause', 'Unknown')}\n\n"
+            f"**Fix:**\n```\n{r.get('fix', 'No fix suggested')}\n```\n\n"
+            f"**Prevention:** {r.get('prevention', 'N/A')}\n\n"
+            f"*Confidence: {conf_pct}%*"
+        )
+
+    except Exception as e:
+        _log.error(f"_cmd_ci LLM error: {e}")
+        return fmt_error("CI Analysis Failed", e)
 
 
 def _cmd_security(
@@ -762,7 +892,7 @@ def _cmd_security(
         return "\n\n".join(lines)
 
     except Exception as e:
-        return f"## ⚠️ Security scan failed: `{str(e)[:200]}`"
+        return fmt_error("Security scan failed", e)
 
 
 def _cmd_gaps(context: str) -> str:
@@ -796,36 +926,65 @@ Return JSON:
 
 
 def _cmd_changelog(repo: str, token: str) -> str:
+    """
+    /changelog — Generate a Keep-a-Changelog entry from recent commits.
+    Posts the entry as a comment. Does not modify CHANGELOG.md.
+    """
     try:
-        commits    = gh_get(f"/repos/{repo}/commits?per_page=20", token)
-        tags       = gh_get(f"/repos/{repo}/tags?per_page=1", token)
-        latest_tag = tags[0]["name"] if tags else "v0.0.0"
+        commits, latest_tag = _fetch_commits_since_tag(repo, token)
+
+        if not commits:
+            return (
+                "## ℹ️ No Commits Found\n\n"
+                "No commits found in this repository yet."
+            )
 
         commit_list = "\n".join(
-            f"- {c['commit']['message'].split(chr(10))[0]}"
+            f"- {c['commit']['message'].split(chr(10))[0][:120]}"
             for c in commits[:15]
         )
 
+        if not commit_list.strip():
+            return (
+                "## ℹ️ No New Commits\n\n"
+                f"No new commits since `{latest_tag}`."
+            )
+
         changelog, _meta = router.ask_text(
-            "Technical writer. Generate a clean CHANGELOG entry in "
-            "Keep a Changelog format.",
-            f"""Generate a CHANGELOG.md entry for version after {latest_tag}.
+            "Technical writer. Generate a clean CHANGELOG entry. "
+            "Keep a Changelog format. No extra commentary.",
+            f"""Generate a CHANGELOG.md entry for the version after {latest_tag}.
 
 Recent commits:
 {commit_list}
 
-Format:
+Format exactly:
 ## [X.Y.Z] - YYYY-MM-DD
 ### Added
+- ...
 ### Changed
-### Fixed""",
-            task="changelog"
+- ...
+### Fixed
+- ...
+
+Skip sections with no entries. Use today's date.""",
+            task="changelog",
         )
 
-        return f"## 📋 CHANGELOG Entry\n\n```markdown\n{changelog}\n```"
+        if not changelog or not changelog.strip():
+            return "## ⚠️ Changelog generation returned empty response. Try again."
 
+        return (
+            f"## 📋 CHANGELOG Entry\n\n"
+            f"```markdown\n{changelog.strip()}\n```\n\n"
+            f"*Copy this into your `CHANGELOG.md` before the previous entry.*"
+        )
+
+    except GitHubError as e:
+        return fmt_error("Changelog failed (GitHub API)", e)
     except Exception as e:
-        return f"## ⚠️ Changelog generation failed: `{str(e)[:200]}`"
+        _log.error(f"_cmd_changelog error: {e}")
+        return fmt_error("Changelog generation failed", e)
 
 
 def _cmd_budget() -> str:
@@ -833,13 +992,21 @@ def _cmd_budget() -> str:
         from app.ai.metrics import format_budget_comment
         return format_budget_comment()
     except Exception as e:
-        return f"## ⚠️ Budget check failed: `{str(e)[:200]}`"
+        return fmt_error("Budget check failed", e)
 
 
 def _cmd_rollback(
     repo: str, issue_number: int, token: str,
     cmd_args: str, author: str
 ) -> str:
+    """
+    /rollback           → list available snapshots
+    /rollback 3         → ask for confirmation
+    /rollback 3 confirm → execute rollback of snapshot #3
+
+    Two-step confirmation prevents accidental destructive actions.
+    Safety snapshot is taken BEFORE rollback; if it fails, rollback aborts.
+    """
     from app.core.snapshot import (
         get_snapshot_by_number,
         format_snapshot_list,
@@ -847,16 +1014,27 @@ def _cmd_rollback(
         take_snapshot,
     )
 
-    if not cmd_args:
+    args = cmd_args.strip() if cmd_args else ""
+
+    # ── No args: show snapshot list ───────────────────────────────────────
+    if not args:
         return format_snapshot_list(repo)
 
+    # ── Parse: "3" or "3 confirm" ─────────────────────────────────────────
+    parts   = args.split()
+    n_str   = parts[0]
+    confirm = len(parts) > 1 and parts[1].lower() == "confirm"
+
     try:
-        n = int(cmd_args.strip())
+        n = int(n_str)
     except ValueError:
         return (
             f"## ⚠️ Invalid Snapshot Number\n\n"
-            f"`{cmd_args}` is not a valid number.\n\n"
-            "Use `/rollback` to see available snapshots."
+            f"`{n_str}` is not a valid number.\n\n"
+            "Usage:\n"
+            "- `/rollback` — see available snapshots\n"
+            "- `/rollback 3` — preview snapshot #3\n"
+            "- `/rollback 3 confirm` — execute rollback"
         )
 
     snap = get_snapshot_by_number(repo, n)
@@ -867,66 +1045,97 @@ def _cmd_rollback(
             "(max 10, expire after 7 days)."
         )
 
-    # Safety snapshot before restoring
-    take_snapshot(repo, token, trigger=f"pre_rollback_by_{author}")
-
-    restored    = []
-    failed      = []
+    # ── Show confirmation prompt if not confirmed ─────────────────────────
     bot_actions = snap.get("bot_actions", [])
+    snap_ts     = snap.get("timestamp", "")[:16].replace("T", " ")
+    action_preview = "\n".join(
+        f"- `{a.get('type','unknown')}` on #{a.get('number','?')}"
+        for a in bot_actions[:5]
+    ) or "- No recorded actions"
+
+    if not confirm:
+        return (
+            f"## ⚠️ Confirm Rollback\n\n"
+            f"**Snapshot #{n}** — taken at `{snap_ts}` "
+            f"by trigger: `{snap.get('trigger','unknown')}`\n\n"
+            f"**Actions that will be undone:**\n{action_preview}\n\n"
+            f"{'*(and more...)*' if len(bot_actions) > 5 else ''}\n\n"
+            f"**To proceed:** reply `/rollback {n} confirm`\n"
+            f"**To cancel:** ignore this message"
+        )
+
+    # ── Confirmed: take safety snapshot first ────────────────────────────
+    try:
+        take_snapshot(
+            repo, token, trigger=f"pre_rollback_by_{author}"
+        )
+    except Exception as e:
+        # Safety snapshot failed — abort. Never rollback without safety net.
+        _log.error(f"_cmd_rollback safety snapshot failed: {e}")
+        return (
+            "## ⚠️ Rollback Aborted\n\n"
+            "Could not create a safety snapshot before rolling back.\n\n"
+            f"Error: `{str(e)[:200]}`\n\n"
+            "Rollback was **not** performed. Fix the snapshot system first."
+        )
+
+    # ── Execute rollback ──────────────────────────────────────────────────
+    restored: list[str] = []
+    failed:   list[str] = []
 
     for action in reversed(bot_actions):
         action_type = action.get("type", "")
+        num         = action.get("number")
+
         try:
-            if action_type == "create_issue":
-                number = action.get("number")
-                if number:
-                    gh_put(
-                        f"/repos/{repo}/issues/{number}",
-                        token,
-                        {"state": "closed"},
-                    )
-                    restored.append(
-                        f"Closed issue #{number}: "
-                        f"{action.get('title','')[:50]}"
-                    )
+            if action_type == "create_issue" and num:
+                gh_put(f"/repos/{repo}/issues/{num}", token, {"state": "closed"})
+                restored.append(
+                    f"Closed issue #{num}: {action.get('title','')[:50]}"
+                )
 
-            elif action_type == "edit_pr_title":
-                number    = action.get("number")
+            elif action_type == "edit_pr_title" and num:
                 old_title = action.get("old_title", "")
-                if number and old_title:
-                    gh_put(
-                        f"/repos/{repo}/pulls/{number}",
-                        token,
-                        {"title": old_title},
-                    )
-                    restored.append(
-                        f"Reverted PR #{number} title to: {old_title[:50]}"
-                    )
+                if old_title:
+                    gh_put(f"/repos/{repo}/pulls/{num}", token, {"title": old_title})
+                    restored.append(f"Reverted PR #{num} title to: `{old_title[:50]}`")
+                else:
+                    failed.append(f"edit_pr_title #{num}: no old_title recorded")
 
-            elif action_type == "add_labels":
-                number = action.get("number")
+            elif action_type == "add_labels" and num:
                 labels = action.get("labels", [])
-                if number and labels:
-                    for lbl in labels:
-                        try:
-                            gh_delete(
-                                f"/repos/{repo}/issues/{number}/labels/{lbl}",
-                                token,
-                            )
-                        except Exception:
-                            pass
-                    restored.append(
-                        f"Removed labels {labels} from #{number}"
-                    )
+                label_errors = []
+                for lbl in labels:
+                    try:
+                        gh_delete(f"/repos/{repo}/issues/{num}/labels/{lbl}", token)
+                    except GitHubError as le:
+                        # 404 = label already removed, that's fine
+                        if le.status_code != 404:
+                            label_errors.append(f"{lbl}: {str(le)[:40]}")
+                    except Exception as le:
+                        label_errors.append(f"{lbl}: {str(le)[:40]}")
 
-        except Exception as exc:
+                if label_errors:
+                    failed.append(f"remove labels from #{num}: {'; '.join(label_errors)}")
+                else:
+                    restored.append(f"Removed labels {labels} from #{num}")
+
+            else:
+                # Unknown or incomplete action — skip, don't fail
+                _log.warning(f"_cmd_rollback: unknown action type {action_type!r}, skipping")
+
+        except GitHubError as exc:
             failed.append(
-                f"{action_type} #{action.get('number','?')}: "
-                f"{str(exc)[:60]}"
+                f"{action_type} #{num or '?'}: {str(exc)[:80]}"
+            )
+        except Exception as exc:
+            _log.error(f"_cmd_rollback action {action_type} failed unexpectedly: {exc}")
+            failed.append(
+                f"{action_type} #{num or '?'}: unexpected error {str(exc)[:60]}"
             )
 
     if not bot_actions:
-        restored.append("No automated actions to undo in this snapshot")
+        restored.append("No automated actions were recorded in this snapshot")
 
     return format_rollback_result(repo, snap, restored, failed)
 
@@ -985,7 +1194,7 @@ Return JSON:
         )
 
     except Exception as e:
-        return f"## ⚠️ Impact analysis failed: `{str(e)[:200]}`"
+        return fmt_error("Impact analysis failed", e)
 
 
 def _cmd_secfull(repo: str, token: str) -> str:
@@ -994,7 +1203,7 @@ def _cmd_secfull(repo: str, token: str) -> str:
         report = run_security_scan(repo, token)
         return report.to_markdown(include_low=True)
     except Exception as e:
-        return f"## ⚠️ Security scan failed: `{str(e)[:200]}`"
+        return fmt_error("Security scan failed", e)
 
 
 def _cmd_autofix(
@@ -1007,20 +1216,70 @@ def _cmd_autofix(
 
 
 def _cmd_report(repo: str) -> str:
+    """
+    /report — Show weekly analytics for this repo.
+    Degrades gracefully when Redis is unavailable.
+    """
+    # record_command_used is best-effort — never block the report on it
     try:
-        from app.core.analytics import format_report_comment, record_command_used
+        from app.core.analytics import record_command_used
         record_command_used(repo, "report")
-        return format_report_comment(repo)
+    except Exception:
+        pass  # Non-critical — analytics tracking failure must not block report
+
+    try:
+        from app.core.analytics import format_report_comment
+        report = format_report_comment(repo)
+
+        if not report or not report.strip():
+            return (
+                "## 📊 No Data Yet\n\n"
+                "No activity has been recorded for this repo yet.\n\n"
+                "The report will populate after the first PR merge, "
+                "issue close, or command is used."
+            )
+        return report
+
     except Exception as e:
-        return f"## ⚠️ Report failed: `{str(e)[:200]}`"
+        err = str(e).lower()
+        if "redis" in err or "connection" in err or "refused" in err:
+            return (
+                "## ⚠️ Report Unavailable\n\n"
+                "Redis is not reachable — analytics data cannot be read.\n\n"
+                "Check your `REDIS_URL` environment variable in Render.\n"
+                "The report will work once Redis is connected."
+            )
+        _log.error(f"_cmd_report error: {e}")
+        return fmt_error("Report failed", e)
 
 
 def _cmd_notify(
     repo: str, issue_number: int, issue: dict,
     token: str, cmd_args: str
 ) -> str:
+    """
+    /notify [message] — Send Discord/Slack notification about this issue or PR.
+
+    Checks webhook env vars upfront so the error message is actionable.
+    Supports custom message via cmd_args.
+    """
+    import os
+    discord_url = os.environ.get("DISCORD_WEBHOOK_URL", "")
+    slack_url   = os.environ.get("SLACK_WEBHOOK_URL", "")
+
+    if not discord_url and not slack_url:
+        return (
+            "## ⚠️ Notifications Not Configured\n\n"
+            "No webhook URL found. Add one of these to your Render environment:\n\n"
+            "- `DISCORD_WEBHOOK_URL` — Discord webhook URL\n"
+            "- `SLACK_WEBHOOK_URL` — Slack webhook URL\n\n"
+            "See [Render env vars](https://render.com/docs/environment-variables) "
+            "for setup instructions."
+        )
+
     try:
         from app.github.notifications import send_rich_discord
+
         title  = issue.get("title", f"Issue #{issue_number}")
         is_pr  = "pull_request" in issue
         labels = [lb.get("name", "") for lb in issue.get("labels", [])]
@@ -1029,38 +1288,65 @@ def _cmd_notify(
             "html_url",
             f"https://github.com/{repo}/issues/{issue_number}",
         )
-        color = 0x5865F2
-        if any("bug" in lb.lower() for lb in labels):
-            color = 0xE74C3C
-        elif any("security" in lb.lower() for lb in labels):
-            color = 0xE74C3C
-        elif any("feature" in lb.lower() for lb in labels):
-            color = 0x2ECC71
+        custom_msg = cmd_args.strip() if cmd_args else ""
 
-        desc = (
-            f"**Repo:** `{repo}`\n"
-            f"**Labels:** {', '.join(labels) or 'none'}"
-        )
+        # Determine color by label semantics
+        color = 0x5865F2  # default: Discord blurple
+        for lb in labels:
+            lb_lower = lb.lower()
+            if "bug" in lb_lower or "security" in lb_lower or "critical" in lb_lower:
+                color = 0xE74C3C  # red
+                break
+            if "feature" in lb_lower or "enhancement" in lb_lower:
+                color = 0x2ECC71  # green
+                break
+            if "question" in lb_lower or "help" in lb_lower:
+                color = 0xF39C12  # orange
+                break
+
+        desc_parts = [
+            f"**Repo:** `{repo}`",
+            f"**Labels:** {', '.join(labels) or 'none'}",
+        ]
+        if custom_msg:
+            desc_parts.append(f"**Note:** {custom_msg[:200]}")
+
+        notify_title = f"🔔 {kind} #{issue_number} — {title[:80]}"
+
         success, msg = send_rich_discord(
-            title=f"🔔 {kind} #{issue_number} — {title[:80]}",
-            description=desc,
+            title=notify_title,
+            description="\n".join(desc_parts),
             color=color,
             fields=[
-                {"name": "Type",   "value": kind,            "inline": True},
-                {"name": "Number", "value": f"#{issue_number}", "inline": True},
+                {"name": "Type",   "value": kind,               "inline": True},
+                {"name": "Number", "value": f"#{issue_number}",  "inline": True},
+                {"name": "Repo",   "value": repo,                "inline": False},
             ],
             url=url,
         )
+
+        channels = []
+        if discord_url:
+            channels.append("Discord")
+        if slack_url:
+            channels.append("Slack")
+
         if success:
             return (
-                f"## 🔔 Notification Sent!\n\n"
-                f"Discord alert posted for {kind} #{issue_number}."
+                f"## 🔔 Notification Sent\n\n"
+                f"Alert posted to: **{', '.join(channels)}**\n\n"
+                f"**{kind} #{issue_number}:** {title[:80]}"
             )
+
+        # send_rich_discord returned False
         return (
             f"## ⚠️ Notification Failed\n\n"
-            f"`{msg}`\n\nCheck DISCORD_WEBHOOK_URL in Render env."
+            f"Webhook returned error: `{msg[:200]}`\n\n"
+            "Check that your webhook URL is valid and the channel still exists."
         )
+
     except Exception as e:
+        _log.error(f"_cmd_notify error: {e}")
         return f"## ⚠️ Notify error: `{str(e)[:200]}`"
 
 
@@ -1231,16 +1517,31 @@ Return JSON:
 
 def _cmd_release(repo: str, token: str, author: str) -> str:
     """
-    /release — Draft a GitHub release from latest commits since last tag.
-    Creates a draft release with AI-generated release notes.
+    /release — Draft a GitHub release from commits since last tag.
+
+    Guards:
+    - Empty repo (no commits) → clear message
+    - Duplicate tag (422) → suggest next version
+    - LLM returns bad version format → fallback bump
     """
     try:
-        tags    = gh_get(f"/repos/{repo}/tags?per_page=1", token)
+        # Fetch tags and commits
+        tags    = gh_get(f"/repos/{repo}/tags?per_page=10", token)
         commits = gh_get(f"/repos/{repo}/commits?per_page=20", token)
 
-        latest_tag     = tags[0]["name"] if tags else "v0.0.0"
-        commit_list    = "\n".join(
-            f"- {c['commit']['message'].split(chr(10))[0]}"
+        if not commits:
+            return (
+                "## ⚠️ No Commits Found\n\n"
+                "This repository has no commits yet. "
+                "Make at least one commit before creating a release."
+            )
+
+        # All existing tag names — pass to LLM to avoid conflicts
+        existing_tags = [t["name"] for t in (tags if isinstance(tags, list) else [])]
+        latest_tag    = existing_tags[0] if existing_tags else "v0.0.0"
+
+        commit_list = "\n".join(
+            f"- {c['commit']['message'].split(chr(10))[0][:120]}"
             for c in commits[:15]
         )
 
@@ -1248,94 +1549,168 @@ def _cmd_release(repo: str, token: str, author: str) -> str:
             "Technical writer. Generate a GitHub release. JSON only.",
             f"""Generate release notes for the next version after {latest_tag}.
 
+Existing tags (DO NOT reuse any of these): {', '.join(existing_tags[:10]) or 'none'}
 Commits since last release:
 {commit_list}
 
 Return JSON:
 {{
-  "version": "next semantic version (e.g. v1.2.3)",
-  "title": "short release title",
-  "highlights": ["key feature 1", "key feature 2"],
+  "version": "next semantic version e.g. v1.2.3 — must not be in existing tags",
+  "title": "short descriptive release title",
+  "highlights": ["key change 1", "key change 2"],
   "breaking_changes": [],
   "release_notes": "full markdown release notes"
 }}""",
             task="changelog",
         )
 
-        version        = r.get("version", "v0.0.1")
-        release_notes  = r.get("release_notes", "")
-        highlights     = r.get("highlights", [])
+        version = r.get("version", "").strip()
 
-        # Create draft release via GitHub API
-        release = gh_post(f"/repos/{repo}/releases", token, {
-            "tag_name":         version,
-            "name":             r.get("title", version),
-            "body":             release_notes,
-            "draft":            True,
-            "prerelease":       False,
-            "generate_release_notes": False,
-        })
+        # Validate version format — fallback to auto-bump if LLM fails
+        if not version or not re.match(r"^v\d+\.\d+\.\d+", version):
+            version = _bump_version(latest_tag)
+            _log.warning(f"_cmd_release: LLM returned bad version, using {version}")
 
-        release_url = release.get("html_url", "")
+        # If LLM suggested an existing tag, bump it
+        if version in existing_tags:
+            version = _bump_version(version)
+            _log.warning(f"_cmd_release: version conflict, bumped to {version}")
+
+        release_notes = r.get("release_notes", f"Release {version}")
+        highlights    = r.get("highlights", [])
+
+        # Create draft release
+        try:
+            release = gh_post(f"/repos/{repo}/releases", token, {
+                "tag_name":               version,
+                "name":                   r.get("title", version),
+                "body":                   release_notes,
+                "draft":                  True,
+                "prerelease":             False,
+                "generate_release_notes": False,
+            })
+        except GitHubError as e:
+            if e.status_code == 422:
+                # Tag already exists (race condition or LLM conflict)
+                bumped = _bump_version(version)
+                return (
+                    f"## ⚠️ Tag Already Exists\n\n"
+                    f"`{version}` already exists as a tag or release.\n\n"
+                    f"Try again — the bot will use `{bumped}` next time, "
+                    f"or specify manually by editing the draft."
+                )
+            raise
+
+        release_url   = release.get("html_url", "")
         highlights_md = (
             "\n".join(f"- {h}" for h in highlights[:5])
-            if highlights
-            else "_No highlights identified._"
+            if highlights else "_No highlights identified._"
+        )
+        breaking      = r.get("breaking_changes", [])
+        breaking_md   = (
+            "\n".join(f"- ⚠️ {b}" for b in breaking[:3])
+            if breaking else ""
         )
 
-        return (
+        out = (
             f"## 🚀 Draft Release Created\n\n"
-            f"**Version:** `{version}`\n"
-            f"**Status:** Draft (review before publishing)\n\n"
-            f"### Highlights\n{highlights_md}\n\n"
-            f"[View Draft Release]({release_url})\n\n"
-            f"> ✏️ Edit the draft before publishing — "
+            f"**Version:** `{version}`  |  **Status:** Draft\n\n"
+            f"### Highlights\n{highlights_md}\n"
+        )
+        if breaking_md:
+            out += f"\n### ⚠️ Breaking Changes\n{breaking_md}\n"
+        out += (
+            f"\n[View & Edit Draft]({release_url})\n\n"
+            f"> Review and publish when ready. "
             f"AI-generated notes may need adjustments."
         )
+        return out
 
+    except GitHubError as e:
+        return f"## ⚠️ Release creation failed (GitHub API): `{str(e)[:200]}`"
     except Exception as e:
+        _log.error(f"_cmd_release error: {e}")
         return f"## ⚠️ Release creation failed: `{str(e)[:200]}`"
 
 
 def _cmd_runtests(repo: str, issue_number: int, token: str) -> str:
     """
     /runtests — Trigger CI test workflow via GitHub Actions workflow_dispatch.
-    Requires a workflow named 'test.yml' or 'ci.yml' in the repo.
+
+    Error handling:
+    - 422: workflow exists but has no workflow_dispatch trigger → tell user how to fix
+    - 403: GitHub App missing actions:write permission → tell user how to fix
+    - No workflow found → suggest workflow names to create
     """
     try:
         repo_data      = gh_get(f"/repos/{repo}", token)
         default_branch = repo_data.get("default_branch", "main")
 
-        # Find test workflow
-        workflows = gh_get(f"/repos/{repo}/actions/workflows", token)
+        workflows_data = gh_get(f"/repos/{repo}/actions/workflows", token)
+        all_workflows  = (
+            workflows_data.get("workflows", [])
+            if isinstance(workflows_data, dict) else []
+        )
+
+        # Find best matching test/CI workflow
+        TEST_NAMES = ("test", "ci", "pytest", "check", "lint", "build")
         test_workflow = None
-        for wf in workflows.get("workflows", []):
-            if any(
-                name in wf.get("path", "").lower()
-                for name in ("test", "ci", "pytest", "check")
-            ):
+        for wf in all_workflows:
+            path = wf.get("path", "").lower()
+            name = wf.get("name", "").lower()
+            if any(n in path or n in name for n in TEST_NAMES):
                 test_workflow = wf
                 break
 
         if not test_workflow:
+            wf_names = [w.get("name", w.get("path", "?")) for w in all_workflows[:5]]
+            existing = (
+                f"\nExisting workflows: {', '.join(f'`{n}`' for n in wf_names)}"
+                if wf_names else ""
+            )
             return (
                 "## ⚠️ No Test Workflow Found\n\n"
-                "Could not find a CI/test workflow in `.github/workflows/`.\n\n"
-                "Create a workflow file named `test.yml` or `ci.yml` to enable `/runtests`."
+                "Could not find a test/CI workflow in `.github/workflows/`."
+                f"{existing}\n\n"
+                "Create a workflow file to enable `/runtests`. Example:\n\n"
+                "```yaml\n# .github/workflows/test.yml\n"
+                "on:\n  push:\n  workflow_dispatch:  # ← required for /runtests\njobs:\n"
+                "  test:\n    runs-on: ubuntu-latest\n    steps:\n"
+                "      - uses: actions/checkout@v4\n"
+                "      - run: pip install -r requirements.txt && pytest\n```"
             )
 
-        wf_id = test_workflow["id"]
-        gh_post(
-            f"/repos/{repo}/actions/workflows/{wf_id}/dispatches",
-            token,
-            {"ref": default_branch},
-        )
-
+        wf_id   = test_workflow["id"]
         wf_name = test_workflow.get("name", "Test workflow")
-        wf_url  = (
-            f"https://github.com/{repo}/actions/workflows/"
-            f"{test_workflow.get('path','').split('/')[-1]}"
-        )
+        wf_file = test_workflow.get("path", "").split("/")[-1]
+        wf_url  = f"https://github.com/{repo}/actions/workflows/{wf_file}"
+
+        try:
+            gh_post(
+                f"/repos/{repo}/actions/workflows/{wf_id}/dispatches",
+                token,
+                {"ref": default_branch},
+            )
+        except GitHubError as e:
+            if e.status_code == 422:
+                return (
+                    f"## ⚠️ Workflow Cannot Be Dispatched\n\n"
+                    f"**Workflow:** `{wf_name}` (`{wf_file}`)\n\n"
+                    "This workflow does not have a `workflow_dispatch` trigger.\n\n"
+                    f"Add this to `{wf_file}`:\n\n"
+                    "```yaml\non:\n  push:\n  workflow_dispatch:  # ← add this line\n```\n\n"
+                    "Then commit and try `/runtests` again."
+                )
+            if e.status_code == 403:
+                return (
+                    "## ⚠️ Permission Denied\n\n"
+                    "The GitHub App does not have `actions: write` permission.\n\n"
+                    "Fix in your GitHub App settings:\n"
+                    "1. Go to your GitHub App → Permissions & Events\n"
+                    "2. Set **Actions** to **Read & Write**\n"
+                    "3. Re-install the app on this repo"
+                )
+            raise
 
         return (
             f"## 🧪 Tests Triggered\n\n"
@@ -1345,5 +1720,8 @@ def _cmd_runtests(repo: str, issue_number: int, token: str) -> str:
             f"Results will appear in GitHub Actions within a few minutes."
         )
 
+    except GitHubError as e:
+        return f"## ⚠️ Could not trigger tests (GitHub API): `{str(e)[:200]}`"
     except Exception as e:
+        _log.error(f"_cmd_runtests error: {e}")
         return f"## ⚠️ Could not trigger tests: `{str(e)[:200]}`"

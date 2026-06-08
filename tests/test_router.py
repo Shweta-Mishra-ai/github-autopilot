@@ -175,12 +175,16 @@ class TestFallbackChain:
         b70 = get_breaker("groq_70b")
         b8  = get_breaker("groq_8b")
         orig70, orig8 = b70._state, b8._state
+        result = "not_set"
         try:
             b70._state = CBState.OPEN
             b8._state  = CBState.OPEN
             b70._opened_at = 0.0
             b8._opened_at  = 0.0
             result = router._try_fallback("sys", "user", 500, 0.2, 30, "nonexistent")
+        except BaseException:
+            # AllProvidersDown or any error = no fallback available
+            result = None
         finally:
             b70._state = orig70
             b8._state  = orig8

@@ -117,7 +117,7 @@ where `stripe_token` is `None`, raising `AttributeError: 'NoneType' object
 has no attribute 'id'` on line 47.
 
 **Fix:**
-```python
+```
 def process_payment(user_id: int, stripe_token: str | None) -> bool:
     if stripe_token is None:
         log.warning(f"No Stripe token for user {user_id}")
@@ -129,7 +129,7 @@ def process_payment(user_id: int, stripe_token: str | None) -> bool:
 has finished loading, resulting in a None token reaching the backend.
 
 **Test:**
-```python
+```
 def test_process_payment_none_token():
     result = process_payment(user_id=1, stripe_token=None)
     assert result is False
@@ -244,7 +244,7 @@ ci: add lint step to workflow
 ### 1. `PERFORMANCE` — Cache repeated database lookups
 The `get_user()` call on line 23 executes on every request. With high traffic this
 creates significant database load.
-```python
+```
 from functools import lru_cache
 
 @lru_cache(maxsize=1000)
@@ -253,13 +253,13 @@ def get_user(user_id: int) -> User:
 ```
 
 ### 2. `READABILITY` — Extract magic numbers to named constants
-```python
+```
 MAX_RETRY_ATTEMPTS = 3
 RETRY_DELAY_SECONDS = 2.0
 ```
 
 ### 3. `SECURITY` — Validate file extension before processing upload
-```python
+```
 ALLOWED_EXTENSIONS = {'.jpg', '.png', '.gif', '.pdf'}
 if not any(filename.endswith(ext) for ext in ALLOWED_EXTENSIONS):
     raise ValueError(f"File type not allowed: {filename}")
@@ -289,31 +289,29 @@ if not any(filename.endswith(ext) for ext in ALLOWED_EXTENSIONS):
 **What it does:** Analyses time and space complexity, detects N+1 query patterns, identifies blocking I/O in async contexts, and suggests caching opportunities.
 
 **Output:**
-```markdown
+```
 ## ⚡ Performance Analysis
 
-**Rating:** 🟠 Slow
+Rating: 🟠 Slow
 
-**Summary:** The main bottleneck is a nested loop creating O(n²) complexity
-in the `match_users()` function. With 1,000 users this executes 1,000,000 iterations.
+Summary: The main bottleneck is a nested loop creating O(n²) complexity
+in the match_users() function. With 1,000 users this executes 1,000,000 iterations.
 
-### 1. `match_users()` — O(n²) → O(n) with a dict lookup
+1. match_users() — O(n²) → O(n) with a dict lookup
 
-**Problem:** Nested loop comparing every user pair.
+Problem: Nested loop comparing every user pair.
 
-**Fix:**
-```python
-# O(n) with set lookup
-user_emails = {u.email for u in users_b}
-matches = [u for u in users_a if u.email in user_emails]
-```
+Fix:
+    # O(n) with set lookup
+    user_emails = {u.email for u in users_b}
+    matches = [u for u in users_a if u.email in user_emails]
 
-**Improvement:** ~1000× faster at 1,000 users, scales linearly.
+Improvement: ~1000x faster at 1,000 users, scales linearly.
 
-### 🎯 Quick Wins
-- Use `set` for membership checks instead of `list`
-- Cache `db.query(Config).first()` — called 47 times per request
-- Move `load_translations()` outside the request handler (loads file on every call)
+Quick Wins:
+- Use set for membership checks instead of list
+- Cache db.query(Config).first() — called 47 times per request
+- Move load_translations() outside the request handler
 ```
 
 ---
@@ -346,7 +344,7 @@ the next provider. With the breaker, failures are detected after 3 attempts
 and subsequent calls fail instantly, allowing fast fallback.
 
 **Example:**
-```python
+```
 breaker = CircuitBreaker("groq_70b", fail_threshold=3, recovery_timeout=60)
 if breaker.is_available():
     response = call_groq()
@@ -486,11 +484,11 @@ FAILED tests/test_auth.py::test_login - ImportError: cannot import name 'create_
 **What it does:** Generates a `CHANGELOG.md` entry in [Keep a Changelog](https://keepachangelog.com) format from the last 20 commits.
 
 **Output:**
-```markdown
+```
 ## 📋 CHANGELOG Entry
 
 ```markdown
-## [4.8.0] - 2026-05-27
+## [Unreleased]
 
 ### Added
 - `/runtests` command: trigger GitHub Actions workflow_dispatch
@@ -519,10 +517,10 @@ FAILED tests/test_auth.py::test_login - ImportError: cannot import name 'create_
 **What it does:** Creates a GitHub **draft release** with AI-generated release notes. The release is draft — you must review and publish it manually.
 
 **Output:**
-```markdown
+```
 ## 🚀 Draft Release Created
 
-**Version:** `v4.8.0`
+**Version:** *(AI-generated based on commit history)*
 **Status:** Draft (review before publishing)
 
 ### Highlights
@@ -530,7 +528,7 @@ FAILED tests/test_auth.py::test_login - ImportError: cannot import name 'create_
 - 35+ secret patterns with entropy gating and false-positive suppression
 - Bounded thread pool — 6 workers, 50-job queue cap
 
-[View Draft Release](https://github.com/org/repo/releases/tag/v4.8.0)
+*(Link to the draft release will appear in the response)*
 
 > ✏️ Review the release notes and adjust before publishing.
 > AI-generated descriptions may need human refinement.
@@ -568,7 +566,7 @@ FAILED tests/test_auth.py::test_login - ImportError: cannot import name 'create_
 **What it does:** Scans the PR diff for credential patterns using `enhanced_secrets.py` (35+ patterns) and scans `requirements.txt` changes for CVE-linked vulnerable dependencies.
 
 **Output:**
-```markdown
+```
 ## 🔒 Security Scan Results
 
 ✅ **No secrets detected** in changed files.
@@ -607,7 +605,7 @@ pip install Pillow>=9.3.0 requests>=2.28.1
 **What it does:** Grades the repository A–F based on: open issue count, open PR count, presence of license and description, CI configuration, security alerts, and documentation completeness.
 
 **Output:**
-```markdown
+```
 ## 🏥 Repo Health — org/repo
 
 ### Grade: **B** (78/100)
@@ -645,7 +643,7 @@ pip install Pillow>=9.3.0 requests>=2.28.1
 If any guardrail fails, the bot posts an explanation and does NOT merge.
 
 **Output on success:**
-```markdown
+```
 ## ✅ Merged!
 
 **`feat/user-auth`** → **`main`**
@@ -653,7 +651,7 @@ SHA: `a1b2c3d4`
 ```
 
 **Output on guardrail failure:**
-```markdown
+```
 ## 🚫 Cannot Merge
 
 **Reason:** 2 CI checks are still running or failed.
@@ -679,7 +677,7 @@ Fix the failing checks and retry `/merge`.
 ```
 
 **List output:**
-```markdown
+```
 ## 📸 Available Snapshots — org/repo
 
 | # | Created | Trigger | Actions recorded |
@@ -729,7 +727,7 @@ Use `/rollback N` to restore to snapshot #N.
 
 In `.ai-repo-manager.yml`:
 
-```yaml
+```
 commands:
   enabled:
     - fix           # ← only commands in this list are active
@@ -738,14 +736,15 @@ commands:
     - security
     # /autofix, /merge, etc. are NOT listed → will show "Command Disabled"
 ```
+```
 
 If `commands.enabled` is not present in the config file, all 26 commands are active by default.
 
 To disable a single command without listing all others:
-```yaml
-# This approach is NOT supported — you must list all enabled commands.
-# If you want most commands but not /merge, list all except /merge.
-```
+
+> **Note:** This is not supported. You must list all enabled commands explicitly.
+> If you want all commands except `/merge`, list all commands except `/merge`.
+
 
 To add a command back after it showed "Command Disabled":
 1. Open `.ai-repo-manager.yml` in your default branch

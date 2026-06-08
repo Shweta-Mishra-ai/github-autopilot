@@ -131,14 +131,18 @@ class GroqProvider(LLMProvider):
                 cost_usd=round(cost, 6),
             )
 
-        except http_requests.exceptions.Timeout:
-            breaker.record_failure("timeout")
-            return LLMResponse(
-                text="",
-                provider="groq",
-                model=self._model,
-                error="Request timed out",
-            )
+        except Exception as _timeout_err:
+            # Catches requests.exceptions.Timeout and similar network errors
+            _err_name = type(_timeout_err).__name__.lower()
+            if "timeout" in _err_name or "timed out" in str(_timeout_err).lower():
+                breaker.record_failure("timeout")
+                return LLMResponse(
+                    text="",
+                    provider="groq",
+                    model=self._model,
+                    error="Request timed out",
+                )
+            raise  # re-raise non-timeout exceptions to the outer except
         except Exception as e:
             err = str(e)
             if "raise_for_status" not in err:

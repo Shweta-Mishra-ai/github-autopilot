@@ -29,7 +29,7 @@ for _mod in ['structlog','redis','groq','google','google.generativeai',
              'flask','flask.logging']:
     sys.modules[_mod] = MagicMock()
 
-sys.path.insert(0, '/tmp/github-autopilot-main')
+sys.path.insert(0, str(_ROOT))
 
 
 # ══════════════════════════════════════════════════════
@@ -223,7 +223,7 @@ class TestWorkerSafe:
         import importlib.util
         spec = importlib.util.spec_from_file_location(
             "worker_test",
-            "/tmp/github-autopilot-main/worker.py"
+            str(_ROOT / "worker.py")
         )
         mod = importlib.util.module_from_spec(spec)
         try:
@@ -235,7 +235,7 @@ class TestWorkerSafe:
         import importlib.util
         spec = importlib.util.spec_from_file_location(
             "worker_test2",
-            "/tmp/github-autopilot-main/worker.py"
+            str(_ROOT / "worker.py")
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)

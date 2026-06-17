@@ -732,7 +732,8 @@ def _cmd_merge(
             # Audit log — /merge is irreversible, always record it
             try:
                 from app.core.redis_client import get_redis as _get_redis
-                import json as _j, time as _t
+                import json as _j
+                import time as _t
                 _get_redis().lpush("audit:merge", _j.dumps({
                     "repo": repo, "pr": issue_number,
                     "by": author, "at": int(_t.time()),

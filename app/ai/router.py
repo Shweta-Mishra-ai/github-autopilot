@@ -96,7 +96,6 @@ class LLMRouter:
     def _usage_pct(self, provider_key: str) -> float:
         try:
             from app.core.redis_client import get_redis
-
             r = get_redis()
             today = datetime.date.today().isoformat()
             used = int(r.get(f"llm:requests:{provider_key}:{today}") or 0)
@@ -106,27 +105,24 @@ class LLMRouter:
             return 0.0
 
     def _sanitize(self, text: str, max_chars: int) -> str:
+        """
+        Sanitize user input before sending to LLM.
+        Uses app/core/sanitizer.py (15 patterns + Unicode normalization)
+        instead of the previous 8-pattern substring match.
+        """
         if not text:
             return ""
         text = text[:max_chars]
-        injections = [
-            "ignore previous instructions",
-            "ignore all instructions",
-            "disregard your system prompt",
-            "you are now",
-            "act as",
-            "jailbreak",
-            "DAN mode",
-            "developer mode",
-        ]
-        text_lower = text.lower()
-        for pattern in injections:
-            if pattern in text_lower:
-                log.warning(f"router.injection_attempt pattern='{pattern}'")
-                idx = text_lower.index(pattern)
-                text = text[:idx] + "[FILTERED]" + text[idx + len(pattern) :]
-                text_lower = text.lower()
-        return text.strip()
+        try:
+            from app.core.sanitizer import sanitize_user_input
+            return sanitize_user_input(text)
+        except Exception:
+            # Fallback: basic injection filter if sanitizer unavailable
+            for pattern in ["ignore all previous", "you are now", "jailbreak"]:
+                if pattern in text.lower():
+                    idx = text.lower().index(pattern)
+                    text = text[:idx] + "[FILTERED]" + text[idx + len(pattern):]
+            return text
 
     def _select_provider(self, task: str, context_tokens: int = 0) -> LLMProvider:
         """
@@ -290,7 +286,6 @@ class LLMRouter:
         )
         try:
             from app.core.redis_client import get_redis
-
             r = get_redis()
             today = datetime.date.today().isoformat()
             cost_mc = int(cost_est * 100_000)
@@ -307,7 +302,6 @@ class LLMRouter:
         usage = {}
         try:
             from app.core.redis_client import get_redis
-
             r = get_redis()
             for pk, limits in DAILY_LIMITS.items():
                 req = int(r.get(f"llm:requests:{pk}:{today}") or 0)

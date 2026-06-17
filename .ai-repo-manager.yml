@@ -1,0 +1,101 @@
+# .ai-repo-manager.yml
+# GitHub Autopilot — Repo-level configuration
+# Place this file in your repo root to customize bot behavior.
+# All settings are optional — safe defaults used if missing.
+# Docs: https://github.com/Shweta-Mishra-ai/github-autopilot
+
+bot:
+  enabled: true
+  footer: "\n\n---\n*🤖 GitHub Autopilot — AI-powered repo management*"
+
+pull_requests:
+  enabled: true
+  auto_polish_title: true
+  auto_fill_description: true
+  code_review: true
+  detect_test_gaps: true
+  max_files_reviewed: 4
+
+issues:
+  enabled: true
+  auto_triage: true
+  auto_label: true
+
+push:
+  enabled: true
+  enforce_conventional_commits: true
+  create_issue_threshold: 3
+  scan_secrets: true
+  scan_dependencies: true
+
+auto_merge:
+  enabled: false
+  require_passing_checks: true
+  require_no_blocking_reviews: true
+  allow_protected_branches: false
+  allowed_risk_levels:
+    - low
+
+ai:
+  primary_model: "llama-3.3-70b-versatile"
+  fallback_model: "llama-3.1-8b-instant"
+  max_tokens: 1500
+  temperature: 0.2
+  timeout_seconds: 45
+
+confidence:
+  thresholds:
+    pr_title_rewrite: 0.85
+    issue_label: 0.75
+    auto_merge: 0.95
+    fix_command: 0.70
+    code_review: 0.75
+
+notifications:
+  slack: false
+  discord: false
+  on_secret_detected: true
+  on_high_risk_pr: true
+  on_health_degraded: true
+
+labels:
+  auto_create: true
+
+commands:
+  permissions:
+    maintainer_only:
+      - merge
+      - release
+      - rollback
+  enabled:
+    # Code Quality
+    - fix
+    - autofix
+    - apply
+    - improve
+    - refactor
+    - perf
+    # Understanding
+    - explain
+    - summarize
+    - arch
+    - impact
+    - gaps
+    - ci
+    # Documentation & Release
+    - docs
+    - test
+    - changelog
+    - release
+    - version
+    - runtests
+    # Security & Health
+    - security
+    - secfull
+    - health
+    # Operations
+    - merge
+    - rollback
+    - report
+    - budget
+    - notify

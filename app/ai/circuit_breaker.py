@@ -120,7 +120,7 @@ class AllProvidersDown(Exception):
         # FIXED: try/except prevents TypeError when _breakers has mocks
         try:
             recovery = min(int(cb.seconds_until_retry()) for cb in _breakers.values())
-        except (TypeError, ValueError, AttributeError):
+        except Exception:
             recovery = 60
         self.retry_in_seconds = recovery
         super().__init__(

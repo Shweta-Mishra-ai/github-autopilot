@@ -6,7 +6,10 @@ Covers: protocol, auth, all 8 tools, run_command restrictions.
 Uses inspect.getsource() pattern to avoid module-cache issues.
 """
 import sys
+from pathlib import Path
 from unittest.mock import patch, MagicMock
+
+_ROOT = Path(__file__).parent.parent
 
 _req = MagicMock()
 _req.adapters = MagicMock(); _req.adapters.HTTPAdapter = MagicMock
@@ -23,7 +26,7 @@ for _m in ['structlog','redis','groq','google','google.generativeai',
            'sentence_transformers','qdrant_client','scipy','flask','flask.logging']:
     sys.modules[_m] = MagicMock()
 
-sys.path.insert(0, '/tmp/github-autopilot-main')
+sys.path.insert(0, str(_ROOT))
 
 
 class TestMCPProtocol:
@@ -182,8 +185,8 @@ class TestScanSecrets:
     def test_content_prefixed_with_plus(self):
         """scan_diff only scans lines with '+' prefix — must be applied."""
         import inspect
-        from app.mcp import server as mcp_server
-        src = inspect.getsource(mcp_server._handle_scan_secrets)
+        from app.mcp.server import _handle_scan_secrets
+        src = inspect.getsource(_handle_scan_secrets)
         assert '"+{' in src or '"+' in src or "'+'" in src or 'f"+' in src
 
     def test_aws_key_detected(self):
@@ -414,4 +417,3 @@ class TestToolsCallDispatch:
 
 if __name__ == "__main__":
     print("Run with: python -m pytest tests/test_mcp.py -v")
-

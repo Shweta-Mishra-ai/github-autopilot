@@ -28,6 +28,12 @@ for _m in ['structlog','redis','groq','google','google.generativeai',
 
 sys.path.insert(0, str(_ROOT))
 
+# Ensure app/mcp/__init__.py exists at runtime (guards against missing file)
+_mcp_init = _ROOT / "app" / "mcp" / "__init__.py"
+if not _mcp_init.exists():
+    _mcp_init.parent.mkdir(parents=True, exist_ok=True)
+    _mcp_init.write_text('"""app/mcp — Model Context Protocol server."""\n')
+
 
 class TestMCPProtocol:
 

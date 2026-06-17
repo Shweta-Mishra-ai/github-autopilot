@@ -199,7 +199,7 @@ Return JSON:
 
         lines = [
             f"## PR #{pr_number} Analysis — {repo}",
-            f"",
+            "",
             f"**Grade:** {result.get('grade','N/A')}",
             f"**Summary:** {result.get('summary','')}",
             f"**Recommendation:** {result.get('recommendation','')}",
@@ -388,7 +388,7 @@ Return JSON:
         findings = result.get("findings", [])
         cves     = result.get("cve_risks", [])
 
-        lines = [f"## Security Review", f"**Risk Level:** {risk}", ""]
+        lines = ["## Security Review", f"**Risk Level:** {risk}", ""]
         if findings:
             lines += ["**Findings:**"]
             for f in findings[:8]:
@@ -414,10 +414,6 @@ def _handle_get_repo_health(args: dict) -> str:
 
     try:
         from app.ai.router import router
-        from app.github.auth import get_installation_token
-
-        token = get_installation_token(install_id)
-
         result, _meta = router.ask(
             "DevOps expert. Return JSON only.",
             f"""Grade repository health for {repo}.
@@ -474,8 +470,8 @@ def _handle_run_command(args: dict) -> str:
     if cmd not in ALLOWED:
         return (
             f"Error: '{cmd}' is not available via MCP. "
-            f"Destructive commands (/merge /autofix /apply /release "
-            f"/rollback /runtests) require a direct GitHub comment for safety."
+            "Destructive commands (/merge /autofix /apply /release "
+            "/rollback /runtests) require a direct GitHub comment for safety."
         )
 
     try:

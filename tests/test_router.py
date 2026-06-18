@@ -176,10 +176,11 @@ class TestFallbackChain:
         b8  = get_breaker("groq_8b")
         orig70, orig8 = b70._state, b8._state
         try:
+            import time as _time
             b70._state = CBState.OPEN
             b8._state  = CBState.OPEN
-            b70._opened_at = 0.0
-            b8._opened_at  = 0.0
+            b70._opened_at = _time.time()  # freshly opened → no HALF_OPEN transition
+            b8._opened_at  = _time.time()
             result = router._try_fallback("sys", "user", 500, 0.2, 30, "nonexistent")
         finally:
             b70._state = orig70

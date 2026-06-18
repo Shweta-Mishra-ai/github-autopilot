@@ -101,4 +101,3 @@ def _delete(key: str):
         redis_client.get_redis().delete(key)
     except Exception:
         pass
-

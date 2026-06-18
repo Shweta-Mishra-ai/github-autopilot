@@ -100,13 +100,17 @@ class GroqProvider(LLMProvider):
                     error=f"RATE_LIMIT:{retry_after}",
                 )
 
-            if r.status_code >= 500:
-                breaker.record_failure(f"server_error_{r.status_code}")
+            try:
+                _status = int(r.status_code)
+            except (TypeError, ValueError):
+                _status = 0
+            if _status >= 500:
+                breaker.record_failure(f"server_error_{_status}")
                 return LLMResponse(
                     text="",
                     provider="groq",
                     model=self._model,
-                    error=f"Server error {r.status_code}",
+                    error=f"Server error {_status}",
                 )
 
             r.raise_for_status()

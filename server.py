@@ -16,7 +16,7 @@ from flask import Flask, jsonify, request
 from app.core.idempotency  import is_duplicate, make_fingerprint
 from app.core.metrics      import metrics
 from app.core.redis_client import is_redis_available
-from app.core.thread_pool  import dispatch, pool_stats, shutdown
+from app.core.thread_pool  import dispatch, pool_stats
 from app.core.webhook_security import verify_webhook, startup_check
 
 logging.basicConfig(
@@ -104,6 +104,40 @@ def test_discord():
     success, message = _test()
     return jsonify({"success": success, "message": message}), 200 if success else 500
 
+
+
+
+@app.route("/mcp", methods=["POST"])
+def mcp_endpoint():
+    """MCP (Model Context Protocol) endpoint for IDE integrations."""
+    from app.mcp.server import handle_mcp_request
+
+    auth  = request.headers.get("Authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else ""
+
+    try:
+        body = request.get_json(force=True) or {}
+    except Exception:
+        return jsonify({"error": {"code": -32700, "message": "Parse error"}}), 400
+
+    resp, status = handle_mcp_request(
+        body.get("method", ""), body.get("params", {}), token
+    )
+    return jsonify(resp), status
+
+
+@app.route("/mcp", methods=["GET"])
+def mcp_info():
+    """MCP server discovery endpoint."""
+    return jsonify({
+        "name":        "github-autopilot",
+        "version":     VERSION,
+        "protocol":    "mcp/2024-11-05",
+        "tools":       8,
+        "description": "AI-powered GitHub repository assistant",
+        "auth":        "Bearer token via MCP_API_KEY env var",
+        "docs":        "https://github.com/Shweta-Mishra-ai/github-autopilot/blob/main/docs/mcp-setup.md",
+    })
 
 @app.route("/webhook", methods=["POST"])
 def webhook():

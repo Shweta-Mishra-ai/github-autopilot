@@ -559,4 +559,3 @@ GitHub → Settings → Developer Settings → GitHub Apps → Edit → Delete G
 
 All data (Redis state, analytics, snapshots) is automatically deleted when the Redis instance is deleted.
 
-

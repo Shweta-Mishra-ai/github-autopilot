@@ -729,6 +729,19 @@ def _cmd_merge(
         })
 
         if result.get("merged"):
+            # Audit log — /merge is irreversible, always record it
+            try:
+                from app.core.redis_client import get_redis as _get_redis
+                import json as _j
+                import time as _t
+                _get_redis().lpush("audit:merge", _j.dumps({
+                    "repo": repo, "pr": issue_number,
+                    "by": author, "at": int(_t.time()),
+                    "sha": result.get("sha", "")[:12],
+                }))
+                _get_redis().ltrim("audit:merge", 0, 999)
+            except Exception:
+                pass  # audit failure must not block the merge
             try:
                 gh_delete(
                     f"/repos/{repo}/git/refs/heads/{head_branch}", token

@@ -40,7 +40,7 @@ DEFAULTS: dict = {
     },
     "pull_requests": {
         "enabled": True,
-        "auto_polish_title": True,
+        "auto_polish_title": False,  # Changed: silent rewrite off by default. Enable in .ai-repo-manager.yml
         "auto_fill_description": True,
         "code_review": True,
         "max_files_reviewed": 6,

@@ -41,27 +41,31 @@ def summarize_pr(
         files = []
 
     try:
-        title    = pr.get("title", "")
-        body     = (pr.get("body") or "")[:800]
-        author   = pr.get("user", {}).get("login", "")
-        base     = pr.get("base", {}).get("ref", "main")
-        head     = pr.get("head", {}).get("ref", "")
+        title = pr.get("title", "")
+        body = (pr.get("body") or "")[:800]
+        author = pr.get("user", {}).get("login", "")
+        base = pr.get("base", {}).get("ref", "main")
+        head = pr.get("head", {}).get("ref", "")
 
         total_add = sum(f.get("additions", 0) for f in files)
         total_del = sum(f.get("deletions", 0) for f in files)
         file_list = "\n".join(
-            f"  {f['filename']} (+{f.get('additions',0)} -{f.get('deletions',0)})"
+            f"  {f['filename']} (+{f.get('additions', 0)} -{f.get('deletions', 0)})"
             for f in files[:10]
         )
 
         # Classify file types for reviewer tips
-        has_tests    = any("test" in f.get("filename","") for f in files)
+        has_tests = any("test" in f.get("filename", "") for f in files)
         has_security = any(
-            any(x in f.get("filename","") for x in ["auth", "security", "crypto", "token", "secret"])
+            any(
+                x in f.get("filename", "")
+                for x in ["auth", "security", "crypto", "token", "secret"]
+            )
             for f in files
         )
-        has_deps     = any(f.get("filename","") in ("requirements.txt","package.json","Pipfile")
-                          for f in files)
+        has_deps = any(
+            f.get("filename", "") in ("requirements.txt", "package.json", "Pipfile") for f in files
+        )
 
         text, _meta = router.ask_text(
             "Senior engineer. Write concise, structured PR summaries for busy reviewers.",
@@ -104,9 +108,9 @@ Write a structured summary with these exact sections:
 def summarize_issue_thread(comments: list, issue: dict) -> str:
     """Summarize a long issue discussion thread."""
     try:
-        title     = issue.get("title", "")
-        thread    = "\n\n".join(
-            f"@{c.get('user',{}).get('login','?')}: {c.get('body','')[:300]}"
+        title = issue.get("title", "")
+        thread = "\n\n".join(
+            f"@{c.get('user', {}).get('login', '?')}: {c.get('body', '')[:300]}"
             for c in comments[:20]
         )
 

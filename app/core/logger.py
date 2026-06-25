@@ -24,10 +24,10 @@ class _JSONFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         entry = {
-            "ts":      self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
-            "level":   record.levelname,
-            "logger":  record.name,
-            "msg":     record.getMessage(),
+            "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
+            "level": record.levelname,
+            "logger": record.name,
+            "msg": record.getMessage(),
         }
         if record.exc_info:
             entry["exc"] = self.formatException(record.exc_info)
@@ -53,10 +53,12 @@ def setup_logging(level: str = "INFO", fmt: str = "json") -> None:
     if fmt == "json":
         handler.setFormatter(_JSONFormatter())
     else:
-        handler.setFormatter(logging.Formatter(
-            "%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
-            datefmt="%H:%M:%S",
-        ))
+        handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
+                datefmt="%H:%M:%S",
+            )
+        )
 
     root.addHandler(handler)
 
@@ -64,9 +66,7 @@ def setup_logging(level: str = "INFO", fmt: str = "json") -> None:
     for noisy in ("urllib3", "requests", "httpx", "werkzeug"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
-    logging.getLogger(__name__).info(
-        f"logging.configured level={level} fmt={fmt}"
-    )
+    logging.getLogger(__name__).info(f"logging.configured level={level} fmt={fmt}")
 
 
 def get_logger(name: str) -> logging.Logger:
@@ -96,7 +96,7 @@ class EventLogger:
         self._ctx = ctx
 
     def _fmt(self, msg: str, **kw) -> str:
-        """Format: 'msg key=val key=val ...' """
+        """Format: 'msg key=val key=val ...'"""
         parts = {**self._ctx, **kw}
         suffix = " ".join(f"{k}={v}" for k, v in parts.items())
         return f"{msg} {suffix}" if suffix else msg
@@ -124,7 +124,4 @@ class EventLogger:
     def bind(self, **extra):
         """Return a new EventLogger with additional context merged in."""
         merged = {**self._ctx, **extra}
-        return EventLogger(
-            self._logger.name.removeprefix("handler."),
-            **merged
-        )
+        return EventLogger(self._logger.name.removeprefix("handler."), **merged)

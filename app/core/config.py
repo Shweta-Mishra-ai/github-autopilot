@@ -25,19 +25,16 @@ log = logging.getLogger(__name__)
 
 # ── Cache (5-minute TTL, thread-safe) ────────────────────────────────────────
 _config_cache: dict[str, tuple] = {}  # {repo: (Config, timestamp)}
-_config_lock  = threading.RLock()     # RLock: reentrant so invalidate can be called inside load
-_config_fetching: set = set()          # repos currently being fetched (thundering herd guard)
-_CONFIG_TTL   = 300  # 5 minutes in seconds
+_config_lock = threading.RLock()  # RLock: reentrant so invalidate can be called inside load
+_config_fetching: set = set()  # repos currently being fetched (thundering herd guard)
+_CONFIG_TTL = 300  # 5 minutes in seconds
 
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 DEFAULTS: dict = {
     "bot": {
         "enabled": True,
-        "footer": (
-            "🤖 [AI Repo Manager V4]"
-            "(https://github.com/Shweta-Mishra-ai/github-autopilot)"
-        ),
+        "footer": ("🤖 [AI Repo Manager V4](https://github.com/Shweta-Mishra-ai/github-autopilot)"),
     },
     "pull_requests": {
         "enabled": True,
@@ -182,14 +179,10 @@ def _validate_config(data: dict) -> dict:
         try:
             mfr = int(mfr)
             if not (1 <= mfr <= 20):
-                log.warning(
-                    f"config.invalid max_files_reviewed={mfr} (must be 1–20) — using 6"
-                )
+                log.warning(f"config.invalid max_files_reviewed={mfr} (must be 1–20) — using 6")
                 data.setdefault("pull_requests", {})["max_files_reviewed"] = 6
         except (TypeError, ValueError):
-            log.warning(
-                f"config.invalid max_files_reviewed={mfr!r} (must be int) — using 6"
-            )
+            log.warning(f"config.invalid max_files_reviewed={mfr!r} (must be int) — using 6")
             data.setdefault("pull_requests", {})["max_files_reviewed"] = 6
 
     # ── create_issue_threshold: must be int 1-20 ────────────────────────────
@@ -198,9 +191,7 @@ def _validate_config(data: dict) -> dict:
         try:
             cit = int(cit)
             if not (1 <= cit <= 20):
-                log.warning(
-                    f"config.invalid create_issue_threshold={cit} (must be 1–20) — using 3"
-                )
+                log.warning(f"config.invalid create_issue_threshold={cit} (must be 1–20) — using 3")
                 data.setdefault("push", {})["create_issue_threshold"] = 3
         except (TypeError, ValueError):
             data.setdefault("push", {})["create_issue_threshold"] = 3
@@ -292,7 +283,7 @@ def load_config(repo: str, token: str) -> Config:
         from app.github.client import gh_get
 
         data = gh_get(f"/repos/{repo}/contents/.ai-repo-manager.yml", token)
-        raw  = base64.b64decode(data["content"]).decode("utf-8")
+        raw = base64.b64decode(data["content"]).decode("utf-8")
 
         import yaml
 

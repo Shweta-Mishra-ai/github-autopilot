@@ -75,9 +75,7 @@ def scan_diff(diff: str) -> list[SecretFinding]:
             match = re.search(pattern, content)
             if match:
                 matched = match.group(0)
-                redacted = (
-                    matched[:6] + "..." + matched[-4:] if len(matched) > 12 else "***"
-                )
+                redacted = matched[:6] + "..." + matched[-4:] if len(matched) > 12 else "***"
                 findings.append(
                     SecretFinding(
                         pattern_name=name,

@@ -37,8 +37,6 @@ def _make_id() -> str:
 
 def take_snapshot(repo: str, token: str, trigger: str = "manual") -> str | None:
     try:
-
-
         issues_data = gh_get(f"/repos/{repo}/issues?state=open&per_page=20", token)
         prs_data = gh_get(f"/repos/{repo}/pulls?state=open&per_page=10", token)
         commits = gh_get(f"/repos/{repo}/commits?per_page=5", token)
@@ -238,9 +236,7 @@ def format_snapshot_list(repo: str) -> str:
 *Snapshots expire after 7 days. Last {len(snapshots)} shown.*"""
 
 
-def format_rollback_result(
-    repo: str, snap: dict, restored: list[str], failed: list[str]
-) -> str:
+def format_rollback_result(repo: str, snap: dict, restored: list[str], failed: list[str]) -> str:
     snap_ts = snap.get("timestamp", "")[:16].replace("T", " ")
 
     success_lines = "\n".join(f"- ✅ {r}" for r in restored) or "- Nothing to restore"

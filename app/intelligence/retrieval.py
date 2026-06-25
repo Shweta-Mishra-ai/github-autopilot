@@ -62,8 +62,7 @@ def get_relevant_context(
 
         context = "\n".join(context_parts)
         log.info(
-            f"retrieval.context_built repo={repo} "
-            f"chunks={len(context_parts)} chars={total_chars}"
+            f"retrieval.context_built repo={repo} chunks={len(context_parts)} chars={total_chars}"
         )
         return f"## Relevant Codebase Context\n\n{context}"
 

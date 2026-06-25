@@ -131,9 +131,7 @@ def validate_command(
                 title=f"Invalid Subcommand: `{cmd} {cmd_subcommand}`",
                 body=(
                     "**Valid subcommands:** "
-                    + ", ".join(
-                        f"`{s}`" if s else "*(none)*" for s in spec.valid_subcommands
-                    )
+                    + ", ".join(f"`{s}`" if s else "*(none)*" for s in spec.valid_subcommands)
                     + f"\n\n**Example:**\n```\n{spec.example}\n```"
                 ),
             ),

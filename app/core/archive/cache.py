@@ -14,12 +14,12 @@ import contextlib
 log = logging.getLogger(__name__)
 
 TTL_MAP = {
-    "/pulls/":    300,
-    "/issues/":   600,
-    "/repos/":    1800,
-    "/commits/":  3600,
+    "/pulls/": 300,
+    "/issues/": 600,
+    "/repos/": 1800,
+    "/commits/": 3600,
     "/contents/": 300,
-    "default":    180,
+    "default": 180,
 }
 
 
@@ -33,6 +33,7 @@ def cached_gh_get(path: str, token: str, ttl: int = 0) -> dict | list | None:
         return cached
 
     from app.github.client import gh_get
+
     data = gh_get(path, token)
     _set(key, data, ttl)
     return data
@@ -44,7 +45,7 @@ def invalidate(path: str, token: str):
 
 def invalidate_repo(repo: str):
     try:
-        r    = redis_client.get_redis()
+        r = redis_client.get_redis()
         keys = r.keys(f"ghcache:*{repo}*")
         if keys:
             r.delete(*keys)
@@ -56,9 +57,9 @@ def get_stats() -> dict:
     try:
         r = redis_client.get_redis()
         return {
-            "hits":   int(r.get("ghcache:stats:hits") or 0),
+            "hits": int(r.get("ghcache:stats:hits") or 0),
             "misses": int(r.get("ghcache:stats:misses") or 0),
-            "keys":   len(r.keys("ghcache:data:*")),
+            "keys": len(r.keys("ghcache:data:*")),
         }
     except Exception:
         return {"hits": 0, "misses": 0, "keys": 0}
@@ -79,7 +80,7 @@ def _get_ttl(path: str) -> int:
 
 def _get(key: str):
     try:
-        r   = redis_client.get_redis()
+        r = redis_client.get_redis()
         raw = r.get(key)
         if raw:
             r.incr("ghcache:stats:hits")

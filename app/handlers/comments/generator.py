@@ -79,10 +79,7 @@ Return JSON:
 
     lines = [f"## ✨ Improvements\n\n**{r.get('summary', '')}**\n"]
     for i, imp in enumerate(r.get("improvements", [])[:4], 1):
-        lines.append(
-            f"### {i}. `{imp.get('area','').upper()}` "
-            f"— {imp.get('suggestion','')}"
-        )
+        lines.append(f"### {i}. `{imp.get('area', '').upper()}` — {imp.get('suggestion', '')}")
         if imp.get("example"):
             lines.append(f"```\n{imp['example'][:300]}\n```")
     return "\n\n".join(lines)
@@ -111,9 +108,9 @@ Return JSON:
     lines = [f"## 🧪 Tests ({r.get('framework', 'pytest')})\n"]
     for t in r.get("tests", [])[:3]:
         lines.append(
-            f"### `{t.get('name','test')}` ({t.get('type','unit')})\n"
-            f"*{t.get('desc','')}*\n"
-            f"```python\n{t.get('code','')[:400]}\n```"
+            f"### `{t.get('name', 'test')}` ({t.get('type', 'unit')})\n"
+            f"*{t.get('desc', '')}*\n"
+            f"```python\n{t.get('code', '')[:400]}\n```"
         )
     return "\n\n".join(lines)
 
@@ -138,9 +135,9 @@ Return JSON:
 
     return (
         f"## 📚 Documentation\n\n"
-        f"**Docstring:**\n```\n{r.get('docstring','')}\n```\n\n"
-        f"**Usage:**\n```\n{r.get('usage','')}\n```\n\n"
-        f"**README section:**\n{r.get('readme_section','')}"
+        f"**Docstring:**\n```\n{r.get('docstring', '')}\n```\n\n"
+        f"**Usage:**\n```\n{r.get('usage', '')}\n```\n\n"
+        f"**README section:**\n{r.get('readme_section', '')}"
     )
 
 
@@ -167,17 +164,14 @@ Return JSON:
     if not r or not r.get("refactors"):
         return "## ♻️ Refactor\n\n_No refactoring opportunities identified._"
 
-    lines = [f"## ♻️ Refactor\n\n**{r.get('summary','')}**\n"]
+    lines = [f"## ♻️ Refactor\n\n**{r.get('summary', '')}**\n"]
     for i, ref in enumerate(r.get("refactors", [])[:4], 1):
-        lines.append(
-            f"### {i}. `{ref.get('type','').upper()}` "
-            f"— {ref.get('description','')}"
-        )
+        lines.append(f"### {i}. `{ref.get('type', '').upper()}` — {ref.get('description', '')}")
         if ref.get("before"):
             lines.append(f"**Before:**\n```\n{ref['before'][:300]}\n```")
         if ref.get("after"):
             lines.append(f"**After:**\n```\n{ref['after'][:300]}\n```")
-        lines.append(f"✅ **Benefit:** {ref.get('benefit','')}")
+        lines.append(f"✅ **Benefit:** {ref.get('benefit', '')}")
     return "\n\n".join(lines)
 
 
@@ -202,10 +196,7 @@ Return JSON:
     if not r or not r.get("gaps"):
         return "## 🔍 Test Coverage Gaps\n\n_No gaps identified._"
 
-    lines = [
-        f"## 🔍 Test Coverage Gaps\n\n"
-        f"**{r.get('coverage_assessment', '')}**\n"
-    ]
+    lines = [f"## 🔍 Test Coverage Gaps\n\n**{r.get('coverage_assessment', '')}**\n"]
     for i, gap in enumerate(r.get("gaps", [])[:5], 1):
         lines.append(
             f"### {i}. {gap.get('area', '')} "
@@ -243,7 +234,7 @@ Return JSON:
     if not r:
         return "## ⚡ Performance Analysis\n\n_Could not complete analysis._"
 
-    rating  = r.get("overall_rating", "acceptable")
+    rating = r.get("overall_rating", "acceptable")
     r_emoji = {"fast": "🟢", "acceptable": "🟡", "slow": "🟠", "critical": "🔴"}.get(rating, "🟡")
 
     issues_md = ""
@@ -256,10 +247,7 @@ Return JSON:
             f"**Improvement:** {issue.get('improvement', '')}\n"
         )
 
-    qw_md = (
-        "\n".join(f"- {w}" for w in r.get("quick_wins", [])[:5])
-        or "_No quick wins found._"
-    )
+    qw_md = "\n".join(f"- {w}" for w in r.get("quick_wins", [])[:5]) or "_No quick wins found._"
     return (
         f"## ⚡ Performance Analysis\n\n"
         f"**Rating:** {r_emoji} {rating.capitalize()}\n\n"
@@ -269,25 +257,20 @@ Return JSON:
     )
 
 
-def cmd_arch(
-    repo: str, issue_number: int, issue: dict, token: str
-) -> str:
+def cmd_arch(repo: str, issue_number: int, issue: dict, token: str) -> str:
     """Architecture review — layers, coupling, god classes."""
     from app.handlers.comments import gh_get
 
     context = ""
     if "pull_request" in issue:
         try:
-            files    = gh_get(f"/repos/{repo}/pulls/{issue_number}/files", token)
-            context  = "Files changed:\n" + "\n".join(f["filename"] for f in files[:15])
+            files = gh_get(f"/repos/{repo}/pulls/{issue_number}/files", token)
+            context = "Files changed:\n" + "\n".join(f["filename"] for f in files[:15])
         except Exception:
             pass
 
     if not context:
-        context = (
-            f"Title: {issue.get('title','')}\n"
-            f"Body: {(issue.get('body') or '')[:500]}"
-        )
+        context = f"Title: {issue.get('title', '')}\nBody: {(issue.get('body') or '')[:500]}"
 
     r, _ = safe_router_ask(
         "Software architect with 15+ years. Review architecture. JSON only.",
@@ -316,25 +299,24 @@ Return JSON:
     if not r:
         return "## 🏗️ Architecture Review\n\n_Could not complete analysis._"
 
-    health  = r.get("health", "good")
-    h_emoji = {"excellent": "🟢", "good": "🟡", "needs_work": "🟠", "critical": "🔴"}.get(health, "🟡")
+    health = r.get("health", "good")
+    h_emoji = {"excellent": "🟢", "good": "🟡", "needs_work": "🟠", "critical": "🔴"}.get(
+        health, "🟡"
+    )
 
     violations_md = ""
     for v in r.get("violations", [])[:5]:
-        sev   = v.get("severity", "medium")
-        s_em  = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(sev, "🟡")
+        sev = v.get("severity", "medium")
+        s_em = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(sev, "🟡")
         violations_md += (
-            f"\n- {s_em} **{v.get('type','').replace('_',' ').title()}** "
+            f"\n- {s_em} **{v.get('type', '').replace('_', ' ').title()}** "
             f"— `{v.get('location', '')}`: {v.get('description', '')}\n"
             f"  → {v.get('recommendation', '')}"
         )
 
-    pos_md = (
-        "\n".join(f"- ✅ {p}" for p in r.get("positive_patterns", [])[:3])
-        or ""
-    )
+    pos_md = "\n".join(f"- ✅ {p}" for p in r.get("positive_patterns", [])[:3]) or ""
     priority = r.get("refactoring_priority", "planned")
-    p_emoji  = {"immediate": "🔴", "planned": "🟡", "backlog": "🟢"}.get(priority, "🟡")
+    p_emoji = {"immediate": "🔴", "planned": "🟡", "backlog": "🟢"}.get(priority, "🟡")
 
     return (
         f"## 🏗️ Architecture Review\n\n"

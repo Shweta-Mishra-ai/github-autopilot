@@ -181,18 +181,14 @@ Return JSON:
 {config.footer}"""
 
     try:
-        gh_post(
-            f"/repos/{repo}/issues/{issue_number}/comments", token, {"body": comment}
-        )
+        gh_post(f"/repos/{repo}/issues/{issue_number}/comments", token, {"body": comment})
         log.done(f"Issue #{issue_number} triaged: {result['type']}/{priority}")
     except GitHubError as e:
         log.error(f"Comment failed: {e}")
 
     # Notification
     with contextlib.suppress(Exception):
-        notify_new_issue(
-            repo=repo, issue_number=issue_number, title=title, labels=all_labels
-        )
+        notify_new_issue(repo=repo, issue_number=issue_number, title=title, labels=all_labels)
 
 
 def _ensure_labels(repo: str, token: str):

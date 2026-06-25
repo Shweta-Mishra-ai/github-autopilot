@@ -199,9 +199,7 @@ def groq_ask(
                 return {"raw": ""}
 
             except Exception as e:
-                log.warning(
-                    f"groq_ask.unexpected model={model} attempt={attempt + 1}: {e}"
-                )
+                log.warning(f"groq_ask.unexpected model={model} attempt={attempt + 1}: {e}")
                 if attempt < MAX_RETRIES - 1:
                     time.sleep(2**attempt)
 

@@ -23,7 +23,7 @@ def extract_command(body: str) -> str | None:
     body_lower = body.lower()
     # Sort by length descending so /autofix is tried before /fix
     for cmd in sorted(ALL_COMMANDS, key=len, reverse=True):
-        if re.search(r'(?<![/\w])' + re.escape(cmd) + r'\b', body_lower):
+        if re.search(r"(?<![/\w])" + re.escape(cmd) + r"\b", body_lower):
             return cmd
     return None
 
@@ -35,7 +35,8 @@ def check_user_rate_limit(repo: str, author: str) -> bool:
     """
     try:
         from app.core.redis_client import get_redis
-        r   = get_redis()
+
+        r = get_redis()
         key = f"cmd_rl:{repo}:{author}:{int(time.time() // USER_CMD_WINDOW)}"
         cnt = r.incr(key)
         r.expire(key, USER_CMD_WINDOW)

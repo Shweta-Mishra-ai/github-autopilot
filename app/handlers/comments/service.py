@@ -35,16 +35,16 @@ def handle_comment_event(payload: dict) -> None:
     if action not in ("created", "edited"):
         return
 
-    comment      = payload.get("comment") or {}
-    issue        = payload.get("issue") or {}
-    repo_data    = payload.get("repository") or {}
+    comment = payload.get("comment") or {}
+    issue = payload.get("issue") or {}
+    repo_data = payload.get("repository") or {}
     installation = payload.get("installation") or {}
-    sender       = payload.get("sender") or {}
+    sender = payload.get("sender") or {}
 
-    body           = comment.get("body", "")
-    author         = sender.get("login", "")
-    repo           = repo_data.get("full_name", "")
-    issue_number   = issue.get("number", 0)
+    body = comment.get("body", "")
+    author = sender.get("login", "")
+    repo = repo_data.get("full_name", "")
+    issue_number = issue.get("number", 0)
     installation_id = installation.get("id", 0)
 
     if not all([body, author, repo, issue_number, installation_id]):
@@ -75,7 +75,9 @@ def handle_comment_event(payload: dict) -> None:
     # ── Per-user rate limit ───────────────────────────────────────────────
     if not check_user_rate_limit(repo, author):
         _post_comment(
-            repo, issue_number, token,
+            repo,
+            issue_number,
+            token,
             (
                 f"## ⏳ Rate Limit Reached\n\n"
                 f"@{author} — you've used the command limit (10/hour) for this repo.\n\n"
@@ -89,7 +91,9 @@ def handle_comment_event(payload: dict) -> None:
     allowed, reason = check_command_permission(cmd, repo, author, token, config)
     if not allowed:
         _post_comment(
-            repo, issue_number, token,
+            repo,
+            issue_number,
+            token,
             (
                 f"## 🚫 Permission Denied\n\n"
                 f"@{author} — `{cmd}` requires maintainer access.\n\n"
@@ -103,10 +107,7 @@ def handle_comment_event(payload: dict) -> None:
     cmd_args = body.lower().split(cmd, 1)[-1].strip() if cmd in body.lower() else ""
 
     # ── Context building ──────────────────────────────────────────────────
-    context = (
-        f"Title: {issue.get('title', '')}\n"
-        f"Body: {(issue.get('body') or '')[:1500]}"
-    )
+    context = f"Title: {issue.get('title', '')}\nBody: {(issue.get('body') or '')[:1500]}"
 
     # ── Dispatch ──────────────────────────────────────────────────────────
     response = _dispatch(
@@ -132,11 +133,12 @@ def handle_comment_event(payload: dict) -> None:
 
     # ── Post to GitHub ────────────────────────────────────────────────────
     footer = getattr(config, "footer", "")
-    full   = f"{response}\n\n---\n*🤖 `{cmd}` — requested by @{author}*{footer}"
+    full = f"{response}\n\n---\n*🤖 `{cmd}` — requested by @{author}*{footer}"
     _post_comment(repo, issue_number, token, full, log_ctx)
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
+
 
 def _post_comment(
     repo: str,
@@ -174,7 +176,7 @@ def _dispatch(
     Never raises.
     """
     from . import generator as G
-    from . import reviewer  as R
+    from . import reviewer as R
     from . import publisher as P
 
     try:
@@ -240,6 +242,7 @@ def _dispatch(
             # ── Shared handlers ────────────────────────────────────────
             case "/autofix":
                 from app.handlers.autofix import run_autofix
+
                 return run_autofix(repo, issue_number, issue, token, cmd_args.strip())
 
             case _:

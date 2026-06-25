@@ -14,9 +14,9 @@ import logging
 
 log = logging.getLogger(__name__)
 
-QDRANT_URL     = os.environ.get("QDRANT_URL", "")
+QDRANT_URL = os.environ.get("QDRANT_URL", "")
 QDRANT_API_KEY = os.environ.get("QDRANT_API_KEY", "")
-USE_QDRANT     = bool(QDRANT_URL and QDRANT_API_KEY)
+USE_QDRANT = bool(QDRANT_URL and QDRANT_API_KEY)
 
 _DEPS_AVAILABLE = None  # Lazy-checked once
 
@@ -26,6 +26,7 @@ def _check_deps() -> bool:
     if _DEPS_AVAILABLE is None:
         try:
             import sentence_transformers  # noqa: F401
+
             _DEPS_AVAILABLE = True
         except ImportError:
             log.debug(
@@ -42,6 +43,7 @@ def embed_file(repo: str, filepath: str, content: str) -> bool:
         return False
     try:
         from sentence_transformers import SentenceTransformer
+
         model = SentenceTransformer("all-MiniLM-L6-v2")
         embedding = model.encode(content[:2000]).tolist()
         log.debug(f"embeddings.embed_file repo={repo} file={filepath} dims={len(embedding)}")
@@ -57,6 +59,7 @@ def search_similar(repo: str, query: str, top_k: int = 5) -> list[dict]:
         return []
     try:
         from sentence_transformers import SentenceTransformer
+
         model = SentenceTransformer("all-MiniLM-L6-v2")
         _ = model.encode(query).tolist()
         # Vector store not wired — return empty (Qdrant integration pending)

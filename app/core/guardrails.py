@@ -26,9 +26,7 @@ class GuardrailResult:
     action_taken: str = ""
 
 
-def check_pr_auto_merge(
-    pr_data: dict, checks: list, reviews: list, config
-) -> GuardrailResult:
+def check_pr_auto_merge(pr_data: dict, checks: list, reviews: list, config) -> GuardrailResult:
     if not config.auto_merge_enabled():
         return GuardrailResult(False, "Auto-merge disabled in .ai-repo-manager.yml")
 
@@ -36,24 +34,19 @@ def check_pr_auto_merge(
     if mergeable is False:
         return GuardrailResult(False, "PR has merge conflicts")
     if mergeable is None:
-        return GuardrailResult(
-            False, "GitHub hasn't computed mergeability yet — retry in a moment"
-        )
+        return GuardrailResult(False, "GitHub hasn't computed mergeability yet — retry in a moment")
 
     if config.get("auto_merge", "require_no_blocking_reviews", default=True):
         blocking = [r for r in reviews if r.get("state") == "CHANGES_REQUESTED"]
         if blocking:
             blockers = ", ".join(f"@{r['user']['login']}" for r in blocking[:3])
-            return GuardrailResult(
-                False, f"Blocked by change requests from: {blockers}"
-            )
+            return GuardrailResult(False, f"Blocked by change requests from: {blockers}")
 
     if config.get("auto_merge", "require_passing_checks", default=True):
         failed = [
             c
             for c in checks
-            if c.get("conclusion")
-            in ("failure", "cancelled", "timed_out", "action_required")
+            if c.get("conclusion") in ("failure", "cancelled", "timed_out", "action_required")
         ]
         if failed:
             names = ", ".join(c["name"] for c in failed[:3])
@@ -64,9 +57,7 @@ def check_pr_auto_merge(
     if base in protected and not config.get(
         "auto_merge", "allow_protected_branches", default=False
     ):
-        return GuardrailResult(
-            False, f"Target `{base}` is protected — auto-merge disabled"
-        )
+        return GuardrailResult(False, f"Target `{base}` is protected — auto-merge disabled")
 
     if pr_data.get("draft", False):
         return GuardrailResult(False, "Draft PRs cannot be auto-merged")
@@ -99,9 +90,7 @@ def check_pr_title_update(pr: dict, config) -> GuardrailResult:
     if not current_title:
         return GuardrailResult(False, "PR has no title")
     if CONVENTIONAL.match(current_title):
-        return GuardrailResult(
-            False, "Title already follows conventional commit format"
-        )
+        return GuardrailResult(False, "Title already follows conventional commit format")
     return GuardrailResult(True, "OK")
 
 

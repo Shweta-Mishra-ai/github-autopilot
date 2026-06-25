@@ -96,8 +96,7 @@ def _analyze_pr(pr, repo, pr_number, files, token, config, gate, context, log):
     head_branch = pr["head"]["ref"]
 
     files_summary = "\n".join(
-        f"- {f['filename']} (+{f.get('additions', 0)} -{f.get('deletions', 0)})"
-        for f in files[:8]
+        f"- {f['filename']} (+{f.get('additions', 0)} -{f.get('deletions', 0)})" for f in files[:8]
     )
 
     r, _meta = router.ask(
@@ -129,9 +128,7 @@ Return JSON:
     r = validate_pr_analysis(r)
     result = gate.evaluate("pr_title_rewrite", r)
 
-    risk_emoji = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(
-        r.get("risk_level", "low"), "🟢"
-    )
+    risk_emoji = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(r.get("risk_level", "low"), "🟢")
     focus_items = "\n".join(f"- {f}" for f in r.get("review_focus", [])[:3])
     confidence_note = result.get("confidence_note", "")
 
@@ -252,8 +249,7 @@ def _detect_test_gaps(pr, repo, pr_number, files, token, config, log):
             return
 
         source_context = "\n\n".join(
-            f"### {f['filename']}\n```\n{f.get('patch', '')[:600]}\n```"
-            for f in source_files[:4]
+            f"### {f['filename']}\n```\n{f.get('patch', '')[:600]}\n```" for f in source_files[:4]
         )
 
         test_context = (
@@ -337,9 +333,7 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
     """Run AI code review on changed files."""
     max_files = config.get("pull_requests", "max_files_reviewed", default=4)
     reviewable = [
-        f
-        for f in files[:max_files]
-        if f.get("patch") and not _is_generated(f["filename"])
+        f for f in files[:max_files] if f.get("patch") and not _is_generated(f["filename"])
     ]
 
     if not reviewable:
@@ -394,8 +388,7 @@ Return JSON:
             issues_md = "✅ No issues found."
 
         reviews.append(
-            f"### `{filename}` — Score: {score}/10\n"
-            f"{r.get('summary', '')}\n\n{issues_md}"
+            f"### `{filename}` — Score: {score}/10\n{r.get('summary', '')}\n\n{issues_md}"
         )
 
     if reviews:
@@ -468,8 +461,9 @@ def _blast_radius(files: list) -> str:
             categories["AI (LLM layer)"].append(name)
         elif name.startswith("app/security/"):
             categories["Security"].append(name)
-        elif name.endswith((".yml", ".yaml", ".toml", "Procfile",
-                             "Dockerfile", "requirements.txt", "render.yaml")):
+        elif name.endswith(
+            (".yml", ".yaml", ".toml", "Procfile", "Dockerfile", "requirements.txt", "render.yaml")
+        ):
             categories["Config / Deploy"].append(name)
         elif name.endswith((".md", ".rst", ".txt")):
             categories["Documentation"].append(name)
@@ -480,7 +474,7 @@ def _blast_radius(files: list) -> str:
     for layer, layer_files in categories.items():
         if layer_files:
             sample = ", ".join(f"`{f.split('/')[-1]}`" for f in layer_files[:3])
-            more   = f" +{len(layer_files) - 3} more" if len(layer_files) > 3 else ""
+            more = f" +{len(layer_files) - 3} more" if len(layer_files) > 3 else ""
             lines.append(f"- **{layer}** — {sample}{more}")
 
     return "\n".join(lines) if lines else "- No categorized files found"

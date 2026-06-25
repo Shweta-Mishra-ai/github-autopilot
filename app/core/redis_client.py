@@ -12,10 +12,12 @@ import redis as redis_lib
 log = logging.getLogger(__name__)
 
 REDIS_URL = os.environ.get("REDIS_URL", "")
-_IS_PRODUCTION = os.environ.get("FLASK_ENV", "") == "production" or \
-                 os.environ.get("ENVIRONMENT", "") == "production"
+_IS_PRODUCTION = (
+    os.environ.get("FLASK_ENV", "") == "production"
+    or os.environ.get("ENVIRONMENT", "") == "production"
+)
 
-_pool:   redis_lib.ConnectionPool | None = None
+_pool: redis_lib.ConnectionPool | None = None
 _client = None
 _client_lock = threading.Lock()
 
@@ -88,7 +90,7 @@ def reset_client() -> None:
     """Force-reset the singleton (tests only)."""
     global _pool, _client
     with _client_lock:
-        _pool   = None
+        _pool = None
         _client = None
 
 
@@ -101,12 +103,13 @@ class _FakeRedis:
     """
 
     def __init__(self):
-        self._store:  dict = {}
+        self._store: dict = {}
         self._expiry: dict = {}
         self._lock = threading.Lock()
 
     def _is_expired(self, key: str) -> bool:
         import time
+
         exp = self._expiry.get(key)
         return exp is not None and time.time() > exp
 
@@ -123,6 +126,7 @@ class _FakeRedis:
 
     def set(self, key: str, value, ex: int = None, nx: bool = False):
         import time
+
         with self._lock:
             self._evict(key)
             if nx and key in self._store:
@@ -148,6 +152,7 @@ class _FakeRedis:
 
     def expire(self, key: str, seconds: int):
         import time
+
         with self._lock:
             if key in self._store:
                 self._expiry[key] = time.time() + seconds
@@ -178,13 +183,13 @@ class _FakeRedis:
             lst = self._store.get(key, [])
             if not isinstance(lst, list):
                 return []
-            return lst[start:] if end == -1 else lst[start: end + 1]
+            return lst[start:] if end == -1 else lst[start : end + 1]
 
     def ltrim(self, key: str, start: int, end: int):
         with self._lock:
             lst = self._store.get(key, [])
             if isinstance(lst, list):
-                self._store[key] = lst[start: end + 1]
+                self._store[key] = lst[start : end + 1]
 
     def ping(self) -> bool:
         return True
@@ -203,7 +208,7 @@ class _FakeRedis:
             if not isinstance(zset, dict):
                 return []
             sorted_items = sorted(zset.items(), key=lambda x: x[1])
-            sliced = sorted_items[start:] if end == -1 else sorted_items[start: end + 1]
+            sliced = sorted_items[start:] if end == -1 else sorted_items[start : end + 1]
             return sliced if withscores else [item[0] for item in sliced]
 
     def zremrangebyrank(self, key: str, start: int, end: int):
@@ -212,7 +217,7 @@ class _FakeRedis:
             if not isinstance(zset, dict):
                 return
             sorted_keys = sorted(zset.items(), key=lambda x: x[1])
-            for k, _ in sorted_keys[start: end + 1]:
+            for k, _ in sorted_keys[start : end + 1]:
                 zset.pop(k, None)
 
     def hset(self, name: str, key=None, value=None, mapping=None, items=None):

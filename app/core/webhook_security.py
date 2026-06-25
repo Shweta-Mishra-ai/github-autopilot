@@ -33,12 +33,13 @@ log = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-MAX_PAYLOAD_BYTES = 25 * 1024 * 1024   # 25 MB
-MAX_AGE_SECONDS = 300                   # Reject webhooks older than 5 minutes
-IP_RATE_LIMIT = 100                     # Max requests per IP per minute
+MAX_PAYLOAD_BYTES = 25 * 1024 * 1024  # 25 MB
+MAX_AGE_SECONDS = 300  # Reject webhooks older than 5 minutes
+IP_RATE_LIMIT = 100  # Max requests per IP per minute
 
 
 # ── Startup check ─────────────────────────────────────────────────────────────
+
 
 def startup_check():
     """
@@ -49,13 +50,10 @@ def startup_check():
 
     secret = os.environ.get("GITHUB_WEBHOOK_SECRET", "")
     if not secret:
-        errors.append(
-            "GITHUB_WEBHOOK_SECRET is not set. Webhooks cannot be verified."
-        )
+        errors.append("GITHUB_WEBHOOK_SECRET is not set. Webhooks cannot be verified.")
     elif len(secret) < 20:
         log.warning(
-            f"webhook_security.weak_secret: only {len(secret)} chars. "
-            "Use 32+ random chars."
+            f"webhook_security.weak_secret: only {len(secret)} chars. Use 32+ random chars."
         )
 
     app_id = os.environ.get("GITHUB_APP_ID", "")
@@ -68,20 +66,16 @@ def startup_check():
     if not private_key:
         errors.append("GITHUB_PRIVATE_KEY is not set.")
     elif "BEGIN" not in private_key:
-        errors.append(
-            "GITHUB_PRIVATE_KEY does not look like a PEM key "
-            "(missing 'BEGIN' marker)."
-        )
+        errors.append("GITHUB_PRIVATE_KEY does not look like a PEM key (missing 'BEGIN' marker).")
 
     if errors:
-        raise RuntimeError(
-            "Startup validation failed:\n  - " + "\n  - ".join(errors)
-        )
+        raise RuntimeError("Startup validation failed:\n  - " + "\n  - ".join(errors))
 
     log.info("webhook_security.startup_ok: all credentials validated.")
 
 
 # ── Signature verification ────────────────────────────────────────────────────
+
 
 def _get_webhook_secret() -> bytes:
     """
@@ -102,8 +96,7 @@ def verify_signature(payload_bytes: bytes, signature_header: str) -> bool:
     secret = _get_webhook_secret()
     if not secret:
         log.error(
-            "webhook_security.no_secret: GITHUB_WEBHOOK_SECRET is empty — "
-            "REJECTING all webhooks."
+            "webhook_security.no_secret: GITHUB_WEBHOOK_SECRET is empty — REJECTING all webhooks."
         )
         return False
 
@@ -111,9 +104,7 @@ def verify_signature(payload_bytes: bytes, signature_header: str) -> bool:
         log.warning("webhook_security.missing_signature")
         return False
 
-    expected = "sha256=" + hmac.new(
-        secret, payload_bytes, hashlib.sha256
-    ).hexdigest()
+    expected = "sha256=" + hmac.new(secret, payload_bytes, hashlib.sha256).hexdigest()
 
     ok = hmac.compare_digest(expected, signature_header)
     if not ok:
@@ -122,6 +113,7 @@ def verify_signature(payload_bytes: bytes, signature_header: str) -> bool:
 
 
 # ── Timestamp / replay protection ─────────────────────────────────────────────
+
 
 def verify_timestamp(headers: dict) -> bool:
     """
@@ -152,6 +144,7 @@ def verify_timestamp(headers: dict) -> bool:
 
 
 # ── IP extraction — spoofing-resistant ────────────────────────────────────────
+
 
 def _get_client_ip(request) -> str:
     """
@@ -185,6 +178,7 @@ def check_ip_rate_limit(ip: str) -> bool:
     """
     try:
         from app.core.redis_client import get_redis, is_redis_available
+
         if is_redis_available():
             r = get_redis()
             key = f"webhook_rl:{ip}:{int(time.time() // 60)}"
@@ -240,6 +234,7 @@ def is_bot_sender(payload: dict) -> bool:
 
 
 # ── Full verification pipeline ────────────────────────────────────────────────
+
 
 def verify_webhook(request) -> tuple[bool, str]:
     """

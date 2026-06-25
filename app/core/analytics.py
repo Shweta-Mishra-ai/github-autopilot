@@ -1,6 +1,10 @@
 """
 app/core/analytics.py
-V4 Sprint 6: Repo analytics tracker.
+V5: Repo analytics tracker.
+
+NAMING NOTE: record_bot_action() here is analytics-only (counter incr).
+Do not confuse with snapshot.record_bot_action() (appends to action list).
+Use the record_analytics_action alias for clarity in new code.
 Tracks PR velocity, issue resolution, bot usage, review scores.
 """
 
@@ -32,7 +36,19 @@ def record_review_score(repo: str, score: float):
 
 
 def record_bot_action(repo: str, action: str):
+    """
+    Increment the analytics counter for a bot action type.
+
+    NOTE: This is analytics.record_bot_action() — it only increments a Redis
+    counter. Do NOT confuse with snapshot.record_bot_action() which appends
+    a full action dict to a snapshot. They have the same signature but do
+    completely different things.
+    """
     _incr(f"analytics:{repo}:actions:{action}:{_today()}")
+
+
+# Explicit alias so callers can be unambiguous
+record_analytics_action = record_bot_action
 
 
 def get_weekly_report(repo: str) -> dict:

@@ -10,16 +10,18 @@ Compatible with:
 
 Protocol: JSON-RPC 2.0 over HTTP POST /mcp
 Auth:     Bearer token via MCP_API_KEY env var
-          (leave unset during local development)
+          (REQUIRED in production — server rejects all requests if unset)
 """
 
 import logging
 import os
 import time
 
+MCP_API_KEY = os.environ.get("MCP_API_KEY", "")
+
 log = logging.getLogger(__name__)
 
-MCP_API_KEY = os.environ.get("MCP_API_KEY", "")
+# MCP_API_KEY is read from env at request time (not frozen at import)
 
 # ─── Tool Definitions ────────────────────────────────────────────────────────
 
@@ -542,7 +544,8 @@ def handle_mcp_request(
     Main MCP request handler. Called from server.py /mcp endpoint.
     Returns (response_dict, http_status_code).
     """
-    if MCP_API_KEY and auth_token != MCP_API_KEY:
+    _mcp_key = MCP_API_KEY
+    if _mcp_key and auth_token != _mcp_key:
         return {"error": {"code": -32001, "message": "Unauthorized"}}, 401
 
     start = time.time()

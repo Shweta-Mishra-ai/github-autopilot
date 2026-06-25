@@ -17,7 +17,7 @@ from app.core.config import load_config
 from app.core.logger import get_logger
 from app.core.logger import EventLogger
 
-log = get_logger(__name__)
+log = EventLogger("schedule")
 
 STALE_DAYS = int(os.environ.get("STALE_ISSUE_DAYS", "30"))
 

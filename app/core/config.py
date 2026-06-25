@@ -26,6 +26,7 @@ log = logging.getLogger(__name__)
 # ── Cache (5-minute TTL, thread-safe) ────────────────────────────────────────
 _config_cache: dict[str, tuple] = {}  # {repo: (Config, timestamp)}
 _config_lock  = threading.RLock()     # RLock: reentrant so invalidate can be called inside load
+_config_fetching: set = set()          # repos currently being fetched (thundering herd guard)
 _CONFIG_TTL   = 300  # 5 minutes in seconds
 
 
@@ -57,6 +58,9 @@ DEFAULTS: dict = {
         "create_issue_threshold": 3,
         "scan_secrets": True,
         "scan_dependencies": True,
+        # scan_all_branches: if true, dep scan + commit lint run on all branches
+        # Secret scan ALWAYS runs on all branches regardless of this setting
+        "scan_all_branches": False,
     },
     "auto_merge": {
         "enabled": False,
@@ -257,7 +261,15 @@ def load_config(repo: str, token: str) -> Config:
     """
     Load .ai-repo-manager.yml from repo with 5-minute cache.
     Falls back to defaults if file missing or invalid.
-    Thread-safe: uses RLock to prevent concurrent cache writes.
+    Thread-safe: uses RLock + per-repo fetch sentinel to prevent
+    thundering herd (multiple threads simultaneously fetching same config
+    on cache miss, wasting GitHub API calls).
+
+    FIXED: V4 fetched outside the lock with no guard, so N threads with
+    simultaneous cache misses all called gh_get() for the same repo. Under
+    load this was N× GitHub API calls for identical data. V5 uses a
+    _config_fetching set as a per-repo sentinel: only the first thread
+    fetches; others get defaults and let the cache warm naturally.
     """
     now = time.time()
 
@@ -267,16 +279,24 @@ def load_config(repo: str, token: str) -> Config:
             if now - cached_at < _CONFIG_TTL:
                 return cached_config
 
-    # Cache miss — fetch from GitHub (outside lock to avoid blocking other threads)
+        # Thundering herd guard: if another thread is already fetching this
+        # repo's config, return defaults rather than pile-on with a 2nd fetch.
+        if repo in _config_fetching:
+            log.debug(f"config.fetch_in_progress repo={repo} — returning defaults")
+            return Config({})
+
+        _config_fetching.add(repo)
+
+    # Cache miss — fetch from GitHub (outside lock so other repos aren't blocked)
     try:
         from app.github.client import gh_get
 
-        data    = gh_get(f"/repos/{repo}/contents/.ai-repo-manager.yml", token)
-        content = base64.b64decode(data["content"]).decode("utf-8")
+        data = gh_get(f"/repos/{repo}/contents/.ai-repo-manager.yml", token)
+        raw  = base64.b64decode(data["content"]).decode("utf-8")
 
         import yaml
 
-        parsed = yaml.safe_load(content) or {}
+        parsed = yaml.safe_load(raw) or {}
         if not isinstance(parsed, dict):
             log.warning(f"config.invalid_yaml repo={repo} — using defaults")
             parsed = {}
@@ -289,7 +309,9 @@ def load_config(repo: str, token: str) -> Config:
         config = Config({})
 
     with _config_lock:
+        _config_fetching.discard(repo)
         _config_cache[repo] = (config, now)
+
     return config
 
 
@@ -302,7 +324,9 @@ def invalidate_config_cache(repo: str = None):
     with _config_lock:
         if repo:
             _config_cache.pop(repo, None)
+            _config_fetching.discard(repo)
             log.debug(f"config.cache_invalidated repo={repo}")
         else:
             _config_cache.clear()
+            _config_fetching.clear()
         log.debug("config.cache_invalidated all")

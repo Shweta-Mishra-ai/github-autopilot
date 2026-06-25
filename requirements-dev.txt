@@ -1,0 +1,12 @@
+# requirements-dev.txt — AI Repo Manager V5
+# Dev and test dependencies only. Not installed in production.
+-r requirements.txt
+
+pytest==8.3.4
+pytest-cov==6.0.0
+pytest-mock==3.14.0
+ruff==0.8.0
+
+# Optional: heavy intelligence layer (not needed for core bot to run)
+# qdrant-client==1.9.1
+# sentence-transformers==3.2.1

@@ -1,6 +1,6 @@
 """
 app/handlers/autofix.py
-Fixed V4.2 — All issues addressed.
+V5 — YAML extension restriction + payload safety.
 
 FIXES vs V4.1:
   1. BLOCKED_PATHS massively expanded — CI workflows, requirements.txt,
@@ -29,7 +29,26 @@ from app.ai.router import router
 
 log = logging.getLogger(__name__)
 
-ALLOWED_EXTENSIONS = {".py", ".md", ".txt", ".yml", ".yaml", ".json", ".toml"}
+# FIXED: .yml/.yaml removed from blanket allowed set.
+# Workflows, Dockerfiles, Helm charts etc. are .yml — allowing all yaml
+# was a CI injection vector even with the prefix blocklist.
+# Only specific safe yaml-like files (e.g. mkdocs.yml, .pre-commit-config.yaml)
+# in non-sensitive directories are permitted via SAFE_YAML_PATHS.
+ALLOWED_EXTENSIONS = {".py", ".md", ".txt", ".json", ".toml"}
+
+# Yaml files are allowed ONLY when they are NOT in sensitive directories
+# and explicitly match known-safe patterns. The prefix blocklist still applies.
+ALLOWED_YAML_PATTERNS = (
+    "mkdocs.yml",
+    "mkdocs.yaml",
+    ".pre-commit-config.yaml",
+    "codecov.yml",
+    "codecov.yaml",
+    "readthedocs.yml",
+    "readthedocs.yaml",
+    ".markdownlint.yml",
+    ".markdownlint.yaml",
+)
 
 # Hard blocklist — exact paths
 BLOCKED_PATHS = {
@@ -266,6 +285,7 @@ def _make_diff_preview(original: str, fixed: str, filepath: str) -> str:
 
 def _generate_fix_plan(title: str, body: str, target_file: str) -> Optional[dict]:
     try:
+        from app.ai.circuit_breaker import AllProvidersDown
         hint = f"Focus on file: {target_file}" if target_file else ""
         r, meta = router.ask(
             "Principal engineer. Generate precise minimal code fixes. JSON only.",
@@ -295,9 +315,25 @@ If confidence < 0.6 return {{"confidence": 0.0}}""",
 
         return r
 
+    except AllProvidersDown:
+        log.error("autofix._generate_fix_plan: all providers down")
+        return None
     except Exception as e:
         log.error(f"autofix._generate failed: {e}")
         return None
+
+
+def _contains_workflow_syntax(content: str) -> bool:
+    """
+    Detect if content looks like a GitHub Actions workflow file.
+    Used to reject LLM responses that try to inject workflow syntax
+    into non-workflow YAML files.
+    """
+    # Simple heuristic: workflow files have 'on:' and 'jobs:' at top level
+    lines = content[:2000].splitlines()
+    has_on = any(line.strip().startswith("on:") for line in lines[:20])
+    has_jobs = any(line.strip().startswith("jobs:") for line in lines[:30])
+    return has_on and has_jobs
 
 
 def _apply_fix(current: str, fix_plan: dict, title: str) -> tuple[str, int]:
@@ -344,6 +380,11 @@ Return JSON: {{"fixed_content": "complete file content", "changed_lines": 2}}"""
             )
             return current, tokens
 
+        # Workflow injection guard: reject YAML that gained workflow syntax
+        if not _contains_workflow_syntax(current) and _contains_workflow_syntax(fixed):
+            log.warning("autofix._apply_fix: workflow injection attempt detected — rejecting")
+            return current, tokens
+
         return fixed, tokens
 
     except Exception as e:
@@ -373,7 +414,14 @@ def _build_pr_body(fix_plan: dict, issue_number: int, title: str) -> str:
 
 
 def _is_allowed(filepath: str) -> bool:
-    """Return True only if the file path is safe to auto-modify."""
+    """
+    Return True only if the file path is safe to auto-modify.
+
+    FIXED: .yml/.yaml was in ALLOWED_EXTENSIONS, allowing LLM to modify
+    any yaml file not explicitly blocked by prefix — e.g. "deploy/api.yml"
+    could be a CI/CD config not under .github/workflows/. Yaml files now
+    require an exact match against ALLOWED_YAML_PATTERNS.
+    """
     if not filepath:
         return False
     # Path traversal
@@ -388,6 +436,11 @@ def _is_allowed(filepath: str) -> bool:
             return False
     # Extension check
     ext = "." + filepath.rsplit(".", 1)[-1] if "." in filepath else ""
+    if ext in (".yml", ".yaml"):
+        # Yaml: only allow specific known-safe filenames
+        basename = filepath.split("/")[-1]
+        # Compare against the basename of each pattern (strip any leading path)
+        return any(basename == pat.split("/")[-1] for pat in ALLOWED_YAML_PATTERNS)
     return ext in ALLOWED_EXTENSIONS
 
 
@@ -399,6 +452,8 @@ def _block_reason(filepath: str) -> str:
         if filepath.startswith(prefix):
             return f"files under `{prefix}` are protected"
     ext = "." + filepath.rsplit(".", 1)[-1] if "." in filepath else ""
+    if ext in (".yml", ".yaml"):
+        return "YAML files are restricted to known-safe config files (e.g. mkdocs.yml)"
     if ext not in ALLOWED_EXTENSIONS:
         return f"extension `{ext}` is not in the allowed list"
-    return "path is restricted"
+    return None

@@ -2,22 +2,31 @@
 server.py — Flask entry point.
 
 Security:  webhook_security.verify_webhook() — HMAC, replay, rate limit
-Threading: thread_pool.dispatch()           — bounded pool, queue cap
+Threading: thread_pool.dispatch()           — bounded pool, backpressure on saturation
 Health:    /ping (public), /health (auth-gated detail)
 """
 
 import logging
 import os
+import signal
 import time
 import traceback
 
 from flask import Flask, jsonify, request
 
-from app.core.idempotency  import is_duplicate, make_fingerprint
-from app.core.metrics      import metrics
-from app.core.redis_client import is_redis_available
-from app.core.thread_pool  import dispatch, pool_stats
-from app.core.webhook_security import verify_webhook, startup_check
+import app.core.idempotency as idempotency
+import app.core.thread_pool as thread_pool
+import app.core.webhook_security as webhook_security
+
+is_duplicate = lambda *a, **kw: idempotency.is_duplicate(*a, **kw)
+make_fingerprint = lambda *a, **kw: idempotency.make_fingerprint(*a, **kw)
+dispatch = lambda *a, **kw: thread_pool.dispatch(*a, **kw)
+verify_webhook = lambda *a, **kw: webhook_security.verify_webhook(*a, **kw)
+
+from app.core.metrics        import metrics
+from app.core.redis_client   import is_redis_available
+from app.core.thread_pool    import is_saturated, pool_stats, shutdown
+from app.core.webhook_security import startup_check
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -29,7 +38,17 @@ app = Flask(__name__)
 
 METRICS_TOKEN = os.environ.get("METRICS_AUTH_TOKEN", "")
 START_TIME    = time.time()
-VERSION       = "4.2.0"
+VERSION       = "5.0.0"
+
+
+# ── Graceful shutdown ───────────────────────────────────────────────────────
+
+def _handle_sigterm(signum, frame):
+    log.info("server.sigterm_received — draining thread pool")
+    shutdown(wait=True)
+    log.info("server.graceful_shutdown_complete")
+
+signal.signal(signal.SIGTERM, _handle_sigterm)
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────
@@ -70,6 +89,9 @@ def health():
     any_llm_ok     = any(s["state"] == "closed" for s in breaker_status.values())
     overall        = "ok" if (gh_ok and any_llm_ok) else "degraded"
 
+    pool           = pool_stats()
+    pool_saturated = pool.get("saturation_pct", 0) > 80
+
     return jsonify({
         "status":         overall,
         "version":        VERSION,
@@ -78,11 +100,14 @@ def health():
             "redis":         "ok" if redis_ok else "unavailable",
             "github_api":    "ok" if gh_ok    else "rate_limited",
             "llm_providers": breaker_status,
+            "thread_pool":   "saturated" if pool_saturated else "ok",
         },
-        "thread_pool": pool_stats(),
+        "thread_pool": pool,
         "metrics": {
-            "events_total": metrics.get("events.total", 0),
-            "errors_total": metrics.get("events.error", 0),
+            "events_total":           metrics.get("events.total", 0),
+            "errors_total":           metrics.get("events.error", 0),
+            "events_dropped":         metrics.get("events.dropped", 0),
+            "secondary_rate_limited": metrics.get("events.secondary_rate_limited", 0),
         },
     }), 200 if overall == "ok" else 207
 
@@ -96,21 +121,10 @@ def get_metrics():
     return jsonify(metrics.snapshot())
 
 
-@app.route("/test-discord", methods=["POST"])
-def test_discord():
-    if os.environ.get("FLASK_ENV") == "production":
-        return jsonify({"error": "Not available in production"}), 403
-    from app.github.notifications import test_discord as _test
-    success, message = _test()
-    return jsonify({"success": success, "message": message}), 200 if success else 500
-
-
-
-
 @app.route("/mcp", methods=["POST"])
 def mcp_endpoint():
     """MCP (Model Context Protocol) endpoint for IDE integrations."""
-    from app.mcp.server import handle_mcp_request
+    from app.mcp.mcp_server import handle_mcp_request
 
     auth  = request.headers.get("Authorization", "")
     token = auth[7:] if auth.startswith("Bearer ") else ""
@@ -138,6 +152,7 @@ def mcp_info():
         "auth":        "Bearer token via MCP_API_KEY env var",
         "docs":        "https://github.com/Shweta-Mishra-ai/github-autopilot/blob/main/docs/mcp-setup.md",
     })
+
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -176,10 +191,22 @@ def webhook():
         return jsonify({"status": "duplicate — skipped"}), 200
 
     # Dispatch to bounded pool — ACK immediately
-    _dispatch(webhook_event, payload, repo)
+    result = _dispatch(webhook_event, payload, repo)
+
+    # Saturated pool → 503 so GitHub retries automatically
+    if is_saturated(result):
+        metrics.increment("events.dropped")
+        log.error(
+            f"dispatch.saturated event={webhook_event} repo={repo} "
+            "— returning 503 for GitHub retry"
+        )
+        return jsonify({
+            "error": "Server busy — please retry",
+            "retry_after": 30,
+        }), 503
+
     metrics.increment(f"events.{webhook_event}.queued")
     metrics.increment("events.total")
-
     return jsonify({"status": "accepted"}), 202
 
 
@@ -221,19 +248,22 @@ def _run_handler(webhook_event: str, payload: dict, repo: str):
         log.info(f"dispatch.done event={webhook_event}")
 
     except Exception as e:
-        log.error(f"dispatch.error event={webhook_event} repo={repo}: {e}")
-        log.error(traceback.format_exc())
-        metrics.increment(f"events.{webhook_event}.error")
+        from app.github.client import GitHubSecondaryRateLimitError
+        if isinstance(e, GitHubSecondaryRateLimitError):
+            log.warning(
+                f"dispatch.secondary_rate_limit event={webhook_event} repo={repo} "
+                f"retry_after={e.retry_after}s — dropping, GitHub will retry"
+            )
+            metrics.increment("events.secondary_rate_limited")
+        else:
+            log.error(f"dispatch.error event={webhook_event} repo={repo}: {e}")
+            log.error(traceback.format_exc())
+            metrics.increment(f"events.{webhook_event}.error")
 
 
 def _dispatch(webhook_event: str, payload: dict, repo: str):
-    result = dispatch(_run_handler, webhook_event, payload, repo)
-    if result is None:
-        log.error(
-            f"dispatch.dropped event={webhook_event} repo={repo} "
-            "— pool saturated"
-        )
-        metrics.increment("events.dropped")
+    """Returns Future on success, _SATURATED sentinel on queue full."""
+    return dispatch(_run_handler, webhook_event, payload, repo)
 
 
 # ── Boot ───────────────────────────────────────────────────────────────────

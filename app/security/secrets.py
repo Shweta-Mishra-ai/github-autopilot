@@ -7,9 +7,9 @@ Regex + entropy based detection.
 import re
 import math
 from dataclasses import dataclass
-from app.core.logger import get_logger
+from app.core.logger import get_logger, EventLogger
 
-log = get_logger(__name__)
+log = EventLogger("secrets")
 
 # Secret patterns
 PATTERNS = [

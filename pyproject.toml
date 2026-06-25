@@ -1,0 +1,105 @@
+[project]
+name = "ai-repo-manager"
+version = "5.0.0"
+description = "AI-powered GitHub automation bot — auto-fix, PR review, secret scanning, and more"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["github", "ai", "automation", "bot", "llm", "devops"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Quality Assurance",
+]
+
+dependencies = [
+    "flask>=3.0.0",
+    "gunicorn>=23.0.0",
+    "requests>=2.32.0",
+    "PyJWT>=2.8.0",
+    "cryptography>=42.0.0",
+    "PyYAML>=6.0.0",
+    "redis>=5.0.0",
+    "groq>=0.11.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
+    "ruff>=0.8.0",
+    "pip-audit>=2.7.0",
+]
+intelligence = [
+    "qdrant-client>=1.9.0",
+    "sentence-transformers>=3.0.0",
+]
+
+[project.scripts]
+ai-repo-manager = "ai_repo_manager.cli:main"
+arm = "ai_repo_manager.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Shweta-Mishra-ai/github-autopilot"
+"Bug Tracker" = "https://github.com/Shweta-Mishra-ai/github-autopilot/issues"
+
+# ── Ruff ────────────────────────────────────────────────────────────────────
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "C4", "SIM"]
+ignore = [
+    "E501",   # line too long — handled by formatter
+    "B008",   # do not perform function calls in default arguments (Flask DI pattern)
+    "SIM108", # ternary operator — readability > brevity in critical security code
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501", "F841"]   # long assert messages are fine in tests
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ── Pytest ───────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+markers = [
+    "e2e: end-to-end tests requiring live GitHub credentials",
+    "integration: tests requiring live Redis or external services",
+    "slow: tests that take more than 2 seconds",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+# ── Coverage ─────────────────────────────────────────────────────────────────
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "app/auth.py",           # deprecated legacy file
+    "archive/*",
+    "tests/*",
+    "app/intelligence/*",    # optional layer, no hard deps
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "raise NotImplementedError",
+    "def __repr__",
+]

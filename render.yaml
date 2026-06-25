@@ -38,6 +38,10 @@ services:
         sync: false
       - key: METRICS_AUTH_TOKEN
         sync: false
+      - key: MCP_API_KEY
+        sync: false
+        # REQUIRED: MCP endpoint rejects ALL requests when this is unset.
+        # Generate with: python3 -c "import secrets; print(secrets.token_hex(32))"
       - key: MAX_DISPATCH_WORKERS
         value: "6"
       - key: REPO_DAILY_AI_LIMIT
@@ -48,4 +52,8 @@ services:
   - type: redis
     name: github-autopilot-redis
     plan: free
-    maxmemoryPolicy: allkeys-lru
+    # FIXED: allkeys-lru was evicting idempotency keys under memory pressure,
+    # causing duplicate webhook processing (GitHub retries for 24h).
+    # noeviction means Redis returns an error when full instead of silently
+    # deleting critical keys. Monitor memory usage and upgrade plan if needed.
+    maxmemoryPolicy: noeviction

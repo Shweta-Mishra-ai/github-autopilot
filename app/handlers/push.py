@@ -1,10 +1,13 @@
 """
 app/handlers/push.py
-V4 Sprint 2: Smart dependency scanning + dedup.
+V5: All-branch secret scanning + configurable full-scan branches.
 
 FIXED (Sprint 2): Duplicate issues — Redis dedup (24h dep scan, 6h commit lint).
 NEW (Sprint 2): Only HIGH/CRITICAL vulnerabilities create GitHub issues.
      LOW/MODERATE = logged only (no spam).
+
+FIXED (V5): Secret scan now runs on ALL branches, not just main/master.
+     Secrets pushed to feature branches are the most common vector.
 
 FIXED (Sprint 8): _scan_secrets was missing dedup entirely.
      _already_reported() existed and was used for dep scan + commit lint but
@@ -63,10 +66,10 @@ def handle(payload: dict) -> None:
 
     if pusher in SKIP_AUTHORS or pusher.endswith("[bot]"):
         return
-    if ref not in ("refs/heads/main", "refs/heads/master"):
-        return
     if not commits:
         return
+    if not ref.startswith("refs/heads/"):
+        return  # Skip tag pushes
 
     try:
         token = get_installation_token(installation_id)
@@ -80,14 +83,24 @@ def handle(payload: dict) -> None:
     if not config.get("push", "enabled", default=True):
         return
 
+    # Secret scan runs on ALL branches (secrets are dangerous everywhere).
+    # Dependency + commit lint only run on default branch by default,
+    # but can be extended via config push.scan_all_branches = true.
+    is_default_branch = ref in ("refs/heads/main", "refs/heads/master")
+    scan_all = config.get("push", "scan_all_branches", default=False)
+    run_full_scan = is_default_branch or scan_all
+
+    # Secret scan: ALL branches — secrets don't care which branch they're on
     if config.get("push", "scan_secrets", default=True):
         _scan_secrets(repo, commits, token, config, log)
 
-    if config.get("push", "scan_dependencies", default=True):
-        _scan_dependencies(repo, commits, token, config, log)
+    # Dep scan + commit lint: default branch only (or all if scan_all_branches=true)
+    if run_full_scan:
+        if config.get("push", "scan_dependencies", default=True):
+            _scan_dependencies(repo, commits, token, config, log)
 
-    if config.get("push", "enforce_conventional_commits", default=True):
-        _lint_commits(repo, commits, token, config, log)
+        if config.get("push", "enforce_conventional_commits", default=True):
+            _lint_commits(repo, commits, token, config, log)
 
     _index_changed_files(repo, commits, token, latest_sha, log)
 

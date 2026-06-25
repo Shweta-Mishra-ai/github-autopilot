@@ -40,14 +40,22 @@ def record_autofix_closed(repo: str, pr_number: int):
 
 
 def get_acceptance_rate(repo: str, fix_type: str = "all") -> float:
-    """Returns fix acceptance rate 0.0-1.0 for this repo."""
+    """
+    Returns fix acceptance rate 0.0-1.0 for this repo.
+
+    FIXED: V4 hardcoded ["code", "deps", "config", "docs"] — new fix types
+    added by /refactor, /test, /autofix etc. were silently excluded, making
+    the acceptance rate an undercount. V5 uses get_all_fix_types() to
+    discover all recorded types dynamically.
+    """
     try:
         r = get_redis()
         if fix_type == "all":
+            all_types = _get_all_fix_types(repo, r)
             accepted = sum(int(r.get(f"learn:{repo}:fix_accepted:{t}") or 0)
-                          for t in ["code", "deps", "config", "docs"])
+                          for t in all_types)
             ignored  = sum(int(r.get(f"learn:{repo}:fix_ignored:{t}") or 0)
-                          for t in ["code", "deps", "config", "docs"])
+                          for t in all_types)
         else:
             accepted = int(r.get(f"learn:{repo}:fix_accepted:{fix_type}") or 0)
             ignored  = int(r.get(f"learn:{repo}:fix_ignored:{fix_type}") or 0)
@@ -55,6 +63,31 @@ def get_acceptance_rate(repo: str, fix_type: str = "all") -> float:
         return round(accepted / total, 2) if total >= 5 else 0.5
     except Exception:
         return 0.5
+
+
+def _get_all_fix_types(repo: str, r) -> list[str]:
+    """
+    Discover all fix types that have been recorded for this repo.
+    Falls back to the known set if Redis scan is unavailable.
+    """
+    # Always include the baseline types so we don't regress
+    known = {"code", "deps", "config", "docs", "autofix", "refactor", "test",
+             "ci", "security", "perf"}
+    try:
+        # Try to discover additional types from recorded events
+        events_raw = r.lrange(f"learn:{repo}:events", 0, 199)
+        import json as _json
+        for raw in events_raw:
+            try:
+                entry = _json.loads(raw)
+                t = entry.get("data", {}).get("type", "")
+                if t:
+                    known.add(t)
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return list(known)
 
 
 def get_repo_patterns(repo: str) -> dict:
@@ -141,3 +174,6 @@ def get_pattern_summary(repo: str) -> str:
     if not patterns:
         return ""
     return " " + ", ".join(f"{k}={v}" for k, v in patterns.items())
+
+# Module-level alias for test compatibility
+record_event = _record_event

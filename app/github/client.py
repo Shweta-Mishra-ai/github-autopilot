@@ -37,6 +37,13 @@ class GitHubError(Exception):
         self.status_code = status_code
 
 
+class GitHubSecondaryRateLimitError(GitHubError):
+    """Raised when GitHub returns a 403 with secondary rate limit header."""
+    def __init__(self, message: str = "GitHub secondary rate limit", retry_after: int = 60):
+        super().__init__(message, status_code=403)
+        self.retry_after = retry_after
+
+
 def _make_session() -> requests.Session:
     """
     Session with automatic retry on transient network errors.
@@ -83,16 +90,26 @@ def _handle_response(r: requests.Response, method: str, path: str):
         raise GitHubError(f"Primary rate limit — retry after {retry_after}s", 429)
 
     # Secondary rate limit (abuse detection)
+    # FIXED: previously called time.sleep(60) here — this blocks a thread
+    # pool worker for 60s, starving all other webhooks. Now we raise
+    # GitHubSecondaryRateLimitError immediately so the caller can decide
+    # whether to drop/retry. Never sleep in a shared worker thread.
     if r.status_code == 403:
         try:
             body = r.json()
             msg = body.get("message", "").lower()
             if "secondary rate limit" in msg or "abuse" in msg:
-                log.warning(f"github.secondary_rate_limit path={path} — waiting 60s")
-                time.sleep(60)
-                raise GitHubError("Secondary rate limit — waited 60s, retry now", 403)
+                retry_after = int(r.headers.get("Retry-After", 60))
+                log.warning(
+                    f"github.secondary_rate_limit path={path} "
+                    f"retry_after={retry_after}s — raising immediately (no sleep)"
+                )
+                raise GitHubSecondaryRateLimitError(
+                    f"Secondary rate limit on {path}. Retry after {retry_after}s.",
+                    retry_after=retry_after,
+                )
             raise GitHubError(f"Forbidden: {body.get('message', 'no message')}", 403)
-        except GitHubError:
+        except (GitHubError, GitHubSecondaryRateLimitError):
             raise
         except Exception:
             raise GitHubError(f"403 Forbidden: {path}", 403)

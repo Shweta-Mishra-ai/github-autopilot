@@ -8,7 +8,7 @@ LLM provider tests. Updated for V5:
 
 import os
 import sys
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -41,8 +41,8 @@ class TestGroqProvider:
         from app.ai.providers.groq import GroqProvider
         provider = GroqProvider()
         with patch("app.ai.providers.groq.http_requests.post",
-                   return_value=self._make_response("hello")):
-            with patch("app.ai.circuit_breaker.get_breaker") as mock_breaker:
+                   return_value=self._make_response("hello")), \
+             patch("app.ai.circuit_breaker.get_breaker") as mock_breaker:
                 mock_breaker.return_value.is_available.return_value = True
                 result = provider.call_raw("sys", "usr", 500, 0.2, 30)
         assert result.text == "hello"
@@ -112,8 +112,8 @@ class TestGroqProvider:
         mock_resp = MagicMock()
         mock_resp.status_code = 429
         mock_resp.headers = {"Retry-After": "45"}
-        with patch("app.ai.providers.groq.http_requests.post", return_value=mock_resp):
-            with patch("app.ai.circuit_breaker.get_breaker") as mock_breaker:
+        with patch("app.ai.providers.groq.http_requests.post", return_value=mock_resp), \
+             patch("app.ai.circuit_breaker.get_breaker") as mock_breaker:
                 mock_breaker.return_value.is_available.return_value = True
                 result = provider.call_raw("sys", "usr", 500, 0.2, 30)
         assert "RATE_LIMIT:45" in result.error
@@ -133,12 +133,11 @@ class TestGroqProvider:
     def test_missing_api_key_returns_error(self):
         from app.ai.providers.groq import GroqProvider
         provider = GroqProvider()
-        with patch.dict(os.environ, {"GROQ_API_KEY": ""}):
-            with patch("app.ai.circuit_breaker.get_breaker") as mock_breaker:
-                mock_breaker.return_value.is_available.return_value = True
-                # Also patch module-level constant
-                with patch("app.ai.providers.groq.GROQ_API_KEY", ""):
-                    result = provider.call_raw("sys", "usr", 500, 0.2, 30)
+        with patch.dict(os.environ, {"GROQ_API_KEY": ""}), \
+             patch("app.ai.circuit_breaker.get_breaker") as mock_breaker, \
+             patch("app.ai.providers.groq.GROQ_API_KEY", ""):
+            mock_breaker.return_value.is_available.return_value = True
+            result = provider.call_raw("sys", "usr", 500, 0.2, 30)
         assert "GROQ_API_KEY" in result.error
 
     def test_timeout_records_circuit_failure(self):
@@ -146,8 +145,8 @@ class TestGroqProvider:
         from app.ai.providers.groq import GroqProvider
         provider = GroqProvider()
         with patch("app.ai.providers.groq.http_requests.post",
-                   side_effect=req_lib.exceptions.Timeout()):
-            with patch("app.ai.circuit_breaker.get_breaker") as mock_breaker:
+                   side_effect=req_lib.exceptions.Timeout()), \
+             patch("app.ai.circuit_breaker.get_breaker") as mock_breaker:
                 mock_breaker.return_value.is_available.return_value = True
                 result = provider.call_raw("sys", "usr", 500, 0.2, 30)
         mock_breaker.return_value.record_failure.assert_called()
@@ -158,8 +157,8 @@ class TestGroqProvider:
         provider = GroqProvider()
         mock_resp = MagicMock()
         mock_resp.status_code = 503
-        with patch("app.ai.providers.groq.http_requests.post", return_value=mock_resp):
-            with patch("app.ai.circuit_breaker.get_breaker") as mock_breaker:
+        with patch("app.ai.providers.groq.http_requests.post", return_value=mock_resp), \
+             patch("app.ai.circuit_breaker.get_breaker") as mock_breaker:
                 mock_breaker.return_value.is_available.return_value = True
                 result = provider.call_raw("sys", "usr", 500, 0.2, 30)
         mock_breaker.return_value.record_failure.assert_called()
@@ -182,8 +181,8 @@ class TestGroqProvider:
         from app.ai.providers.base import LLMResponse
         provider = GroqProvider()
         resp = self._make_response("test output", 200, 100)
-        with patch("app.ai.providers.groq.http_requests.post", return_value=resp):
-            with patch("app.ai.circuit_breaker.get_breaker") as mock_breaker:
+        with patch("app.ai.providers.groq.http_requests.post", return_value=resp), \
+             patch("app.ai.circuit_breaker.get_breaker") as mock_breaker:
                 mock_breaker.return_value.is_available.return_value = True
                 result = provider.call_raw("sys", "usr", 500, 0.2, 30)
         assert isinstance(result, LLMResponse)

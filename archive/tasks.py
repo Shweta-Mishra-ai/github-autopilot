@@ -106,7 +106,7 @@ def handle_push(self, payload: dict):
         log.warning(
             f"Push handler: all providers down, retry in {exc.retry_in_seconds}s"
         )
-        raise self.retry(exc=exc, countdown=exc.retry_in_seconds)
+        raise self.retry(exc=exc, countdown=exc.retry_in_seconds) from exc
     except Exception as exc:
         log.error(f"handle_push failed: {exc}")
         try:
@@ -128,7 +128,7 @@ def handle_check_run(self, payload: dict):
 
         handle(payload)
     except AllProvidersDown as exc:
-        raise self.retry(exc=exc, countdown=exc.retry_in_seconds)
+        raise self.retry(exc=exc, countdown=exc.retry_in_seconds) from exc
     except Exception as exc:
         log.error(f"handle_check_run failed: {exc}")
         try:

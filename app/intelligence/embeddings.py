@@ -10,7 +10,6 @@ To re-enable: add sentence-transformers and qdrant-client to requirements.txt.
 """
 
 import os
-import hashlib
 import logging
 
 log = logging.getLogger(__name__)

@@ -113,10 +113,8 @@ def check_command_permission(
 
     # Check 1: Is this a globally restricted command?
     full_cmd = f"/{cmd_key}"
-    if full_cmd not in RESTRICTED_COMMANDS:
-        # Also check config-level maintainer_only list
-        if not config.is_maintainer_only(cmd_key):
-            return True, ""
+    if (full_cmd not in RESTRICTED_COMMANDS) and not config.is_maintainer_only(cmd_key):
+        return True, ""
 
     # Command requires elevated permissions
     if not is_maintainer(repo, author, token):

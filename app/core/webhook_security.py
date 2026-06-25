@@ -236,9 +236,7 @@ def is_bot_sender(payload: dict) -> bool:
         return True
     if any(sender_login.endswith(suf) for suf in BOT_LOGIN_SUFFIXES):
         return True
-    if sender_login in OWN_BOT_LOGINS:
-        return True
-    return False
+    return sender_login in OWN_BOT_LOGINS
 
 
 # ── Full verification pipeline ────────────────────────────────────────────────

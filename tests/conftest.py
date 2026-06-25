@@ -14,7 +14,6 @@ import os
 import sys
 import types
 import threading
-import json
 import time
 import pytest
 

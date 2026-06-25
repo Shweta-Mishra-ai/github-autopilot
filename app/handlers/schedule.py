@@ -14,8 +14,8 @@ from app.github.auth import get_installation_token
 from app.github.client import gh_get, gh_post, gh_put, GitHubError
 from app.github.notifications import notify_health_degraded, notify_stale_closed
 from app.core.config import load_config
-from app.core.logger import get_logger
 from app.core.logger import EventLogger
+import contextlib
 
 log = EventLogger("schedule")
 
@@ -89,10 +89,8 @@ def _mark_stale(repo: str, issue: dict, token: str, config):
                      repo=repo, issue=issue_number, days=days_inactive)
 
             # FIXED: Pass days_inactive to fix hardcoded 37 days bug
-            try:
+            with contextlib.suppress(Exception):
                 notify_stale_closed(repo, issue_number, title, days_inactive)
-            except Exception:
-                pass
 
         except GitHubError as e:
             log.error("schedule.stale_close_failed",
@@ -225,10 +223,8 @@ def run_health_report(repo: str, installation_id: int):
         })
 
         if score < 70:
-            try:
+            with contextlib.suppress(Exception):
                 notify_health_degraded(repo, grade, score)
-            except Exception:
-                pass
 
         log.info("schedule.health_report.done", repo=repo, grade=grade, score=score)
 
@@ -287,14 +283,12 @@ pip install --upgrade {' '.join(f['package'] for f in findings[:5])}
 
 def _ensure_label(repo: str, token: str, name: str, color: str, description: str):
     """Create label if it doesn't exist."""
-    try:
+    with contextlib.suppress(Exception):
         gh_post(f"/repos/{repo}/labels", token, {
             "name": name,
             "color": color,
             "description": description
         })
-    except Exception:
-        pass  # Label already exists
 
 def run_weekly_report(installation_id: int, repo: str):
     """

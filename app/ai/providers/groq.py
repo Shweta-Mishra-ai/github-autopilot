@@ -166,7 +166,6 @@ class GroqProvider(LLMProvider):
         """
         try:
             import datetime
-            from app.core.redis_client import get_redis
 
             if total_tokens <= 0:
                 return

@@ -36,10 +36,9 @@ class CircuitBreaker:
     @property
     def state(self) -> CBState:
         with self._lock:
-            if self._state == CBState.OPEN:
-                if time.time() - self._opened_at >= self.recovery_timeout:
-                    log.info(f"circuit_breaker.half_open provider={self.provider}")
-                    self._state = CBState.HALF_OPEN
+            if self._state == CBState.OPEN and time.time() - self._opened_at >= self.recovery_timeout:
+                log.info(f"circuit_breaker.half_open provider={self.provider}")
+                self._state = CBState.HALF_OPEN
             return self._state
 
     def is_available(self) -> bool:

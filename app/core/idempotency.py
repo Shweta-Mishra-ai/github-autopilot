@@ -18,7 +18,8 @@ import hashlib
 import time
 import logging
 from collections import OrderedDict
-from app.core.redis_client import is_redis_available
+
+from app.core.redis_client import get_redis, is_redis_available
 
 log = logging.getLogger(__name__)
 
@@ -58,8 +59,6 @@ def is_duplicate(fingerprint: str) -> bool:
     Falls back to in-memory if Redis unavailable (with WARNING).
     """
     try:
-        from app.core.redis_client import get_redis, is_redis_available
-
         if is_redis_available():
             r   = get_redis()
             key = f"idem:{fingerprint}"

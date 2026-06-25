@@ -7,6 +7,7 @@ Structured prompt injection defense.
 import re
 import unicodedata
 import logging
+import contextlib
 
 log = logging.getLogger(__name__)
 
@@ -49,10 +50,8 @@ def sanitize_user_input(text: str, max_chars: int = 8_000) -> str:
     text = text[:max_chars]
 
     # Unicode normalization — collapse lookalike characters
-    try:
+    with contextlib.suppress(Exception):
         text = unicodedata.normalize("NFKC", text)
-    except Exception:
-        pass
 
     # Pattern replacement
     hits = []

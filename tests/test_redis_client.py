@@ -11,7 +11,7 @@ Covers V5 fixes:
 import os
 import sys
 import threading
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -43,7 +43,7 @@ class TestSingleton:
         for t in threads:
             t.join()
 
-        assert len(set(id(r) for r in results)) == 1, (
+        assert len({id(r) for r in results}) == 1, (
             "All threads must receive the same Redis instance"
         )
 

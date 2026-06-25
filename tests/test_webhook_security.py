@@ -88,7 +88,7 @@ class TestVerifySignature:
 
     def test_secret_rotation_works_without_restart(self):
         """V5 FIX: secret read live from env, not frozen at import."""
-        from app.core.webhook_security import verify_signature, _get_webhook_secret
+        from app.core.webhook_security import _get_webhook_secret
         secret_a = "secret-aaa-32chars-long-xxxxxxx!"
         secret_b = "secret-bbb-32chars-long-xxxxxxx!"
         with patch.dict(os.environ, {"GITHUB_WEBHOOK_SECRET": secret_a}):
@@ -177,23 +177,23 @@ class TestIPRateLimit:
 
     def test_first_request_allowed(self):
         from app.core.webhook_security import check_ip_rate_limit
-        with patch("app.core.webhook_security._ip_counts", {}):
-            with patch("app.core.redis_client.is_redis_available", return_value=False):
+        with patch("app.core.webhook_security._ip_counts", {}), \
+             patch("app.core.redis_client.is_redis_available", return_value=False):
                 assert check_ip_rate_limit("10.0.0.1") is True
 
     def test_over_limit_rejected(self):
         from app.core import webhook_security
         now = time.time()
-        with patch.dict("app.core.webhook_security._ip_counts", {"9.9.9.9": [now] * 100}):
-            with patch("app.core.redis_client.is_redis_available", return_value=False):
+        with patch.dict("app.core.webhook_security._ip_counts", {"9.9.9.9": [now] * 100}), \
+             patch("app.core.redis_client.is_redis_available", return_value=False):
                 assert webhook_security.check_ip_rate_limit("9.9.9.9") is False
 
     def test_expired_entries_not_counted(self):
         from app.core.webhook_security import check_ip_rate_limit, IP_RATE_LIMIT
         old_time = time.time() - 61
         with patch.dict("app.core.webhook_security._ip_counts",
-                        {"7.7.7.7": [old_time] * (IP_RATE_LIMIT - 1)}):
-            with patch("app.core.redis_client.is_redis_available", return_value=False):
+                        {"7.7.7.7": [old_time] * (IP_RATE_LIMIT - 1)}), \
+             patch("app.core.redis_client.is_redis_available", return_value=False):
                 assert check_ip_rate_limit("7.7.7.7") is True
 
     def test_memory_leak_fix_empty_window_removes_key(self):
@@ -214,8 +214,8 @@ class TestIPRateLimit:
 
     def test_different_ips_independent(self):
         from app.core.webhook_security import check_ip_rate_limit
-        with patch("app.core.webhook_security._ip_counts", {}):
-            with patch("app.core.redis_client.is_redis_available", return_value=False):
+        with patch("app.core.webhook_security._ip_counts", {}), \
+             patch("app.core.redis_client.is_redis_available", return_value=False):
                 for _ in range(5):
                     check_ip_rate_limit("192.168.1.1")
                 assert check_ip_rate_limit("192.168.1.2") is True
@@ -230,8 +230,8 @@ class TestPayloadSize:
         from app.core.webhook_security import verify_webhook, MAX_PAYLOAD_BYTES
         big_body = b"x" * (MAX_PAYLOAD_BYTES + 1)
         req = _mock_request(body=big_body, sig=_make_sig(big_body))
-        with patch.dict(os.environ, {"GITHUB_WEBHOOK_SECRET": TEST_SECRET}):
-            with patch("app.core.webhook_security.check_ip_rate_limit", return_value=True):
+        with patch.dict(os.environ, {"GITHUB_WEBHOOK_SECRET": TEST_SECRET}), \
+             patch("app.core.webhook_security.check_ip_rate_limit", return_value=True):
                 ok, err = verify_webhook(req)
         assert ok is False
         assert "large" in err.lower()
@@ -286,8 +286,8 @@ class TestStartupCheck:
         from app.core.webhook_security import startup_check
         env = {"GITHUB_WEBHOOK_SECRET": "", "GITHUB_APP_ID": "123",
                "GITHUB_PRIVATE_KEY": "-----BEGIN RSA PRIVATE KEY-----\ntest\n-----END RSA PRIVATE KEY-----"}
-        with patch.dict(os.environ, env):
-            with pytest.raises(RuntimeError, match="WEBHOOK_SECRET"):
+        with patch.dict(os.environ, env), \
+             pytest.raises(RuntimeError, match="WEBHOOK_SECRET"):
                 startup_check()
 
     def test_raises_without_app_id(self):
@@ -295,26 +295,23 @@ class TestStartupCheck:
         from app.core.webhook_security import startup_check
         env = {"GITHUB_WEBHOOK_SECRET": "a" * 32, "GITHUB_APP_ID": "",
                "GITHUB_PRIVATE_KEY": "-----BEGIN RSA PRIVATE KEY-----\ntest\n-----END RSA PRIVATE KEY-----"}
-        with patch.dict(os.environ, env):
-            with pytest.raises(RuntimeError, match="APP_ID"):
-                startup_check()
+        with patch.dict(os.environ, env), pytest.raises(RuntimeError, match="APP_ID"):
+            startup_check()
 
     def test_raises_with_non_numeric_app_id(self):
         from app.core.webhook_security import startup_check
         env = {"GITHUB_WEBHOOK_SECRET": "a" * 32, "GITHUB_APP_ID": "not-a-number",
                "GITHUB_PRIVATE_KEY": "-----BEGIN RSA PRIVATE KEY-----\ntest\n-----END RSA PRIVATE KEY-----"}
-        with patch.dict(os.environ, env):
-            with pytest.raises(RuntimeError, match="numeric"):
-                startup_check()
+        with patch.dict(os.environ, env), pytest.raises(RuntimeError, match="numeric"):
+            startup_check()
 
     def test_raises_without_private_key(self):
         """V5 FIX: missing PRIVATE_KEY now caught at boot."""
         from app.core.webhook_security import startup_check
         env = {"GITHUB_WEBHOOK_SECRET": "a" * 32, "GITHUB_APP_ID": "12345",
                "GITHUB_PRIVATE_KEY": ""}
-        with patch.dict(os.environ, env):
-            with pytest.raises(RuntimeError, match="PRIVATE_KEY"):
-                startup_check()
+        with patch.dict(os.environ, env), pytest.raises(RuntimeError, match="PRIVATE_KEY"):
+            startup_check()
 
 
 # ── Full pipeline ─────────────────────────────────────────────────────────────
@@ -325,16 +322,16 @@ class TestVerifyWebhook:
         from app.core.webhook_security import verify_webhook
         payload = b'{"action":"opened"}'
         req = _mock_request(body=payload, sig=_make_sig(payload))
-        with patch.dict(os.environ, {"GITHUB_WEBHOOK_SECRET": TEST_SECRET}):
-            with patch("app.core.webhook_security.check_ip_rate_limit", return_value=True):
+        with patch.dict(os.environ, {"GITHUB_WEBHOOK_SECRET": TEST_SECRET}), \
+             patch("app.core.webhook_security.check_ip_rate_limit", return_value=True):
                 ok, err = verify_webhook(req)
         assert ok is True and err == ""
 
     def test_invalid_signature_rejected(self):
         from app.core.webhook_security import verify_webhook
         req = _mock_request(sig="sha256=badhash")
-        with patch.dict(os.environ, {"GITHUB_WEBHOOK_SECRET": TEST_SECRET}):
-            with patch("app.core.webhook_security.check_ip_rate_limit", return_value=True):
+        with patch.dict(os.environ, {"GITHUB_WEBHOOK_SECRET": TEST_SECRET}), \
+             patch("app.core.webhook_security.check_ip_rate_limit", return_value=True):
                 ok, err = verify_webhook(req)
         assert ok is False and "signature" in err.lower()
 
@@ -343,16 +340,16 @@ class TestVerifyWebhook:
         from app.core.webhook_security import verify_webhook
         payload = b'{"action":"opened"}'
         req = _mock_request(body=payload, sig=_make_sig(payload))
-        with patch.dict(os.environ, {"GITHUB_WEBHOOK_SECRET": ""}):
-            with patch("app.core.webhook_security.check_ip_rate_limit", return_value=True):
+        with patch.dict(os.environ, {"GITHUB_WEBHOOK_SECRET": ""}), \
+             patch("app.core.webhook_security.check_ip_rate_limit", return_value=True):
                 ok, _ = verify_webhook(req)
         assert ok is False
 
     def test_rate_limited_ip_rejected(self):
         from app.core.webhook_security import verify_webhook
         req = _mock_request()
-        with patch.dict(os.environ, {"GITHUB_WEBHOOK_SECRET": TEST_SECRET}):
-            with patch("app.core.webhook_security.check_ip_rate_limit", return_value=False):
+        with patch.dict(os.environ, {"GITHUB_WEBHOOK_SECRET": TEST_SECRET}), \
+             patch("app.core.webhook_security.check_ip_rate_limit", return_value=False):
                 ok, err = verify_webhook(req)
         assert ok is False and "many" in err.lower()
 

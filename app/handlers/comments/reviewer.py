@@ -11,15 +11,16 @@ import logging
 import re
 
 from app.github.client import GitHubError
+from app.github.helpers import fmt_error
 import app.handlers.comments as hc
 
-gh_get = lambda *a, **kw: hc.gh_get(*a, **kw)
+def gh_get(*a, **kw):
+    return hc.gh_get(*a, **kw)
 
 class RouterProxy:
     def __getattr__(self, name):
         return getattr(hc.router, name)
 router = RouterProxy()
-from app.github.helpers import fmt_error
 
 log = logging.getLogger(__name__)
 
@@ -70,28 +71,34 @@ def cmd_health(repo: str, token: str) -> str:
         recommendations: list[str] = []
 
         if len(open_issues) > 20:
-            score -= 15; findings.append(f"🔴 {len(open_issues)} open issues")
+            score -= 15
+            findings.append(f"🔴 {len(open_issues)} open issues")
             recommendations.append("Triage and close old issues")
         elif len(open_issues) > 10:
-            score -= 7; findings.append(f"🟡 {len(open_issues)} open issues")
+            score -= 7
+            findings.append(f"🟡 {len(open_issues)} open issues")
         else:
             findings.append(f"✅ {len(open_issues)} open issues")
 
         if len(open_prs) > 10:
-            score -= 10; findings.append(f"🔴 {len(open_prs)} open PRs")
+            score -= 10
+            findings.append(f"🔴 {len(open_prs)} open PRs")
         elif len(open_prs) > 5:
-            score -= 5; findings.append(f"🟡 {len(open_prs)} open PRs")
+            score -= 5
+            findings.append(f"🟡 {len(open_prs)} open PRs")
         else:
             findings.append(f"✅ {len(open_prs)} open PRs")
 
         if not repo_data.get("license"):
-            score -= 8; findings.append("🔴 No license")
+            score -= 8
+            findings.append("🔴 No license")
             recommendations.append("Add LICENSE file")
         else:
             findings.append(f"✅ License: {repo_data['license'].get('name','')}")
 
         if not repo_data.get("description"):
-            score -= 5; findings.append("🟡 No description")
+            score -= 5
+            findings.append("🟡 No description")
         else:
             findings.append("✅ Description present")
 
@@ -175,7 +182,6 @@ def cmd_summarize(repo: str, issue_number: int, token: str) -> str:
 def cmd_ci(context: str, repo: str = "", token: str = "") -> str:
     """Analyze a CI failure — from pasted log or latest failed run."""
     from app.handlers.comments import router
-    import logging as _log
 
     ci_context = context.strip() if context else ""
 

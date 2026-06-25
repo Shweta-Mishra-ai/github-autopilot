@@ -56,9 +56,8 @@ class TestCircuitBreakerThreadSafety(unittest.TestCase):
         cb = self.CB("test_provider")
         self.assertIsNotNone(cb._lock)
         # RLock is re-entrant — acquire twice without deadlock
-        with cb._lock:
-            with cb._lock:
-                pass  # Would deadlock with plain Lock
+        with cb._lock, cb._lock:
+            pass  # Would deadlock with plain Lock
 
     def test_concurrent_state_reads_no_corruption(self):
         """100 threads reading state simultaneously must not corrupt state."""
@@ -78,12 +77,14 @@ class TestCircuitBreakerThreadSafety(unittest.TestCase):
                 errors.append(e)
 
         threads = [threading.Thread(target=read_state) for _ in range(100)]
-        for t in threads: t.start()
-        for t in threads: t.join()
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
 
         self.assertEqual(len(errors), 0, f"Thread errors: {errors}")
         # All reads should be consistent (either OPEN or HALF_OPEN)
-        unique = set(r.value for r in results)
+        unique = {r.value for r in results}
         self.assertTrue(unique.issubset({"open", "half_open"}))
 
     def test_concurrent_record_failure_no_corruption(self):
@@ -98,8 +99,10 @@ class TestCircuitBreakerThreadSafety(unittest.TestCase):
                 errors.append(e)
 
         threads = [threading.Thread(target=fail) for _ in range(50)]
-        for t in threads: t.start()
-        for t in threads: t.join()
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
 
         self.assertEqual(len(errors), 0)
         # Failures should be exactly 50 (no lost updates)
@@ -151,8 +154,10 @@ class TestRouterThreadSafety(unittest.TestCase):
                     results.append(r._get_gemini())
 
                 threads = [threading.Thread(target=get_gemini) for _ in range(20)]
-                for t in threads: t.start()
-                for t in threads: t.join()
+                for t in threads:
+                    t.start()
+                for t in threads:
+                    t.join()
 
             # All threads got the same instance
             non_none = [x for x in results if x is not None]
@@ -214,53 +219,53 @@ class TestThreadPoolSaturation(unittest.TestCase):
 
     def test_server_returns_503_on_saturation(self):
         """server.py webhook endpoint returns 503 when pool is saturated."""
-        with patch("app.core.webhook_security.verify_webhook", return_value=(True, "")):
-            with patch("app.core.webhook_security.is_bot_sender", return_value=False):
-                with patch("app.core.idempotency.is_duplicate", return_value=False):
-                    with patch("app.core.idempotency.make_fingerprint", return_value="abc123"):
-                        with patch("app.core.thread_pool.dispatch") as mock_dispatch:
-                            from app.core.thread_pool import _SATURATED
-                            mock_dispatch.return_value = _SATURATED
+        with patch("app.core.webhook_security.verify_webhook", return_value=(True, "")), \
+             patch("app.core.webhook_security.is_bot_sender", return_value=False), \
+             patch("app.core.idempotency.is_duplicate", return_value=False), \
+             patch("app.core.idempotency.make_fingerprint", return_value="abc123"), \
+             patch("app.core.thread_pool.dispatch") as mock_dispatch:
+            from app.core.thread_pool import _SATURATED
+            mock_dispatch.return_value = _SATURATED
 
-                            import server
-                            server.app.config["TESTING"] = True
-                            client = server.app.test_client()
+            import server
+            server.app.config["TESTING"] = True
+            client = server.app.test_client()
 
-                            resp = client.post(
-                                "/webhook",
-                                data=json.dumps({
-                                    "repository": {"full_name": "org/repo"},
-                                    "action": "opened"
-                                }),
-                                content_type="application/json",
-                                headers={"X-GitHub-Event": "push", "X-GitHub-Delivery": "abc123"},
-                            )
-                            self.assertEqual(resp.status_code, 503,
-                                             "Expected 503 on pool saturation")
+            resp = client.post(
+                "/webhook",
+                data=json.dumps({
+                    "repository": {"full_name": "org/repo"},
+                    "action": "opened"
+                }),
+                content_type="application/json",
+                headers={"X-GitHub-Event": "push", "X-GitHub-Delivery": "abc123"},
+            )
+            self.assertEqual(resp.status_code, 503,
+                             "Expected 503 on pool saturation")
 
     def test_server_returns_202_on_success(self):
         """server.py webhook endpoint returns 202 when pool accepts the job."""
-        with patch("app.core.webhook_security.verify_webhook", return_value=(True, "")):
-            with patch("app.core.webhook_security.is_bot_sender", return_value=False):
-                with patch("app.core.idempotency.is_duplicate", return_value=False):
-                    with patch("app.core.idempotency.make_fingerprint", return_value="def456"):
-                        with patch("app.core.thread_pool.dispatch") as mock_dispatch:
-                            mock_dispatch.return_value = MagicMock()  # Future-like
+        with patch("app.core.webhook_security.verify_webhook", return_value=(True, "")), \
+             patch("app.core.webhook_security.is_bot_sender", return_value=False), \
+             patch("app.core.idempotency.is_duplicate", return_value=False), \
+             patch("app.core.idempotency.make_fingerprint", return_value="def456"), \
+             patch("app.core.thread_pool.dispatch") as mock_dispatch:
+            mock_dispatch.return_value = MagicMock()  # Future-like
 
-                            import server
-                            server.app.config["TESTING"] = True
-                            client = server.app.test_client()
+            import server
+            server.app.config["TESTING"] = True
+            client = server.app.test_client()
 
-                            resp = client.post(
-                                "/webhook",
-                                data=json.dumps({
-                                    "repository": {"full_name": "org/repo"},
-                                    "action": "opened"
-                                }),
-                                content_type="application/json",
-                                headers={"X-GitHub-Event": "push", "X-GitHub-Delivery": "def456"},
-                            )
-                            self.assertEqual(resp.status_code, 202)
+            resp = client.post(
+                "/webhook",
+                data=json.dumps({
+                    "repository": {"full_name": "org/repo"},
+                    "action": "opened"
+                }),
+                content_type="application/json",
+                headers={"X-GitHub-Event": "push", "X-GitHub-Delivery": "def456"},
+            )
+            self.assertEqual(resp.status_code, 202)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -433,7 +438,6 @@ class TestIntelligenceGraceful(unittest.TestCase):
     def test_embed_file_returns_false_without_deps(self):
         """embed_file must return False (not ImportError) when sentence-transformers missing."""
         with patch.dict(sys.modules, {"sentence_transformers": None}):
-            import importlib
             import app.intelligence.embeddings as emb
             emb._DEPS_AVAILABLE = None  # Reset lazy check
             # Patch the import inside the function
@@ -584,8 +588,10 @@ class TestSnapshotRollback(unittest.TestCase):
             record_bot_action(repo, snap_id, {"type": "create_issue", "number": i})
 
         threads = [threading.Thread(target=write_action, args=(i,)) for i in range(20)]
-        for t in threads: t.start()
-        for t in threads: t.join()
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
 
         # All 20 actions should be recorded
         r = get_redis()
@@ -656,16 +662,16 @@ class TestServerRoutes(unittest.TestCase):
 
     def test_webhook_duplicate_returns_200(self):
         """Duplicate webhook returns 200 (not error) so GitHub stops retrying."""
-        with patch("app.core.webhook_security.verify_webhook", return_value=(True, "")):
-            with patch("app.core.webhook_security.is_bot_sender", return_value=False):
-                with patch("app.core.idempotency.is_duplicate", return_value=True):
-                    with patch("app.core.idempotency.make_fingerprint", return_value="dup123"):
-                        resp = self.client.post(
-                            "/webhook",
-                            data=json.dumps({"repository": {"full_name": "org/repo"}}),
-                            content_type="application/json",
-                            headers={"X-GitHub-Event": "push"},
-                        )
+        with patch("app.core.webhook_security.verify_webhook", return_value=(True, "")), \
+             patch("app.core.webhook_security.is_bot_sender", return_value=False), \
+             patch("app.core.idempotency.is_duplicate", return_value=True), \
+             patch("app.core.idempotency.make_fingerprint", return_value="dup123"):
+            resp = self.client.post(
+                "/webhook",
+                data=json.dumps({"repository": {"full_name": "org/repo"}}),
+                content_type="application/json",
+                headers={"X-GitHub-Event": "push"},
+            )
         self.assertEqual(resp.status_code, 200)
         self.assertIn("duplicate", json.loads(resp.data)["status"])
 

@@ -267,9 +267,7 @@ def _is_false_positive(value: str) -> bool:
         if fp.lower() in v_lower or v_lower in fp.lower():
             return True
     # Common placeholder patterns
-    if re.search(r"(x{6,}|placeholder|example|changeme|your[_-]|insert)", v_lower):
-        return True
-    return False
+    return bool(re.search(r"(x{6,}|placeholder|example|changeme|your[_-]|insert)", v_lower))
 
 
 def _is_test_line(line: str) -> bool:

@@ -9,7 +9,7 @@ Router tests updated for:
 
 import os
 import sys
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -70,7 +70,6 @@ class TestLLMRouter:
 
     def test_budget_alert_fires_at_80_percent(self):
         """V5: warning must be logged when token usage ≥ 80% of daily limit."""
-        import logging
         router = self._make_router()
         r = rc.get_redis()
         import datetime
@@ -89,7 +88,6 @@ class TestLLMRouter:
 
     def test_budget_alert_silent_below_threshold(self):
         """No warning logged at 50% usage."""
-        import logging
         router = self._make_router()
         r = rc.get_redis()
         import datetime

@@ -6,7 +6,7 @@ Tests for atomic snapshot bot_actions (V5 fix: lpush replaces read-modify-write)
 import json
 import os
 import sys
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

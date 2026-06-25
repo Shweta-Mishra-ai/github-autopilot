@@ -239,7 +239,7 @@ def find_similar(cmd: str) -> str | None:
     for known in ALL_COMMANDS:
         known_bare = known.lstrip("/")
         if abs(len(known_bare) - len(cmd_lower)) <= 1:
-            diffs = sum(a != b for a, b in zip(known_bare, cmd_lower))
+            diffs = sum(a != b for a, b in zip(known_bare, cmd_lower, strict=False))
             if diffs <= 1:
                 return known
     return None

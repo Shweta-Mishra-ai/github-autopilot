@@ -9,6 +9,7 @@ import hashlib
 import json
 import logging
 from app.core import redis_client
+import contextlib
 
 log = logging.getLogger(__name__)
 
@@ -90,14 +91,10 @@ def _get(key: str):
 
 
 def _set(key: str, data, ttl: int):
-    try:
+    with contextlib.suppress(Exception):
         redis_client.get_redis().set(key, json.dumps(data), ex=ttl)
-    except Exception:
-        pass
 
 
 def _delete(key: str):
-    try:
+    with contextlib.suppress(Exception):
         redis_client.get_redis().delete(key)
-    except Exception:
-        pass

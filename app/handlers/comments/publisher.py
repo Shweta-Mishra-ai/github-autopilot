@@ -10,19 +10,24 @@ import logging
 import os
 import re
 
+import contextlib
 from app.github.client import GitHubError
+from app.github.helpers import fmt_error
 import app.handlers.comments as hc
 
-gh_get = lambda *a, **kw: hc.gh_get(*a, **kw)
-gh_post = lambda *a, **kw: hc.gh_post(*a, **kw)
-gh_put = lambda *a, **kw: hc.gh_put(*a, **kw)
-gh_delete = lambda *a, **kw: hc.gh_delete(*a, **kw)
+def gh_get(*a, **kw):
+    return hc.gh_get(*a, **kw)
+def gh_post(*a, **kw):
+    return hc.gh_post(*a, **kw)
+def gh_put(*a, **kw):
+    return hc.gh_put(*a, **kw)
+def gh_delete(*a, **kw):
+    return hc.gh_delete(*a, **kw)
 
 class RouterProxy:
     def __getattr__(self, name):
         return getattr(hc.router, name)
 router = RouterProxy()
-from app.github.helpers import fmt_error
 
 log = logging.getLogger(__name__)
 
@@ -71,10 +76,8 @@ def cmd_merge(
             except Exception:
                 pass  # audit failure must not block the merge
 
-            try:
+            with contextlib.suppress(Exception):
                 gh_delete(f"/repos/{repo}/git/refs/heads/{head_branch}", token)
-            except Exception:
-                pass  # branch may already be deleted; non-fatal
 
             return (
                 f"## ✅ Merged!\n\n"
@@ -501,9 +504,11 @@ def cmd_notify(
         for lb in labels:
             lb_l = lb.lower()
             if any(w in lb_l for w in ("bug", "security", "critical")):
-                color = 0xE74C3C; break
+                color = 0xE74C3C
+                break
             if any(w in lb_l for w in ("feature", "enhancement")):
-                color = 0x2ECC71; break
+                color = 0x2ECC71
+                break
 
         desc_parts = [f"**Repo:** `{repo}`", f"**Labels:** {', '.join(labels) or 'none'}"]
         if custom_msg:

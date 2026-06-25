@@ -1,17 +1,4 @@
-"""
-app/handlers/comments/service.py
-Main entry point: handle_comment_event()
-
-Orchestrates:
-  1. Bot-loop detection
-  2. Command extraction
-  3. Per-user rate limiting
-  4. Authorization check
-  5. Command dispatch → generator / reviewer / publisher
-  6. Response posting to GitHub
-
-This file is intentionally thin — all logic lives in the sub-modules.
-"""
+"""app/handlers/comments/service.py — Main orchestration layer for comment handling."""
 
 from __future__ import annotations
 
@@ -195,25 +182,42 @@ def _dispatch(
 
         match cmd:
             # ── Generator: AI content ──────────────────────────────────
-            case "/fix":      return G.cmd_fix(ctx_title, context)
-            case "/explain":  return G.cmd_explain(context)
-            case "/improve":  return G.cmd_improve(context)
-            case "/test":     return G.cmd_test(context)
-            case "/docs":     return G.cmd_docs(context)
-            case "/refactor": return G.cmd_refactor(context)
-            case "/gaps":     return G.cmd_gaps(context)
-            case "/perf":     return G.cmd_perf(context)
-            case "/arch":     return G.cmd_arch(repo, issue_number, issue, token)
+            case "/fix":
+                return G.cmd_fix(ctx_title, context)
+            case "/explain":
+                return G.cmd_explain(context)
+            case "/improve":
+                return G.cmd_improve(context)
+            case "/test":
+                return G.cmd_test(context)
+            case "/docs":
+                return G.cmd_docs(context)
+            case "/refactor":
+                return G.cmd_refactor(context)
+            case "/gaps":
+                return G.cmd_gaps(context)
+            case "/perf":
+                return G.cmd_perf(context)
+            case "/arch":
+                return G.cmd_arch(repo, issue_number, issue, token)
 
             # ── Reviewer: read-only analysis ───────────────────────────
-            case "/health":    return R.cmd_health(repo, token)
-            case "/version":   return R.cmd_version(repo, token)
-            case "/summarize": return R.cmd_summarize(repo, issue_number, token)
-            case "/ci":        return R.cmd_ci(cmd_args, repo=repo, token=token)
-            case "/budget":    return R.cmd_budget()
-            case "/report":    return R.cmd_report(repo)
-            case "/impact":    return R.cmd_impact(repo, issue_number, issue, token)
-            case "/changelog": return R.cmd_changelog(repo, token)
+            case "/health":
+                return R.cmd_health(repo, token)
+            case "/version":
+                return R.cmd_version(repo, token)
+            case "/summarize":
+                return R.cmd_summarize(repo, issue_number, token)
+            case "/ci":
+                return R.cmd_ci(cmd_args, repo=repo, token=token)
+            case "/budget":
+                return R.cmd_budget()
+            case "/report":
+                return R.cmd_report(repo)
+            case "/impact":
+                return R.cmd_impact(repo, issue_number, issue, token)
+            case "/changelog":
+                return R.cmd_changelog(repo, token)
 
             # ── Publisher: GitHub writes ───────────────────────────────
             case "/merge":

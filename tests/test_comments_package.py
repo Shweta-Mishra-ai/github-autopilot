@@ -31,7 +31,7 @@ class TestPackageStructure:
 
     def test_all_commands_sorted(self):
         from app.handlers.comments.constants import ALL_COMMANDS
-        assert ALL_COMMANDS == sorted(ALL_COMMANDS), "Commands must be sorted"
+        assert sorted(ALL_COMMANDS) == ALL_COMMANDS, "Commands must be sorted"
 
     def test_no_duplicate_commands(self):
         from app.handlers.comments.constants import ALL_COMMANDS
@@ -61,7 +61,6 @@ class TestPackageStructure:
         from app.handlers.comments.reviewer import (
             cmd_health, cmd_version, cmd_summarize, cmd_ci,
             cmd_budget, cmd_report, cmd_impact, cmd_changelog,
-            _bump_version, _fetch_commits_since_tag,
         )
         for fn in [cmd_health, cmd_version, cmd_summarize, cmd_ci,
                    cmd_budget, cmd_report, cmd_impact, cmd_changelog]:

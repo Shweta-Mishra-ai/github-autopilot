@@ -17,8 +17,10 @@ if not _mcp_pkg.exists():
 
 # Mock heavy deps before any app imports
 _req = MagicMock()
-_req.adapters = MagicMock(); _req.adapters.HTTPAdapter = MagicMock
-_req.Session = MagicMock; _req.exceptions = MagicMock()
+_req.adapters = MagicMock()
+_req.adapters.HTTPAdapter = MagicMock
+_req.Session = MagicMock
+_req.exceptions = MagicMock()
 _req.exceptions.RequestException = Exception
 _req.exceptions.ConnectionError = ConnectionError
 _req.exceptions.Timeout = TimeoutError
@@ -130,9 +132,9 @@ class TestAnalyzePR:
 
     def test_successful_analysis(self):
         mod = _import_mcp()
-        with patch('app.github.auth.get_installation_token', return_value="tok"):
-            with patch('app.github.client.gh_get', return_value={"title": "PR"}):
-                with patch('app.ai.router.router.ask', return_value=({
+        with patch('app.github.auth.get_installation_token', return_value="tok"), \
+             patch('app.github.client.gh_get', return_value={"title": "PR"}), \
+             patch('app.ai.router.router.ask', return_value=({
                     "grade": "A", "summary": "Good PR",
                     "security_issues": [], "test_gaps": [],
                     "improvements": [], "recommendation": "approve",
@@ -156,11 +158,11 @@ class TestFixIssue:
 
     def test_successful_fix(self):
         mod = _import_mcp()
-        with patch('app.github.auth.get_installation_token', return_value="tok"):
-            with patch('app.github.client.gh_get', return_value={
+        with patch('app.github.auth.get_installation_token', return_value="tok"), \
+             patch('app.github.client.gh_get', return_value={
                 "title": "Bug", "body": "crashes"
-            }):
-                with patch('app.ai.router.router.ask', return_value=({
+            }), \
+             patch('app.ai.router.router.ask', return_value=({
                     "root_cause": "null check missing",
                     "fix": "if x is None: return",
                     "test": "def test_none(): ...",
@@ -212,7 +214,9 @@ class TestExplainCode:
     def test_depth_deep_uses_1500_tokens(self):
         mod = _import_mcp()
         captured = {}
-        def cap(*a, **kw): captured['mt'] = kw.get('max_tokens'); return ("ok", MagicMock())
+        def cap(*a, **kw):
+            captured['mt'] = kw.get('max_tokens')
+            return ("ok", MagicMock())
         with patch('app.ai.router.router.ask_text', side_effect=cap):
             mod._handle_explain_code({"code": "x=1", "depth": "deep"})
         assert captured.get('mt') == 1500
@@ -220,7 +224,9 @@ class TestExplainCode:
     def test_depth_brief_uses_400_tokens(self):
         mod = _import_mcp()
         captured = {}
-        def cap(*a, **kw): captured['mt'] = kw.get('max_tokens'); return ("ok", MagicMock())
+        def cap(*a, **kw):
+            captured['mt'] = kw.get('max_tokens')
+            return ("ok", MagicMock())
         with patch('app.ai.router.router.ask_text', side_effect=cap):
             mod._handle_explain_code({"code": "x=1", "depth": "brief"})
         assert captured.get('mt') == 400
@@ -273,12 +279,12 @@ class TestGetRepoHealth:
 
     def test_successful_health(self):
         mod = _import_mcp()
-        with patch('app.github.auth.get_installation_token', return_value="tok"):
-            with patch('app.ai.router.router.ask', return_value=({
-                "grade": "B", "score": 7.5,
-                "top_issues": ["low coverage"],
-                "quick_wins": ["add CI badge"],
-            }, MagicMock())):
+        with patch('app.github.auth.get_installation_token', return_value="tok"), \
+             patch('app.ai.router.router.ask', return_value=({
+                 "grade": "B", "score": 7.5,
+                 "top_issues": ["low coverage"],
+                 "quick_wins": ["add CI badge"],
+             }, MagicMock())):
                 result = mod._handle_get_repo_health({
                     "repo": "o/r", "installation_id": 123
                 })
@@ -334,10 +340,10 @@ class TestRunCommand:
 
     def test_fix_routes_correctly(self):
         mod = _import_mcp()
-        with patch('app.github.auth.get_installation_token', return_value="tok"):
-            with patch('app.github.client.gh_get', return_value={"title":"Bug","body":"body"}):
-                with patch('app.handlers.comments._cmd_fix',
-                           return_value="## Fix") as mock_fix:
+        with patch('app.github.auth.get_installation_token', return_value="tok"), \
+             patch('app.github.client.gh_get', return_value={"title":"Bug","body":"body"}), \
+             patch('app.handlers.comments._cmd_fix',
+                        return_value="## Fix") as mock_fix:
                     result = mod._handle_run_command({
                         "repo": "o/r", "issue_number": 1,
                         "command": "/fix", "installation_id": 123
@@ -347,10 +353,10 @@ class TestRunCommand:
 
     def test_budget_called_with_zero_args(self):
         mod = _import_mcp()
-        with patch('app.github.auth.get_installation_token', return_value="tok"):
-            with patch('app.github.client.gh_get', return_value={"title":"t","body":"b"}):
-                with patch('app.handlers.comments._cmd_budget',
-                           return_value="## Budget") as mock_budget:
+        with patch('app.github.auth.get_installation_token', return_value="tok"), \
+             patch('app.github.client.gh_get', return_value={"title":"t","body":"b"}), \
+             patch('app.handlers.comments._cmd_budget',
+                        return_value="## Budget") as mock_budget:
                     result = mod._handle_run_command({
                         "repo": "o/r", "issue_number": 1,
                         "command": "/budget", "installation_id": 123
@@ -360,9 +366,9 @@ class TestRunCommand:
 
     def test_bad_parse_returns_error(self):
         mod = _import_mcp()
-        with patch('app.github.auth.get_installation_token', return_value="tok"):
-            with patch('app.github.client.gh_get', return_value={"title":"t","body":"b"}):
-                with patch('app.handlers.comments._extract_command', return_value=None):
+        with patch('app.github.auth.get_installation_token', return_value="tok"), \
+             patch('app.github.client.gh_get', return_value={"title":"t","body":"b"}), \
+             patch('app.handlers.comments._extract_command', return_value=None):
                     result = mod._handle_run_command({
                         "repo": "o/r", "issue_number": 1,
                         "command": "/fix", "installation_id": 123

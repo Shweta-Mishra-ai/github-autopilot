@@ -14,19 +14,22 @@ import traceback
 
 from flask import Flask, jsonify, request
 
-import app.core.idempotency as idempotency
-import app.core.thread_pool as thread_pool
-import app.core.webhook_security as webhook_security
-
-is_duplicate = lambda *a, **kw: idempotency.is_duplicate(*a, **kw)
-make_fingerprint = lambda *a, **kw: idempotency.make_fingerprint(*a, **kw)
-dispatch = lambda *a, **kw: thread_pool.dispatch(*a, **kw)
-verify_webhook = lambda *a, **kw: webhook_security.verify_webhook(*a, **kw)
-
 from app.core.metrics        import metrics
 from app.core.redis_client   import is_redis_available
 from app.core.thread_pool    import is_saturated, pool_stats, shutdown
 from app.core.webhook_security import startup_check
+import app.core.idempotency as idempotency
+import app.core.thread_pool as thread_pool
+import app.core.webhook_security as webhook_security
+
+def is_duplicate(*a, **kw):
+    return idempotency.is_duplicate(*a, **kw)
+def make_fingerprint(*a, **kw):
+    return idempotency.make_fingerprint(*a, **kw)
+def dispatch(*a, **kw):
+    return thread_pool.dispatch(*a, **kw)
+def verify_webhook(*a, **kw):
+    return webhook_security.verify_webhook(*a, **kw)
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",

@@ -79,14 +79,14 @@ def _call_groq(
         _track_usage(provider_key, data.get("usage", {}))
         return result
 
-    except requests.exceptions.Timeout:
+    except requests.exceptions.Timeout as e:
         breaker.record_failure("timeout")
-        raise AIError("Request timed out")
+        raise AIError("Request timed out") from e
     except AIError:
         raise
     except Exception as e:
         breaker.record_failure(str(e)[:60])
-        raise AIError(str(e))
+        raise AIError(str(e)) from e
 
 
 def _track_usage(provider_key: str, usage: dict):

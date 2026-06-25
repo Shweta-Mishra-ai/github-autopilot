@@ -3,7 +3,9 @@ tests/test_week1_fixes.py
 Tests for Week 1 P0 fixes. All tests use inspect.getsource()
 to verify production code — avoids module cache issues.
 """
-import sys, os, inspect
+import sys
+import os
+import inspect
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -229,7 +231,7 @@ class TestWorkerSafe:
         try:
             spec.loader.exec_module(mod)
         except ImportError as e:
-            assert False, f"worker.py broken import: {e}"
+            raise AssertionError(f"worker.py broken import: {e}") from e
 
     def test_has_run_function(self):
         import importlib.util

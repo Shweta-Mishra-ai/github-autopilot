@@ -14,7 +14,7 @@ import sys
 import os
 import re
 import base64
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -301,8 +301,8 @@ class TestRunAutofix:
         orig_content = b"def foo():\n    return x.strip()\n"
 
         with patch("app.handlers.autofix.router.ask",
-                   side_effect=[(plan, meta), (fix_resp, meta)]):
-            with patch("app.handlers.autofix.gh_get") as mock_get:
+                   side_effect=[(plan, meta), (fix_resp, meta)]), \
+             patch("app.handlers.autofix.gh_get") as mock_get:
                 mock_get.side_effect = [
                     {
                         "content": base64.b64encode(orig_content).decode(),
@@ -311,8 +311,8 @@ class TestRunAutofix:
                     {"default_branch": "main"},
                     {"object": {"sha": "def456"}},
                 ]
-                with patch("app.handlers.autofix.gh_put", return_value={}):
-                    with patch("app.handlers.autofix.gh_post", return_value={}):
+                with patch("app.handlers.autofix.gh_put", return_value={}), \
+                     patch("app.handlers.autofix.gh_post", return_value={}):
                         result = run_autofix("test/repo", 1, self._issue(), "token")
 
         # Should contain diff preview and confirmation instructions
@@ -331,11 +331,11 @@ class TestRunAutofix:
         fix_resp = {"fixed_content": "def foo(): return 42\n", "changed_lines": 0}
 
         with patch("app.handlers.autofix.router.ask",
-                   side_effect=[(plan, meta), (fix_resp, meta)]):
-            with patch("app.handlers.autofix.gh_get", return_value={
-                "content": base64.b64encode(orig_content).decode(),
-                "sha": "abc123",
-            }):
+                   side_effect=[(plan, meta), (fix_resp, meta)]), \
+             patch("app.handlers.autofix.gh_get", return_value={
+                 "content": base64.b64encode(orig_content).decode(),
+                 "sha": "abc123",
+             }):
                 result = run_autofix("test/repo", 1, self._issue(), "token")
 
         assert "Skipped" in result
@@ -363,16 +363,16 @@ class TestCmdRelease:
             "release_notes": "## What's New\n- Added stuff",
         }
         with patch("app.handlers.comments.router.ask",
-                   return_value=self._mock_router_text(plan)):
-            with patch("app.handlers.comments.gh_get", side_effect=[
-                [{"name": "v1.1.0"}],   # tags
-                [{"commit": {"message": "feat: add thing"}}] * 5,  # commits
-            ]):
-                with patch("app.handlers.comments.gh_post", return_value={
-                    "html_url": "https://github.com/test/repo/releases/1",
-                    "number": 1,
-                }) as mock_post:
-                    result = _cmd_release("test/repo", "token", "author")
+                   return_value=self._mock_router_text(plan)), \
+             patch("app.handlers.comments.gh_get", side_effect=[
+                 [{"name": "v1.1.0"}],   # tags
+                 [{"commit": {"message": "feat: add thing"}}] * 5,  # commits
+             ]), \
+             patch("app.handlers.comments.gh_post", return_value={
+                 "html_url": "https://github.com/test/repo/releases/1",
+                 "number": 1,
+             }) as mock_post:
+                result = _cmd_release("test/repo", "token", "author")
 
         assert "Draft" in result or "draft" in result
         assert "v1.2.0" in result
@@ -389,15 +389,15 @@ class TestCmdRelease:
             "release_notes": "Initial release",
         }
         with patch("app.handlers.comments.router.ask",
-                   return_value=self._mock_router_text(plan)):
-            with patch("app.handlers.comments.gh_get", side_effect=[
-                [],  # no tags
-                [{"commit": {"message": "init"}}],
-            ]):
-                with patch("app.handlers.comments.gh_post", return_value={
-                    "html_url": "https://github.com/test/repo/releases/1",
-                }):
-                    result = _cmd_release("test/repo", "token", "author")
+                   return_value=self._mock_router_text(plan)), \
+             patch("app.handlers.comments.gh_get", side_effect=[
+                 [],  # no tags
+                 [{"commit": {"message": "init"}}],
+             ]), \
+             patch("app.handlers.comments.gh_post", return_value={
+                 "html_url": "https://github.com/test/repo/releases/1",
+             }):
+                result = _cmd_release("test/repo", "token", "author")
 
         assert "v0.0" in result or "Release" in result
 
@@ -416,15 +416,15 @@ class TestCmdRelease:
             "release_notes": "## Major changes",
         }
         with patch("app.handlers.comments.router.ask",
-                   return_value=self._mock_router_text(plan)):
-            with patch("app.handlers.comments.gh_get", side_effect=[
-                [{"name": "v1.9.0"}],
-                [{"commit": {"message": "feat: big thing"}}],
-            ]):
-                with patch("app.handlers.comments.gh_post", return_value={
-                    "html_url": "https://github.com/test/repo/releases/42",
-                }):
-                    result = _cmd_release("test/repo", "token", "author")
+                   return_value=self._mock_router_text(plan)), \
+             patch("app.handlers.comments.gh_get", side_effect=[
+                 [{"name": "v1.9.0"}],
+                 [{"commit": {"message": "feat: big thing"}}],
+             ]), \
+             patch("app.handlers.comments.gh_post", return_value={
+                 "html_url": "https://github.com/test/repo/releases/42",
+             }):
+                result = _cmd_release("test/repo", "token", "author")
 
         assert "https://github.com/test/repo/releases/42" in result
 
@@ -449,9 +449,8 @@ class TestCmdRuntests:
         with patch("app.handlers.comments.gh_get", side_effect=[
             {"default_branch": "main"},
             self._workflows(["CI", "Deploy"]),
-        ]):
-            with patch("app.handlers.comments.gh_post", return_value={}) as mock_post:
-                result = _cmd_runtests("test/repo", 1, "token")
+        ]), patch("app.handlers.comments.gh_post", return_value={}) as mock_post:
+            result = _cmd_runtests("test/repo", 1, "token")
 
         assert "Triggered" in result or "triggered" in result.lower()
         assert mock_post.called
@@ -461,9 +460,8 @@ class TestCmdRuntests:
         with patch("app.handlers.comments.gh_get", side_effect=[
             {"default_branch": "main"},
             self._workflows(["Tests", "Lint"]),
-        ]):
-            with patch("app.handlers.comments.gh_post", return_value={}):
-                result = _cmd_runtests("test/repo", 1, "token")
+        ]), patch("app.handlers.comments.gh_post", return_value={}):
+            result = _cmd_runtests("test/repo", 1, "token")
 
         assert "Triggered" in result or "🧪" in result
 
@@ -490,9 +488,8 @@ class TestCmdRuntests:
         with patch("app.handlers.comments.gh_get", side_effect=[
             {"default_branch": "develop"},
             self._workflows(["CI Checks"]),
-        ]):
-            with patch("app.handlers.comments.gh_post", return_value={}):
-                result = _cmd_runtests("test/repo", 1, "token")
+        ]), patch("app.handlers.comments.gh_post", return_value={}):
+            result = _cmd_runtests("test/repo", 1, "token")
 
         # Should mention the workflow name or branch
         assert "CI" in result or "develop" in result
@@ -503,8 +500,8 @@ class TestCmdRuntests:
         with patch("app.handlers.comments.gh_get", side_effect=[
             {"default_branch": "master"},  # older repo using master
             self._workflows(["pytest"]),
-        ]):
-            with patch("app.handlers.comments.gh_post", return_value={}) as mock_post:
+        ]), \
+             patch("app.handlers.comments.gh_post", return_value={}) as mock_post:
                 result = _cmd_runtests("test/repo", 1, "token")
 
         # The dispatch call should use 'master'
@@ -523,7 +520,7 @@ class TestCmdNotify:
         d = {
             "title": "Test issue",
             "html_url": "https://github.com/test/repo/issues/1",
-            "labels": [{"name": l} for l in (labels or [])],
+            "labels": [{"name": lbl} for lbl in (labels or [])],
         }
         if is_pr:
             d["pull_request"] = {}
@@ -531,9 +528,9 @@ class TestCmdNotify:
 
     def test_discord_success(self):
         from app.handlers.comments import _cmd_notify
-        with patch.dict(os.environ, {"DISCORD_WEBHOOK_URL": "https://discord.com/api/webhooks/x"}):
-            with patch("app.github.notifications.send_rich_discord",
-                       return_value=(True, "ok")):
+        with patch.dict(os.environ, {"DISCORD_WEBHOOK_URL": "https://discord.com/api/webhooks/x"}), \
+             patch("app.github.notifications.send_rich_discord",
+                        return_value=(True, "ok")):
                 result = _cmd_notify("test/repo", 1, self._issue(), "token", "")
         assert "Sent" in result or "sent" in result.lower()
 
@@ -550,8 +547,8 @@ class TestCmdNotify:
         def capture_discord(**kwargs):
             captured.update(kwargs)
             return (True, "ok")
-        with patch.dict(os.environ, {"DISCORD_WEBHOOK_URL": "https://discord.com/api/webhooks/x"}):
-            with patch("app.github.notifications.send_rich_discord", side_effect=capture_discord):
+        with patch.dict(os.environ, {"DISCORD_WEBHOOK_URL": "https://discord.com/api/webhooks/x"}), \
+             patch("app.github.notifications.send_rich_discord", side_effect=capture_discord):
                 _cmd_notify("test/repo", 1, self._issue(labels=["bug"]), "token", "")
         # Red color for bugs
         assert captured.get("color") == 0xE74C3C
@@ -566,16 +563,16 @@ class TestCmdReport:
     def test_report_returns_analytics(self):
         from app.handlers.comments import _cmd_report
         with patch("app.core.analytics.format_report_comment",
-                   return_value="## 📊 Report\n\nAll good."):
-            with patch("app.core.analytics.record_command_used"):
+                   return_value="## 📊 Report\n\nAll good."), \
+             patch("app.core.analytics.record_command_used"):
                 result = _cmd_report("test/repo")
         assert "Report" in result
 
     def test_report_failure_handled(self):
         from app.handlers.comments import _cmd_report
         with patch("app.core.analytics.format_report_comment",
-                   side_effect=Exception("Redis down")):
-            with patch("app.core.analytics.record_command_used"):
+                   side_effect=Exception("Redis down")), \
+             patch("app.core.analytics.record_command_used"):
                 result = _cmd_report("test/repo")
         assert "⚠️" in result
 

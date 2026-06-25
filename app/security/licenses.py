@@ -5,7 +5,7 @@ Flags copyleft licenses in permissive projects.
 """
 
 import requests
-from app.core.logger import get_logger, EventLogger
+from app.core.logger import EventLogger
 
 log = EventLogger("licenses")
 

@@ -15,7 +15,6 @@ WHY THIS MATTERS:
   3 retries covers 99.9% of transient failures.
 """
 
-import time
 import logging
 import requests
 from requests.adapters import HTTPAdapter
@@ -111,8 +110,8 @@ def _handle_response(r: requests.Response, method: str, path: str):
             raise GitHubError(f"Forbidden: {body.get('message', 'no message')}", 403)
         except (GitHubError, GitHubSecondaryRateLimitError):
             raise
-        except Exception:
-            raise GitHubError(f"403 Forbidden: {path}", 403)
+        except Exception as e:
+            raise GitHubError(f"403 Forbidden: {path}", 403) from e
 
     if r.status_code == 404:
         raise GitHubError(f"Not found: {path}", 404)
@@ -146,7 +145,7 @@ def gh_get(path: str, token: str) -> dict | list:
     try:
         r = _session.get(url, headers=_headers(token), timeout=DEFAULT_TIMEOUT)
     except requests.exceptions.ConnectionError as e:
-        raise GitHubError(f"Connection error: {e}", 0)
+        raise GitHubError(f"Connection error: {e}", 0) from e
     return _handle_response(r, "GET", path)
 
 
@@ -184,7 +183,7 @@ def gh_post(path: str, token: str, data: dict) -> dict:
             url, headers=_headers(token), json=data, timeout=DEFAULT_TIMEOUT
         )
     except requests.exceptions.ConnectionError as e:
-        raise GitHubError(f"Connection error: {e}", 0)
+        raise GitHubError(f"Connection error: {e}", 0) from e
     return _handle_response(r, "POST", path)
 
 
@@ -196,7 +195,7 @@ def gh_put(path: str, token: str, data: dict) -> dict:
             url, headers=_headers(token), json=data, timeout=DEFAULT_TIMEOUT
         )
     except requests.exceptions.ConnectionError as e:
-        raise GitHubError(f"Connection error: {e}", 0)
+        raise GitHubError(f"Connection error: {e}", 0) from e
     return _handle_response(r, "PUT", path)
 
 
@@ -208,7 +207,7 @@ def gh_patch(path: str, token: str, data: dict) -> dict:
             url, headers=_headers(token), json=data, timeout=DEFAULT_TIMEOUT
         )
     except requests.exceptions.ConnectionError as e:
-        raise GitHubError(f"Connection error: {e}", 0)
+        raise GitHubError(f"Connection error: {e}", 0) from e
     return _handle_response(r, "PATCH", path)
 
 
@@ -218,5 +217,5 @@ def gh_delete(path: str, token: str) -> dict:
     try:
         r = _session.delete(url, headers=_headers(token), timeout=DEFAULT_TIMEOUT)
     except requests.exceptions.ConnectionError as e:
-        raise GitHubError(f"Connection error: {e}", 0)
+        raise GitHubError(f"Connection error: {e}", 0) from e
     return _handle_response(r, "DELETE", path)

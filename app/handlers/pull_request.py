@@ -16,6 +16,7 @@ from app.core.config import load_config
 from app.core.logger import EventLogger
 from app.core.confidence import ConfidenceGate
 from app.core.guardrails import check_pr_title_update
+import contextlib
 
 SKIP_AUTHORS = {
     "dependabot[bot]",
@@ -69,15 +70,13 @@ def handle(payload: dict):
         log.debug(f"Context retrieval skipped: {e}")
 
     if action == "opened":
-        try:
+        with contextlib.suppress(Exception):
             notify_pr_opened(
                 repo=repo,
                 pr_number=pr_number,
                 title=pr.get("title", ""),
                 risk="unknown",
             )
-        except Exception:
-            pass
 
         _analyze_pr(pr, repo, pr_number, files, token, config, gate, context, log)
         _post_pr_summary(pr, repo, pr_number, files, token, config, log)
@@ -176,10 +175,8 @@ Return JSON:
                 log.error(f"Title update failed: {e}")
 
     if r.get("risk_level") == "high":
-        try:
+        with contextlib.suppress(Exception):
             notify_high_risk_pr(repo, pr_number, title)
-        except Exception:
-            pass
 
 
 def _post_pr_summary(pr, repo, pr_number, files, token, config, log):

@@ -39,7 +39,8 @@ def get_redis() -> "redis_lib.Redis | _FakeRedis":
         if _client is not None:
             return _client
 
-        if not REDIS_URL:
+        redis_url = os.environ.get("REDIS_URL", "")
+        if not redis_url:
             if _IS_PRODUCTION:
                 raise RuntimeError(
                     "REDIS_URL is not set in production environment. "
@@ -52,7 +53,7 @@ def get_redis() -> "redis_lib.Redis | _FakeRedis":
 
         try:
             _pool = redis_lib.ConnectionPool.from_url(
-                REDIS_URL,
+                redis_url,
                 max_connections=10,
                 socket_connect_timeout=5,
                 socket_timeout=5,
@@ -61,7 +62,7 @@ def get_redis() -> "redis_lib.Redis | _FakeRedis":
             )
             _client = redis_lib.Redis(connection_pool=_pool)
             _client.ping()
-            log.info(f"redis.connected url={REDIS_URL[:30]}...")
+            log.info(f"redis.connected url={redis_url[:30]}...")
         except Exception as e:
             if _IS_PRODUCTION:
                 raise RuntimeError(

@@ -137,7 +137,11 @@ def _build_redis_mock():
         def from_url(cls, *a, **kw):
             return cls()
 
-    redis_mod.Redis = lambda connection_pool=None, **kw: _FakeRedisInstance()
+    class MockRedis(_FakeRedisInstance):
+        def __init__(self, *a, **kw):
+            super().__init__(**kw)
+
+    redis_mod.Redis = MockRedis
     redis_mod.ConnectionPool = _CP
     redis_mod.RedisError = Exception
     redis_mod.exceptions = types.SimpleNamespace(

@@ -21,15 +21,15 @@ _req.exceptions = MagicMock()
 _req.exceptions.RequestException = Exception
 _req.exceptions.ConnectionError = ConnectionError
 _req.exceptions.Timeout = TimeoutError
-sys.modules['requests'] = _req
-sys.modules['requests.adapters'] = _req.adapters
-sys.modules['requests.exceptions'] = _req.exceptions
+sys.modules.setdefault('requests', _req)
+sys.modules.setdefault('requests.adapters', _req.adapters)
+sys.modules.setdefault('requests.exceptions', _req.exceptions)
 for _mod in ['structlog','redis','groq','google','google.generativeai',
              'flask_limiter','flask_limiter.util','apscheduler',
              'apscheduler.schedulers','apscheduler.schedulers.background',
              'sentence_transformers','qdrant_client','scipy',
              'flask','flask.logging']:
-    sys.modules[_mod] = MagicMock()
+    sys.modules.setdefault(_mod, MagicMock())
 
 sys.path.insert(0, str(_ROOT))
 

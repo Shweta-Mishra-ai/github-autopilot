@@ -135,9 +135,7 @@ def check_response(
     for field_name, min_len in _MIN_LENGTHS.items():
         val = response.get(field_name, "")
         if val and isinstance(val, str) and len(val.strip()) < min_len:
-            warnings.append(
-                f"Field '{field_name}' suspiciously short ({len(val.strip())} chars)"
-            )
+            warnings.append(f"Field '{field_name}' suspiciously short ({len(val.strip())} chars)")
             penalty += 0.15
             penalized_fields.append(field_name)
 

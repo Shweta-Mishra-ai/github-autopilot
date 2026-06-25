@@ -62,18 +62,14 @@ def check_and_wait():
         wait_seconds = max(0, reset_at - time.time()) + 5
         if 0 < wait_seconds < 120:
             log.warning(
-                f"GitHub rate limit low ({remaining} remaining) "
-                f"— waiting {wait_seconds:.0f}s"
+                f"GitHub rate limit low ({remaining} remaining) — waiting {wait_seconds:.0f}s"
             )
             time.sleep(wait_seconds)
         elif wait_seconds >= 120:
             log.error(
-                f"GitHub rate limit exhausted. "
-                f"Reset in {wait_seconds:.0f}s — skipping action."
+                f"GitHub rate limit exhausted. Reset in {wait_seconds:.0f}s — skipping action."
             )
-            raise RuntimeError(
-                f"GitHub rate limit exhausted. Resets in {wait_seconds:.0f}s."
-            )
+            raise RuntimeError(f"GitHub rate limit exhausted. Resets in {wait_seconds:.0f}s.")
 
 
 def get_status() -> dict:

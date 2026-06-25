@@ -1,6 +1,7 @@
 """
 app/github/helpers.py — Shared GitHub API helpers.
 """
+
 import logging
 
 log = logging.getLogger(__name__)

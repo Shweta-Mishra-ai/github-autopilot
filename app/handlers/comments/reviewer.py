@@ -14,12 +14,16 @@ from app.github.client import GitHubError
 from app.github.helpers import fmt_error
 import app.handlers.comments as hc
 
+
 def gh_get(*a, **kw):
     return hc.gh_get(*a, **kw)
+
 
 class RouterProxy:
     def __getattr__(self, name):
         return getattr(hc.router, name)
+
+
 router = RouterProxy()
 
 log = logging.getLogger(__name__)
@@ -27,16 +31,15 @@ log = logging.getLogger(__name__)
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
 
-def _fetch_commits_since_tag(
-    repo: str, token: str, per_page: int = 20
-) -> tuple[list, str]:
+
+def _fetch_commits_since_tag(repo: str, token: str, per_page: int = 20) -> tuple[list, str]:
     """
     Fetch recent commits and latest tag name.
     Shared by /changelog and /release to avoid duplicate GitHub API calls.
     Returns (commits, latest_tag).
     """
-    tags       = gh_get(f"/repos/{repo}/tags?per_page=1", token)
-    commits    = gh_get(f"/repos/{repo}/commits?per_page={per_page}", token)
+    tags = gh_get(f"/repos/{repo}/tags?per_page=1", token)
+    commits = gh_get(f"/repos/{repo}/commits?per_page={per_page}", token)
     latest_tag = tags[0]["name"] if (isinstance(tags, list) and tags) else "v0.0.0"
     return (commits if isinstance(commits, list) else []), latest_tag
 
@@ -58,16 +61,17 @@ def _bump_version(version: str) -> str:
 
 # ── Commands ──────────────────────────────────────────────────────────────────
 
+
 def cmd_health(repo: str, token: str) -> str:
     """Repo health grade: issues, PRs, license, description."""
     try:
-        repo_data  = gh_get(f"/repos/{repo}", token)
+        repo_data = gh_get(f"/repos/{repo}", token)
         all_issues = gh_get(f"/repos/{repo}/issues?state=open&per_page=50", token)
-        open_prs   = gh_get(f"/repos/{repo}/pulls?state=open&per_page=20", token)
+        open_prs = gh_get(f"/repos/{repo}/pulls?state=open&per_page=20", token)
 
         open_issues = [i for i in all_issues if "pull_request" not in i]
         score = 100
-        findings: list[str]       = []
+        findings: list[str] = []
         recommendations: list[str] = []
 
         if len(open_issues) > 20:
@@ -94,7 +98,7 @@ def cmd_health(repo: str, token: str) -> str:
             findings.append("🔴 No license")
             recommendations.append("Add LICENSE file")
         else:
-            findings.append(f"✅ License: {repo_data['license'].get('name','')}")
+            findings.append(f"✅ License: {repo_data['license'].get('name', '')}")
 
         if not repo_data.get("description"):
             score -= 5
@@ -103,15 +107,25 @@ def cmd_health(repo: str, token: str) -> str:
             findings.append("✅ Description present")
 
         grade = (
-            "A+" if score >= 90 else "A" if score >= 80 else "B"
-            if score >= 70 else "C" if score >= 60 else "D" if score >= 50 else "F"
+            "A+"
+            if score >= 90
+            else "A"
+            if score >= 80
+            else "B"
+            if score >= 70
+            else "C"
+            if score >= 60
+            else "D"
+            if score >= 50
+            else "F"
         )
-        bar       = "█" * (score // 10) + "░" * (10 - score // 10)
+        bar = "█" * (score // 10) + "░" * (10 - score // 10)
         findings_md = "\n".join(f"- {f}" for f in findings)
         rec_section = (
             "\n### 💡 Recommendations\n"
-            + "\n".join(f"{i+1}. {r}" for i, r in enumerate(recommendations[:4]))
-            if recommendations else "\n### 💡 All good!"
+            + "\n".join(f"{i + 1}. {r}" for i, r in enumerate(recommendations[:4]))
+            if recommendations
+            else "\n### 💡 All good!"
         )
 
         return (
@@ -129,15 +143,13 @@ def cmd_health(repo: str, token: str) -> str:
 def cmd_version(repo: str, token: str) -> str:
     """Show latest tag, release, and recent commits."""
     try:
-        tags     = gh_get(f"/repos/{repo}/tags?per_page=10", token)
+        tags = gh_get(f"/repos/{repo}/tags?per_page=10", token)
         releases = gh_get(f"/repos/{repo}/releases?per_page=3", token)
-        commits  = gh_get(f"/repos/{repo}/commits?per_page=8", token)
+        commits = gh_get(f"/repos/{repo}/commits?per_page=8", token)
 
-        latest_tag     = tags[0]["name"] if tags else "No tags yet"
+        latest_tag = tags[0]["name"] if tags else "No tags yet"
         latest_release = releases[0]["name"] if releases else "No releases"
-        tags_list      = (
-            "\n".join(f"- `{t['name']}`" for t in tags[:5]) or "- No tags yet"
-        )
+        tags_list = "\n".join(f"- `{t['name']}`" for t in tags[:5]) or "- No tags yet"
         commits_md = "\n".join(
             f"| `{c['sha'][:7]}` | {c['commit']['message'].split(chr(10))[0][:55]} |"
             for c in commits[:6]
@@ -162,13 +174,8 @@ def cmd_summarize(repo: str, issue_number: int, token: str) -> str:
     try:
         from app.handlers.comments import router
 
-        comments = gh_get(
-            f"/repos/{repo}/issues/{issue_number}/comments?per_page=50", token
-        )
-        thread = "\n\n".join(
-            f"@{c['user']['login']}: {c['body'][:300]}"
-            for c in comments[:20]
-        )
+        comments = gh_get(f"/repos/{repo}/issues/{issue_number}/comments?per_page=50", token)
+        thread = "\n\n".join(f"@{c['user']['login']}: {c['body'][:300]}" for c in comments[:20])
         summary, _ = router.ask_text(
             "Senior engineer. Summarize GitHub discussions concisely.",
             f"Summarize this discussion thread:\n\n{thread[:3000]}",
@@ -187,7 +194,7 @@ def cmd_ci(context: str, repo: str = "", token: str = "") -> str:
 
     if not ci_context and repo and token:
         try:
-            runs     = gh_get(f"/repos/{repo}/actions/runs?status=failure&per_page=5", token)
+            runs = gh_get(f"/repos/{repo}/actions/runs?status=failure&per_page=5", token)
             run_list = runs.get("workflow_runs", []) if isinstance(runs, dict) else []
             if not run_list:
                 return (
@@ -197,12 +204,12 @@ def cmd_ci(context: str, repo: str = "", token: str = "") -> str:
                 )
             latest = run_list[0]
             ci_context = (
-                f"Workflow: {latest.get('name','unknown')}\n"
-                f"Branch: {latest.get('head_branch','unknown')}\n"
-                f"Status: {latest.get('conclusion','unknown')}\n"
-                f"URL: {latest.get('html_url','')}\n"
-                f"Commit: {latest.get('head_sha','')[:12]}\n"
-                f"Message: {latest.get('head_commit',{}).get('message','')[:200]}"
+                f"Workflow: {latest.get('name', 'unknown')}\n"
+                f"Branch: {latest.get('head_branch', 'unknown')}\n"
+                f"Status: {latest.get('conclusion', 'unknown')}\n"
+                f"URL: {latest.get('html_url', '')}\n"
+                f"Commit: {latest.get('head_sha', '')[:12]}\n"
+                f"Message: {latest.get('head_commit', {}).get('message', '')[:200]}"
             )
         except Exception as exc:
             return (
@@ -232,17 +239,14 @@ Return JSON:
         )
 
         if not isinstance(r, dict) or "root_cause" not in r:
-            return (
-                "## ⚠️ CI Analysis Incomplete\n\n"
-                f"Raw output:\n\n```\n{str(r)[:500]}\n```"
-            )
+            return f"## ⚠️ CI Analysis Incomplete\n\nRaw output:\n\n```\n{str(r)[:500]}\n```"
 
         return (
             f"## 🔴 CI Failure Analysis\n\n"
-            f"**Root Cause:** {r.get('root_cause','Unknown')}\n\n"
-            f"**Fix:**\n```\n{r.get('fix','No fix suggested')}\n```\n\n"
-            f"**Prevention:** {r.get('prevention','N/A')}\n\n"
-            f"*Confidence: {int(float(r.get('confidence',0.85))*100)}%*"
+            f"**Root Cause:** {r.get('root_cause', 'Unknown')}\n\n"
+            f"**Fix:**\n```\n{r.get('fix', 'No fix suggested')}\n```\n\n"
+            f"**Prevention:** {r.get('prevention', 'N/A')}\n\n"
+            f"*Confidence: {int(float(r.get('confidence', 0.85)) * 100)}%*"
         )
 
     except Exception as exc:
@@ -254,6 +258,7 @@ def cmd_budget() -> str:
     """Show today's AI token and cost usage."""
     try:
         from app.ai.metrics import format_budget_comment
+
         return format_budget_comment()
     except Exception as exc:
         return fmt_error("Budget check failed", exc)
@@ -263,12 +268,14 @@ def cmd_report(repo: str) -> str:
     """Show weekly analytics for this repo."""
     try:
         from app.core.analytics import record_command_used
+
         record_command_used(repo, "report")
     except Exception:
         pass  # analytics tracking is non-critical
 
     try:
         from app.core.analytics import format_report_comment
+
         report = format_report_comment(repo)
         if not report or not report.strip():
             return (
@@ -280,17 +287,12 @@ def cmd_report(repo: str) -> str:
     except Exception as exc:
         err = str(exc).lower()
         if any(w in err for w in ("redis", "connection", "refused")):
-            return (
-                "## ⚠️ Report Unavailable\n\n"
-                "Redis is not reachable. Check `REDIS_URL` in Render."
-            )
+            return "## ⚠️ Report Unavailable\n\nRedis is not reachable. Check `REDIS_URL` in Render."
         log.error(f"cmd_report error: {exc}")
         return fmt_error("Report failed", exc)
 
 
-def cmd_impact(
-    repo: str, issue_number: int, issue: dict, token: str
-) -> str:
+def cmd_impact(repo: str, issue_number: int, issue: dict, token: str) -> str:
     """Blast radius analysis for a PR."""
     if "pull_request" not in issue:
         return "## ℹ️ `/impact` only works on Pull Requests."
@@ -299,8 +301,8 @@ def cmd_impact(
         from app.handlers.comments import router
         from app.handlers.pull_request import _blast_radius
 
-        files    = gh_get(f"/repos/{repo}/pulls/{issue_number}/files", token)
-        blast    = _blast_radius(files)
+        files = gh_get(f"/repos/{repo}/pulls/{issue_number}/files", token)
+        blast = _blast_radius(files)
         filenames = [f["filename"] for f in files[:15]]
 
         r, _ = router.ask(
@@ -320,20 +322,20 @@ Return JSON:
             task="arch",
         )
 
-        bc_risk  = r.get("breaking_change_risk", "low")
+        bc_risk = r.get("breaking_change_risk", "low")
         bc_emoji = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(bc_risk, "🟡")
         migration = "⚠️ Yes" if r.get("requires_migration") else "✅ No"
-        systems   = ", ".join(f"`{s}`" for s in r.get("affected_systems", [])[:5])
+        systems = ", ".join(f"`{s}`" for s in r.get("affected_systems", [])[:5])
         notes_sec = f"\n> ℹ️ {r.get('notes')}" if r.get("notes") else ""
 
         return (
             f"## 💥 Blast Radius — PR #{issue_number}\n\n"
-            f"**Summary:** {r.get('summary','')}\n\n"
+            f"**Summary:** {r.get('summary', '')}\n\n"
             f"### Layers Affected\n{blast}\n\n"
             f"### Impact Assessment\n| | |\n|---|---|\n"
             f"| **Breaking Change Risk** | {bc_emoji} {bc_risk.capitalize()} |\n"
             f"| **Requires Migration** | {migration} |\n"
-            f"| **Review Priority** | `{r.get('review_priority','medium')}` |\n"
+            f"| **Review Priority** | `{r.get('review_priority', 'medium')}` |\n"
             f"| **Affected Systems** | {systems or 'none identified'} |"
             f"{notes_sec}"
         )
@@ -353,8 +355,7 @@ def cmd_changelog(repo: str, token: str) -> str:
             return "## ℹ️ No Commits Found\n\nNo commits in this repository yet."
 
         commit_list = "\n".join(
-            f"- {c['commit']['message'].split(chr(10))[0][:120]}"
-            for c in commits[:15]
+            f"- {c['commit']['message'].split(chr(10))[0][:120]}" for c in commits[:15]
         )
 
         if not commit_list.strip():

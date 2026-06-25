@@ -26,7 +26,7 @@ def build_fix_prompt(
     Returns (system_prompt, user_prompt).
     """
     repo_context = _get_repo_context(repo) if repo else ""
-    patterns     = _get_accepted_patterns(repo) if repo else ""
+    patterns = _get_accepted_patterns(repo) if repo else ""
 
     system = (
         "You are a principal engineer with 15+ years experience. "
@@ -187,7 +187,8 @@ def _get_repo_context(repo: str) -> str:
     """Get cached repo context string for prompt injection."""
     try:
         from app.core.redis_client import get_redis
-        r   = get_redis()
+
+        r = get_redis()
         ctx = r.get(f"repo_context:{repo}")
         return ctx.decode() if ctx else ""
     except Exception:
@@ -198,6 +199,7 @@ def _get_accepted_patterns(repo: str) -> str:
     """Get summary of accepted fix patterns for this repo."""
     try:
         from app.core.learning import get_pattern_summary
+
         return get_pattern_summary(repo)
     except Exception:
         return ""
@@ -206,10 +208,18 @@ def _get_accepted_patterns(repo: str) -> str:
 def _detect_language(filename: str) -> str:
     """Detect language from filename for prompt context."""
     ext_map = {
-        ".py": "Python", ".ts": "TypeScript", ".js": "JavaScript",
-        ".go": "Go", ".rs": "Rust", ".java": "Java",
-        ".rb": "Ruby", ".cs": "C#", ".cpp": "C++",
-        ".yml": "YAML", ".yaml": "YAML", ".json": "JSON",
+        ".py": "Python",
+        ".ts": "TypeScript",
+        ".js": "JavaScript",
+        ".go": "Go",
+        ".rs": "Rust",
+        ".java": "Java",
+        ".rb": "Ruby",
+        ".cs": "C#",
+        ".cpp": "C++",
+        ".yml": "YAML",
+        ".yaml": "YAML",
+        ".json": "JSON",
     }
     if "." in filename:
         ext = "." + filename.rsplit(".", 1)[-1]
@@ -218,6 +228,7 @@ def _detect_language(filename: str) -> str:
 
 
 # ==== Unified functions expected by tests ====
+
 
 def build_prompt(task: str, context: str = "", repo: str = "", history: str = "") -> str:
     """Unified prompt builder for all task types."""

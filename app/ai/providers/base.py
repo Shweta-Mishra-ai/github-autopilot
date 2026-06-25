@@ -37,7 +37,6 @@ class LLMResponse:
         return self.error is not None
 
 
-
 class LLMProvider(ABC):
     """
     Abstract base for all LLM providers.

@@ -31,11 +31,15 @@ log = logging.getLogger(__name__)
 
 # ── Saturation sentinel ───────────────────────────────────────────────────────
 
+
 class _SaturatedError:
     """Returned by dispatch() when queue is full. Not an exception."""
+
     pass
 
+
 _SATURATED = _SaturatedError()
+
 
 def is_saturated(result) -> bool:
     """True if dispatch() returned the saturation sentinel."""
@@ -48,10 +52,10 @@ def is_saturated(result) -> bool:
 # will hit OOM or timeout. Keep conservative.
 # gunicorn runs --workers 1, so this singleton is process-wide and safe.
 MAX_DISPATCH_WORKERS = int(os.environ.get("MAX_DISPATCH_WORKERS", "6"))
-_QUEUE_MAXSIZE = 50   # Pending work items; beyond this → 503 to GitHub
+_QUEUE_MAXSIZE = 50  # Pending work items; beyond this → 503 to GitHub
 
 _pool: ThreadPoolExecutor | None = None
-_pool_lock   = threading.Lock()
+_pool_lock = threading.Lock()
 _pending: int = 0
 _pending_lock = threading.Lock()
 
@@ -118,8 +122,8 @@ def pool_stats() -> dict:
     with _pending_lock:
         pend = _pending
     return {
-        "max_workers":    MAX_DISPATCH_WORKERS,
-        "pending_tasks":  pend,
+        "max_workers": MAX_DISPATCH_WORKERS,
+        "pending_tasks": pend,
         "queue_capacity": _QUEUE_MAXSIZE,
         "saturation_pct": round(pend / _QUEUE_MAXSIZE * 100, 1),
     }

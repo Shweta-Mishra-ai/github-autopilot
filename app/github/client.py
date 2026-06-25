@@ -38,6 +38,7 @@ class GitHubError(Exception):
 
 class GitHubSecondaryRateLimitError(GitHubError):
     """Raised when GitHub returns a 403 with secondary rate limit header."""
+
     def __init__(self, message: str = "GitHub secondary rate limit", retry_after: int = 60):
         super().__init__(message, status_code=403)
         self.retry_after = retry_after
@@ -125,9 +126,7 @@ def _handle_response(r: requests.Response, method: str, path: str):
 
     # 5xx — session already retried, this is the final failure
     if r.status_code >= 500:
-        log.error(
-            f"github.server_error method={method} path={path} status={r.status_code}"
-        )
+        log.error(f"github.server_error method={method} path={path} status={r.status_code}")
         raise GitHubError(f"GitHub server error {r.status_code}: {path}", r.status_code)
 
     raise GitHubError(
@@ -179,9 +178,7 @@ def gh_post(path: str, token: str, data: dict) -> dict:
     check_and_wait()
     url = f"{GITHUB_API}{path}"
     try:
-        r = _session.post(
-            url, headers=_headers(token), json=data, timeout=DEFAULT_TIMEOUT
-        )
+        r = _session.post(url, headers=_headers(token), json=data, timeout=DEFAULT_TIMEOUT)
     except requests.exceptions.ConnectionError as e:
         raise GitHubError(f"Connection error: {e}", 0) from e
     return _handle_response(r, "POST", path)
@@ -191,9 +188,7 @@ def gh_put(path: str, token: str, data: dict) -> dict:
     check_and_wait()
     url = f"{GITHUB_API}{path}"
     try:
-        r = _session.put(
-            url, headers=_headers(token), json=data, timeout=DEFAULT_TIMEOUT
-        )
+        r = _session.put(url, headers=_headers(token), json=data, timeout=DEFAULT_TIMEOUT)
     except requests.exceptions.ConnectionError as e:
         raise GitHubError(f"Connection error: {e}", 0) from e
     return _handle_response(r, "PUT", path)
@@ -203,9 +198,7 @@ def gh_patch(path: str, token: str, data: dict) -> dict:
     check_and_wait()
     url = f"{GITHUB_API}{path}"
     try:
-        r = _session.patch(
-            url, headers=_headers(token), json=data, timeout=DEFAULT_TIMEOUT
-        )
+        r = _session.patch(url, headers=_headers(token), json=data, timeout=DEFAULT_TIMEOUT)
     except requests.exceptions.ConnectionError as e:
         raise GitHubError(f"Connection error: {e}", 0) from e
     return _handle_response(r, "PATCH", path)

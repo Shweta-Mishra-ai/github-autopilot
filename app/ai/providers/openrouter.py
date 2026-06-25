@@ -9,6 +9,7 @@ other providers are unavailable.
 Free models available: mistralai/mistral-7b-instruct:free,
                        huggingfaceh4/zephyr-7b-beta:free
 """
+
 import logging
 import os
 import time
@@ -84,14 +85,12 @@ class OpenRouterProvider(LLMProvider):
         breaker = get_breaker("openrouter")
         if not breaker.is_available():
             return {}, LLMResponse(
-                text="", provider="openrouter", model=self._model,
-                error="circuit_open"
+                text="", provider="openrouter", model=self._model, error="circuit_open"
             )
 
         if not self._api_key:
             return {}, LLMResponse(
-                text="", provider="openrouter", model=self._model,
-                error="no_api_key"
+                text="", provider="openrouter", model=self._model, error="no_api_key"
             )
 
         start = time.time()
@@ -108,7 +107,7 @@ class OpenRouterProvider(LLMProvider):
                     "model": self._model,
                     "messages": [
                         {"role": "system", "content": system},
-                        {"role": "user",   "content": user},
+                        {"role": "user", "content": user},
                     ],
                     "max_tokens": max_tokens,
                     "temperature": temperature,
@@ -117,14 +116,15 @@ class OpenRouterProvider(LLMProvider):
                 timeout=timeout,
             )
             resp.raise_for_status()
-            data       = resp.json()
-            raw_text   = data["choices"][0]["message"]["content"]
-            usage      = data.get("usage", {})
-            p_tok      = usage.get("prompt_tokens", 0)
-            c_tok      = usage.get("completion_tokens", 0)
+            data = resp.json()
+            raw_text = data["choices"][0]["message"]["content"]
+            usage = data.get("usage", {})
+            p_tok = usage.get("prompt_tokens", 0)
+            c_tok = usage.get("completion_tokens", 0)
             latency_ms = int((time.time() - start) * 1000)
 
             from app.ai.providers.base import _extract_json as _ej
+
             result = _ej(raw_text)
 
             breaker.record_success()
@@ -144,8 +144,7 @@ class OpenRouterProvider(LLMProvider):
             breaker.record_failure(err)
             log.error(f"openrouter.ask failed: {err}")
             return {}, LLMResponse(
-                text="", provider="openrouter", model=self._model,
-                error=err, latency_ms=latency_ms
+                text="", provider="openrouter", model=self._model, error=err, latency_ms=latency_ms
             )
 
     def ask_text(
@@ -158,14 +157,12 @@ class OpenRouterProvider(LLMProvider):
         breaker = get_breaker("openrouter")
         if not breaker.is_available():
             return "", LLMResponse(
-                text="", provider="openrouter", model=self._model,
-                error="circuit_open"
+                text="", provider="openrouter", model=self._model, error="circuit_open"
             )
 
         if not self._api_key:
             return "", LLMResponse(
-                text="", provider="openrouter", model=self._model,
-                error="no_api_key"
+                text="", provider="openrouter", model=self._model, error="no_api_key"
             )
 
         start = time.time()
@@ -182,7 +179,7 @@ class OpenRouterProvider(LLMProvider):
                     "model": self._model,
                     "messages": [
                         {"role": "system", "content": system},
-                        {"role": "user",   "content": user},
+                        {"role": "user", "content": user},
                     ],
                     "max_tokens": max_tokens,
                     "temperature": 0.3,
@@ -190,11 +187,11 @@ class OpenRouterProvider(LLMProvider):
                 timeout=timeout,
             )
             resp.raise_for_status()
-            data       = resp.json()
-            text       = data["choices"][0]["message"]["content"]
-            usage      = data.get("usage", {})
-            p_tok      = usage.get("prompt_tokens", 0)
-            c_tok      = usage.get("completion_tokens", 0)
+            data = resp.json()
+            text = data["choices"][0]["message"]["content"]
+            usage = data.get("usage", {})
+            p_tok = usage.get("prompt_tokens", 0)
+            c_tok = usage.get("completion_tokens", 0)
             latency_ms = int((time.time() - start) * 1000)
 
             breaker.record_success()
@@ -213,7 +210,5 @@ class OpenRouterProvider(LLMProvider):
             err = str(e)[:100]
             breaker.record_failure(err)
             return "", LLMResponse(
-                text="", provider="openrouter", model=self._model,
-                error=err, latency_ms=latency_ms
+                text="", provider="openrouter", model=self._model, error=err, latency_ms=latency_ms
             )
-

@@ -88,9 +88,7 @@ class GroqProvider(LLMProvider):
         }
 
         try:
-            r = http_requests.post(
-                GROQ_URL, headers=headers, json=body, timeout=timeout
-            )
+            r = http_requests.post(GROQ_URL, headers=headers, json=body, timeout=timeout)
 
             if r.status_code == 429:
                 retry_after = int(r.headers.get("Retry-After", 30))

@@ -24,7 +24,7 @@ from app.core.redis_client import get_redis, is_redis_available
 log = logging.getLogger(__name__)
 
 _TTL_SECONDS = 86400  # 24h — GitHub retries for up to 24h
-_MAX_LOCAL   = 2000   # In-memory fallback max size
+_MAX_LOCAL = 2000  # In-memory fallback max size
 
 _seen_local: OrderedDict = OrderedDict()
 
@@ -36,9 +36,9 @@ def make_fingerprint(delivery_id: str, event_type: str, payload: dict) -> str:
     """
     key_fields = {
         "delivery": delivery_id,
-        "event":    event_type,
-        "action":   payload.get("action", ""),
-        "repo":     payload.get("repository", {}).get("full_name", ""),
+        "event": event_type,
+        "action": payload.get("action", ""),
+        "repo": payload.get("repository", {}).get("full_name", ""),
         "number": (
             payload.get("pull_request", {}).get("number")
             or payload.get("issue", {}).get("number")
@@ -60,7 +60,7 @@ def is_duplicate(fingerprint: str) -> bool:
     """
     try:
         if is_redis_available():
-            r   = get_redis()
+            r = get_redis()
             key = f"idem:{fingerprint}"
             # Returns True (new key set) or None (key existed → duplicate)
             result = r.set(key, "1", nx=True, ex=_TTL_SECONDS)

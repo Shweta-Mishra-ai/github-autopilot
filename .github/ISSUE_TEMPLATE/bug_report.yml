@@ -1,0 +1,67 @@
+name: Bug Report
+description: Something is not working correctly
+title: "fix: "
+labels: ["bug", "triage"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please fill out the details below.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug
+      placeholder: The /fix command returned an empty response...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      placeholder: The bot should have posted a fix suggestion...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Comment /fix on issue #5
+        2. Wait 30 seconds
+        3. No response posted
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Which component?
+      options:
+        - Slash commands (/fix, /explain, etc.)
+        - PR analysis
+        - Code review
+        - Issue triage
+        - Push / commit linting
+        - Secret detection
+        - Scheduled tasks
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs (if any)
+      description: Paste Render or server logs here
+      render: shell
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: v3.0.0

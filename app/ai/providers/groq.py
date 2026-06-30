@@ -1,10 +1,13 @@
 """
 app/ai/providers/groq.py
-V4: Groq LLM provider (Llama 3.3 70B + Llama 3.1 8B).
+V5 — Fixed token tracking.
 
-Circuit breaker check is the VERY FIRST thing in call_raw —
-before API key check, before any HTTP call.
-This ensures patch.object on the breaker instance works in tests.
+FIXES vs V4:
+  1. TOKEN COUNTER BUG: _track() used r.incr(tokens_key) which always adds 1,
+     not the actual token count. Replaced with r.incrby(tokens_key, total_tokens).
+     The /budget command now shows real token usage instead of a request count.
+  2. REQUEST COUNTER separated from token counter: tokens tracked via incrby,
+     requests tracked via incr(1) — both correct.
 """
 
 import logging
@@ -12,8 +15,9 @@ import os
 
 import requests as http_requests
 
-from app.ai.circuit_breaker import get_breaker
+import app.ai.circuit_breaker as cb
 from app.ai.providers.base import LLMProvider, LLMResponse
+from app.core.redis_client import get_redis
 
 log = logging.getLogger(__name__)
 
@@ -49,9 +53,7 @@ class GroqProvider(LLMProvider):
         timeout: int,
     ) -> LLMResponse:
         # ── STEP 1: Circuit breaker check — MUST be first ─────────────────────
-        # patch.object on get_breaker(provider_key) instance works because
-        # get_breaker() returns the same singleton from _breakers dict.
-        breaker = get_breaker(self.provider_key)
+        breaker = cb.get_breaker(self.provider_key)
         if not breaker.is_available():
             return LLMResponse(
                 text="",
@@ -86,9 +88,7 @@ class GroqProvider(LLMProvider):
         }
 
         try:
-            r = http_requests.post(
-                GROQ_URL, headers=headers, json=body, timeout=timeout
-            )
+            r = http_requests.post(GROQ_URL, headers=headers, json=body, timeout=timeout)
 
             if r.status_code == 429:
                 retry_after = int(r.headers.get("Retry-After", 30))
@@ -135,18 +135,14 @@ class GroqProvider(LLMProvider):
                 cost_usd=round(cost, 6),
             )
 
-        except Exception as _timeout_err:
-            # Catches requests.exceptions.Timeout and similar network errors
-            _err_name = type(_timeout_err).__name__.lower()
-            if "timeout" in _err_name or "timed out" in str(_timeout_err).lower():
-                breaker.record_failure("timeout")
-                return LLMResponse(
-                    text="",
-                    provider="groq",
-                    model=self._model,
-                    error="Request timed out",
-                )
-            raise  # re-raise non-timeout exceptions to the outer except
+        except http_requests.exceptions.Timeout:
+            breaker.record_failure("timeout")
+            return LLMResponse(
+                text="",
+                provider="groq",
+                model=self._model,
+                error="Request timed out",
+            )
         except Exception as e:
             err = str(e)
             if "raise_for_status" not in err:
@@ -159,19 +155,30 @@ class GroqProvider(LLMProvider):
             )
 
     def _track(self, total_tokens: int):
+        """
+        Track token + request usage in Redis for /budget command.
+
+        FIXED: tokens key now uses incrby(total_tokens) instead of incr(1).
+        The old code incremented the token counter by 1 per call regardless
+        of how many tokens were consumed, making /budget data meaningless.
+        """
         try:
             import datetime
-            from app.core.redis_client import get_redis
 
             if total_tokens <= 0:
                 return
             r = get_redis()
             today = datetime.date.today().isoformat()
-            for k in (
-                f"llm:tokens:{self.provider_key}:{today}",
-                f"llm:requests:{self.provider_key}:{today}",
-            ):
-                r.incr(k)
-                r.expire(k, 86400)
+
+            # Tokens: add actual count
+            tok_key = f"llm:tokens:{self.provider_key}:{today}"
+            r.incrby(tok_key, total_tokens)
+            r.expire(tok_key, 86400)
+
+            # Requests: always +1 per call
+            req_key = f"llm:requests:{self.provider_key}:{today}"
+            r.incr(req_key)
+            r.expire(req_key, 86400)
+
         except Exception:
             pass

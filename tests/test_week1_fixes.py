@@ -3,7 +3,9 @@ tests/test_week1_fixes.py
 Tests for Week 1 P0 fixes. All tests use inspect.getsource()
 to verify production code — avoids module cache issues.
 """
-import sys, os, inspect
+import sys
+import os
+import inspect
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -19,15 +21,15 @@ _req.exceptions = MagicMock()
 _req.exceptions.RequestException = Exception
 _req.exceptions.ConnectionError = ConnectionError
 _req.exceptions.Timeout = TimeoutError
-sys.modules['requests'] = _req
-sys.modules['requests.adapters'] = _req.adapters
-sys.modules['requests.exceptions'] = _req.exceptions
+sys.modules.setdefault('requests', _req)
+sys.modules.setdefault('requests.adapters', _req.adapters)
+sys.modules.setdefault('requests.exceptions', _req.exceptions)
 for _mod in ['structlog','redis','groq','google','google.generativeai',
              'flask_limiter','flask_limiter.util','apscheduler',
              'apscheduler.schedulers','apscheduler.schedulers.background',
              'sentence_transformers','qdrant_client','scipy',
              'flask','flask.logging']:
-    sys.modules[_mod] = MagicMock()
+    sys.modules.setdefault(_mod, MagicMock())
 
 sys.path.insert(0, str(_ROOT))
 
@@ -87,7 +89,7 @@ class TestOpenRouterProvider:
 
     def test_no_llmprovider_extract_json(self):
         """Must not call LLMProvider._extract_json (class method doesn't exist)."""
-        with open(str(_ROOT / 'app/ai/providers/openrouter.py')) as f:
+        with open(str(_ROOT / 'app/ai/providers/openrouter.py'), encoding='utf-8') as f:
             src = f.read()
         assert 'LLMProvider._extract_json' not in src
 
@@ -152,7 +154,7 @@ class TestAutoPollishTitleDefault:
 
     def test_default_is_false_in_source(self):
         """DEFAULTS must have auto_polish_title: False."""
-        with open(str(_ROOT / 'app/core/config.py')) as f:
+        with open(str(_ROOT / 'app/core/config.py'), encoding='utf-8') as f:
             src = f.read()
         assert '"auto_polish_title": False' in src, (
             "auto_polish_title must be False in DEFAULTS"
@@ -160,7 +162,7 @@ class TestAutoPollishTitleDefault:
 
     def test_not_true_in_defaults(self):
         """DEFAULTS must NOT have auto_polish_title: True."""
-        with open(str(_ROOT / 'app/core/config.py')) as f:
+        with open(str(_ROOT / 'app/core/config.py'), encoding='utf-8') as f:
             src = f.read()
         # Find the DEFAULTS dict section and check value
         idx = src.find('"auto_polish_title"')
@@ -214,7 +216,7 @@ class TestWorkerSafe:
 
     def test_no_queue_consumer_import(self):
         """worker.py must not import from app.queue.consumer (archived)."""
-        with open(str(_ROOT / 'worker.py')) as f:
+        with open(str(_ROOT / 'worker.py'), encoding='utf-8') as f:
             src = f.read()
         assert 'app.queue.consumer' not in src
 
@@ -229,7 +231,7 @@ class TestWorkerSafe:
         try:
             spec.loader.exec_module(mod)
         except ImportError as e:
-            assert False, f"worker.py broken import: {e}"
+            raise AssertionError(f"worker.py broken import: {e}") from e
 
     def test_has_run_function(self):
         import importlib.util
@@ -243,7 +245,7 @@ class TestWorkerSafe:
 
     def test_docstring_explains_status(self):
         """worker.py must have docstring explaining it is not active."""
-        with open(str(_ROOT / 'worker.py')) as f:
+        with open(str(_ROOT / 'worker.py'), encoding='utf-8') as f:
             src = f.read()
         assert 'not active' in src.lower() or 'archive' in src.lower()
 
@@ -254,24 +256,24 @@ class TestWorkerSafe:
 class TestCLIWorkerConfig:
 
     def test_default_workers_is_1(self):
-        with open(str(_ROOT / 'ai_repo_manager/cli.py')) as f:
+        with open(str(_ROOT / 'ai_repo_manager/cli.py'), encoding='utf-8') as f:
             src = f.read()
         assert 'default=2' not in src, "cli.py must not default to 2 workers"
         assert 'default=1' in src
 
     def test_worker_class_is_gthread(self):
-        with open(str(_ROOT / 'ai_repo_manager/cli.py')) as f:
+        with open(str(_ROOT / 'ai_repo_manager/cli.py'), encoding='utf-8') as f:
             src = f.read()
         assert 'gthread' in src
         assert '--worker-class=sync' not in src
 
     def test_threads_flag_present(self):
-        with open(str(_ROOT / 'ai_repo_manager/cli.py')) as f:
+        with open(str(_ROOT / 'ai_repo_manager/cli.py'), encoding='utf-8') as f:
             src = f.read()
         assert '--threads' in src
 
     def test_no_v4_version_strings(self):
-        with open(str(_ROOT / 'ai_repo_manager/cli.py')) as f:
+        with open(str(_ROOT / 'ai_repo_manager/cli.py'), encoding='utf-8') as f:
             src = f.read()
         assert 'v4.7' not in src
         assert 'V4 —' not in src
@@ -284,14 +286,14 @@ class TestYMLFooter:
 
     def test_no_hardcoded_version(self):
         import re
-        with open(str(_ROOT / '.ai-repo-manager.yml')) as f:
+        with open(str(_ROOT / '.ai-repo-manager.yml'), encoding='utf-8') as f:
             src = f.read()
         assert not re.search(r'v\d+\.\d+', src), (
             "Footer must not contain hardcoded version number"
         )
 
     def test_footer_references_product(self):
-        with open(str(_ROOT / '.ai-repo-manager.yml')) as f:
+        with open(str(_ROOT / '.ai-repo-manager.yml'), encoding='utf-8') as f:
             src = f.read()
         assert 'GitHub Autopilot' in src or 'AI Repo Manager' in src
 

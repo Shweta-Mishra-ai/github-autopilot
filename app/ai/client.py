@@ -79,14 +79,14 @@ def _call_groq(
         _track_usage(provider_key, data.get("usage", {}))
         return result
 
-    except requests.exceptions.Timeout:
+    except requests.exceptions.Timeout as e:
         breaker.record_failure("timeout")
-        raise AIError("Request timed out")
+        raise AIError("Request timed out") from e
     except AIError:
         raise
     except Exception as e:
         breaker.record_failure(str(e)[:60])
-        raise AIError(str(e))
+        raise AIError(str(e)) from e
 
 
 def _track_usage(provider_key: str, usage: dict):
@@ -199,9 +199,7 @@ def groq_ask(
                 return {"raw": ""}
 
             except Exception as e:
-                log.warning(
-                    f"groq_ask.unexpected model={model} attempt={attempt + 1}: {e}"
-                )
+                log.warning(f"groq_ask.unexpected model={model} attempt={attempt + 1}: {e}")
                 if attempt < MAX_RETRIES - 1:
                     time.sleep(2**attempt)
 
@@ -232,8 +230,17 @@ def groq_text(
                 return _call_groq(model, system, user, max_tokens, 0.3, timeout)
 
             except AIError as e:
-                if "RATE_LIMIT" in str(e):
-                    time.sleep(15)
+                err_str = str(e)
+                if "RATE_LIMIT" in err_str:
+                    # FIXED: V4 always slept 15s regardless of Retry-After value.
+                    # Parse the actual retry_after from "RATE_LIMIT:{seconds}".
+                    # Also: this sleep blocks a thread pool worker — cap at 10s.
+                    try:
+                        retry_after = min(int(err_str.split(":")[1]), 10)
+                    except Exception:
+                        retry_after = 10
+                    log.warning(f"groq_text.rate_limit model={model} sleeping={retry_after}s")
+                    time.sleep(retry_after)
                     break
                 if attempt < MAX_RETRIES - 1:
                     time.sleep(2**attempt)

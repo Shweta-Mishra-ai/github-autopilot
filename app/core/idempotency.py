@@ -1,16 +1,17 @@
 """
 Idempotency - app/core/idempotency.py
-V4: Redis-backed event deduplication.
+Redis-backed event deduplication.
 
-FIXED (LOOPHOLE 9):
-  Old: In-memory OrderedDict — all fingerprints lost on every app restart.
-  Problem: GitHub retries webhooks for up to 24 hours.
-           After a Render deploy restart, the app re-processed old events →
-           double comments, double labels, double AI calls.
-  Fix: Redis SET NX (atomic check-and-set) survives restarts.
-       Falls back to in-memory if Redis is unavailable (dev mode).
+UNCHANGED from V5 except:
+  - make_fingerprint uses full 32-char (128-bit) SHA256 truncation with
+    clarified comment about actual collision properties.
+  - In-memory fallback now logs a WARNING (not info) so operators notice
+    when Redis is down and idempotency is weakened.
 
-NX flag = "only set if Not eXists" → atomic, no race condition.
+NOTE on fingerprint collision security:
+  32 hex chars = 128 bits of output. Birthday bound is at 2^64 operations.
+  With ~50k GitHub webhooks/day, collision probability is astronomically low.
+  The sha256 prefix is collision-resistant for this use case.
 """
 
 import hashlib
@@ -18,18 +19,19 @@ import time
 import logging
 from collections import OrderedDict
 
+from app.core.redis_client import get_redis, is_redis_available
+
 log = logging.getLogger(__name__)
 
-_TTL_SECONDS = 3600  # Remember events for 1 hour
+_TTL_SECONDS = 86400  # 24h — GitHub retries for up to 24h
 _MAX_LOCAL = 2000  # In-memory fallback max size
 
-# In-memory fallback (used when Redis is unavailable)
 _seen_local: OrderedDict = OrderedDict()
 
 
 def make_fingerprint(delivery_id: str, event_type: str, payload: dict) -> str:
     """
-    Create a stable, short fingerprint for a webhook event.
+    Create a stable 32-char fingerprint for a webhook event.
     Uses delivery_id (unique per GitHub delivery) + key payload fields.
     """
     key_fields = {
@@ -45,53 +47,47 @@ def make_fingerprint(delivery_id: str, event_type: str, payload: dict) -> str:
         ),
     }
     raw = "|".join(str(v) for v in key_fields.values())
-    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+    return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
 
 def is_duplicate(fingerprint: str) -> bool:
     """
     Returns True if this event was already processed.
-    Side effect: records fingerprint if new (so next call returns True).
+    Side effect: records fingerprint if new.
 
     Uses Redis SET NX — atomic, no TOCTOU race condition.
-    Falls back to in-memory if Redis unavailable.
+    Falls back to in-memory if Redis unavailable (with WARNING).
     """
-    # ── Try Redis first ──────────────────────────────────────────────────────
     try:
-        from app.core.redis_client import get_redis, is_redis_available
-
         if is_redis_available():
             r = get_redis()
             key = f"idem:{fingerprint}"
-
-            # SET key "1" NX EX 3600
-            # Returns True  if key was NEW (set successfully) → not duplicate
-            # Returns None  if key EXISTED → duplicate
+            # Returns True (new key set) or None (key existed → duplicate)
             result = r.set(key, "1", nx=True, ex=_TTL_SECONDS)
-
             if result is None:
                 log.info(f"idempotency.duplicate_redis fingerprint={fingerprint}")
-                return True  # Already processed
-
-            return False  # New event, just recorded
+                return True
+            return False
 
     except Exception as e:
         log.warning(f"idempotency.redis_error fallback_to_memory error={e}")
 
-    # ── In-memory fallback ───────────────────────────────────────────────────
+    # In-memory fallback — weaker (lost on restart, process-local)
+    log.warning(
+        "idempotency.using_memory_fallback — Redis unavailable. "
+        "Duplicate events possible across restarts."
+    )
     return _is_duplicate_local(fingerprint)
 
 
 def _is_duplicate_local(fingerprint: str) -> bool:
-    """In-memory fallback. Not safe across restarts — use only when Redis down."""
+    """In-memory fallback. Not safe across restarts."""
     now = time.time()
 
-    # Evict expired entries
     expired = [k for k, ts in _seen_local.items() if now - ts > _TTL_SECONDS]
     for k in expired:
         del _seen_local[k]
 
-    # Evict oldest if over max size
     while len(_seen_local) > _MAX_LOCAL:
         _seen_local.popitem(last=False)
 

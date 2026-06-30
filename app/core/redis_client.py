@@ -1,55 +1,78 @@
 """
-Redis Client - app/core/redis_client.py
-V4: Connection pool singleton.
-Prevents creating new TCP connection on every Redis operation.
-All modules import get_redis() from here — never create their own connections.
+app/core/redis_client.py — Thread-safe Redis singleton; fails loud in production.
 """
+
+from __future__ import annotations
 
 import os
 import logging
+import threading
 import redis as redis_lib
 
 log = logging.getLogger(__name__)
 
 REDIS_URL = os.environ.get("REDIS_URL", "")
+_IS_PRODUCTION = (
+    os.environ.get("FLASK_ENV", "") == "production"
+    or os.environ.get("ENVIRONMENT", "") == "production"
+)
 
 _pool: redis_lib.ConnectionPool | None = None
-_client: redis_lib.Redis | None = None
+_client = None
+_client_lock = threading.Lock()
 
 
-def get_redis() -> redis_lib.Redis:
+def get_redis() -> "redis_lib.Redis | _FakeRedis":
     """
     Returns a Redis client backed by a shared connection pool.
-    Thread-safe. Creates pool once, reuses on every call.
-    Falls back to a no-op client if REDIS_URL not set (local dev without Redis).
+    Thread-safe via double-checked locking.
+
+    In production (FLASK_ENV=production): raises RuntimeError if Redis unavailable.
+    In dev/test: falls back to _FakeRedis in-memory stub.
     """
     global _pool, _client
 
     if _client is not None:
         return _client
 
-    if not REDIS_URL:
-        log.warning("REDIS_URL not set — using in-memory fallback (no persistence)")
-        _client = _FakeRedis()
+    with _client_lock:
+        if _client is not None:
+            return _client
+
+        redis_url = os.environ.get("REDIS_URL", "")
+        if not redis_url:
+            if _IS_PRODUCTION:
+                raise RuntimeError(
+                    "REDIS_URL is not set in production environment. "
+                    "Redis is required for idempotency and rate limiting. "
+                    "Set REDIS_URL in your Render environment variables."
+                )
+            log.warning("REDIS_URL not set — using in-memory fallback (dev/test only)")
+            _client = _FakeRedis()
+            return _client
+
+        try:
+            _pool = redis_lib.ConnectionPool.from_url(
+                redis_url,
+                max_connections=10,
+                socket_connect_timeout=5,
+                socket_timeout=5,
+                retry_on_timeout=True,
+                decode_responses=True,
+            )
+            _client = redis_lib.Redis(connection_pool=_pool)
+            _client.ping()
+            log.info(f"redis.connected url={redis_url[:30]}...")
+        except Exception as e:
+            if _IS_PRODUCTION:
+                raise RuntimeError(
+                    f"Redis connection failed in production: {e}. "
+                    "Check REDIS_URL and that the Redis service is running."
+                ) from e
+            log.warning(f"Redis connection failed: {e} — using in-memory fallback (dev/test only)")
+            _client = _FakeRedis()
+
         return _client
-
-    try:
-        _pool = redis_lib.ConnectionPool.from_url(
-            REDIS_URL,
-            max_connections=10,
-            socket_connect_timeout=5,
-            socket_timeout=5,
-            retry_on_timeout=True,
-            decode_responses=True,  # Always return strings, not bytes
-        )
-        _client = redis_lib.Redis(connection_pool=_pool)
-        _client.ping()  # Verify connection works at startup
-        log.info(f"redis.connected url={REDIS_URL[:30]}...")
-    except Exception as e:
-        log.warning(f"Redis connection failed: {e} — using in-memory fallback")
-        _client = _FakeRedis()
-
-    return _client
 
 
 def is_redis_available() -> bool:
@@ -64,18 +87,25 @@ def is_redis_available() -> bool:
         return False
 
 
+def reset_client() -> None:
+    """Force-reset the singleton (tests only)."""
+    global _pool, _client
+    with _client_lock:
+        _pool = None
+        _client = None
+
+
 class _FakeRedis:
     """
-    In-memory Redis stub for local dev without Redis.
-    Supports only the methods we actually use.
-    Data is lost on restart — acceptable for dev only.
+    In-memory Redis stub for local dev / tests without Redis.
+    Data is lost on restart — acceptable for non-production use only.
+
+    FIXED: hset() signature now matches redis-py exactly.
     """
 
     def __init__(self):
         self._store: dict = {}
         self._expiry: dict = {}
-        import threading
-
         self._lock = threading.Lock()
 
     def _is_expired(self, key: str) -> bool:
@@ -84,20 +114,24 @@ class _FakeRedis:
         exp = self._expiry.get(key)
         return exp is not None and time.time() > exp
 
+    def _evict(self, key: str):
+        """Evict if expired. Must be called inside lock."""
+        if self._is_expired(key):
+            self._store.pop(key, None)
+            self._expiry.pop(key, None)
+
     def get(self, key: str):
         with self._lock:
-            if self._is_expired(key):
-                self._store.pop(key, None)
-                self._expiry.pop(key, None)
-                return None
+            self._evict(key)
             return self._store.get(key)
 
     def set(self, key: str, value, ex: int = None, nx: bool = False):
         import time
 
         with self._lock:
-            if nx and key in self._store and not self._is_expired(key):
-                return None  # Key exists, nx=True means don't overwrite
+            self._evict(key)
+            if nx and key in self._store:
+                return None
             self._store[key] = str(value)
             if ex:
                 self._expiry[key] = time.time() + ex
@@ -105,7 +139,15 @@ class _FakeRedis:
 
     def incr(self, key: str) -> int:
         with self._lock:
+            self._evict(key)
             val = int(self._store.get(key, 0)) + 1
+            self._store[key] = str(val)
+            return val
+
+    def incrby(self, key: str, amount: int) -> int:
+        with self._lock:
+            self._evict(key)
+            val = int(self._store.get(key, 0)) + amount
             self._store[key] = str(val)
             return val
 
@@ -124,8 +166,7 @@ class _FakeRedis:
 
     def exists(self, key: str) -> int:
         with self._lock:
-            if self._is_expired(key):
-                return 0
+            self._evict(key)
             return 1 if key in self._store else 0
 
     def lpush(self, key: str, *values):
@@ -143,9 +184,7 @@ class _FakeRedis:
             lst = self._store.get(key, [])
             if not isinstance(lst, list):
                 return []
-            if end == -1:
-                return lst[start:]
-            return lst[start : end + 1]
+            return lst[start:] if end == -1 else lst[start : end + 1]
 
     def ltrim(self, key: str, start: int, end: int):
         with self._lock:
@@ -153,7 +192,7 @@ class _FakeRedis:
             if isinstance(lst, list):
                 self._store[key] = lst[start : end + 1]
 
-    def ping(self):
+    def ping(self) -> bool:
         return True
 
     def zadd(self, key: str, mapping: dict):
@@ -170,13 +209,8 @@ class _FakeRedis:
             if not isinstance(zset, dict):
                 return []
             sorted_items = sorted(zset.items(), key=lambda x: x[1])
-            if end == -1:
-                sliced = sorted_items[start:]
-            else:
-                sliced = sorted_items[start : end + 1]
-            if withscores:
-                return sliced
-            return [item[0] for item in sliced]
+            sliced = sorted_items[start:] if end == -1 else sorted_items[start : end + 1]
+            return sliced if withscores else [item[0] for item in sliced]
 
     def zremrangebyrank(self, key: str, start: int, end: int):
         with self._lock:
@@ -184,26 +218,34 @@ class _FakeRedis:
             if not isinstance(zset, dict):
                 return
             sorted_keys = sorted(zset.items(), key=lambda x: x[1])
-            to_remove = sorted_keys[start : end + 1]
-            for k, _ in to_remove:
+            for k, _ in sorted_keys[start : end + 1]:
                 zset.pop(k, None)
 
-    def hset(self, key: str, mapping: dict = None, **kwargs):
+    def hset(self, name: str, key=None, value=None, mapping=None, items=None):
+        """
+        Matches redis-py hset signature:
+          hset(name, key, value)
+          hset(name, mapping={...})
+          hset(name, items=[key, val, ...])
+        """
         with self._lock:
-            h = self._store.get(key, {})
+            h = self._store.get(name, {})
             if not isinstance(h, dict):
                 h = {}
             if mapping:
                 h.update(mapping)
-            h.update(kwargs)
-            self._store[key] = h
+            if key is not None and value is not None:
+                h[str(key)] = str(value)
+            if items:
+                it = iter(items)
+                for k in it:
+                    h[str(k)] = str(next(it, ""))
+            self._store[name] = h
 
     def hget(self, key: str, field: str):
         with self._lock:
             h = self._store.get(key, {})
-            if not isinstance(h, dict):
-                return None
-            return h.get(field)
+            return h.get(field) if isinstance(h, dict) else None
 
     def hgetall(self, key: str) -> dict:
         with self._lock:

@@ -1,10 +1,13 @@
 """
 app/handlers/push.py
-V4 Sprint 2: Smart dependency scanning + dedup.
+V5: All-branch secret scanning + configurable full-scan branches.
 
 FIXED (Sprint 2): Duplicate issues — Redis dedup (24h dep scan, 6h commit lint).
 NEW (Sprint 2): Only HIGH/CRITICAL vulnerabilities create GitHub issues.
      LOW/MODERATE = logged only (no spam).
+
+FIXED (V5): Secret scan now runs on ALL branches, not just main/master.
+     Secrets pushed to feature branches are the most common vector.
 
 FIXED (Sprint 8): _scan_secrets was missing dedup entirely.
      _already_reported() existed and was used for dep scan + commit lint but
@@ -36,8 +39,16 @@ from app.security.dependencies import (
 )
 
 CONVENTIONAL_TYPES = {
-    "feat", "fix", "docs", "refactor", "test", "chore",
-    "perf", "ci", "style", "build",
+    "feat",
+    "fix",
+    "docs",
+    "refactor",
+    "test",
+    "chore",
+    "perf",
+    "ci",
+    "style",
+    "build",
 }
 SKIP_AUTHORS = {
     "dependabot[bot]",
@@ -63,10 +74,10 @@ def handle(payload: dict) -> None:
 
     if pusher in SKIP_AUTHORS or pusher.endswith("[bot]"):
         return
-    if ref not in ("refs/heads/main", "refs/heads/master"):
-        return
     if not commits:
         return
+    if not ref.startswith("refs/heads/"):
+        return  # Skip tag pushes
 
     try:
         token = get_installation_token(installation_id)
@@ -80,14 +91,24 @@ def handle(payload: dict) -> None:
     if not config.get("push", "enabled", default=True):
         return
 
+    # Secret scan runs on ALL branches (secrets are dangerous everywhere).
+    # Dependency + commit lint only run on default branch by default,
+    # but can be extended via config push.scan_all_branches = true.
+    is_default_branch = ref in ("refs/heads/main", "refs/heads/master")
+    scan_all = config.get("push", "scan_all_branches", default=False)
+    run_full_scan = is_default_branch or scan_all
+
+    # Secret scan: ALL branches — secrets don't care which branch they're on
     if config.get("push", "scan_secrets", default=True):
         _scan_secrets(repo, commits, token, config, log)
 
-    if config.get("push", "scan_dependencies", default=True):
-        _scan_dependencies(repo, commits, token, config, log)
+    # Dep scan + commit lint: default branch only (or all if scan_all_branches=true)
+    if run_full_scan:
+        if config.get("push", "scan_dependencies", default=True):
+            _scan_dependencies(repo, commits, token, config, log)
 
-    if config.get("push", "enforce_conventional_commits", default=True):
-        _lint_commits(repo, commits, token, config, log)
+        if config.get("push", "enforce_conventional_commits", default=True):
+            _lint_commits(repo, commits, token, config, log)
 
     _index_changed_files(repo, commits, token, latest_sha, log)
 
@@ -164,9 +185,7 @@ def _scan_secrets(repo, commits, token, config, log) -> None:
             f"/repos/{repo}/issues",
             token,
             {
-                "title": (
-                    f"🚨 Secret detected in push — {len(all_findings)} finding(s)"
-                ),
+                "title": (f"🚨 Secret detected in push — {len(all_findings)} finding(s)"),
                 "body": format_secret_findings(all_findings, repo),
                 "labels": ["security", "critical"],
             },
@@ -192,10 +211,7 @@ def _scan_dependencies(repo, commits, token, config, log) -> None:
         changed_files.update(commit.get("added", []))
         changed_files.update(commit.get("modified", []))
 
-    dep_files = [
-        f for f in changed_files
-        if f in ("requirements.txt", "requirements-dev.txt")
-    ]
+    dep_files = [f for f in changed_files if f in ("requirements.txt", "requirements-dev.txt")]
 
     for dep_file in dep_files:
         try:
@@ -226,9 +242,7 @@ def _scan_dependencies(repo, commits, token, config, log) -> None:
 
             report_key = f"dep_high_{dep_file}"
             if _already_reported(repo, report_key, ttl_seconds=86400):
-                log.info(
-                    f"push.dep_scan_dedup file={dep_file} (HIGH reported in last 24h)"
-                )
+                log.info(f"push.dep_scan_dedup file={dep_file} (HIGH reported in last 24h)")
                 continue
 
             gh_post(
@@ -259,19 +273,14 @@ def _lint_commits(repo, commits, token, config, log) -> None:
     threshold = config.get("push", "create_issue_threshold", default=3)
 
     if len(bad_commits) < threshold:
-        log.info(
-            f"push.commit_lint ok — "
-            f"{len(bad_commits)} non-conventional below threshold"
-        )
+        log.info(f"push.commit_lint ok — {len(bad_commits)} non-conventional below threshold")
         return
 
     if _already_reported(repo, "commit_lint", ttl_seconds=21600):
         log.info("push.commit_lint_skipped (reported in last 6h)")
         return
 
-    rows = "\n".join(
-        f"| `{c['sha']}` | {c['message']} |" for c in bad_commits
-    )
+    rows = "\n".join(f"| `{c['sha']}` | {c['message']} |" for c in bad_commits)
     body = f"""## ⚡ Commit Convention Alert
 
 These commits don't follow [Conventional Commits](https://www.conventionalcommits.org/) format:
@@ -296,9 +305,7 @@ type(scope): description
             f"/repos/{repo}/issues",
             token,
             {
-                "title": (
-                    f"⚡ {len(bad_commits)} non-conventional commits pushed to main"
-                ),
+                "title": (f"⚡ {len(bad_commits)} non-conventional commits pushed to main"),
                 "body": body,
                 "labels": ["commit-convention", "help wanted ⚠️"],
             },
@@ -322,7 +329,8 @@ def _index_changed_files(repo, commits, token, latest_sha, log) -> None:
             changed_files.update(commit.get("modified", []))
 
         indexable = [
-            f for f in changed_files
+            f
+            for f in changed_files
             if f.endswith((".py", ".md", ".yml", ".yaml", ".json", ".txt"))
             and not f.startswith("tests/")
         ]
@@ -333,12 +341,8 @@ def _index_changed_files(repo, commits, token, latest_sha, log) -> None:
         indexed = 0
         for filepath in indexable[:10]:
             try:
-                file_data = gh_get(
-                    f"/repos/{repo}/contents/{filepath}", token
-                )
-                content = base64.b64decode(
-                    file_data["content"]
-                ).decode("utf-8")
+                file_data = gh_get(f"/repos/{repo}/contents/{filepath}", token)
+                content = base64.b64decode(file_data["content"]).decode("utf-8")
                 if embed_file(repo, filepath, content, latest_sha):
                     indexed += 1
             except Exception:

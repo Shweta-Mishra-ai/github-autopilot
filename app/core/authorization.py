@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 
 # Cache permission lookups: (repo, user) → permission_level
 # TTL = 5 min — same as config cache. Cleared on explicit invalidation.
-_perm_cache: dict[tuple, tuple] = {}   # {(repo, user): (perm, timestamp)}
+_perm_cache: dict[tuple, tuple] = {}  # {(repo, user): (perm, timestamp)}
 _perm_lock = threading.Lock()
 _PERM_TTL = 300  # 5 minutes
 
@@ -35,9 +35,12 @@ MAINTAINER_PERMISSIONS = {"admin", "maintain", "write"}
 
 # Commands that require at least write/maintain/admin access
 RESTRICTED_COMMANDS = {
-    "/merge", "/rollback", "/release",
-    "/autofix", "/apply",        # Auto-mutates repo state
-    "/secfull",                  # Sensitive report — internal data
+    "/merge",
+    "/rollback",
+    "/release",
+    "/autofix",
+    "/apply",  # Auto-mutates repo state
+    "/secfull",  # Sensitive report — internal data
 }
 
 
@@ -50,6 +53,7 @@ def get_user_permission(repo: str, username: str, token: str) -> str:
     Returns "none" on any API error (fail closed).
     """
     import time
+
     cache_key = (repo, username)
     now = time.time()
 
@@ -72,7 +76,7 @@ def get_user_permission(repo: str, username: str, token: str) -> str:
             perm = "none"
         else:
             log.warning(f"auth.permission_check_failed user={username}: {e}")
-            perm = "none"   # fail closed
+            perm = "none"  # fail closed
     except Exception as e:
         log.error(f"auth.permission_unexpected user={username}: {e}")
         perm = "none"
@@ -113,17 +117,13 @@ def check_command_permission(
 
     # Check 1: Is this a globally restricted command?
     full_cmd = f"/{cmd_key}"
-    if full_cmd not in RESTRICTED_COMMANDS:
-        # Also check config-level maintainer_only list
-        if not config.is_maintainer_only(cmd_key):
-            return True, ""
+    if (full_cmd not in RESTRICTED_COMMANDS) and not config.is_maintainer_only(cmd_key):
+        return True, ""
 
     # Command requires elevated permissions
     if not is_maintainer(repo, author, token):
         perm = get_user_permission(repo, author, token)
-        log.warning(
-            f"auth.denied cmd={cmd} user={author} repo={repo} perm={perm}"
-        )
+        log.warning(f"auth.denied cmd={cmd} user={author} repo={repo} perm={perm}")
         return False, (
             f"`{cmd}` requires **write/maintain/admin** access on this repository.\n\n"
             f"Your current access level: `{perm or 'none'}`\n\n"

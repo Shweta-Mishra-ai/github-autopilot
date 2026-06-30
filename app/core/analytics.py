@@ -1,6 +1,10 @@
 """
 app/core/analytics.py
-V4 Sprint 6: Repo analytics tracker.
+V5: Repo analytics tracker.
+
+NAMING NOTE: record_bot_action() here is analytics-only (counter incr).
+Do not confuse with snapshot.record_bot_action() (appends to action list).
+Use the record_analytics_action alias for clarity in new code.
 Tracks PR velocity, issue resolution, bot usage, review scores.
 """
 
@@ -32,36 +36,48 @@ def record_review_score(repo: str, score: float):
 
 
 def record_bot_action(repo: str, action: str):
+    """
+    Increment the analytics counter for a bot action type.
+
+    NOTE: This is analytics.record_bot_action() — it only increments a Redis
+    counter. Do NOT confuse with snapshot.record_bot_action() which appends
+    a full action dict to a snapshot. They have the same signature but do
+    completely different things.
+    """
     _incr(f"analytics:{repo}:actions:{action}:{_today()}")
 
 
+# Explicit alias so callers can be unambiguous
+record_analytics_action = record_bot_action
+
+
 def get_weekly_report(repo: str) -> dict:
-    week  = _week()
+    week = _week()
     today = _today()
 
     merge_hours = _get_list(f"analytics:{repo}:pr_merge_hours:{week}")
     issue_hours = _get_list(f"analytics:{repo}:issue_hours:{week}")
-    scores      = _get_list(f"analytics:{repo}:review_scores:{week}")
-    avg_merge   = _avg(merge_hours)
-    avg_issue   = _avg(issue_hours)
-    avg_score   = _avg(scores)
+    scores = _get_list(f"analytics:{repo}:review_scores:{week}")
+    avg_merge = _avg(merge_hours)
+    avg_issue = _avg(issue_hours)
+    avg_score = _avg(scores)
 
     return {
-        "repo":         repo,
-        "week":         week,
+        "repo": repo,
+        "week": week,
         "prs": {
-            "merged_today":    _get_int(f"analytics:{repo}:prs_merged:{today}"),
+            "merged_today": _get_int(f"analytics:{repo}:prs_merged:{today}"),
             "avg_merge_hours": round(avg_merge, 1),
-            "avg_merge_days":  round(avg_merge / 24, 1) if avg_merge else 0,
+            "avg_merge_days": round(avg_merge / 24, 1) if avg_merge else 0,
         },
         "issues": {
-            "closed_today":    _get_int(f"analytics:{repo}:issues_closed:{today}"),
+            "closed_today": _get_int(f"analytics:{repo}:issues_closed:{today}"),
             "avg_close_hours": round(avg_issue, 1),
         },
         "code_quality": {
-            "avg_review_score":  round(avg_score, 1),
+            "avg_review_score": round(avg_score, 1),
             "reviews_this_week": len(scores),
-            "grade":             _score_to_grade(avg_score),
+            "grade": _score_to_grade(avg_score),
         },
         "bot_usage": {
             "top_commands": _get_top_commands(repo),
@@ -71,51 +87,57 @@ def get_weekly_report(repo: str) -> dict:
 
 
 def format_report_comment(repo: str) -> str:
-    d    = get_weekly_report(repo)
-    prs  = d["prs"]
-    iss  = d["issues"]
+    d = get_weekly_report(repo)
+    prs = d["prs"]
+    iss = d["issues"]
     qual = d["code_quality"]
-    bot  = d["bot_usage"]
+    bot = d["bot_usage"]
 
-    grade   = qual["grade"]
+    grade = qual["grade"]
     g_emoji = {"A": "🟢", "B": "🟡", "C": "🟠", "D": "🔴", "F": "🔴"}.get(grade, "⚪")
 
-    merge_disp = f"{prs['avg_merge_hours']}h" if prs["avg_merge_hours"] < 24 else f"{prs['avg_merge_days']}d"
-    close_disp = f"{iss['avg_close_hours']}h" if iss["avg_close_hours"] < 24 else f"{round(iss['avg_close_hours']/24,1)}d"
+    merge_disp = (
+        f"{prs['avg_merge_hours']}h" if prs["avg_merge_hours"] < 24 else f"{prs['avg_merge_days']}d"
+    )
+    close_disp = (
+        f"{iss['avg_close_hours']}h"
+        if iss["avg_close_hours"] < 24
+        else f"{round(iss['avg_close_hours'] / 24, 1)}d"
+    )
 
-    cmd_rows = "\n".join(
-        f"| `/{cmd}` | {cnt} |"
-        for cmd, cnt in (bot["top_commands"] or {}).items()
-    ) or "| — | — |"
+    cmd_rows = (
+        "\n".join(f"| `/{cmd}` | {cnt} |" for cmd, cnt in (bot["top_commands"] or {}).items())
+        or "| — | — |"
+    )
 
     return f"""## 📊 Weekly Repo Report — `{repo}`
-*Week of {d['week']}*
+*Week of {d["week"]}*
 
 ### 🔀 Pull Requests
 | Metric | Value |
 |--------|-------|
-| **Merged Today** | {prs['merged_today']} |
+| **Merged Today** | {prs["merged_today"]} |
 | **Avg Merge Time** | {merge_disp} |
 
 ### 🐛 Issues
 | Metric | Value |
 |--------|-------|
-| **Closed Today** | {iss['closed_today']} |
+| **Closed Today** | {iss["closed_today"]} |
 | **Avg Resolution** | {close_disp} |
 
 ### 🔍 Code Quality
 | Metric | Value |
 |--------|-------|
-| **Avg Review Score** | {qual['avg_review_score']}/10 |
+| **Avg Review Score** | {qual["avg_review_score"]}/10 |
 | **Grade** | {g_emoji} {grade} |
-| **Reviews This Week** | {qual['reviews_this_week']} |
+| **Reviews This Week** | {qual["reviews_this_week"]} |
 
 ### 🤖 Bot Usage
 | Command | Uses |
 |---------|------|
 {cmd_rows}
 
-**Total actions:** {bot['total_actions']}
+**Total actions:** {bot["total_actions"]}
 
 ---
 *🤖 AI Repo Manager V4 — Use `/report` anytime for fresh stats*"""
@@ -126,7 +148,7 @@ def _today() -> str:
 
 
 def _week() -> str:
-    now  = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
     week = now - timedelta(days=now.weekday())
     return week.strftime("%Y-W%V")
 
@@ -183,9 +205,23 @@ def _score_to_grade(score: float) -> str:
 
 
 def _get_top_commands(repo: str, top_n: int = 5) -> dict:
-    commands = ["fix", "explain", "improve", "test", "review",
-                "gaps", "ci", "security", "rollback", "autofix",
-                "report", "budget", "changelog", "refactor", "docs"]
+    commands = [
+        "fix",
+        "explain",
+        "improve",
+        "test",
+        "review",
+        "gaps",
+        "ci",
+        "security",
+        "rollback",
+        "autofix",
+        "report",
+        "budget",
+        "changelog",
+        "refactor",
+        "docs",
+    ]
     counts = {}
     try:
         r = redis_client.get_redis()
@@ -199,6 +235,5 @@ def _get_top_commands(repo: str, top_n: int = 5) -> dict:
 
 
 def _get_total_actions(repo: str, today: str) -> int:
-    actions = ["comment_posted", "pr_analyzed", "issue_triaged",
-               "autofix_created", "label_applied"]
+    actions = ["comment_posted", "pr_analyzed", "issue_triaged", "autofix_created", "label_applied"]
     return sum(_get_int(f"analytics:{repo}:actions:{a}:{today}") for a in actions)

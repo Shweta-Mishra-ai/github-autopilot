@@ -36,9 +36,7 @@ class SecurityFinding:
 
     @property
     def severity_rank(self) -> int:
-        return {"critical": 4, "high": 3, "medium": 2, "low": 1}.get(
-            self.severity.lower(), 0
-        )
+        return {"critical": 4, "high": 3, "medium": 2, "low": 1}.get(self.severity.lower(), 0)
 
 
 @dataclass
@@ -116,9 +114,7 @@ class SecurityReport:
                 }.get(f.severity, "⚠️")
                 pkg_str = f" — `{f.package}`" if f.package else ""
                 cve_str = f" ([{f.cve_id}]({f.url}))" if f.cve_id else ""
-                lines.append(
-                    f"- {sev_emoji} **{f.severity.upper()}**{pkg_str}{cve_str}: {f.title}"
-                )
+                lines.append(f"- {sev_emoji} **{f.severity.upper()}**{pkg_str}{cve_str}: {f.title}")
 
         if self.codeql:
             lines.append("\n### 🔍 CodeQL Findings")
@@ -175,9 +171,7 @@ def run_pr_security_scan(repo: str, pr_number: int, token: str) -> SecurityRepor
     all_sec = _scan_secrets(repo, token, report.errors)
 
     if changed_paths:
-        report.codeql = [
-            f for f in all_codeql if not f.file_path or f.file_path in changed_paths
-        ]
+        report.codeql = [f for f in all_codeql if not f.file_path or f.file_path in changed_paths]
     else:
         report.codeql = all_codeql
 
@@ -191,21 +185,15 @@ def _scan_dependabot(repo: str, token: str, errors: list) -> list[SecurityFindin
     try:
         from app.github.client import gh_get
 
-        alerts = gh_get(
-            f"/repos/{repo}/dependabot/alerts?state=open&per_page=30", token
-        )
+        alerts = gh_get(f"/repos/{repo}/dependabot/alerts?state=open&per_page=30", token)
         findings = []
         for alert in alerts:
             adv = alert.get("security_advisory", {})
             dep = alert.get("dependency", {})
             pkg = dep.get("package", {}).get("name", "")
             severity = adv.get("severity", "medium").lower()
-            cve_ids = [
-                i["value"] for i in adv.get("identifiers", []) if i["type"] == "CVE"
-            ]
-            ghsa_ids = [
-                i["value"] for i in adv.get("identifiers", []) if i["type"] == "GHSA"
-            ]
+            cve_ids = [i["value"] for i in adv.get("identifiers", []) if i["type"] == "CVE"]
+            ghsa_ids = [i["value"] for i in adv.get("identifiers", []) if i["type"] == "GHSA"]
             cve_id = cve_ids[0] if cve_ids else (ghsa_ids[0] if ghsa_ids else "")
             url = alert.get("html_url", "")
 
@@ -234,9 +222,7 @@ def _scan_codeql(repo: str, token: str, errors: list) -> list[SecurityFinding]:
     try:
         from app.github.client import gh_get
 
-        alerts = gh_get(
-            f"/repos/{repo}/code-scanning/alerts?state=open&per_page=30", token
-        )
+        alerts = gh_get(f"/repos/{repo}/code-scanning/alerts?state=open&per_page=30", token)
         findings = []
         for alert in alerts:
             rule = alert.get("rule", {})
@@ -253,9 +239,7 @@ def _scan_codeql(repo: str, token: str, errors: list) -> list[SecurityFinding]:
                 SecurityFinding(
                     source="codeql",
                     severity=severity,
-                    title=rule.get("description", rule.get("id", "CodeQL finding"))[
-                        :100
-                    ],
+                    title=rule.get("description", rule.get("id", "CodeQL finding"))[:100],
                     description=alert.get("message", {}).get("text", "")[:200],
                     file_path=location.get("path", ""),
                     line_number=location.get("start_line", 0),
@@ -276,14 +260,10 @@ def _scan_secrets(repo: str, token: str, errors: list) -> list[SecurityFinding]:
     try:
         from app.github.client import gh_get
 
-        alerts = gh_get(
-            f"/repos/{repo}/secret-scanning/alerts?state=open&per_page=30", token
-        )
+        alerts = gh_get(f"/repos/{repo}/secret-scanning/alerts?state=open&per_page=30", token)
         findings = []
         for alert in alerts:
-            secret_type = alert.get(
-                "secret_type_display_name", alert.get("secret_type", "Secret")
-            )
+            secret_type = alert.get("secret_type_display_name", alert.get("secret_type", "Secret"))
             findings.append(
                 SecurityFinding(
                     source="secret_scanning",

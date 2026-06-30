@@ -1,16 +1,12 @@
 """
 app/ai/circuit_breaker.py
-V4: Per-provider circuit breaker.
+Thread-safe circuit breaker with RLock.
 
-FIXED: AllProvidersDown.__init__ wraps min() in try/except
-  — prevents TypeError when _breakers contains mocks in tests.
-
-FIXED: get_breaker() always returns from _breakers dict
-  — predictable behavior, no surprise new instances.
 """
 
 import time
 import logging
+import threading
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -33,50 +29,58 @@ class CircuitBreaker:
     _failures: int = field(default=0, init=False, repr=False)
     _opened_at: float = field(default=0.0, init=False, repr=False)
     _last_failure_reason: str = field(default="", init=False, repr=False)
+    _lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
 
     @property
     def state(self) -> CBState:
-        if self._state == CBState.OPEN:
-            if time.time() - self._opened_at >= self.recovery_timeout:
+        with self._lock:
+            if (
+                self._state == CBState.OPEN
+                and time.time() - self._opened_at >= self.recovery_timeout
+            ):
                 log.info(f"circuit_breaker.half_open provider={self.provider}")
                 self._state = CBState.HALF_OPEN
-        return self._state
+            return self._state
 
     def is_available(self) -> bool:
         return self.state in (CBState.CLOSED, CBState.HALF_OPEN)
 
     def record_success(self):
-        if self._state != CBState.CLOSED:
-            log.info(f"circuit_breaker.recovered provider={self.provider}")
-        self._failures = 0
-        self._state = CBState.CLOSED
-        self._last_failure_reason = ""
+        with self._lock:
+            if self._state != CBState.CLOSED:
+                log.info(f"circuit_breaker.recovered provider={self.provider}")
+            self._failures = 0
+            self._state = CBState.CLOSED
+            self._last_failure_reason = ""
 
     def record_failure(self, reason: str = ""):
-        self._failures += 1
-        self._last_failure_reason = reason
-        if self._failures >= self.fail_threshold or self._state == CBState.HALF_OPEN:
-            self._state = CBState.OPEN
-            self._opened_at = time.time()
-            log.warning(
-                f"circuit_breaker.opened provider={self.provider} "
-                f"failures={self._failures} reason={reason}"
-            )
+        with self._lock:
+            self._failures += 1
+            self._last_failure_reason = reason
+            if self._failures >= self.fail_threshold or self._state == CBState.HALF_OPEN:
+                self._state = CBState.OPEN
+                self._opened_at = time.time()
+                log.warning(
+                    f"circuit_breaker.opened provider={self.provider} "
+                    f"failures={self._failures} reason={reason}"
+                )
 
     def seconds_until_retry(self) -> int:
-        if self._state == CBState.OPEN:
-            remaining = self.recovery_timeout - (time.time() - self._opened_at)
-            return max(0, int(remaining))
-        return 0
+        with self._lock:
+            if self._state == CBState.OPEN:
+                remaining = self.recovery_timeout - (time.time() - self._opened_at)
+                return max(0, int(remaining))
+            return 0
 
     def status(self) -> dict:
-        return {
-            "provider": self.provider,
-            "state": self.state.value,
-            "failures": self._failures,
-            "last_failure": self._last_failure_reason,
-            "recovers_in_seconds": self.seconds_until_retry(),
-        }
+        with self._lock:
+            return {
+                "provider": self.provider,
+                "state": self._state.value,
+                "failures": self._failures,
+                "last_failure": self._last_failure_reason,
+                "recovers_in_seconds": self.seconds_until_retry(),
+            }
 
 
 # ── Module-level singletons ───────────────────────────────────────────────────
@@ -93,7 +97,6 @@ def get_breaker(provider: str) -> CircuitBreaker:
     """
     Always returns from _breakers dict.
     If provider unknown, adds it. Never creates a throwaway instance.
-    This ensures tests that patch _breakers[key] always work.
     """
     if provider not in _breakers:
         _breakers[provider] = CircuitBreaker(provider)
@@ -116,13 +119,13 @@ def status_all() -> dict:
 
 
 class AllProvidersDown(Exception):
-    def __init__(self):
-        # FIXED: try/except prevents TypeError when _breakers has mocks
-        try:
-            recovery = min(int(cb.seconds_until_retry()) for cb in _breakers.values())
-        except Exception:
-            recovery = 60
-        self.retry_in_seconds = recovery
-        super().__init__(
-            f"All LLM providers unavailable. Earliest retry in {recovery}s."
-        )
+    def __init__(self, retry_in_seconds: int = None):
+        if retry_in_seconds is not None:
+            self.retry_in_seconds = int(retry_in_seconds)
+        else:
+            try:
+                values = [int(cb.seconds_until_retry()) for cb in _breakers.values()]
+                self.retry_in_seconds = max(60, min(values)) if values else 60
+            except Exception:
+                self.retry_in_seconds = 60
+        super().__init__(f"All LLM providers are unavailable. Retry in ~{self.retry_in_seconds}s.")

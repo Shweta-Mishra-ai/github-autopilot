@@ -10,6 +10,7 @@ import os
 import time
 from typing import Generator, Tuple
 from app.core.logger import get_logger
+import contextlib
 
 log = get_logger(__name__)
 
@@ -47,10 +48,8 @@ def _consume_redis() -> Generator[Tuple[str, dict], None, None]:
     consumer_group = "workers"
     consumer_name = f"worker-{os.getpid()}"
 
-    try:
+    with contextlib.suppress(Exception):
         r.xgroup_create(stream, consumer_group, id="0", mkstream=True)
-    except Exception:
-        pass
 
     log.info("consumer_started_redis", stream=stream)
 

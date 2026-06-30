@@ -56,10 +56,15 @@ class TestHandleSkips:
             mock_tok.assert_not_called()
 
     def test_non_main_branch_skipped(self):
-        with patch("app.handlers.push.get_installation_token") as mock_tok:
+        """V5: non-main branches still run secret scan, so token IS fetched."""
+        with patch("app.handlers.push.get_installation_token", return_value="tok") as mock_tok, \
+             patch("app.handlers.push.load_config", return_value=_mock_config()), \
+             patch("app.handlers.push._scan_secrets"), \
+             patch("app.handlers.push._scan_dependencies"), \
+             patch("app.handlers.push._lint_commits"), \
+             patch("app.handlers.push._index_changed_files"):
             from app.handlers.push import handle
             handle(_payload(ref="refs/heads/feature/foo"))
-            mock_tok.assert_not_called()
 
     def test_empty_commits_skipped(self):
         import importlib

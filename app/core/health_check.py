@@ -126,9 +126,7 @@ def get_degraded_message() -> str:
     if not health["is_degraded"]:
         return ""
 
-    degraded_providers = [
-        pk for pk, ph in health["providers"].items() if ph["is_degraded"]
-    ]
+    degraded_providers = [pk for pk, ph in health["providers"].items() if ph["is_degraded"]]
 
     if not health["github_api"]["is_healthy"]:
         remaining = health["github_api"]["remaining"]

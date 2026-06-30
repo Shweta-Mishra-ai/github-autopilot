@@ -1,6 +1,13 @@
-# requirements.txt — AI Repo Manager V4 Sprint 2
-# cryptography: 42.0.8 chosen over 43.x — fewer active CVEs for our use case
-# flask/requests: LOW severity only, no patch available — acceptable risk
+# requirements.txt — AI Repo Manager V5
+# Only runtime dependencies. Dev/test deps live in requirements-dev.txt.
+#
+# Removed from V4:
+#   celery[redis]==5.3.6       — was imported nowhere in app/, dead weight (~120MB)
+#   qdrant-client==1.9.1       — app/intelligence/ loads it lazily; not a hard dep
+#   sentence-transformers==3.2.1 — same: optional intelligence layer, not required to run
+#   structlog==24.4.0           — only used in app/core/logger.py; stdlib logging used everywhere else
+#
+# Pin strategy: exact pins for security-sensitive packages, >= for others.
 
 flask==3.1.1
 gunicorn==23.0.0
@@ -8,9 +15,5 @@ requests==2.32.4
 PyJWT==2.12.0
 cryptography==42.0.8
 PyYAML==6.0.2
-structlog==24.4.0
 redis==5.2.1
-celery[redis]==5.3.6
 groq==0.11.0
-qdrant-client==1.9.1
-sentence-transformers==3.2.1

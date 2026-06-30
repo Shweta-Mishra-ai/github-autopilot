@@ -12,6 +12,7 @@ from app.auth import (
     groq_ask,
     groq_text,
 )
+import contextlib
 
 log = logging.getLogger(__name__)
 
@@ -93,12 +94,10 @@ Return JSON:
     labels = result.get("labels", [])
     risk = result.get("risk_level", "low")
     if labels:
-        try:
+        with contextlib.suppress(Exception):
             gh_post(
                 f"/repos/{repo}/issues/{pr_number}/labels", token, {"labels": labels}
             )
-        except Exception:
-            pass
 
     risk_emoji = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(risk, "🟡")
     was_updated = bool(patch_data)
@@ -265,12 +264,10 @@ Return JSON:
     priority = result.get("priority", "medium")
     p_emoji = {"high": "🔥", "medium": "📌", "low": "💤"}.get(priority, "📌")
     labels.append(f"priority: {priority} {p_emoji}")
-    try:
+    with contextlib.suppress(Exception):
         gh_post(
             f"/repos/{repo}/issues/{issue_number}/labels", token, {"labels": labels}
         )
-    except Exception:
-        pass
 
     t_emoji = {
         "bug": "🐛",
@@ -500,7 +497,5 @@ def _ensure_labels(repo: str, token: str):
     ]
     # FIXED (F401): Removed unused `import requests as _req` — gh_post is used directly
     for name, color in LABELS:
-        try:
+        with contextlib.suppress(Exception):
             gh_post(f"/repos/{repo}/labels", token, {"name": name, "color": color})
-        except Exception:
-            pass

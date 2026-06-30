@@ -1,335 +1,215 @@
 <div align="center">
 
-# GitHub Autopilot
+# 🤖 GitHub Autopilot
 
-**A self-hosted GitHub App that automates code review, issue triage, and repository maintenance using AI.**
+**AI-powered GitHub automation. Fix bugs, review PRs, scan secrets — all from a comment.**
 
-[![CI](https://github.com/Shweta-Mishra-ai/github-autopilot/actions/workflows/ci.yml/badge.svg)](https://github.com/Shweta-Mishra-ai/github-autopilot/actions)
-[![Python](https://img.shields.io/badge/python-3.11+-3b82f6?style=flat-square&logo=python&logoColor=white)](https://python.org)
-[![Flask](https://img.shields.io/badge/flask-3.x-000000?style=flat-square&logo=flask)](https://flask.palletsprojects.com)
-[![License: MIT](https://img.shields.io/badge/license-MIT-a855f7?style=flat-square)](LICENSE)
-[![code style: ruff](https://img.shields.io/badge/code%20style-ruff-ef4444?style=flat-square)](https://docs.astral.sh/ruff)
-
-[**Live Demo**](https://github-autopilot-1.onrender.com) · [**Install**](https://github.com/apps/ai-repo-manager) · [**Documentation**](docs/)
+[![CI](https://github.com/Shweta-Mishra-ai/github-autopilot/actions/workflows/ci.yml/badge.svg)](https://github.com/Shweta-Mishra-ai/github-autopilot/actions/workflows/ci.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://python.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg)](LICENSE)
+[![Render](https://img.shields.io/badge/deploy-Render-46E3B7?logo=render)](https://render.com)
 
 </div>
 
 ---
 
-## Overview
+## What it does
 
-GitHub Autopilot is a self-hosted GitHub App that installs in minutes and acts as an AI-powered co-pilot across your repositories. It reacts to GitHub events automatically and responds to slash commands posted in issue and pull request comments.
+Type a command in any GitHub issue or PR comment. The bot responds in seconds.
 
-**Automated on every event:**
-- Pull requests — rewrites vague titles, fills empty descriptions, rates code quality (A–F), identifies test gaps, maps blast radius across system layers
-- Issues — assigns priority and complexity labels, generates targeted follow-up questions, estimates resolution time
-- Push — scans for exposed secrets across 35+ patterns, checks for known CVEs in dependencies
+```
+/fix          → AI generates a bug fix with root cause + test
+/explain      → Plain-English explanation of the issue
+/security     → Scan PR for secrets and vulnerable deps
+/autofix      → Auto-apply safe code improvements
+/merge        → Merge PR after all checks pass
+/rollback 2   → Restore repo state to snapshot #2
+/budget       → Show today's AI token usage
+```
 
-**On demand via slash commands:**
-- 26 commands covering code quality, documentation, security, releases, and operations
-- Rate-limited per user and per repository to prevent abuse
-- Permission-gated so destructive operations require write access
-
----
-
-## Free Tier Deployment
-
-GitHub Autopilot is designed to run at zero cost on Render's free tier with Groq's free API.
-
-| Resource | Limit |
-|----------|-------|
-| Concurrent webhook workers | 6 threads |
-| AI requests (Groq free) | 14,400 per day |
-| AI calls per repository | 150 per day (configurable) |
-| Redis storage (Render free) | 25 MB |
-| Server sleep | After 15 minutes of inactivity |
+> **Secret scanning runs on every push to every branch** — not just main.
 
 ---
 
-## Installation
+## Deploy in 10 minutes
 
-### Prerequisites
+### Step 1 — Create GitHub App
 
-- Python 3.11 or higher
-- Redis instance (Render provides one for free)
-- Groq API key — free at [console.groq.com](https://console.groq.com)
-- A GitHub App (created during setup)
+1. Go to **github.com/settings/apps** → New GitHub App
+2. Set **Webhook URL**: `https://your-app.onrender.com/webhook`
+3. Set **Webhook secret**: `python3 -c "import secrets; print(secrets.token_hex(32))"`
+4. Permissions: Issues ✏️ · Pull requests ✏️ · Contents ✏️ · Actions ✏️
+5. Subscribe to: Push · Pull request · Issue comment · Issues
+6. Download the **private key** (`.pem` file)
 
-### Local setup
+### Step 2 — Deploy
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
+
+Or manually: fork this repo → Render → New Blueprint → connect fork.
+
+### Step 3 — Set environment variables
+
+| Variable | Where to get it |
+|----------|----------------|
+| `GITHUB_APP_ID` | App settings page (numeric ID) |
+| `GITHUB_PRIVATE_KEY` | Contents of `.pem` file |
+| `GITHUB_WEBHOOK_SECRET` | The secret you set in Step 1 |
+| `GROQ_API_KEY` | [console.groq.com](https://console.groq.com) — free |
+| `REDIS_URL` | Render Redis add-on |
+| `MCP_API_KEY` | `python3 -c "import secrets; print(secrets.token_hex(32))"` |
+| `METRICS_AUTH_TOKEN` | Any strong random string |
+
+### Step 4 — Install and verify
+
+Install the GitHub App on your repositories, then:
+
+```bash
+curl https://your-app.onrender.com/ping
+# → {"status": "ok", "version": "5.0.0"}
+```
+
+---
+
+## Commands
+
+| Command | Description | Who |
+|---------|-------------|-----|
+| `/fix` | AI bug fix with root cause + test | Anyone |
+| `/explain` | Plain-English explanation | Anyone |
+| `/improve` | Concrete improvement suggestions | Anyone |
+| `/test` | Generate pytest test cases | Anyone |
+| `/docs` | Generate docstrings + README section | Anyone |
+| `/refactor` | Refactoring with before/after | Anyone |
+| `/perf` | Performance analysis (O(n²), N+1, etc.) | Anyone |
+| `/gaps` | Test coverage gap analysis | Anyone |
+| `/arch` | Architecture review | Anyone |
+| `/ci` | Analyze CI failure | Anyone |
+| `/security` | Secret + dependency scan on PR | Anyone |
+| `/secfull` | Full repo security scan | Anyone |
+| `/health` | Repo health grade | Anyone |
+| `/version` | Tags, releases, recent commits | Anyone |
+| `/summarize` | Summarize issue thread | Anyone |
+| `/budget` | Today's AI token usage | Anyone |
+| `/report` | Weekly analytics | Anyone |
+| `/changelog` | Generate CHANGELOG entry | Anyone |
+| `/impact` | PR blast radius analysis | Anyone |
+| `/merge` | Merge PR after checks pass | Maintainers |
+| `/apply` | Open PR from autofix branch | Maintainers |
+| `/rollback N` | Restore to snapshot N | Maintainers |
+| `/release` | Draft GitHub release | Maintainers |
+| `/runtests` | Trigger CI workflow | Maintainers |
+| `/notify` | Send Discord/Slack alert | Maintainers |
+| `/autofix` | Auto-apply code improvements | Maintainers |
+
+---
+
+## Run locally
 
 ```bash
 git clone https://github.com/Shweta-Mishra-ai/github-autopilot.git
 cd github-autopilot
-python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env                              # Fill in required values
-flask --app server run --port 5000
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+cp .env.example .env   # fill in your credentials
+python server.py
 ```
 
-### Deploy to Render
+## Run tests
 
 ```bash
-# 1. Push this repository to GitHub
-# 2. On Render: New → Web Service → connect your repository
-#    Build command: pip install -r requirements.txt
-#    Start command: defined in render.yaml
-#    Health check:  /ping
-# 3. On Render: New → Redis → copy the connection string to REDIS_URL
-# 4. On GitHub: Settings → Developer Settings → GitHub Apps → New
-#    Webhook URL: https://your-service.onrender.com/webhook
-#    Permissions:  Contents, Issues, Pull Requests, Actions (Read & Write)
-#    Events:       pull_request, issues, issue_comment, push, check_run
+pytest tests/ -v
 ```
-
-Full step-by-step guide: [docs/deployment/render-deploy.md](docs/deployment/render-deploy.md)
 
 ---
 
-## Slash Commands
+## Architecture
 
-Post any of these as a comment on a GitHub issue or pull request.
+```
+Webhook → server.py → webhook_security.py  (HMAC-SHA256 + replay + IP rate limit)
+                    → idempotency.py        (24h Redis dedup window)
+                    → thread_pool.py        (bounded pool, backpressure on saturation)
+                         │
+                 ┌───────┴────────┐
+           handlers/          handlers/
+           push.py            comments/
+           pull_request.py    ├── service.py    ← orchestration
+           autofix.py         ├── generator.py  ← /fix /explain /perf
+           issues.py          ├── reviewer.py   ← /health /ci /budget
+                              ├── publisher.py  ← /merge /rollback
+                              └── dispatcher.py ← rate limit + routing
+                         │
+                    ai/router.py          (Groq 70B → Gemini → OpenRouter fallback)
+                    ai/circuit_breaker.py (per-provider, thread-safe)
+                         │
+                    core/redis_client.py  (connection pool singleton)
+                    core/snapshot.py      (atomic state snapshots)
+                    core/learning.py      (per-repo acceptance tracking)
+```
 
-> Commands marked 🔐 require **write**, **maintain**, or **admin** access.  
-> Rate limit: 10 commands per user per hour, per repository.
+**Key design decisions:**
 
-### Code Quality
-
-| Command | Description |
-|---------|-------------|
-| `/fix` | Root cause analysis with a production-ready fix and a suggested verification test |
-| `/autofix` 🔐 | Creates a branch, applies the fix, and posts a diff preview for review |
-| `/apply` 🔐 | Opens a pull request from an autofix branch once you have reviewed the diff |
-| `/improve` | Scored suggestions across performance, security, and readability |
-| `/refactor` | Structural refactor recommendations with before/after examples |
-| `/perf` | Time complexity analysis, N+1 query detection, and optimisation suggestions |
-
-### Code Understanding
-
-| Command | Description |
-|---------|-------------|
-| `/explain` | Plain-English explanation: what the code does, how it works, and common pitfalls |
-| `/summarize` | Condenses a long pull request or issue thread into a concise summary |
-| `/arch` | Architecture review highlighting coupling issues and layer violations |
-| `/impact` | Blast radius map showing which system layers a change touches |
-| `/gaps` | Test coverage gap analysis with risk-rated suggestions |
-| `/ci` | CI failure root cause analysis with concrete fix steps |
-
-### Documentation and Releases
-
-| Command | Description |
-|---------|-------------|
-| `/docs` | Generates docstrings and a README section for the changed code |
-| `/test` | Generates a pytest test suite for the changed code |
-| `/changelog` | Produces a Keep a Changelog entry from recent commit history |
-| `/release` 🔐 | Creates a GitHub draft release with AI-generated release notes |
-| `/version` | Shows tag history and semantic versioning status |
-| `/runtests` 🔐 | Triggers a GitHub Actions workflow via `workflow_dispatch` |
-
-### Security and Health
-
-| Command | Description |
-|---------|-------------|
-| `/security` | Scans the pull request diff for exposed secrets and vulnerable dependencies |
-| `/secfull` 🔐 | Full security report: Dependabot alerts, CodeQL findings, Secret Scanning |
-| `/health` | Repository health grade (A–F) with ranked improvement recommendations |
-
-### Operations
-
-| Command | Description |
-|---------|-------------|
-| `/merge` 🔐 | Merges the pull request after guardrails pass: CI green, reviews approved, no conflicts |
-| `/rollback` 🔐 | Lists snapshots or restores repository state (requires two-step confirmation) |
-| `/report` | Weekly analytics: pull request velocity, issue resolution time, quality grade |
-| `/budget` | Live LLM token usage and estimated cost breakdown per provider |
-| `/notify` | Sends an issue or pull request alert to Discord or Slack |
+- All webhook handlers run in a `ThreadPoolExecutor` — Flask thread only ACKs
+- Idempotency keys live 24 hours, matching GitHub's webhook retry window
+- Redis uses `noeviction` policy — idempotency keys are never silently evicted
+- Secret scanning runs on **all branches**, not just main
+- LLM provider failover is automatic: Groq → Gemini → OpenRouter
 
 ---
 
-## How It Works
+## Configuration
 
-```
-Incoming Webhook (POST /webhook)
-           │
-           ▼
-  ┌─────────────────────────────────────┐
-  │          Security Pipeline           │
-  │  1. HMAC-SHA256 signature check     │
-  │  2. IP rate limiting (Redis)        │
-  │  3. Replay protection (Redis NX)    │
-  │  4. Bot loop detection              │
-  └──────────────────┬──────────────────┘
-                     │  ACK 202 immediately
-                     ▼
-       Thread Pool — 6 workers, 50-job cap
-       ┌──────────┬──────────┬──────────┐
-       │    PR    │  Issues  │ Comments │  Push
-       │  review  │  triage  │ commands │  scan
-       └────┬─────┴────┬─────┴────┬─────┘
-            └──────────┴──────────┘
-                       │
-                       ▼
-                   AI Router
-       ┌──────────────────────────────┐
-       │  Groq 70B  — primary         │
-       │  Groq 8B   — fast tasks      │
-       │  Gemini    — long context    │
-       │  OpenRouter — fallback       │
-       │                              │
-       │  Circuit breakers per-       │
-       │  provider · Hallucination    │
-       │  detection · Cost tracking   │
-       └───────────────┬──────────────┘
-                       │
-                       ▼
-              Post result to GitHub
+Add `.ai-repo-manager.yml` to your repository root to customise behaviour:
+
+```yaml
+push:
+  scan_secrets: true
+  scan_dependencies: true
+  scan_all_branches: false
+
+autofix:
+  max_files: 5
+
+commands:
+  maintainer_only:
+    - /merge
+    - /rollback
+    - /release
+
+bot:
+  footer: "\n\n---\n*Powered by GitHub Autopilot*"
 ```
 
 ---
 
 ## Security
 
-| Threat | Mitigation |
-|--------|------------|
-| Forged webhooks | HMAC-SHA256 verification; server refuses to start without `GITHUB_WEBHOOK_SECRET` |
-| Replay attacks | SHA-256 event fingerprint in Redis with SET NX; 1-hour TTL |
-| Webhook floods | Per-IP rate limiting (100 req/min); bounded thread pool (6 workers) |
-| Privilege escalation | GitHub collaborator API permission check before every restricted command |
-| Prompt injection | Input sanitisation and 8,000-character limit per field |
-| Secret exposure | 35+ regex patterns with Shannon entropy gating |
-| Bot feedback loops | `sender.type` and `[bot]` suffix detection |
-| Command abuse | 10 commands per user per hour; 150 AI calls per repository per day |
+- Webhook signatures verified with HMAC-SHA256 on every request
+- Empty `GITHUB_WEBHOOK_SECRET` → all requests rejected at startup
+- `MCP_API_KEY` unset → MCP endpoint rejects all requests
+- IP rate limiting: 100 requests/min per IP (spoofing-resistant)
+- Autofix restricted to safe file extensions; CI/CD files protected
+- Bot-loop prevention on all event handlers
 
-Full threat model: [docs/security/threat-model.md](docs/security/threat-model.md)
+Found a vulnerability? Email rather than opening a public issue.
 
 ---
 
-## Environment Variables
+## Changelog
 
-| Variable | Required | Purpose |
-|----------|:--------:|---------|
-| `GITHUB_APP_ID` | ✅ | Numeric App ID from GitHub App settings |
-| `GITHUB_PRIVATE_KEY` | ✅ | RSA private key in PEM format, including headers |
-| `GITHUB_WEBHOOK_SECRET` | ✅ | Server will not start without this value |
-| `GROQ_API_KEY` | ✅ | Primary LLM — free at [console.groq.com](https://console.groq.com) |
-| `REDIS_URL` | ✅ | Redis connection string |
-| `GEMINI_API_KEY` | ⚡ | Gemini Flash fallback — [aistudio.google.com](https://aistudio.google.com) |
-| `OPENROUTER_API_KEY` | ⚡ | Emergency LLM fallback — [openrouter.ai](https://openrouter.ai) |
-| `DISCORD_WEBHOOK_URL` | 📢 | Discord notifications via `/notify` |
-| `SLACK_WEBHOOK_URL` | 📢 | Slack notifications via `/notify` |
-| `METRICS_AUTH_TOKEN` | 🔒 | Bearer token required to access `/health` detail endpoint |
-| `MAX_DISPATCH_WORKERS` | ⚙️ | Thread pool size (default: `6`) |
-| `REPO_DAILY_AI_LIMIT` | ⚙️ | Maximum AI calls per repository per day (default: `150`) |
-
-> ✅ Required &nbsp;·&nbsp; ⚡ Recommended &nbsp;·&nbsp; 📢 Optional &nbsp;·&nbsp; 🔒 Security &nbsp;·&nbsp; ⚙️ Tuning
-
-Copy `.env.example` to `.env` and fill in the required values to get started.
-
----
-
-## Project Structure
-
-```
-github-autopilot/
-├── server.py                    # Entry point — security pipeline and event dispatch
-├── .env.example                 # All supported environment variables with descriptions
-├── .ai-repo-manager.yml         # Per-repository bot configuration schema
-│
-├── app/
-│   ├── ai/
-│   │   ├── router.py            # Multi-provider LLM router with task classification
-│   │   ├── circuit_breaker.py   # Per-provider circuit breakers (CLOSED / OPEN / HALF_OPEN)
-│   │   ├── hallucination.py     # Response confidence scoring and placeholder detection
-│   │   └── providers/           # Groq, Gemini, OpenRouter implementations
-│   │
-│   ├── core/
-│   │   ├── webhook_security.py  # Full webhook verification pipeline
-│   │   ├── authorization.py     # Command permission enforcement
-│   │   ├── thread_pool.py       # Bounded ThreadPoolExecutor
-│   │   ├── idempotency.py       # SHA-256 event deduplication via Redis
-│   │   ├── analytics.py         # Usage tracking and /report data
-│   │   └── snapshot.py          # Repository snapshots for /rollback
-│   │
-│   ├── github/
-│   │   ├── auth.py              # JWT generation and installation token exchange
-│   │   ├── client.py            # GitHub REST API client with retry and backoff
-│   │   ├── helpers.py           # Shared utilities
-│   │   └── notifications.py     # Discord and Slack message builder
-│   │
-│   ├── handlers/
-│   │   ├── comments.py          # Slash command dispatcher — 26 commands
-│   │   ├── autofix.py           # Automated fix engine: diff → branch → pull request
-│   │   ├── pull_request.py      # PR analysis, blast radius mapping, review posting
-│   │   ├── issues.py            # Issue triage, labelling, and first-response
-│   │   ├── push.py              # Secret scanning and dependency checks on push
-│   │   └── ci.py                # CI failure analysis
-│   │
-│   └── security/
-│       ├── enhanced_secrets.py  # 35+ secret patterns with entropy gating
-│       ├── dependencies.py      # CVE vulnerability scanner
-│       └── scanner.py           # Dependabot and CodeQL API integration
-│
-├── tests/                       # Full test suite — no network calls required
-├── docs/                        # Technical documentation
-└── archive/                     # Inactive code retained for reference
-```
-
----
-
-## Troubleshooting
-
-**Webhooks not being processed**
-- Confirm `/ping` returns `{"status": "ok"}`
-- Check Render logs for `webhook.rejected` — includes the rejection reason
-- Verify `GITHUB_WEBHOOK_SECRET` in Render matches the value set in your GitHub App
-
-**Commands not responding**
-- Commands work on issues and pull requests only, not on commits or discussions
-- Verify you have the required permission for restricted commands (🔐)
-- Confirm the GitHub App is installed on the target repository
-
-**LLM calls failing**
-- Check the circuit breaker status at `/health` using `Authorization: Bearer <METRICS_AUTH_TOKEN>`
-- Verify `GROQ_API_KEY` is set correctly in Render environment variables
-
-**Redis errors in logs**
-- `/report` and `/budget` require Redis — add `REDIS_URL` in Render environment variables
-- Render free Redis: Dashboard → New → Redis → copy the connection string
-
----
-
-## Documentation
-
-| Document | Description |
-|----------|-------------|
-| [User Setup Guide](docs/guides/user-setup.md) | GitHub App creation, permissions, first install |
-| [Slash Commands Reference](docs/guides/slash-commands.md) | All 26 commands with examples and permissions |
-| [Render Deployment](docs/deployment/render-deploy.md) | Step-by-step production deployment |
-| [AI Routing](docs/ai-system/ai-routing.md) | Multi-provider router and circuit breaker design |
-| [Autofix Engine](docs/ai-system/autofix-engine.md) | How `/autofix` creates branches and pull requests |
-| [Threat Model](docs/security/threat-model.md) | Security design and attack surface analysis |
-| [Observability](docs/observability/observability.md) | Health endpoints, metrics, and monitoring setup |
-| [Testing Guide](docs/testing/testing-guide.md) | Test patterns, mocking strategy, and CI setup |
-
----
-
-## Contributing
-
-Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a pull request.
-
----
-
-## License
-
-Released under the [MIT License](LICENSE).
+### V5.0.0
+- `comments.py` refactored into `comments/` package — 5 focused modules
+- Redis connection pooling with thread-safe singleton
+- Secret scanning extended to all branches
+- LLM provider circuit breakers with automatic failover
+- MCP server for IDE integrations
+- Per-repo config via `.ai-repo-manager.yml`
+- 32 tests across all core modules
 
 ---
 
 <div align="center">
 
-Built by [Shweta Mishra](https://github.com/Shweta-Mishra-ai)
-
-If this project is useful to you, a ⭐ is appreciated.
-
-[![GitHub Stars](https://img.shields.io/github/stars/Shweta-Mishra-ai/github-autopilot?style=social)](https://github.com/Shweta-Mishra-ai/github-autopilot/stargazers)
+Built by [Shweta Mishra](https://github.com/Shweta-Mishra-ai) · MIT License
 
 </div>

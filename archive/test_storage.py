@@ -5,6 +5,7 @@ V3: Unit tests for event storage and fixture system.
 
 import os
 import tempfile
+import contextlib
 from unittest.mock import patch
 
 
@@ -12,18 +13,15 @@ class TestEventStorage:
 
     def setup_method(self):
         # Use temp DB for each test
-        self.tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self.tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)  # noqa: SIM115
         self.tmp.close()
 
     def teardown_method(self):
         # Close any open SQLite connections before deleting (Windows fix)
         import gc
         gc.collect()  # Force garbage collection to close connections
-        try:
+        with contextlib.suppress(PermissionError, OSError):
             os.unlink(self.tmp.name)
-        except (PermissionError, OSError):
-            # Windows: file still locked — ignore, temp dir will clean up
-            pass
 
     def test_init_db_creates_table(self):
         with patch("app.storage.events.DB_PATH", self.tmp.name):
@@ -71,31 +69,28 @@ class TestEventStorage:
 class TestFixtures:
 
     def test_capture_and_load(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("app.storage.fixtures.FIXTURES_DIR", tmpdir):
-                from app.storage.fixtures import capture, load
-                path = capture("push", {"ref": "main"}, "test")
-                assert os.path.exists(path)
+        with tempfile.TemporaryDirectory() as tmpdir, patch("app.storage.fixtures.FIXTURES_DIR", tmpdir):
+            from app.storage.fixtures import capture, load
+            path = capture("push", {"ref": "main"}, "test")
+            assert os.path.exists(path)
 
-                filename = os.path.basename(path)
-                loaded = load(filename)
-                assert loaded["event_type"] == "push"
-                assert loaded["payload"]["ref"] == "main"
+            filename = os.path.basename(path)
+            loaded = load(filename)
+            assert loaded["event_type"] == "push"
+            assert loaded["payload"]["ref"] == "main"
 
     def test_list_fixtures_filtered_by_type(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("app.storage.fixtures.FIXTURES_DIR", tmpdir):
-                from app.storage.fixtures import capture, list_fixtures
-                capture("push", {}, "a")
-                capture("push", {}, "b")
-                capture("issues", {}, "c")
+        with tempfile.TemporaryDirectory() as tmpdir, patch("app.storage.fixtures.FIXTURES_DIR", tmpdir):
+            from app.storage.fixtures import capture, list_fixtures
+            capture("push", {}, "a")
+            capture("push", {}, "b")
+            capture("issues", {}, "c")
 
-                push_fixtures = list_fixtures("push")
-                assert len(push_fixtures) == 2
-                assert all(f.startswith("push") for f in push_fixtures)
+            push_fixtures = list_fixtures("push")
+            assert len(push_fixtures) == 2
+            assert all(f.startswith("push") for f in push_fixtures)
 
     def test_list_fixtures_empty_dir(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("app.storage.fixtures.FIXTURES_DIR", tmpdir):
-                from app.storage.fixtures import list_fixtures
-                assert list_fixtures() == []
+        with tempfile.TemporaryDirectory() as tmpdir, patch("app.storage.fixtures.FIXTURES_DIR", tmpdir):
+            from app.storage.fixtures import list_fixtures
+            assert list_fixtures() == []

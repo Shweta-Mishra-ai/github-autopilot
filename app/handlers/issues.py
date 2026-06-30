@@ -18,6 +18,7 @@ from app.ai.validator import validate_issue_triage
 from app.core.config import load_config
 from app.core.guardrails import check_auto_label
 from app.core.logger import EventLogger
+import contextlib
 
 SKIP_AUTHORS = {
     "dependabot[bot]",
@@ -69,10 +70,8 @@ def handle(payload: dict):
         pass
 
     if config.get("labels", "auto_create", default=True):
-        try:
+        with contextlib.suppress(Exception):
             _ensure_labels(repo, token)
-        except Exception:
-            pass
 
     raw, _meta = router.ask(
         "You are an expert open source maintainer and technical lead. "
@@ -149,14 +148,12 @@ Return JSON:
 
     label_guard = check_auto_label(issue, all_labels, config)
     if label_guard.passed:
-        try:
+        with contextlib.suppress(GitHubError):
             gh_post(
                 f"/repos/{repo}/issues/{issue_number}/labels",
                 token,
                 {"labels": all_labels},
             )
-        except GitHubError:
-            pass
 
     # Build questions section
     q_section = ""
@@ -184,20 +181,14 @@ Return JSON:
 {config.footer}"""
 
     try:
-        gh_post(
-            f"/repos/{repo}/issues/{issue_number}/comments", token, {"body": comment}
-        )
+        gh_post(f"/repos/{repo}/issues/{issue_number}/comments", token, {"body": comment})
         log.done(f"Issue #{issue_number} triaged: {result['type']}/{priority}")
     except GitHubError as e:
         log.error(f"Comment failed: {e}")
 
     # Notification
-    try:
-        notify_new_issue(
-            repo=repo, issue_number=issue_number, title=title, labels=all_labels
-        )
-    except Exception:
-        pass
+    with contextlib.suppress(Exception):
+        notify_new_issue(repo=repo, issue_number=issue_number, title=title, labels=all_labels)
 
 
 def _ensure_labels(repo: str, token: str):
@@ -216,7 +207,5 @@ def _ensure_labels(repo: str, token: str):
         ("help wanted 🙏", "008672"),
     ]
     for name, color in LABELS:
-        try:
+        with contextlib.suppress(Exception):
             gh_post(f"/repos/{repo}/labels", token, {"name": name, "color": color})
-        except Exception:
-            pass

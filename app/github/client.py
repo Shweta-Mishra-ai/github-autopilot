@@ -15,7 +15,6 @@ WHY THIS MATTERS:
   3 retries covers 99.9% of transient failures.
 """
 
-import time
 import logging
 import requests
 from requests.adapters import HTTPAdapter
@@ -35,6 +34,14 @@ class GitHubError(Exception):
     def __init__(self, message: str, status_code: int = 0):
         super().__init__(message)
         self.status_code = status_code
+
+
+class GitHubSecondaryRateLimitError(GitHubError):
+    """Raised when GitHub returns a 403 with secondary rate limit header."""
+
+    def __init__(self, message: str = "GitHub secondary rate limit", retry_after: int = 60):
+        super().__init__(message, status_code=403)
+        self.retry_after = retry_after
 
 
 def _make_session() -> requests.Session:
@@ -83,19 +90,29 @@ def _handle_response(r: requests.Response, method: str, path: str):
         raise GitHubError(f"Primary rate limit — retry after {retry_after}s", 429)
 
     # Secondary rate limit (abuse detection)
+    # FIXED: previously called time.sleep(60) here — this blocks a thread
+    # pool worker for 60s, starving all other webhooks. Now we raise
+    # GitHubSecondaryRateLimitError immediately so the caller can decide
+    # whether to drop/retry. Never sleep in a shared worker thread.
     if r.status_code == 403:
         try:
             body = r.json()
             msg = body.get("message", "").lower()
             if "secondary rate limit" in msg or "abuse" in msg:
-                log.warning(f"github.secondary_rate_limit path={path} — waiting 60s")
-                time.sleep(60)
-                raise GitHubError("Secondary rate limit — waited 60s, retry now", 403)
+                retry_after = int(r.headers.get("Retry-After", 60))
+                log.warning(
+                    f"github.secondary_rate_limit path={path} "
+                    f"retry_after={retry_after}s — raising immediately (no sleep)"
+                )
+                raise GitHubSecondaryRateLimitError(
+                    f"Secondary rate limit on {path}. Retry after {retry_after}s.",
+                    retry_after=retry_after,
+                )
             raise GitHubError(f"Forbidden: {body.get('message', 'no message')}", 403)
-        except GitHubError:
+        except (GitHubError, GitHubSecondaryRateLimitError):
             raise
-        except Exception:
-            raise GitHubError(f"403 Forbidden: {path}", 403)
+        except Exception as e:
+            raise GitHubError(f"403 Forbidden: {path}", 403) from e
 
     if r.status_code == 404:
         raise GitHubError(f"Not found: {path}", 404)
@@ -109,9 +126,7 @@ def _handle_response(r: requests.Response, method: str, path: str):
 
     # 5xx — session already retried, this is the final failure
     if r.status_code >= 500:
-        log.error(
-            f"github.server_error method={method} path={path} status={r.status_code}"
-        )
+        log.error(f"github.server_error method={method} path={path} status={r.status_code}")
         raise GitHubError(f"GitHub server error {r.status_code}: {path}", r.status_code)
 
     raise GitHubError(
@@ -129,7 +144,7 @@ def gh_get(path: str, token: str) -> dict | list:
     try:
         r = _session.get(url, headers=_headers(token), timeout=DEFAULT_TIMEOUT)
     except requests.exceptions.ConnectionError as e:
-        raise GitHubError(f"Connection error: {e}", 0)
+        raise GitHubError(f"Connection error: {e}", 0) from e
     return _handle_response(r, "GET", path)
 
 
@@ -163,11 +178,9 @@ def gh_post(path: str, token: str, data: dict) -> dict:
     check_and_wait()
     url = f"{GITHUB_API}{path}"
     try:
-        r = _session.post(
-            url, headers=_headers(token), json=data, timeout=DEFAULT_TIMEOUT
-        )
+        r = _session.post(url, headers=_headers(token), json=data, timeout=DEFAULT_TIMEOUT)
     except requests.exceptions.ConnectionError as e:
-        raise GitHubError(f"Connection error: {e}", 0)
+        raise GitHubError(f"Connection error: {e}", 0) from e
     return _handle_response(r, "POST", path)
 
 
@@ -175,11 +188,9 @@ def gh_put(path: str, token: str, data: dict) -> dict:
     check_and_wait()
     url = f"{GITHUB_API}{path}"
     try:
-        r = _session.put(
-            url, headers=_headers(token), json=data, timeout=DEFAULT_TIMEOUT
-        )
+        r = _session.put(url, headers=_headers(token), json=data, timeout=DEFAULT_TIMEOUT)
     except requests.exceptions.ConnectionError as e:
-        raise GitHubError(f"Connection error: {e}", 0)
+        raise GitHubError(f"Connection error: {e}", 0) from e
     return _handle_response(r, "PUT", path)
 
 
@@ -187,11 +198,9 @@ def gh_patch(path: str, token: str, data: dict) -> dict:
     check_and_wait()
     url = f"{GITHUB_API}{path}"
     try:
-        r = _session.patch(
-            url, headers=_headers(token), json=data, timeout=DEFAULT_TIMEOUT
-        )
+        r = _session.patch(url, headers=_headers(token), json=data, timeout=DEFAULT_TIMEOUT)
     except requests.exceptions.ConnectionError as e:
-        raise GitHubError(f"Connection error: {e}", 0)
+        raise GitHubError(f"Connection error: {e}", 0) from e
     return _handle_response(r, "PATCH", path)
 
 
@@ -201,5 +210,5 @@ def gh_delete(path: str, token: str) -> dict:
     try:
         r = _session.delete(url, headers=_headers(token), timeout=DEFAULT_TIMEOUT)
     except requests.exceptions.ConnectionError as e:
-        raise GitHubError(f"Connection error: {e}", 0)
+        raise GitHubError(f"Connection error: {e}", 0) from e
     return _handle_response(r, "DELETE", path)

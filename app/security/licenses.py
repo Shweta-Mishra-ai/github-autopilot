@@ -5,9 +5,9 @@ Flags copyleft licenses in permissive projects.
 """
 
 import requests
-from app.core.logger import get_logger
+from app.core.logger import EventLogger
 
-log = get_logger(__name__)
+log = EventLogger("licenses")
 
 PYPI_API = "https://pypi.org/pypi/{package}/json"
 

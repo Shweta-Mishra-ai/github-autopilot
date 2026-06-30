@@ -101,6 +101,23 @@ class DepFinding:
         return self.severity in ISSUE_SEVERITIES and self.cve_id not in ACCEPTED_CVES
 
 
+def parse_requirements(content: str) -> list[dict]:
+    """Parse requirements.txt content into a list of package dictionaries."""
+    packages = []
+    lines = content.strip().splitlines()
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        match = re.match(r"^([a-zA-Z0-9_\-\[\]]+)==([^\s#]+)", line)
+        if not match:
+            continue
+        pkg = match.group(1).lower().split("[")[0]
+        version = match.group(2)
+        packages.append({"name": pkg, "version": version})
+    return packages
+
+
 def scan_requirements_txt(content: str) -> list[DepFinding]:
     """
     Scan requirements.txt content for known vulnerabilities.

@@ -29,7 +29,12 @@ class LLMResponse:
     latency_ms: int = 0  # Wall clock time
     cost_usd: float = 0.0  # Estimated cost
     used_fallback: bool = False  # Was a fallback model used?
-    error: str = ""  # Non-empty if call failed
+    error: str | None = None  # Non-None if call failed
+
+    @property
+    def is_error(self) -> bool:
+        """True if the response represents an error."""
+        return self.error is not None
 
 
 class LLMProvider(ABC):

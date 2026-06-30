@@ -94,9 +94,7 @@ def validate_pr_analysis(raw: dict) -> dict:
         pass
 
     return {
-        "suggested_title": _str(
-            raw.get("suggested_title") or raw.get("improved_title", ""), 200
-        ),
+        "suggested_title": _str(raw.get("suggested_title") or raw.get("improved_title", ""), 200),
         "description": _str(raw.get("description", ""), 5000),
         "labels": labels,
         "risk_level": risk,

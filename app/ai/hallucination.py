@@ -39,8 +39,14 @@ _HALLUCINATION_PATTERNS = [
     (r"\bi cannot access\b", "access_claim", 0.4),
     (r"\bi don't have access\b", "access_claim", 0.4),
     (r"\bI apologize\b", "apology", 0.1),
-    # Fabricated CVE patterns (real CVEs: GHSA-xxxx-xxxx-xxxx or CVE-YYYY-NNNNN)
-    (r"\bCVE-\d{4}-\d{4,}\b", "cve_reference", 0.0),  # valid — no penalty
+    # CVE/GHSA references: patterns detected but not penalised.
+    # A 0.0 penalty means we log the hit for observability but never block
+    # the response solely because a CVE ID appears. Without a live NVD/GHSA
+    # lookup we cannot tell real from fabricated, so we don't penalise — the
+    # caller can choose to cross-reference separately.
+    # NOTE: do NOT add a non-zero penalty here unless you add NVD validation.
+    #       A false positive would block valid security reports.
+    (r"\bCVE-\d{4}-\d{4,}\b", "cve_reference", 0.0),
     (r"\bGHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}\b", "ghsa_reference", 0.0),
     # Placeholder text that should have been filled
     (r"\[insert [^\]]+\]", "placeholder", 0.5),
@@ -121,14 +127,15 @@ def check_response(
                 warnings.append(f"Hallucination signal: {label}")
                 penalty += pen
                 penalized_fields.append(label)
+            else:
+                # Zero-penalty: log for observability only, don't block
+                log.debug(f"hallucination.zero_penalty_hit label={label} type={response_type}")
 
     # 3. Check for suspiciously short required fields
     for field_name, min_len in _MIN_LENGTHS.items():
         val = response.get(field_name, "")
         if val and isinstance(val, str) and len(val.strip()) < min_len:
-            warnings.append(
-                f"Field '{field_name}' suspiciously short ({len(val.strip())} chars)"
-            )
+            warnings.append(f"Field '{field_name}' suspiciously short ({len(val.strip())} chars)")
             penalty += 0.15
             penalized_fields.append(field_name)
 

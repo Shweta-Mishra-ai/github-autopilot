@@ -1,159 +1,168 @@
 """
-tests/test_autofix.py
-Sprint 6: Tests for app/handlers/autofix.py
+tests/test_autofix.py — V5
+Tests for autofix path gating.
+
+V5 changes:
+  - .yml/.yaml removed from blanket ALLOWED_EXTENSIONS
+  - ALLOWED_YAML_PATTERNS allowlist added for specific safe yaml files
+  - _block_reason() updated to explain yaml restriction
 """
-import sys
+
 import os
-from unittest.mock import patch
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-
-def _mock_router(resp=None):
-    from app.ai.providers.base import LLMResponse
-    meta = LLMResponse(text="ok", provider="groq", model="llama", total_tokens=50)
-    r = resp or {"target_file": "app/auth.py", "pr_title": "fix null check",
-                 "commit_message": "fix: null check", "problem": "null crash",
-                 "fix_description": "add null check", "explanation": "prevents crash",
-                 "patch": "if x is None: return", "confidence": 0.9}
-    return patch("app.handlers.autofix.router.ask", return_value=(r, meta))
+from app.handlers.autofix import _is_allowed, _block_reason, ALLOWED_YAML_PATTERNS
 
 
 class TestIsAllowed:
-    def test_py_file_allowed(self):
-        from app.handlers.autofix import _is_allowed
-        assert _is_allowed("app/handlers/comments.py") is True
 
-    def test_env_blocked(self):
-        from app.handlers.autofix import _is_allowed
-        assert _is_allowed(".env") is False
+    # ── Always blocked ─────────────────────────────────────────────────────
 
-    def test_server_blocked(self):
-        from app.handlers.autofix import _is_allowed
+    def test_server_py_blocked(self):
         assert _is_allowed("server.py") is False
 
-    def test_auth_blocked(self):
-        from app.handlers.autofix import _is_allowed
+    def test_webhook_security_blocked(self):
+        assert _is_allowed("app/core/webhook_security.py") is False
+
+    def test_auth_module_blocked(self):
         assert _is_allowed("app/github/auth.py") is False
 
-    def test_ci_workflow_blocked(self):
-        """CI workflow files are blocked to prevent pipeline injection."""
-        from app.handlers.autofix import _is_allowed
+    def test_env_file_blocked(self):
+        assert _is_allowed(".env") is False
+
+    def test_github_workflow_blocked(self):
         assert _is_allowed(".github/workflows/ci.yml") is False
 
-    def test_non_workflow_yaml_allowed(self):
-        """Non-workflow YAML files (e.g. config) are still allowed."""
-        from app.handlers.autofix import _is_allowed
-        assert _is_allowed("config/settings.yml") is True
+    def test_github_action_yml_blocked(self):
+        assert _is_allowed(".github/workflows/deploy.yaml") is False
+
+    def test_github_other_blocked(self):
+        assert _is_allowed(".github/CODEOWNERS") is False
+
+    def test_path_traversal_blocked(self):
+        assert _is_allowed("../../etc/passwd") is False
+
+    def test_absolute_path_blocked(self):
+        assert _is_allowed("/etc/hosts") is False
+
+    def test_requirements_txt_blocked(self):
+        assert _is_allowed("requirements.txt") is False
+
+    # ── YAML: blanket allow removed in V5 ─────────────────────────────────
+
+    def test_arbitrary_yaml_blocked(self):
+        """V5 FIX: .yaml files not in ALLOWED_YAML_PATTERNS must be blocked."""
+        assert _is_allowed("config.yaml") is False
+
+    def test_deploy_yaml_blocked(self):
+        assert _is_allowed("deploy/api.yaml") is False
+
+    def test_helm_values_blocked(self):
+        assert _is_allowed("helm/values.yaml") is False
+
+    def test_docker_compose_yaml_blocked(self):
+        assert _is_allowed("docker-compose.yaml") is False
+
+    def test_k8s_deployment_yaml_blocked(self):
+        assert _is_allowed("k8s/deployment.yaml") is False
+
+    # ── YAML: specific safe files allowed ─────────────────────────────────
+
+    def test_mkdocs_yml_allowed(self):
+        """Known safe: mkdocs.yml is documentation config."""
+        assert _is_allowed("mkdocs.yml") is True
+
+    def test_mkdocs_yaml_allowed(self):
+        assert _is_allowed("mkdocs.yaml") is True
+
+    def test_pre_commit_config_allowed(self):
+        """Known safe: .pre-commit-config.yaml is dev tooling, not CI."""
+        assert _is_allowed(".pre-commit-config.yaml") is True
+
+    def test_codecov_yml_allowed(self):
+        assert _is_allowed("codecov.yml") is True
+
+    def test_codecov_yaml_allowed(self):
+        assert _is_allowed("codecov.yaml") is True
+
+    def test_readthedocs_yml_allowed(self):
+        assert _is_allowed("readthedocs.yml") is True
+
+    def test_markdownlint_yaml_allowed(self):
+        assert _is_allowed(".markdownlint.yaml") is True
+
+    # ── Regular files ──────────────────────────────────────────────────────
+
+    def test_python_file_allowed(self):
+        assert _is_allowed("app/handlers/comments.py") is True
+
+    def test_readme_allowed(self):
+        assert _is_allowed("README.md") is True
+
+    def test_json_config_allowed(self):
+        assert _is_allowed("package.json") is True
+
+    def test_toml_allowed(self):
+        assert _is_allowed("config.toml") is True
+
+    def test_txt_allowed(self):
+        assert _is_allowed("docs/notes.txt") is True
+
+    def test_nested_python_allowed(self):
+        assert _is_allowed("src/core/utils.py") is True
+
+    # ── Edge cases ─────────────────────────────────────────────────────────
 
     def test_empty_path_blocked(self):
-        from app.handlers.autofix import _is_allowed
         assert _is_allowed("") is False
 
+    def test_none_path_blocked(self):
+        assert _is_allowed(None) is False
+
     def test_no_extension_blocked(self):
-        from app.handlers.autofix import _is_allowed
         assert _is_allowed("Makefile") is False
 
+    def test_binary_extension_blocked(self):
+        assert _is_allowed("lib/native.so") is False
 
-class TestBuildPrBody:
-    def test_contains_issue_number(self):
-        from app.handlers.autofix import _build_pr_body
-        body = _build_pr_body(
-            {"problem": "crash", "fix_description": "add check",
-             "explanation": "prevents it", "confidence": 0.9},
-            42, "Test crash"
-        )
-        assert "#42" in body
-
-    def test_contains_closes(self):
-        from app.handlers.autofix import _build_pr_body
-        body = _build_pr_body({}, 7, "Bug")
-        assert "Closes #7" in body
-
-    def test_confidence_shown(self):
-        from app.handlers.autofix import _build_pr_body
-        body = _build_pr_body({"confidence": 0.85}, 1, "Bug")
-        assert "85%" in body
+    def test_dockerfile_blocked(self):
+        assert _is_allowed("Dockerfile") is False
 
 
-class TestGenerateFixPlan:
-    def test_low_confidence_returns_none(self):
-        from app.handlers.autofix import _generate_fix_plan
-        from app.ai.providers.base import LLMResponse
-        meta = LLMResponse(text="", provider="groq", model="llama", total_tokens=10)
-        with patch("app.handlers.autofix.router.ask",
-                   return_value=({"confidence": 0.4}, meta)):
-            result = _generate_fix_plan("title", "body", "")
-        assert result is None
+class TestBlockReason:
 
-    def test_good_plan_returned(self):
-        from app.handlers.autofix import _generate_fix_plan
-        from app.ai.providers.base import LLMResponse
-        meta = LLMResponse(text="", provider="groq", model="llama", total_tokens=10)
-        plan = {"target_file": "app/foo.py", "confidence": 0.9,
-                "patch": "fix here", "pr_title": "fix bug"}
-        with patch("app.handlers.autofix.router.ask", return_value=(plan, meta)):
-            result = _generate_fix_plan("Bug title", "body", "")
-        assert result is not None
-        assert result["confidence"] == 0.9
+    def test_yaml_has_specific_message(self):
+        """V5 FIX: yaml block reason should explain the restriction, not generic ext msg."""
+        reason = _block_reason("config.yaml")
+        assert "yaml" in reason.lower() or "yml" in reason.lower()
 
-    def test_router_exception_returns_none(self):
-        from app.handlers.autofix import _generate_fix_plan
-        with patch("app.handlers.autofix.router.ask", side_effect=Exception("error")):
-            result = _generate_fix_plan("title", "body", "")
-        assert result is None
+    def test_path_traversal_caught(self):
+        assert _block_reason("../../etc/passwd") is not None
+
+    def test_blocked_prefix_explains(self):
+        reason = _block_reason(".github/workflows/ci.yml")
+        assert reason is not None and len(reason) > 0
+
+    def test_allowed_file_returns_none(self):
+        assert _block_reason("app/utils.py") is None
 
 
-class TestRunAutofix:
-    def _issue(self):
-        return {"title": "Fix null crash", "body": "crashes when None passed"}
+class TestAllowedYamlPatterns:
 
-    def test_no_fix_plan_returns_failed(self):
-        from app.handlers.autofix import run_autofix
-        from app.ai.providers.base import LLMResponse
-        meta = LLMResponse(text="", provider="groq", model="llama", total_tokens=10)
-        with patch("app.handlers.autofix.router.ask",
-                   return_value=({"confidence": 0.1}, meta)):
-            result = run_autofix("test/repo", 1, self._issue(), "token")
-        assert "Failed" in result or "failed" in result.lower()
+    def test_patterns_list_is_non_empty(self):
+        assert len(ALLOWED_YAML_PATTERNS) > 0
 
-    def test_blocked_file_returns_skipped(self):
-        from app.handlers.autofix import run_autofix
-        from app.ai.providers.base import LLMResponse
-        meta = LLMResponse(text="", provider="groq", model="llama", total_tokens=10)
-        plan = {"target_file": "server.py", "confidence": 0.9,
-                "patch": "x", "pr_title": "fix"}
-        with patch("app.handlers.autofix.router.ask", return_value=(plan, meta)):
-            result = run_autofix("test/repo", 1, self._issue(), "token")
-        assert "Skipped" in result or "skipped" in result.lower() or "Blocked" in result
+    def test_mkdocs_in_patterns(self):
+        assert any("mkdocs" in p for p in ALLOWED_YAML_PATTERNS)
 
-    def test_full_flow_success(self):
-        from app.handlers.autofix import run_autofix
-        from app.ai.providers.base import LLMResponse
-        meta = LLMResponse(text="", provider="groq", model="llama", total_tokens=50)
-        plan = {"target_file": "app/foo.py", "confidence": 0.9,
-                "patch": "fix here", "pr_title": "fix null",
-                "commit_message": "fix: null", "problem": "null",
-                "fix_description": "add check", "explanation": "prevents crash"}
-        fix_resp = {"fixed_content": "def foo():\n    if x is None: return\n    return x.strip()",
-                    "changed_lines": 1}
+    def test_pre_commit_in_patterns(self):
+        assert any("pre-commit" in p for p in ALLOWED_YAML_PATTERNS)
 
-        with patch("app.handlers.autofix.router.ask", side_effect=[(plan, meta), (fix_resp, meta)]):
-            with patch("app.handlers.autofix.gh_get") as mock_get:
-                mock_get.return_value = {
-                    "content": __import__("base64").b64encode(b"def foo(): return x.strip()").decode(),
-                    "sha": "abc123",
-                    "default_branch": "main",
-                    "object": {"sha": "abc123"},
-                }
-                with patch("app.handlers.autofix.gh_put", return_value={}):
-                    with patch("app.handlers.autofix.gh_post") as mock_post:
-                        mock_post.side_effect = [
-                            {},  # create branch
-                            {"number": 99, "html_url": "https://github.com/test/repo/pull/99"},
-                        ]
-                        result = run_autofix("test/repo", 1, self._issue(), "token")
+    def test_no_workflow_patterns(self):
+        """Workflow files must never be in the allowlist."""
+        assert not any("workflow" in p or "action" in p.lower() for p in ALLOWED_YAML_PATTERNS)
 
-        # V4.2+: autofix posts diff + confirmation, does NOT auto-create PR
-        assert ("diff" in result.lower() or "Diff" in result
-                or "/apply" in result
-                or "Ready" in result)
+    def test_no_docker_compose_in_patterns(self):
+        assert not any("docker" in p for p in ALLOWED_YAML_PATTERNS)

@@ -73,7 +73,10 @@ def _authorized(req) -> bool:
 
 
 def _handle_sigterm(signum, frame):
-    log.info("server.sigterm_received — draining thread pool")
+    log.info("server.sigterm_received — draining queue consumers + thread pool")
+    from app.core.event_queue import stop_consumers
+
+    stop_consumers()
     shutdown(wait=True)
     log.info("server.graceful_shutdown_complete")
 
@@ -135,6 +138,7 @@ def health():
                 "thread_pool": "saturated" if pool_saturated else "ok",
             },
             "thread_pool": pool,
+            "event_queue": _queue_stats(),
             "metrics": {
                 "events_total": metrics.get("events.total", 0),
                 "errors_total": metrics.get("events.error", 0),
@@ -222,7 +226,23 @@ def webhook():
         metrics.increment("webhook.duplicate_skipped")
         return jsonify({"status": "duplicate — skipped"}), 200
 
-    # Dispatch to bounded pool — ACK immediately
+    # Durable path first: park event in Redis, consumers pick it up.
+    # Survives restarts/deploys — thread-pool queue does not.
+    from app.core.event_queue import EnqueueResult, enqueue
+
+    eq = enqueue(webhook_event, payload, repo, delivery_id)
+
+    if eq == EnqueueResult.OK:
+        metrics.increment(f"events.{webhook_event}.queued")
+        metrics.increment("events.total")
+        return jsonify({"status": "queued"}), 202
+
+    if eq == EnqueueResult.FULL:
+        # Bounded queue full → 503 so GitHub redelivers later.
+        metrics.increment("events.dropped")
+        return jsonify({"error": "Server busy — please retry", "retry_after": 30}), 503
+
+    # Redis down or envelope too large → degrade to direct thread-pool dispatch.
     result = _dispatch(webhook_event, payload, repo)
 
     # Saturated pool → 503 so GitHub retries automatically
@@ -307,12 +327,26 @@ def _dispatch(webhook_event: str, payload: dict, repo: str):
     return dispatch(_run_handler, webhook_event, payload, repo)
 
 
+def _queue_stats() -> dict:
+    from app.core.event_queue import queue_stats
+
+    return queue_stats()
+
+
+def _boot():
+    """Shared boot path for gunicorn import and `python server.py`."""
+    startup_check()
+    from app.core.event_queue import start_consumers
+
+    start_consumers(_run_handler)
+
+
 # ── Boot ───────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    startup_check()
+    _boot()
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
 else:
-    # Running via gunicorn — validate on import
-    startup_check()
+    # Running via gunicorn — validate credentials + start queue consumers on import
+    _boot()

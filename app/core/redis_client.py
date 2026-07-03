@@ -192,6 +192,60 @@ class _FakeRedis:
             if isinstance(lst, list):
                 self._store[key] = lst[start : end + 1]
 
+    def llen(self, key: str) -> int:
+        with self._lock:
+            lst = self._store.get(key, [])
+            return len(lst) if isinstance(lst, list) else 0
+
+    def rpop(self, key: str):
+        with self._lock:
+            lst = self._store.get(key, [])
+            if isinstance(lst, list) and lst:
+                return lst.pop()
+            return None
+
+    def lrem(self, key: str, count: int, value) -> int:
+        with self._lock:
+            lst = self._store.get(key, [])
+            if not isinstance(lst, list):
+                return 0
+            removed = 0
+            v = str(value)
+            n = abs(count) or len(lst)
+            out = []
+            for item in lst:
+                if item == v and removed < n:
+                    removed += 1
+                    continue
+                out.append(item)
+            self._store[key] = out
+            return removed
+
+    def blmove(
+        self,
+        first_list: str,
+        second_list: str,
+        timeout: float = 0,
+        src: str = "LEFT",
+        dest: str = "RIGHT",
+    ):
+        # Matches redis-py blmove(first_list, second_list, timeout, src, dest).
+        # Non-blocking approximation for tests.
+        with self._lock:
+            lst = self._store.get(first_list, [])
+            if not (isinstance(lst, list) and lst):
+                return None
+            item = lst.pop() if src.upper() == "RIGHT" else lst.pop(0)
+            dlist = self._store.get(second_list, [])
+            if not isinstance(dlist, list):
+                dlist = []
+            if dest.upper() == "LEFT":
+                dlist.insert(0, item)
+            else:
+                dlist.append(item)
+            self._store[second_list] = dlist
+            return item
+
     def ping(self) -> bool:
         return True
 

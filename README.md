@@ -1,77 +1,84 @@
 <div align="center">
 
-# 🤖 GitHub Autopilot
+<img src="assets/logo.svg" alt="GitHub Autopilot logo" width="120"/>
 
-**AI-powered GitHub automation. Fix bugs, review PRs, scan secrets — all from a comment.**
+# GitHub Autopilot
+
+**Your repository's AI co-pilot. Fix bugs, review PRs, scan secrets — from a single comment.**
 
 [![CI](https://github.com/Shweta-Mishra-ai/github-autopilot/actions/workflows/ci.yml/badge.svg)](https://github.com/Shweta-Mishra-ai/github-autopilot/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://python.org)
+[![Tests](https://img.shields.io/badge/tests-695%20passing-22c55e?logo=pytest&logoColor=white)](tests/)
+[![MCP](https://img.shields.io/badge/MCP-server-a371f7?logo=anthropic&logoColor=white)](docs/mcp-setup.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg)](LICENSE)
-[![Render](https://img.shields.io/badge/deploy-Render-46E3B7?logo=render)](https://render.com)
+[![Deploy to Render](https://img.shields.io/badge/deploy-Render-46E3B7?logo=render&logoColor=white)](https://render.com/deploy)
+
+<img src="assets/demo.svg" alt="Demo: /fix command in a GitHub issue, bot replies with root cause, fix and test in 4.2 seconds" width="720"/>
 
 </div>
 
 ---
 
-## What it does
+## Why Autopilot?
 
-Type a command in any GitHub issue or PR comment. The bot responds in seconds.
-
-```
-/fix          → AI generates a bug fix with root cause + test
-/explain      → Plain-English explanation of the issue
-/security     → Scan PR for secrets and vulnerable deps
-/autofix      → Auto-apply safe code improvements
-/merge        → Merge PR after all checks pass
-/rollback 2   → Restore repo state to snapshot #2
-/budget       → Show today's AI token usage
-```
-
-> **Secret scanning runs on every push to every branch** — not just main.
+| | |
+|---|---|
+| ⚡ **26 slash commands** | `/fix` `/security` `/merge` `/autofix` `/rollback` … right in issue/PR comments |
+| 🛡️ **Safety-first automation** | Confidence gates, guardrails, human-in-the-loop `/apply`, maintainer-only permissions |
+| 🔁 **Durable event queue** | Webhooks parked in Redis, survive restarts & deploys — no event ever silently lost |
+| 🧠 **4-provider AI failover** | Groq 70B → Groq 8B → Gemini → OpenRouter, with per-provider circuit breakers |
+| 🔐 **Security scanning** | Secret detection on **every push to every branch**, dependency CVE checks |
+| 🔌 **MCP server built in** | Call Autopilot tools from Claude Code, Cursor, or Codex — [setup guide](docs/mcp-setup.md) |
+| 💸 **Runs on free tier** | Render free web service + free Redis. $0/month |
 
 ---
 
-## Deploy in 10 minutes
+## Quickstart — deploy in 10 minutes
 
-### Step 1 — Create GitHub App
+### 1. Create a GitHub App
 
-1. Go to **github.com/settings/apps** → New GitHub App
-2. Set **Webhook URL**: `https://your-app.onrender.com/webhook`
-3. Set **Webhook secret**: `python3 -c "import secrets; print(secrets.token_hex(32))"`
+1. **github.com/settings/apps** → New GitHub App
+2. Webhook URL: `https://your-app.onrender.com/webhook`
+3. Webhook secret: `python3 -c "import secrets; print(secrets.token_hex(32))"`
 4. Permissions: Issues ✏️ · Pull requests ✏️ · Contents ✏️ · Actions ✏️
 5. Subscribe to: Push · Pull request · Issue comment · Issues
-6. Download the **private key** (`.pem` file)
+6. Download the private key (`.pem`)
 
-### Step 2 — Deploy
+### 2. Deploy
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
 
-Or manually: fork this repo → Render → New Blueprint → connect fork.
+Or manually: fork this repo → Render → **New Blueprint** → connect fork ([render.yaml](render.yaml) does the rest).
 
-### Step 3 — Set environment variables
+### 3. Environment variables
 
-| Variable | Where to get it |
-|----------|----------------|
-| `GITHUB_APP_ID` | App settings page (numeric ID) |
-| `GITHUB_PRIVATE_KEY` | Contents of `.pem` file |
-| `GITHUB_WEBHOOK_SECRET` | The secret you set in Step 1 |
-| `GROQ_API_KEY` | [console.groq.com](https://console.groq.com) — free |
-| `REDIS_URL` | Render Redis add-on |
-| `MCP_API_KEY` | `python3 -c "import secrets; print(secrets.token_hex(32))"` |
-| `METRICS_AUTH_TOKEN` | Any strong random string |
+| Variable | Where to get it | Required |
+|----------|----------------|----------|
+| `GITHUB_APP_ID` | App settings page (numeric ID) | ✅ |
+| `GITHUB_PRIVATE_KEY` | Contents of the `.pem` file | ✅ |
+| `GITHUB_WEBHOOK_SECRET` | The secret from step 1 | ✅ |
+| `GROQ_API_KEY` | [console.groq.com](https://console.groq.com) — free | ✅ |
+| `REDIS_URL` | Auto-wired by render.yaml | ✅ |
+| `MCP_API_KEY` | `python3 -c "import secrets; print(secrets.token_hex(32))"` | for MCP |
+| `METRICS_AUTH_TOKEN` | Any strong random string | recommended |
+| `GEMINI_API_KEY` / `OPENROUTER_API_KEY` | Optional extra AI fallbacks | optional |
 
-### Step 4 — Install and verify
+### 4. Install & verify
 
-Install the GitHub App on your repositories, then:
+Install the GitHub App on your repos, then:
 
 ```bash
 curl https://your-app.onrender.com/ping
 # → {"status": "ok", "version": "5.0.0"}
 ```
 
+Comment `/health` on any issue. The bot replies with a repo health grade. Done. ✈️
+
 ---
 
 ## Commands
+
+Type any of these in a GitHub issue or PR comment:
 
 | Command | Description | Who |
 |---------|-------------|-----|
@@ -81,12 +88,12 @@ curl https://your-app.onrender.com/ping
 | `/test` | Generate pytest test cases | Anyone |
 | `/docs` | Generate docstrings + README section | Anyone |
 | `/refactor` | Refactoring with before/after | Anyone |
-| `/perf` | Performance analysis (O(n²), N+1, etc.) | Anyone |
+| `/perf` | Performance analysis (O(n²), N+1, …) | Anyone |
 | `/gaps` | Test coverage gap analysis | Anyone |
 | `/arch` | Architecture review | Anyone |
 | `/ci` | Analyze CI failure | Anyone |
 | `/security` | Secret + dependency scan on PR | Anyone |
-| `/secfull` | Full repo security scan | Anyone |
+| `/secfull` | Full repo security scan | Maintainers |
 | `/health` | Repo health grade | Anyone |
 | `/version` | Tags, releases, recent commits | Anyone |
 | `/summarize` | Summarize issue thread | Anyone |
@@ -100,116 +107,139 @@ curl https://your-app.onrender.com/ping
 | `/release` | Draft GitHub release | Maintainers |
 | `/runtests` | Trigger CI workflow | Maintainers |
 | `/notify` | Send Discord/Slack alert | Maintainers |
-| `/autofix` | Auto-apply code improvements | Maintainers |
+| `/autofix` | Auto-apply code improvements (human-confirmed via `/apply`) | Maintainers |
 
 ---
 
-## Run locally
+## Architecture
+
+```mermaid
+flowchart TB
+    GH[GitHub webhook] --> SEC["webhook_security<br/>HMAC-SHA256 · replay · IP rate limit"]
+    SEC --> IDEM["idempotency<br/>24h Redis dedup"]
+    IDEM --> Q["event_queue (Redis)<br/>durable · bounded · at-least-once"]
+    Q --> C["consumer group<br/>(in-process, 2 threads)"]
+    IDEM -. "Redis down → fallback" .-> TP["thread_pool<br/>bounded, backpressure"]
+    TP --> H
+    C --> H["handlers<br/>push · pull_request · issues · comments"]
+    H --> R["ai/router<br/>Groq 70B → 8B → Gemini → OpenRouter"]
+    R --> CB["circuit breakers<br/>per provider"]
+    H --> GHA["GitHub API client<br/>retry · rate-limit aware"]
+    IDE["Claude Code / Cursor / Codex"] -->|"MCP · Bearer auth"| MCP["/mcp endpoint<br/>8 tools · fail-closed"]
+    MCP --> H
+```
+
+**The queue is the backbone.** Every webhook is parked in Redis *before* the
+`202` ACK, then consumed by an in-process worker group:
+
+- **Durable** — deploys/restarts/crashes don't lose events; stranded work is requeued at boot, poison events dead-letter after 2 attempts
+- **Bounded** — queue capped at 200 events, envelopes at 512KB, dead-letter at 50: nothing grows unbounded on a 512MB / 25MB-Redis free tier
+- **Backpressured** — queue full → `503` → GitHub redelivers automatically
+- **Degradable** — Redis down → automatic fallback to the bounded thread pool (reduced durability, still working)
+- **Scale-ready** — need more throughput later? Run [`worker.py`](worker.py) as a Render worker service and set `EVENT_QUEUE_CONSUMERS=0` on web. Zero code changes.
+
+**Other key decisions:**
+
+- Idempotency keys live 24h — matches GitHub's webhook retry window
+- Redis runs `noeviction` — dedup/queue keys are never silently evicted
+- MCP + `/metrics` auth fail **closed** with constant-time compares
+- Secret scanning runs on all branches, not just main
+- Confidence gates: every automated action needs a per-action threshold (e.g. auto-merge ≥ 0.95)
+
+---
+
+## Use it from your IDE (MCP)
+
+Autopilot ships an MCP server — analyze PRs, scan secrets, and generate tests
+from Claude Code, Cursor, or Codex without leaving your editor:
+
+```bash
+claude mcp add --transport http github-autopilot \
+  https://your-app.onrender.com/mcp \
+  --header "Authorization: Bearer YOUR_MCP_API_KEY"
+```
+
+Full client configs, tool reference, and troubleshooting: **[docs/mcp-setup.md](docs/mcp-setup.md)**
+
+---
+
+## Configuration
+
+Drop `.ai-repo-manager.yml` in your repo root:
+
+```yaml
+push:
+  scan_secrets: true          # always on for all branches
+  scan_dependencies: true
+
+confidence:
+  thresholds:
+    auto_merge: 0.95
+    fix_command: 0.75
+
+commands:
+  permissions:
+    maintainer_only: [merge, rollback, release]
+
+bot:
+  footer: "*Powered by GitHub Autopilot*"
+```
+
+All keys are validated on load — bad values log a warning and fall back to safe defaults.
+
+---
+
+## Local development
 
 ```bash
 git clone https://github.com/Shweta-Mishra-ai/github-autopilot.git
 cd github-autopilot
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
-cp .env.example .env   # fill in your credentials
+cp .env.example .env          # fill in your credentials
 python server.py
 ```
 
-## Run tests
-
 ```bash
-pytest tests/ -v
+pytest tests/ -v              # 695 tests
+ruff check app/               # lint
 ```
 
 ---
 
-## Architecture
+## Security model
 
-```
-Webhook → server.py → webhook_security.py  (HMAC-SHA256 + replay + IP rate limit)
-                    → idempotency.py        (24h Redis dedup window)
-                    → thread_pool.py        (bounded pool, backpressure on saturation)
-                         │
-                 ┌───────┴────────┐
-           handlers/          handlers/
-           push.py            comments/
-           pull_request.py    ├── service.py    ← orchestration
-           autofix.py         ├── generator.py  ← /fix /explain /perf
-           issues.py          ├── reviewer.py   ← /health /ci /budget
-                              ├── publisher.py  ← /merge /rollback
-                              └── dispatcher.py ← rate limit + routing
-                         │
-                    ai/router.py          (Groq 70B → Gemini → OpenRouter fallback)
-                    ai/circuit_breaker.py (per-provider, thread-safe)
-                         │
-                    core/redis_client.py  (connection pool singleton)
-                    core/snapshot.py      (atomic state snapshots)
-                    core/learning.py      (per-repo acceptance tracking)
-```
-
-**Key design decisions:**
-
-- All webhook handlers run in a `ThreadPoolExecutor` — Flask thread only ACKs
-- Idempotency keys live 24 hours, matching GitHub's webhook retry window
-- Redis uses `noeviction` policy — idempotency keys are never silently evicted
-- Secret scanning runs on **all branches**, not just main
-- LLM provider failover is automatic: Groq → Gemini → OpenRouter
-
----
-
-## Configuration
-
-Add `.ai-repo-manager.yml` to your repository root to customise behaviour:
-
-```yaml
-push:
-  scan_secrets: true
-  scan_dependencies: true
-  scan_all_branches: false
-
-autofix:
-  max_files: 5
-
-commands:
-  maintainer_only:
-    - /merge
-    - /rollback
-    - /release
-
-bot:
-  footer: "\n\n---\n*Powered by GitHub Autopilot*"
-```
-
----
-
-## Security
-
-- Webhook signatures verified with HMAC-SHA256 on every request
-- Empty `GITHUB_WEBHOOK_SECRET` → all requests rejected at startup
-- `MCP_API_KEY` unset → MCP endpoint rejects all requests
-- IP rate limiting: 100 requests/min per IP (spoofing-resistant)
-- Autofix restricted to safe file extensions; CI/CD files protected
+- **Fail closed everywhere it matters**: unset webhook secret → boot refuses; unset `MCP_API_KEY` → MCP returns 503; token compares are constant-time
+- HMAC-SHA256 signature verification on every webhook, replay + IP rate limiting (spoof-resistant)
+- Autofix cannot touch CI workflows, Dockerfiles, env files, or security modules (path allowlist + prefix blocklist + traversal guard); changes require human `/apply`
+- Optional `MCP_ALLOWED_INSTALLATIONS` allowlist for tenant isolation
 - Bot-loop prevention on all event handlers
+- Prompt-injection mitigation: input sanitization + delimiter-wrapped user content
 
-Found a vulnerability? Email rather than opening a public issue.
+Found a vulnerability? Please email rather than opening a public issue.
 
 ---
 
 ## Changelog
 
+### V6 (unreleased)
+- **Durable Redis event queue** — webhooks survive restarts; bounded, at-least-once, dead-letter, thread-pool fallback
+- **Fail-closed MCP auth** + constant-time token compares + installation allowlist
+- Version single source of truth; config cross-tenant leak fixed; dead code purged
+- Pro README, logo, animated demo, MCP setup guide
+
 ### V5.0.0
-- `comments.py` refactored into `comments/` package — 5 focused modules
-- Redis connection pooling with thread-safe singleton
-- Secret scanning extended to all branches
-- LLM provider circuit breakers with automatic failover
-- MCP server for IDE integrations
-- Per-repo config via `.ai-repo-manager.yml`
-- 32 tests across all core modules
+- `comments.py` → `comments/` package (5 focused modules)
+- Redis connection pooling, secret scanning on all branches
+- LLM circuit breakers with automatic failover
+- MCP server for IDE integrations · per-repo YAML config
 
 ---
 
 <div align="center">
 
 Built by [Shweta Mishra](https://github.com/Shweta-Mishra-ai) · MIT License
+
+⭐ Star this repo if Autopilot saved you time!
 
 </div>

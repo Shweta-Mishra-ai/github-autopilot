@@ -244,10 +244,12 @@ class TestWorkerSafe:
         assert hasattr(mod, 'run')
 
     def test_docstring_explains_status(self):
-        """worker.py must have docstring explaining it is not active."""
+        """worker.py docstring must explain deployment status: in-process
+        consumers on free tier today, standalone worker service later."""
         with open(str(_ROOT / 'worker.py'), encoding='utf-8') as f:
             src = f.read()
-        assert 'not active' in src.lower() or 'archive' in src.lower()
+        assert 'free tier' in src.lower()
+        assert 'event_queue' in src.lower()
 
 
 # ══════════════════════════════════════════════════════

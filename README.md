@@ -26,7 +26,8 @@
 | ⚡ **26 slash commands** | `/fix` `/security` `/merge` `/autofix` `/rollback` … right in issue/PR comments |
 | 🛡️ **Safety-first automation** | Confidence gates, guardrails, human-in-the-loop `/apply`, maintainer-only permissions |
 | 🔁 **Durable event queue** | Webhooks parked in Redis, survive restarts & deploys — no event ever silently lost |
-| 🧠 **4-provider AI failover** | Groq 70B → Groq 8B → Gemini → OpenRouter, with per-provider circuit breakers |
+| 🧠 **5-provider AI failover** | Groq 70B → Groq 8B → Gemini → OpenRouter, with per-provider circuit breakers |
+| 🔒 **Local-LLM privacy mode** | Run on your own Ollama — set `LLM_LOCAL_ONLY=1` and code **never** leaves your infra |
 | 🔐 **Security scanning** | Secret detection on **every push to every branch**, dependency CVE checks |
 | 🔌 **MCP server built in** | Call Autopilot tools from Claude Code, Cursor, or Codex — [setup guide](docs/mcp-setup.md) |
 | 💸 **Runs on free tier** | Render free web service + free Redis. $0/month |
@@ -160,6 +161,28 @@ claude mcp add --transport http github-autopilot \
 ```
 
 Full client configs, tool reference, and troubleshooting: **[docs/mcp-setup.md](docs/mcp-setup.md)**
+
+---
+
+## Private mode — keep code on your own hardware
+
+By default the bot sends code to Groq/Gemini/OpenRouter. For private or
+regulated repos, point it at a local [Ollama](https://ollama.com) instead —
+source code never leaves your infrastructure:
+
+```bash
+ollama pull llama3.1:8b
+```
+
+```bash
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_MODEL=llama3.1:8b
+LLM_LOCAL_ONLY=1     # Ollama or nothing — no cloud provider is ever contacted
+# LLM_PREFER_LOCAL=1 # softer: try local first, fall back to cloud on failure
+```
+
+In `LLM_LOCAL_ONLY` mode the router **fails closed** — if Ollama is down, calls
+error out rather than silently leaking to a cloud API. `cost_usd` is always `0`.
 
 ---
 

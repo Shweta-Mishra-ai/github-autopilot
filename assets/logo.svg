@@ -1,0 +1,37 @@
+<svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="badge" x1="16" y1="16" x2="144" y2="144" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B1120"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="30" y1="30" x2="130" y2="130" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#818CF8"/>
+    </linearGradient>
+    <linearGradient id="chev" x1="80" y1="52" x2="80" y2="118" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#67E8F9"/>
+      <stop offset="1" stop-color="#A5B4FC"/>
+    </linearGradient>
+  </defs>
+
+  <!-- badge -->
+  <rect x="8" y="8" width="144" height="144" rx="38" fill="url(#badge)"/>
+  <rect x="8.5" y="8.5" width="143" height="143" rx="37.5" stroke="url(#ring)" stroke-opacity="0.35"/>
+
+  <!-- radar / orbit ring (autopilot heading) -->
+  <circle cx="80" cy="80" r="46" stroke="url(#ring)" stroke-width="3" stroke-opacity="0.55"/>
+  <circle cx="80" cy="80" r="46" stroke="url(#ring)" stroke-width="3" stroke-dasharray="4 12" stroke-opacity="0.9"/>
+
+  <!-- ascending git-commit nodes (the "repo" spine) -->
+  <line x1="80" y1="120" x2="80" y2="86" stroke="url(#chev)" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
+  <circle cx="80" cy="122" r="5" fill="#818CF8"/>
+  <circle cx="80" cy="104" r="4" fill="#A5B4FC" opacity="0.85"/>
+
+  <!-- upward chevron = autopilot / "on course" -->
+  <path d="M56 92 L80 60 L104 92" stroke="url(#chev)" stroke-width="9" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+  <path d="M68 92 L80 76 L92 92" stroke="#0B1120" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" fill="none" opacity="0.55"/>
+
+  <!-- AI spark -->
+  <circle cx="80" cy="52" r="4.5" fill="#22D3EE"/>
+  <circle cx="80" cy="52" r="9" stroke="#22D3EE" stroke-width="1.5" opacity="0.45"/>
+</svg>

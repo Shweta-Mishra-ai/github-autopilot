@@ -44,6 +44,17 @@ services:
         # Generate with: python3 -c "import secrets; print(secrets.token_hex(32))"
       - key: MAX_DISPATCH_WORKERS
         value: "6"
+      - key: EVENT_QUEUE_CONSUMERS
+        value: "2"
+        # In-process durable-queue consumers (free tier has no worker dyno).
+        # SCALING LATER: add a paid worker service running `python worker.py`,
+        # then set this to "0" here so the web process only enqueues:
+        #   - type: worker
+        #     name: github-autopilot-worker
+        #     env: python
+        #     buildCommand: pip install -r requirements.txt
+        #     startCommand: python worker.py
+        #     envVars: same as web (REDIS_URL, GITHUB_*, GROQ_API_KEY, ...)
       - key: REPO_DAILY_AI_LIMIT
         value: "150"
       - key: STALE_ISSUE_DAYS

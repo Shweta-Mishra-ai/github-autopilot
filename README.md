@@ -30,6 +30,7 @@
 | 🔒 **Local-LLM privacy mode** | Run on your own Ollama — set `LLM_LOCAL_ONLY=1` and code **never** leaves your infra |
 | 🔐 **Security scanning** | Secret detection on **every push to every branch**, dependency CVE checks |
 | 🔌 **MCP server built in** | Call Autopilot tools from Claude Code, Cursor, or Codex — [setup guide](docs/mcp-setup.md) |
+| 📊 **Live ops dashboard** | `/dashboard` — queue depth, event throughput, provider circuit-breakers, thread pool. Zero build, no CDN |
 | 💸 **Runs on free tier** | Render free web service + free Redis. $0/month |
 
 ---

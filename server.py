@@ -105,6 +105,18 @@ def ping():
     return jsonify({"status": "ok", "version": VERSION}), 200
 
 
+@app.route("/dashboard", methods=["GET"])
+def dashboard():
+    """
+    Live ops dashboard (HTML). The shell contains no secret; it polls the
+    auth-gated /health + /metrics from the browser using a token the operator
+    pastes in (kept in sessionStorage, never in the URL).
+    """
+    from app.dashboard import dashboard_html
+
+    return dashboard_html(), 200, {"Content-Type": "text/html; charset=utf-8"}
+
+
 @app.route("/health", methods=["GET"])
 def health():
     """

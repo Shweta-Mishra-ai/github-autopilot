@@ -8,10 +8,11 @@
 
 [![CI](https://github.com/Shweta-Mishra-ai/github-autopilot/actions/workflows/ci.yml/badge.svg)](https://github.com/Shweta-Mishra-ai/github-autopilot/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-695%20passing-22c55e?logo=pytest&logoColor=white)](tests/)
+[![Tests](https://img.shields.io/badge/tests-689%20passing-22c55e?logo=pytest&logoColor=white)](tests/)
 [![MCP](https://img.shields.io/badge/MCP-server-a371f7?logo=anthropic&logoColor=white)](docs/mcp-setup.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg)](LICENSE)
 [![Deploy to Render](https://img.shields.io/badge/deploy-Render-46E3B7?logo=render&logoColor=white)](https://render.com/deploy)
+[![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-db61a2?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/Shweta-Mishra-ai)
 
 <img src="assets/demo.svg" alt="Demo: /fix command in a GitHub issue, bot replies with root cause, fix and test in 4.2 seconds" width="720"/>
 
@@ -257,6 +258,20 @@ Found a vulnerability? Please email rather than opening a public issue.
 - Redis connection pooling, secret scanning on all branches
 - LLM circuit breakers with automatic failover
 - MCP server for IDE integrations · per-repo YAML config
+
+---
+
+## Support
+
+GitHub Autopilot is free and open source, built and maintained by one person.
+If it saves your team time, consider sponsoring — it funds the free-tier hosting
+and keeps development going:
+
+<div align="center">
+
+[![Sponsor GitHub Autopilot](https://img.shields.io/badge/❤%20Sponsor-GitHub%20Sponsors-db61a2?logo=githubsponsors&logoColor=white&style=for-the-badge)](https://github.com/sponsors/Shweta-Mishra-ai)
+
+</div>
 
 ---
 

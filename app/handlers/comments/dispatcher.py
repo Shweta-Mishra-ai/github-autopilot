@@ -41,7 +41,13 @@ def check_user_rate_limit(repo: str, author: str) -> bool:
         cnt = r.incr(key)
         r.expire(key, USER_CMD_WINDOW)
         return int(cnt) <= USER_CMD_LIMIT
-    except Exception:
+    except Exception as e:
+        # Explicit, observable fail-open: Redis down must not brick the bot,
+        # but operators need to see when the guard was bypassed.
+        from app.core.metrics import metrics
+
+        metrics.increment("ratelimit.failopen")
+        log.warning(f"ratelimit.redis_unavailable failopen repo={repo} author={author}: {e}")
         return True  # Redis unavailable → allow
 
 

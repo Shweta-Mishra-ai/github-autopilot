@@ -16,6 +16,7 @@ V4 NEW: Extended defaults for all new V4 commands and features.
 """
 
 import base64
+import copy
 import logging
 import threading
 import time
@@ -138,7 +139,10 @@ DEFAULTS: dict = {
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
-    result = base.copy()
+    # deepcopy the base: a shallow base.copy() shares nested dicts, so a
+    # per-repo override could mutate the shared DEFAULTS and leak config
+    # across tenants. deepcopy gives each Config an independent tree.
+    result = copy.deepcopy(base)
     for key, value in override.items():
         if key in result and isinstance(result[key], dict) and isinstance(value, dict):
             result[key] = _deep_merge(result[key], value)

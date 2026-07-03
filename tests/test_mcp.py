@@ -38,6 +38,9 @@ _mcp_server_path = _ROOT / "app" / "mcp" / "mcp_server.py"
 _mcp_server_alt  = _ROOT / "app" / "mcp" / "server.py"
 _MCP_MODULE = "app.mcp.mcp_server" if _mcp_server_path.exists() else "app.mcp.server"
 
+# v6: auth is fail-closed. A key MUST be configured; requests carry it as the token.
+_TEST_KEY = "test-mcp-key"
+
 
 def _import_mcp():
     """Import whichever mcp server module exists."""
@@ -51,22 +54,23 @@ def _import_mcp():
 class TestMCPProtocol:
 
     def setup_method(self, m=None):
-        self._patcher = patch(f'{_MCP_MODULE}.MCP_API_KEY', "")
-        self._patcher.start()
+        import os
+        self._env = patch.dict(os.environ, {"MCP_API_KEY": _TEST_KEY})
+        self._env.start()
 
     def teardown_method(self, m=None):
-        self._patcher.stop()
+        self._env.stop()
 
     def test_initialize(self):
         mod = _import_mcp()
-        resp, status = mod.handle_mcp_request("initialize", {}, "")
+        resp, status = mod.handle_mcp_request("initialize", {}, _TEST_KEY)
         assert status == 200
         assert resp["protocolVersion"] == "2024-11-05"
         assert resp["serverInfo"]["name"] == "github-autopilot"
 
     def test_tools_list_returns_8_tools(self):
         mod = _import_mcp()
-        resp, status = mod.handle_mcp_request("tools/list", {}, "")
+        resp, status = mod.handle_mcp_request("tools/list", {}, _TEST_KEY)
         assert status == 200
         assert len(resp["tools"]) == 8
 
@@ -80,13 +84,13 @@ class TestMCPProtocol:
 
     def test_unknown_method_returns_400(self):
         mod = _import_mcp()
-        _, status = mod.handle_mcp_request("bad/method", {}, "")
+        _, status = mod.handle_mcp_request("bad/method", {}, _TEST_KEY)
         assert status == 400
 
     def test_unknown_tool_returns_400_with_available(self):
         mod = _import_mcp()
         resp, status = mod.handle_mcp_request(
-            "tools/call", {"name": "nonexistent", "arguments": {}}, ""
+            "tools/call", {"name": "nonexistent", "arguments": {}}, _TEST_KEY
         )
         assert status == 400
         assert "available" in resp["error"]
@@ -94,27 +98,32 @@ class TestMCPProtocol:
 
 class TestMCPAuth:
 
-    def test_no_key_set_allows_all(self):
+    def test_no_key_set_fails_closed(self):
+        """v6: unset MCP_API_KEY must REJECT (503), never allow-all."""
+        import os
         mod = _import_mcp()
-        with patch(f'{_MCP_MODULE}.MCP_API_KEY', ""):
+        with patch.dict(os.environ, {"MCP_API_KEY": ""}):
             _, status = mod.handle_mcp_request("tools/list", {}, "")
-        assert status == 200
+        assert status == 503
 
     def test_wrong_token_gives_401(self):
+        import os
         mod = _import_mcp()
-        with patch(f'{_MCP_MODULE}.MCP_API_KEY', "correct"):
+        with patch.dict(os.environ, {"MCP_API_KEY": "correct"}):
             _, status = mod.handle_mcp_request("tools/list", {}, "wrong")
         assert status == 401
 
     def test_correct_token_gives_200(self):
+        import os
         mod = _import_mcp()
-        with patch(f'{_MCP_MODULE}.MCP_API_KEY', "correct"):
+        with patch.dict(os.environ, {"MCP_API_KEY": "correct"}):
             _, status = mod.handle_mcp_request("tools/list", {}, "correct")
         assert status == 200
 
     def test_empty_token_rejected_when_key_set(self):
+        import os
         mod = _import_mcp()
-        with patch(f'{_MCP_MODULE}.MCP_API_KEY', "correct"):
+        with patch.dict(os.environ, {"MCP_API_KEY": "correct"}):
             _, status = mod.handle_mcp_request("tools/list", {}, "")
         assert status == 401
 
@@ -379,11 +388,12 @@ class TestRunCommand:
 class TestToolsCallDispatch:
 
     def setup_method(self, m=None):
-        self._patcher = patch(f'{_MCP_MODULE}.MCP_API_KEY', "")
-        self._patcher.start()
+        import os
+        self._env = patch.dict(os.environ, {"MCP_API_KEY": _TEST_KEY})
+        self._env.start()
 
     def teardown_method(self, m=None):
-        self._patcher.stop()
+        self._env.stop()
 
     def test_explain_code_via_dispatch(self):
         mod = _import_mcp()
@@ -392,7 +402,7 @@ class TestToolsCallDispatch:
             resp, status = mod.handle_mcp_request("tools/call", {
                 "name": "explain_code",
                 "arguments": {"code": "def add(a,b): return a+b"}
-            }, "")
+            }, _TEST_KEY)
         assert status == 200
         assert "Adds numbers" in resp["content"][0]["text"]
 
@@ -402,7 +412,7 @@ class TestToolsCallDispatch:
                    return_value=("ok", MagicMock())):
             resp, status = mod.handle_mcp_request("tools/call", {
                 "name": "explain_code", "arguments": {"code": "x=1"}
-            }, "")
+            }, _TEST_KEY)
         assert "latency_ms" in resp
         assert resp["latency_ms"] >= 0
 
@@ -413,7 +423,7 @@ class TestToolsCallDispatch:
         try:
             resp, status = mod.handle_mcp_request("tools/call", {
                 "name": "explain_code", "arguments": {"code": "x=1"}
-            }, "")
+            }, _TEST_KEY)
         finally:
             mod.TOOL_HANDLERS["explain_code"] = original
         assert status == 500

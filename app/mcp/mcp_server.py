@@ -9,19 +9,48 @@ Compatible with:
   OpenCode               — .opencode/mcp.json
 
 Protocol: JSON-RPC 2.0 over HTTP POST /mcp
-Auth:     Bearer token via MCP_API_KEY env var
-          (REQUIRED in production — server rejects all requests if unset)
+Auth:     Bearer token via MCP_API_KEY env var, read at request time.
+          FAIL CLOSED — if MCP_API_KEY is unset the server rejects every
+          request with 503. A constant-time compare guards the token.
+Tenant:   MCP_ALLOWED_INSTALLATIONS (optional) restricts which GitHub App
+          installation IDs the tools may act on.
 """
 
+import hmac
 import logging
 import os
 import time
 
-MCP_API_KEY = os.environ.get("MCP_API_KEY", "")
+from app import __version__
 
 log = logging.getLogger(__name__)
 
-# MCP_API_KEY is read from env at request time (not frozen at import)
+
+def _mcp_api_key() -> str:
+    """Read MCP_API_KEY from env at request time (supports zero-downtime rotation)."""
+    return os.environ.get("MCP_API_KEY", "")
+
+
+def _installation_allowed(install_id) -> bool:
+    """
+    Optional tenant isolation for install-id-scoped tools.
+
+    MCP_ALLOWED_INSTALLATIONS is a comma-separated allowlist of GitHub App
+    installation IDs. When set, MCP tools may only act on those installations —
+    a single leaked MCP key can no longer drive commands against every install
+    the App is on. When unset, all installations are allowed (single-tenant
+    default) and a warning is logged so operators know the lever exists.
+    """
+    raw = os.environ.get("MCP_ALLOWED_INSTALLATIONS", "").strip()
+    if not raw:
+        log.warning(
+            "mcp.installation_allowlist_unset — any installation_id accepted. "
+            "Set MCP_ALLOWED_INSTALLATIONS to restrict (recommended for multi-tenant)."
+        )
+        return True
+    allowed = {p.strip() for p in raw.split(",") if p.strip()}
+    return str(install_id) in allowed
+
 
 # ─── Tool Definitions ────────────────────────────────────────────────────────
 
@@ -181,6 +210,8 @@ def _handle_analyze_pr(args: dict) -> str:
         install_id = args.get("installation_id")
         if not install_id:
             return "Error: installation_id is required for GitHub API access."
+        if not _installation_allowed(install_id):
+            return "Error: installation_id not permitted (MCP_ALLOWED_INSTALLATIONS)."
 
         token = get_installation_token(install_id)
         pr = gh_get(f"/repos/{repo}/pulls/{pr_number}", token)
@@ -236,6 +267,8 @@ def _handle_fix_issue(args: dict) -> str:
         return "Error: repo and issue_number are required."
     if not install_id:
         return "Error: installation_id is required."
+    if not _installation_allowed(install_id):
+        return "Error: installation_id not permitted (MCP_ALLOWED_INSTALLATIONS)."
 
     try:
         from app.ai.router import router
@@ -421,6 +454,8 @@ def _handle_get_repo_health(args: dict) -> str:
         return "Error: repo is required."
     if not install_id:
         return "Error: installation_id is required."
+    if not _installation_allowed(install_id):
+        return "Error: installation_id not permitted (MCP_ALLOWED_INSTALLATIONS)."
 
     try:
         from app.ai.router import router
@@ -467,6 +502,8 @@ def _handle_run_command(args: dict) -> str:
 
     if not repo or not issue_number or not command or not install_id:
         return "Error: repo, issue_number, command, and installation_id are required."
+    if not _installation_allowed(install_id):
+        return "Error: installation_id not permitted (MCP_ALLOWED_INSTALLATIONS)."
 
     # Read-only commands only — destructive ones require GitHub comment for audit trail
     ALLOWED = {
@@ -563,8 +600,13 @@ def handle_mcp_request(method: str, params: dict, auth_token: str) -> tuple[dict
     Main MCP request handler. Called from server.py /mcp endpoint.
     Returns (response_dict, http_status_code).
     """
-    _mcp_key = MCP_API_KEY
-    if _mcp_key and auth_token != _mcp_key:
+    # FAIL CLOSED: no configured key → refuse everything (503, not open).
+    _mcp_key = _mcp_api_key()
+    if not _mcp_key:
+        log.error("mcp.no_api_key — refusing request (fail closed). Set MCP_API_KEY.")
+        return {"error": {"code": -32001, "message": "Server auth not configured"}}, 503
+    # Constant-time compare to avoid token-timing side channel.
+    if not hmac.compare_digest(auth_token or "", _mcp_key):
         return {"error": {"code": -32001, "message": "Unauthorized"}}, 401
 
     start = time.time()
@@ -602,7 +644,7 @@ def handle_mcp_request(method: str, params: dict, auth_token: str) -> tuple[dict
         return {
             "protocolVersion": "2024-11-05",
             "capabilities": {"tools": {"listChanged": False}},
-            "serverInfo": {"name": "github-autopilot", "version": "4.2.0"},
+            "serverInfo": {"name": "github-autopilot", "version": __version__},
         }, 200
 
     return {"error": {"code": -32601, "message": f"Unknown method: {method}"}}, 400

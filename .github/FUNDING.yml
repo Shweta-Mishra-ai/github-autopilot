@@ -1,0 +1,7 @@
+# Enables the "Sponsor" button on the GitHub repo.
+# github: must be an account with GitHub Sponsors enabled.
+github: [Shweta-Mishra-ai]
+# Uncomment and fill any you use:
+# ko_fi: your_kofi
+# buy_me_a_coffee: your_handle
+# custom: ["https://your-donation-link"]

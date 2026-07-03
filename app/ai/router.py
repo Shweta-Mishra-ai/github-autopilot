@@ -62,6 +62,7 @@ COST_PER_1K = {
     "groq_8b": 0.00006,
     "gemini": 0.0,
     "openrouter": 0.0,
+    "ollama": 0.0,  # local — free and private
 }
 
 
@@ -71,8 +72,41 @@ class LLMRouter:
         self._groq_8b = GroqProvider("llama-3.1-8b-instant")
         self._gemini = None
         self._openrouter = None
+        self._ollama = None
         self._gemini_lock = threading.Lock()
         self._openrouter_lock = threading.Lock()
+        self._ollama_lock = threading.Lock()
+
+    @staticmethod
+    def _local_only() -> bool:
+        """
+        LLM_LOCAL_ONLY=1 → NO cloud provider is ever contacted. Source code
+        stays on your infrastructure. If Ollama is down, calls fail closed
+        (AllProvidersDown) rather than silently leaking to a cloud provider.
+        """
+        return os.environ.get("LLM_LOCAL_ONLY", "").strip().lower() in ("1", "true", "yes")
+
+    @staticmethod
+    def _prefer_local() -> bool:
+        """LLM_PREFER_LOCAL=1 → try Ollama first, fall back to cloud if it fails."""
+        return os.environ.get("LLM_PREFER_LOCAL", "").strip().lower() in ("1", "true", "yes")
+
+    def _get_ollama(self) -> "LLMProvider | None":
+        from app.ai.providers.ollama import is_configured
+
+        if not is_configured():
+            return None
+        if self._ollama is not None:
+            return self._ollama
+        with self._ollama_lock:
+            if self._ollama is None:
+                try:
+                    from app.ai.providers.ollama import OllamaProvider
+
+                    self._ollama = OllamaProvider()
+                except Exception as e:
+                    log.warning(f"router.ollama_init_failed: {e}")
+        return self._ollama
 
     def _get_gemini(self) -> "LLMProvider | None":
         if self._gemini is not None:
@@ -146,6 +180,20 @@ class LLMRouter:
         GUARANTEED to raise AllProvidersDown if nothing is available.
         """
         task_type = TASK_MAP.get(task, "standard")
+
+        # ── Privacy modes — evaluated before any cloud provider ────────────────
+        # LLM_LOCAL_ONLY: Ollama or nothing. Never leaks code to a cloud API.
+        if self._local_only():
+            ollama = self._get_ollama()
+            if ollama and get_breaker("ollama").is_available():
+                return ollama
+            raise AllProvidersDown()
+
+        # LLM_PREFER_LOCAL: try local first, but cloud fallback is allowed.
+        if self._prefer_local():
+            ollama = self._get_ollama()
+            if ollama and get_breaker("ollama").is_available():
+                return ollama
 
         # Long context → Gemini first
         if task_type == "long" or context_tokens > 6000:
@@ -267,13 +315,21 @@ class LLMRouter:
         self._log_and_track(task, meta)
         return text, meta
 
+    def _fallback_candidates(self) -> list:
+        """
+        Provider order for fallback. In LLM_LOCAL_ONLY mode the list contains
+        ONLY Ollama — cloud providers are never appended, so a local failure
+        can never silently leak code to a cloud API.
+        """
+        if self._local_only():
+            return [self._get_ollama()]
+        candidates = [self._groq_70b, self._groq_8b, self._get_gemini(), self._get_openrouter()]
+        if self._prefer_local():
+            candidates.insert(0, self._get_ollama())
+        return candidates
+
     def _try_fallback(self, system, user, max_tokens, temperature, timeout, failed_key):
-        candidates = [
-            self._groq_70b,
-            self._groq_8b,
-            self._get_gemini(),
-            self._get_openrouter(),
-        ]
+        candidates = self._fallback_candidates()
         for p in candidates:
             if p is None or p.provider_key == failed_key:
                 continue
@@ -286,12 +342,7 @@ class LLMRouter:
         return None
 
     def _try_fallback_text(self, system, user, max_tokens, timeout, failed_key):
-        candidates = [
-            self._groq_70b,
-            self._groq_8b,
-            self._get_gemini(),
-            self._get_openrouter(),
-        ]
+        candidates = self._fallback_candidates()
         for p in candidates:
             if p is None or p.provider_key == failed_key:
                 continue

@@ -1,0 +1,12 @@
+{
+  "$comment": "Claude Code project-scope MCP registration. Replace the URL with your deployed Render URL. MCP_API_KEY is read from your shell environment, never commit the real key. See docs/mcp-setup.md for Cursor/Codex/Claude Desktop configs.",
+  "mcpServers": {
+    "github-autopilot": {
+      "type": "http",
+      "url": "https://your-app.onrender.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${MCP_API_KEY}"
+      }
+    }
+  }
+}

@@ -8,7 +8,7 @@
 
 [![CI](https://github.com/Shweta-Mishra-ai/github-autopilot/actions/workflows/ci.yml/badge.svg)](https://github.com/Shweta-Mishra-ai/github-autopilot/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-732%20passing-22c55e?logo=pytest&logoColor=white)](tests/)
+[![Tests](https://img.shields.io/badge/tests-816%20passing-22c55e?logo=pytest&logoColor=white)](tests/)
 [![MCP](https://img.shields.io/badge/MCP-server-a371f7?logo=anthropic&logoColor=white)](docs/mcp-setup.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg)](LICENSE)
 [![Deploy to Render](https://img.shields.io/badge/deploy-Render-46E3B7?logo=render&logoColor=white)](https://render.com/deploy)
@@ -73,7 +73,7 @@ Install the GitHub App on your repos, then:
 
 ```bash
 curl https://github-autopilot-1.onrender.com/ping
-# → {"status": "ok", "version": "6.0.0"}
+# → {"status": "ok", "version": "6.1.0"}
 ```
 
 Comment `/health` on any issue. The bot replies with a repo health grade. Done. ✈️
@@ -249,7 +249,7 @@ python server.py
 ```
 
 ```bash
-pytest tests/ -v              # 695 tests
+pytest tests/ -v              # 816 tests, ~75% coverage
 ruff check app/               # lint
 ```
 
@@ -272,6 +272,12 @@ Found a vulnerability? Please email rather than opening a public issue.
 ---
 
 ## Changelog
+
+### V6.1.0 — 2026-07-05
+- **Live-validated, not just mock-tested**: booted the real app and drove it — real HMAC-signed webhooks through the full dispatch pipeline, `LLM_LOCAL_ONLY` refusing a genuinely unreachable network target, a full memory → encrypted-backup → restore round trip with an explicit no-plaintext-in-ciphertext assertion. Two real bugs found and fixed during this process: a duplicate/ungated release workflow, and the secret scanner flagging its own test fixtures.
+- **+84 tests** (732 → 816): full integration coverage for the webhook pipeline, the local-LLM privacy guarantee, the comment-dispatch entry point (all 25 commands' routing verified), the GitHub Security API reader, and Slack/Discord notifications. Coverage 65% → 75%.
+- **Two dead files removed** (verified via grep, not assumed): the pre-router V4 LLM client and an unwired V3 cron handler.
+- Documentation corrected to match reality: the testing guide referenced a test file that no longer existed and a CI config that didn't match `.github/workflows/ci.yml`; both rewritten from verified values.
 
 ### V6.0.0 — 2026-07-04
 - **Durable Redis event queue** — webhooks survive restarts; bounded, at-least-once, dead-letter, thread-pool fallback

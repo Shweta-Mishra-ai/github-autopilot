@@ -263,6 +263,9 @@ ruff check app/               # lint
 - Optional `MCP_ALLOWED_INSTALLATIONS` allowlist for tenant isolation
 - Bot-loop prevention on all event handlers
 - Prompt-injection mitigation: input sanitization + delimiter-wrapped user content
+- **No code-execution path**: the bot never runs untrusted repo code (no `eval`/`exec`/`subprocess`/`pickle`) — a malicious repo cannot execute code on the host
+
+Full analysis: [reliability & isolation audit](docs/architecture/reliability-audit.md) · where we're headed: [roadmap](docs/architecture/roadmap.md).
 
 Found a vulnerability? Please email rather than opening a public issue.
 
@@ -273,8 +276,13 @@ Found a vulnerability? Please email rather than opening a public issue.
 ### V6 (unreleased)
 - **Durable Redis event queue** — webhooks survive restarts; bounded, at-least-once, dead-letter, thread-pool fallback
 - **Fail-closed MCP auth** + constant-time token compares + installation allowlist
+- **Local-LLM privacy mode** (Ollama) — code never leaves your infra
+- **Private repo memory** — explainable ("knows why") + encrypted backup
+- **Live ops dashboard** (`/dashboard`) and **Claude Code plugin + marketplace**
+- **Observability** — boot warnings for missing auth tokens; silent optional-path failures now instrumented
+- **Maintainability** — `mcp_server.py` split into `tools.py` / `handlers.py` / dispatch
 - Version single source of truth; config cross-tenant leak fixed; dead code purged
-- Pro README, logo, animated demo, MCP setup guide
+- Pro README, logo, animated demo, MCP setup guide, [reliability audit](docs/architecture/reliability-audit.md) + [roadmap](docs/architecture/roadmap.md)
 
 ### V5.0.0
 - `comments.py` → `comments/` package (5 focused modules)

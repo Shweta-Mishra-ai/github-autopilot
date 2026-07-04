@@ -42,7 +42,7 @@
 ### 1. Create a GitHub App
 
 1. **github.com/settings/apps** → New GitHub App
-2. Webhook URL: `https://your-app.onrender.com/webhook`
+2. Webhook URL: `https://github-autopilot-1.onrender.com/webhook`
 3. Webhook secret: `python3 -c "import secrets; print(secrets.token_hex(32))"`
 4. Permissions: Issues ✏️ · Pull requests ✏️ · Contents ✏️ · Actions ✏️
 5. Subscribe to: Push · Pull request · Issue comment · Issues
@@ -72,7 +72,7 @@ Or manually: fork this repo → Render → **New Blueprint** → connect fork ([
 Install the GitHub App on your repos, then:
 
 ```bash
-curl https://your-app.onrender.com/ping
+curl https://github-autopilot-1.onrender.com/ping
 # → {"status": "ok", "version": "5.0.0"}
 ```
 
@@ -159,11 +159,33 @@ from Claude Code, Cursor, or Codex without leaving your editor:
 
 ```bash
 claude mcp add --transport http github-autopilot \
-  https://your-app.onrender.com/mcp \
+  https://github-autopilot-1.onrender.com/mcp \
   --header "Authorization: Bearer YOUR_MCP_API_KEY"
 ```
 
 Full client configs, tool reference, and troubleshooting: **[docs/mcp-setup.md](docs/mcp-setup.md)**
+
+---
+
+## Use it from your IDE (Claude Code plugin)
+
+Install the commands + MCP server in one step:
+
+```
+/plugin marketplace add Shweta-Mishra-ai/github-autopilot
+/plugin install github-autopilot
+```
+
+Point it at your deployed instance:
+
+```bash
+export GITHUB_AUTOPILOT_URL="https://github-autopilot-1.onrender.com/mcp"
+export MCP_API_KEY="<your server's MCP_API_KEY>"
+```
+
+Then, from Claude Code: `/github-autopilot:review owner/repo 42` ·
+`/github-autopilot:fix owner/repo 17` · `/github-autopilot:security file.py` ·
+`/github-autopilot:health owner/repo`. Full details in [`plugin/README.md`](plugin/README.md).
 
 ---
 

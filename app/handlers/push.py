@@ -339,17 +339,25 @@ def _index_changed_files(repo, commits, token, latest_sha, log) -> None:
             return
 
         indexed = 0
+        failed = 0
         for filepath in indexable[:10]:
             try:
                 file_data = gh_get(f"/repos/{repo}/contents/{filepath}", token)
                 content = base64.b64decode(file_data["content"]).decode("utf-8")
                 if embed_file(repo, filepath, content, latest_sha):
                     indexed += 1
-            except Exception:
-                pass
+            except Exception as e:
+                # Optional feature — never fatal — but make the failure observable
+                # instead of silent, so a repo that never indexes is diagnosable.
+                failed += 1
+                log.debug(f"intelligence.index_skip file={filepath}: {e}")
 
         if indexed > 0:
             log.info(f"intelligence.indexed {indexed}/{len(indexable)} files")
+        if failed:
+            from app.core.metrics import metrics
+
+            metrics.increment("intelligence.index_failed")
 
     except Exception as e:
         log.debug(f"Intelligence indexing skipped: {e}")

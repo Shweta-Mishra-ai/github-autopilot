@@ -166,6 +166,21 @@ def remember(repo: str, text: str, kind: str = "fact", meta: dict | None = None)
         return False
 
 
+def remember_decision(repo: str, decision: str, why: str = "", meta: dict | None = None) -> bool:
+    """
+    Store a decision together with its rationale — the "why" behind it.
+
+    This is what makes the brain *explainable*: when the decision is later
+    recalled, its reasoning comes with it, so the bot can justify what it does
+    instead of asserting it blindly. The rationale is kept in meta["why"] and
+    surfaced by recall_context().
+    """
+    m = dict(meta or {})
+    if why:
+        m["why"] = why.strip()[:MAX_TEXT_CHARS]
+    return remember(repo, decision, kind="decision", meta=m)
+
+
 def recall(repo: str, query: str, top_k: int = DEFAULT_TOP_K) -> list[MemoryItem]:
     """
     Return the top_k memories most relevant to `query`, most-relevant first.
@@ -209,6 +224,10 @@ def recall_context(repo: str, query: str, top_k: int = DEFAULT_TOP_K) -> str:
     lines, total = ["## Repository Memory (learned context)"], 0
     for it in items:
         line = f"- [{it.kind}] {it.text}"
+        # Surface the rationale so the model reasons *with the why*, not just the what.
+        why = (it.meta or {}).get("why")
+        if why:
+            line += f"\n    ↳ why: {why}"
         if total + len(line) > MAX_CONTEXT_CHARS:
             break
         lines.append(line)

@@ -75,6 +75,32 @@ memory.recall_context(repo, "queue")                 # -> prompt block, or "" if
 memory.count(repo); memory.clear(repo); memory.known_repos()
 ```
 
+### Explainable decisions — the brain knows *why*
+
+Decisions can carry their rationale, so the recalled context tells the model not
+just *what* was decided but *why*. This is what makes the brain reason instead of
+assert:
+
+```python
+memory.remember_decision(
+    repo,
+    "use Redis lists for the event queue",
+    why="Celery is too heavy for the 512MB free tier",
+)
+```
+
+`recall_context()` then renders:
+
+```
+## Repository Memory (learned context)
+- [decision] use Redis lists for the event queue
+    ↳ why: Celery is too heavy for the 512MB free tier
+```
+
+The rationale is stored in `meta["why"]` and is subject to the same privacy guard
+as everything else — it only reaches a prompt on a local model (or explicit
+`MEMORY_ALLOW_CLOUD=1`).
+
 `recall_context()` is already wired into the comment handler
 (`augment_with_memory` in `app/handlers/comments/dispatcher.py`), so every
 command automatically benefits when a local model is active.

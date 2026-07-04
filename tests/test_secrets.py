@@ -21,10 +21,22 @@ class TestSecretDetection:
         assert any(f.pattern_name == "GitHub Token" for f in findings)
 
     def test_detects_aws_access_key(self):
-        diff = "+aws_key = 'AKIAIOSFODNN7EXAMPLE'"
+        # Use a non-"EXAMPLE" key: the documented AKIAIOSFODNN7EXAMPLE is now
+        # allowlisted as a placeholder (see test_ignores_placeholder_secrets).
+        diff = "+aws_key = 'AKIA1234567890ABCDEF'"
         findings = scan_diff(diff)
         assert len(findings) > 0
         assert any(f.pattern_name == "AWS Access Key" for f in findings)
+
+    def test_ignores_placeholder_secrets(self):
+        # Documentation dummies / placeholders must NOT raise a finding — they
+        # were the source of noisy false-positive "secret detected" issues.
+        for dummy in (
+            "+aws_key = 'AKIAIOSFODNN7EXAMPLE'",
+            "+api_key = 'REPLACE_WITH_YOUR_KEY_HERE'",
+            "+token = 'your-token-placeholder-xxxxxx'",
+        ):
+            assert scan_diff(dummy) == [], f"placeholder wrongly flagged: {dummy}"
 
     def test_detects_private_key(self):
         diff = "+-----BEGIN RSA PRIVATE KEY-----"
@@ -65,7 +77,7 @@ class TestSecretDetection:
 
     def test_multiple_secrets_in_diff(self):
         diff = (
-            "+aws = 'AKIAIOSFODNN7EXAMPLE'\n"
+            "+aws = 'AKIA1234567890ABCDEF'\n"
             "+token = 'ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ1234567890'"
         )
         findings = scan_diff(diff)

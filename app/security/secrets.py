@@ -39,6 +39,32 @@ PATTERNS = [
 HIGH_ENTROPY_THRESHOLD = 4.5
 MIN_LENGTH_FOR_ENTROPY = 20
 
+# Well-known documentation dummies and obvious placeholders — never real secrets.
+# Filtering these removes the most common false positives (e.g. AWS's own
+# AKIAIOSFODNN7EXAMPLE, "REPLACE_WITH_…", "your-token-here") that otherwise open
+# noisy "secret detected" issues on every push.
+_PLACEHOLDER_MARKERS = (
+    "AKIAIOSFODNN7EXAMPLE",
+    "EXAMPLE",
+    "REPLACE_WITH",
+    "PLACEHOLDER",
+    "CHANGEME",
+    "CHANGE_ME",
+    "YOUR_",
+    "YOUR-",
+    "XXXXXX",
+    "DUMMY",
+    "NOT_REAL",
+    "NOTREAL",
+    "REDACTED",
+)
+
+
+def _is_placeholder(value: str) -> bool:
+    """True if the matched value is an obvious placeholder / documentation dummy."""
+    up = value.upper()
+    return any(marker in up for marker in _PLACEHOLDER_MARKERS)
+
 
 @dataclass
 class SecretFinding:
@@ -75,6 +101,8 @@ def scan_diff(diff: str) -> list[SecretFinding]:
             match = re.search(pattern, content)
             if match:
                 matched = match.group(0)
+                if _is_placeholder(matched):
+                    continue  # documented dummy / placeholder — not a real secret
                 redacted = matched[:6] + "..." + matched[-4:] if len(matched) > 12 else "***"
                 findings.append(
                     SecretFinding(
@@ -90,6 +118,8 @@ def scan_diff(diff: str) -> list[SecretFinding]:
         tokens = re.findall(r"['\"][a-zA-Z0-9+/=_\-]{20,}['\"]", content)
         for token in tokens:
             clean = token.strip("'\"")
+            if _is_placeholder(clean):
+                continue  # placeholder / example — skip
             if _entropy(clean) > HIGH_ENTROPY_THRESHOLD:
                 findings.append(
                     SecretFinding(

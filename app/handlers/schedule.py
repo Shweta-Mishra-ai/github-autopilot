@@ -79,7 +79,7 @@ def _mark_stale(repo: str, issue: dict, token: str, config):
                         f"This issue has been inactive for **{days_inactive} days** "
                         f"and was marked stale. Closing automatically.\n\n"
                         f"Feel free to reopen if this is still relevant!\n\n"
-                        f"> 🤖 Auto-closed by AI Repo Manager V4"
+                        f"> 🤖 Auto-closed by GitHub Autopilot"
                     )
                 },
             )
@@ -107,7 +107,7 @@ It will be **automatically closed in 7 days** unless there is new activity.
 - If this is resolved, please close it manually
 - If this needs help, add the `help wanted` label
 
-> 🤖 This is an automated message from AI Repo Manager V4
+> 🤖 This is an automated message from GitHub Autopilot
 """
 
     try:
@@ -219,7 +219,7 @@ def run_health_report(repo: str, installation_id: int):
 {f"### 💡 Recommendations{chr(10)}{recs_md}" if recommendations else "### 💡 All good — keep it up!"}
 
 ---
-> 🤖 Auto-generated monthly report by AI Repo Manager V4
+> 🤖 Auto-generated monthly report by GitHub Autopilot
 """
 
         gh_post(
@@ -278,7 +278,7 @@ pip install --upgrade {" ".join(f["package"] for f in findings[:5])}
 ```
 
 ---
-> 🤖 Auto-generated weekly report by AI Repo Manager V4
+> 🤖 Auto-generated weekly report by GitHub Autopilot
 """
 
         gh_post(

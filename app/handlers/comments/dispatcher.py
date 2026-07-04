@@ -80,7 +80,7 @@ def providers_down_comment(retry_in: int = 60) -> str:
         f"(circuit breakers open). Earliest retry: **~{retry_in}s**.\n\n"
         "Please try again in a minute.\n\n"
         "> Transient issue — no action needed.\n\n"
-        "---\n*🤖 AI Repo Manager V5*"
+        "---\n*🤖 GitHub Autopilot*"
     )
 
 

@@ -91,7 +91,7 @@ def handle(payload: dict):
         if fix_text and not fix_text.startswith("-"):
             fix_text = "- " + fix_text.replace("\n", "\n- ")
 
-        comment = f"## {cat_emoji} CI Failure — `{check_name}`\n\n**Root cause:** {r.get('root_cause', 'See details below')}\n\n### Fix\n{fix_text}\n{flaky_note}\n\n---\n*🤖 AI Repo Manager V4 — CI Analysis*{config.footer}"
+        comment = f"## {cat_emoji} CI Failure — `{check_name}`\n\n**Root cause:** {r.get('root_cause', 'See details below')}\n\n### Fix\n{fix_text}\n{flaky_note}\n\n---\n*🤖 GitHub Autopilot — CI Analysis*{config.footer}"
 
         gh_post(f"/repos/{repo}/issues/{pr_number}/comments", token, {"body": comment})
         log_ctx.done(f"CI failure comment posted PR #{pr_number}")

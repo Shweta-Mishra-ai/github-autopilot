@@ -139,7 +139,7 @@ class SecurityReport:
             lines.append(f"\n> ⚠️ Some APIs unavailable: {', '.join(self.errors)}")
 
         lines.append("\n---")
-        lines.append("*🤖 AI Repo Manager V4 — GitHub Security APIs*")
+        lines.append("*🤖 GitHub Autopilot — GitHub Security APIs*")
         return "\n".join(lines)
 
 

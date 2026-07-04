@@ -41,5 +41,5 @@ on the server side it rejects every request, so the endpoint is never open.
 
 ## Requirements
 
-- A deployed GitHub Autopilot instance ([1-click deploy](https://github.com/Shweta-Mishra-ai/github-autopilot#deploy-in-10-minutes)).
+- A deployed GitHub Autopilot instance ([1-click deploy](https://github.com/Shweta-Mishra-ai/github-autopilot#quickstart--deploy-in-10-minutes)).
 - `MCP_API_KEY` configured on that instance.

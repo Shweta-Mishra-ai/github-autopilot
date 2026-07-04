@@ -51,6 +51,27 @@ def check_user_rate_limit(repo: str, author: str) -> bool:
         return True  # Redis unavailable → allow
 
 
+def augment_with_memory(context: str, repo: str, query: str) -> str:
+    """
+    Append recalled repository memory to the prompt context.
+
+    Privacy guard lives in memory.recall_context(): it returns "" unless a local
+    model is active (or MEMORY_ALLOW_CLOUD=1), so sensitive learned context never
+    leaks to a cloud LLM in the default configuration. Never raises — memory is
+    an enhancement, not a hard dependency.
+    """
+    try:
+        from app.intelligence.memory import recall_context
+
+        mem_ctx = recall_context(repo, query)
+        if mem_ctx:
+            log.info(f"memory.injected repo={repo}")
+            return f"{context}\n\n{mem_ctx}"
+    except Exception as exc:
+        log.debug(f"memory.augment_skipped repo={repo}: {exc}")
+    return context
+
+
 def providers_down_comment(retry_in: int = 60) -> str:
     """Standard degraded-mode comment when all LLM providers are unavailable."""
     return (

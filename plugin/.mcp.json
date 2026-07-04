@@ -1,5 +1,5 @@
 {
-  "$comment": "MCP server for the GitHub Autopilot plugin. Set GITHUB_AUTOPILOT_URL and MCP_API_KEY in your environment. GITHUB_AUTOPILOT_URL is your deployed Render URL, e.g. https://your-app.onrender.com/mcp",
+  "$comment": "MCP server for the GitHub Autopilot plugin. Set GITHUB_AUTOPILOT_URL and MCP_API_KEY in your environment. GITHUB_AUTOPILOT_URL is your deployed Render URL, e.g. https://github-autopilot-1.onrender.com/mcp",
   "mcpServers": {
     "github-autopilot": {
       "type": "http",

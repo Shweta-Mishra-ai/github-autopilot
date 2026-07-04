@@ -16,7 +16,7 @@ The plugin talks to *your* deployed Autopilot server. Set two environment
 variables before launching your IDE:
 
 ```bash
-export GITHUB_AUTOPILOT_URL="https://your-app.onrender.com/mcp"
+export GITHUB_AUTOPILOT_URL="https://github-autopilot-1.onrender.com/mcp"
 export MCP_API_KEY="<the MCP_API_KEY you set on the server>"
 ```
 

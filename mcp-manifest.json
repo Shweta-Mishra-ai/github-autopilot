@@ -7,7 +7,9 @@
   "documentation": "https://github.com/Shweta-Mishra-ai/github-autopilot/blob/main/docs/mcp-setup.md",
   "transport": {
     "type": "http",
+    "base_url": "https://github-autopilot-1.onrender.com",
     "endpoint": "/mcp",
+    "url": "https://github-autopilot-1.onrender.com/mcp",
     "methods": ["initialize", "tools/list", "tools/call"]
   },
   "authentication": {

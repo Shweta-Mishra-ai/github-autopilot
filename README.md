@@ -42,7 +42,7 @@
 ### 1. Create a GitHub App
 
 1. **github.com/settings/apps** → New GitHub App
-2. Webhook URL: `https://your-app.onrender.com/webhook`
+2. Webhook URL: `https://github-autopilot-1.onrender.com/webhook`
 3. Webhook secret: `python3 -c "import secrets; print(secrets.token_hex(32))"`
 4. Permissions: Issues ✏️ · Pull requests ✏️ · Contents ✏️ · Actions ✏️
 5. Subscribe to: Push · Pull request · Issue comment · Issues
@@ -72,7 +72,7 @@ Or manually: fork this repo → Render → **New Blueprint** → connect fork ([
 Install the GitHub App on your repos, then:
 
 ```bash
-curl https://your-app.onrender.com/ping
+curl https://github-autopilot-1.onrender.com/ping
 # → {"status": "ok", "version": "5.0.0"}
 ```
 
@@ -159,7 +159,7 @@ from Claude Code, Cursor, or Codex without leaving your editor:
 
 ```bash
 claude mcp add --transport http github-autopilot \
-  https://your-app.onrender.com/mcp \
+  https://github-autopilot-1.onrender.com/mcp \
   --header "Authorization: Bearer YOUR_MCP_API_KEY"
 ```
 
@@ -179,7 +179,7 @@ Install the commands + MCP server in one step:
 Point it at your deployed instance:
 
 ```bash
-export GITHUB_AUTOPILOT_URL="https://your-app.onrender.com/mcp"
+export GITHUB_AUTOPILOT_URL="https://github-autopilot-1.onrender.com/mcp"
 export MCP_API_KEY="<your server's MCP_API_KEY>"
 ```
 

@@ -3,7 +3,7 @@
   "mcpServers": {
     "github-autopilot": {
       "type": "http",
-      "url": "https://your-app.onrender.com/mcp",
+      "url": "https://github-autopilot-1.onrender.com/mcp",
       "headers": {
         "Authorization": "Bearer ${MCP_API_KEY}"
       }

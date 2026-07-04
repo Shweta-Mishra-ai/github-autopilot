@@ -387,3 +387,28 @@ class TestLintCommits:
             _lint_commits("org/repo", commits, "tok", cfg, log)
             mock_post.assert_not_called()
 
+
+
+class TestSecretScanSkip:
+    """Test/example/docs paths must be skipped by the push secret scanner."""
+
+    def test_skips_test_and_example_paths(self):
+        from app.handlers.push import _skip_secret_scan
+
+        for p in [
+            "tests/test_memory.py",
+            "app/foo_test.py",
+            "test_secrets.py",
+            ".env.example",
+            "config/prod.env.example",
+            "docs/setup.md",
+            "fixtures/keys.txt",
+            "examples/demo.py",
+        ]:
+            assert _skip_secret_scan(p) is True, p
+
+    def test_scans_real_source_paths(self):
+        from app.handlers.push import _skip_secret_scan
+
+        for p in ["app/handlers/push.py", "server.py", "src/config.py", ""]:
+            assert _skip_secret_scan(p) is False, p

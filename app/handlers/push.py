@@ -145,6 +145,30 @@ def _findings_dedup_key(findings: list) -> str:
 # ── Secret scan ────────────────────────────────────────────────────────────────
 
 
+# Paths that legitimately contain example/dummy secrets — scanning them only
+# produces false-positive "secret detected" issues (the scanner's own fixtures,
+# .env.example, docs snippets).
+_SECRET_SCAN_SKIP = (
+    ".env.example",
+    ".env.sample",
+    ".env.template",
+)
+_SECRET_SCAN_SKIP_DIRS = ("tests/", "test/", "fixtures/", "examples/", "docs/")
+
+
+def _skip_secret_scan(filename: str) -> bool:
+    """True if the file is a test/example/docs path where dummy secrets are expected."""
+    if not filename:
+        return False
+    fn = filename.lower()
+    base = fn.rsplit("/", 1)[-1]
+    if base in _SECRET_SCAN_SKIP or base.endswith(".example"):
+        return True
+    if base.startswith("test_") or base.endswith("_test.py"):
+        return True
+    return any(d in fn for d in _SECRET_SCAN_SKIP_DIRS)
+
+
 def _scan_secrets(repo, commits, token, config, log) -> None:
     """
     Scan all added/modified file patches in `commits` for secrets.
@@ -162,6 +186,8 @@ def _scan_secrets(repo, commits, token, config, log) -> None:
         try:
             diff_data = gh_get(f"/repos/{repo}/commits/{sha}", token)
             for f in diff_data.get("files", []):
+                if _skip_secret_scan(f.get("filename", "")):
+                    continue  # test/example/docs — dummy secrets expected, skip
                 patch = f.get("patch", "")
                 if patch:
                     all_findings.extend(scan_diff(patch))
@@ -339,17 +365,25 @@ def _index_changed_files(repo, commits, token, latest_sha, log) -> None:
             return
 
         indexed = 0
+        failed = 0
         for filepath in indexable[:10]:
             try:
                 file_data = gh_get(f"/repos/{repo}/contents/{filepath}", token)
                 content = base64.b64decode(file_data["content"]).decode("utf-8")
                 if embed_file(repo, filepath, content, latest_sha):
                     indexed += 1
-            except Exception:
-                pass
+            except Exception as e:
+                # Optional feature — never fatal — but make the failure observable
+                # instead of silent, so a repo that never indexes is diagnosable.
+                failed += 1
+                log.debug(f"intelligence.index_skip file={filepath}: {e}")
 
         if indexed > 0:
             log.info(f"intelligence.indexed {indexed}/{len(indexable)} files")
+        if failed:
+            from app.core.metrics import metrics
+
+            metrics.increment("intelligence.index_failed")
 
     except Exception as e:
         log.debug(f"Intelligence indexing skipped: {e}")

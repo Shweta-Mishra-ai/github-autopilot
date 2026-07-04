@@ -71,6 +71,21 @@ def startup_check():
     if errors:
         raise RuntimeError("Startup validation failed:\n  - " + "\n  - ".join(errors))
 
+    # ── Non-fatal warnings — surface config gaps that weaken security but
+    #    should not block boot (the endpoints fail closed / degrade safely). ──
+    if not os.environ.get("METRICS_AUTH_TOKEN", "").strip():
+        log.warning(
+            "webhook_security.metrics_unauthed: METRICS_AUTH_TOKEN is NOT set — "
+            "/health and /metrics expose internal state PUBLICLY. Set a strong "
+            "random value to lock them (and the dashboard)."
+        )
+    if not os.environ.get("MCP_API_KEY", "").strip():
+        log.warning(
+            "webhook_security.mcp_unconfigured: MCP_API_KEY is NOT set — the /mcp "
+            "endpoint is fail-closed (returns 503) so the IDE plugin will NOT work "
+            "until you set it."
+        )
+
     log.info("webhook_security.startup_ok: all credentials validated.")
 
 

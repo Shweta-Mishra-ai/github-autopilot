@@ -145,7 +145,7 @@ After adding all variables, click **Save Changes**. Render will automatically re
 
    | Field | Value |
    |-------|-------|
-   | **GitHub App name** | `AI Repo Manager` (must be unique globally) |
+   | **GitHub App name** | `GitHub Autopilot` (must be unique globally) |
    | **Homepage URL** | `https://your-service-name.onrender.com` |
    | **Webhook URL** | `https://your-service-name.onrender.com/webhook` |
    | **Webhook secret** | The secret you generated in step 3 |
@@ -279,7 +279,7 @@ Create `.ai-repo-manager.yml` in your repository root to customise behaviour. Al
 
 bot:
   enabled: true
-  footer: "\n\n---\n*🤖 AI Repo Manager — your-repo-name*"
+  footer: "\n\n---\n*🤖 GitHub Autopilot — your-repo-name*"
 
 pull_requests:
   enabled: true

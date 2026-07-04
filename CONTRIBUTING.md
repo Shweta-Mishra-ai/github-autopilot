@@ -34,56 +34,79 @@ Thank you for your interest in contributing! This guide will help you get starte
 
 ## Project Structure
 
+This reflects the actual current layout — verify against `find app -name
+"*.py"` before trusting a stale copy of this section (this one was out of
+date until V6.1: it described an `app/queue/` and `app/storage/` that never
+existed in this form, and an `app/ai/client.py` that has since been removed
+as dead code).
+
 ```
 github-autopilot/
 │
-├── server.py                  # Webhook ingestion entry point
-├── worker.py                  # Background event processor
-├── Procfile                   # Process definitions
-├── requirements.txt           # Python dependencies
-├── .ai-repo-manager.yml       # Bot configuration
+├── server.py                   # Flask entry point — webhook + /health /mcp /dashboard routes
+├── worker.py                   # Standalone consumer process (paid-tier scale-out)
+├── requirements.txt            # Runtime dependencies
+├── requirements-dev.txt        # + pytest, ruff, pytest-cov
+├── .ai-repo-manager.yml        # Example per-repo bot configuration
 │
 ├── app/
-│   ├── core/                  # Foundation layer — no side effects
-│   │   ├── config.py          # YAML config loader
-│   │   ├── confidence.py      # Per-action confidence scoring
-│   │   ├── guardrails.py      # Deterministic safety checks
-│   │   ├── idempotency.py     # Event deduplication
-│   │   ├── logger.py          # Structured logging (structlog)
-│   │   └── metrics.py         # In-memory counters
+│   ├── core/                   # Foundation layer — no GitHub/AI API calls
+│   │   ├── config.py           # Per-repo YAML config loader + validation
+│   │   ├── confidence.py       # Per-action confidence scoring
+│   │   ├── guardrails.py       # Deterministic safety checks (auto-merge, etc.)
+│   │   ├── event_queue.py      # Durable Redis webhook queue + consumer group
+│   │   ├── thread_pool.py      # Bounded fallback dispatcher (Redis down)
+│   │   ├── idempotency.py      # Webhook delivery-id dedup
+│   │   ├── webhook_security.py # HMAC verify, rate limit, bot-loop guard, boot checks
+│   │   ├── authorization.py    # Maintainer-only command permission checks
+│   │   ├── memory_backup.py    # Encrypted (Fernet) memory export/import
+│   │   ├── learning.py         # Fix-acceptance tracking — NOT currently wired
+│   │   │                       #   into any handler; see testing-guide.md §11
+│   │   ├── redis_client.py     # Connection pool + in-memory dev fallback
+│   │   └── logger.py           # Structured stdlib logging
 │   │
-│   ├── queue/                 # Event queue layer
-│   │   ├── producer.py        # Enqueue events
-│   │   └── consumer.py        # Dequeue and yield events
+│   ├── intelligence/            # Repo memory ("the brain")
+│   │   └── memory.py            # Per-repo recall + privacy guard (local-only by default)
 │   │
-│   ├── storage/               # Persistence layer
-│   │   ├── events.py          # SQLite event log
-│   │   └── fixtures.py        # Replay test fixtures
+│   ├── security/                # Security scanning
+│   │   ├── secrets.py           # Regex + entropy secret detection in diffs
+│   │   ├── dependencies.py      # Vulnerability scanning (OSV.dev)
+│   │   └── scanner.py           # Reads GitHub's own Security APIs
 │   │
-│   ├── security/              # Security scanning
-│   │   ├── secrets.py         # Secret detection in diffs
-│   │   └── dependencies.py    # Vulnerability scanning (OSV.dev)
+│   ├── github/                  # GitHub API layer
+│   │   ├── auth.py              # JWT + installation token caching
+│   │   ├── client.py            # HTTP client with retry/backoff
+│   │   ├── rate_limit.py        # Rate limit tracking
+│   │   └── notifications.py     # Slack/Discord alerts
 │   │
-│   ├── github/                # GitHub API layer
-│   │   ├── auth.py            # JWT + installation tokens
-│   │   ├── client.py          # HTTP client with retry/backoff
-│   │   ├── rate_limit.py      # Rate limit tracking
-│   │   └── notifications.py   # Slack/Discord alerts
+│   ├── ai/                      # AI layer
+│   │   ├── router.py            # Provider selection, fallback, privacy modes
+│   │   ├── providers/           # groq.py, gemini.py, openrouter.py, ollama.py
+│   │   ├── circuit_breaker.py   # Per-provider failure tracking
+│   │   └── validator.py         # JSON validation + sanitization
 │   │
-│   ├── ai/                    # AI layer
-│   │   ├── client.py          # Groq API + model fallback
-│   │   └── validator.py       # JSON validation + sanitization
+│   ├── mcp/                     # MCP (Model Context Protocol) server
+│   │   ├── tools.py             # Tool schema definitions
+│   │   ├── handlers.py          # Tool implementations
+│   │   └── mcp_server.py        # Transport/dispatch, fail-closed auth
 │   │
-│   └── handlers/              # Event handlers
-│       ├── pull_request.py    # PR analysis + code review
-│       ├── issues.py          # Issue triage
-│       ├── comments.py        # Slash commands
-│       └── push.py            # Commit linting + secret scan
+│   ├── dashboard.py              # Self-contained HTML for GET /dashboard
+│   │
+│   └── handlers/                 # Event handlers
+│       ├── pull_request.py       # PR analysis + code review
+│       ├── issues.py              # Issue triage
+│       ├── push.py                # Commit linting + secret/dependency scan
+│       ├── comments.py            # Deprecated shim — re-exports comments/
+│       └── comments/               # Slash-command package
+│           ├── constants.py        # ALL_COMMANDS, rate limits
+│           ├── dispatcher.py       # Command extraction, memory augmentation
+│           ├── service.py          # handle_comment_event() — the real entry point
+│           ├── generator.py        # /fix /explain /improve /test /docs ...
+│           ├── reviewer.py         # /health /version /summarize /budget ...
+│           └── publisher.py        # /merge /apply /rollback /security ...
 │
-└── tests/
-    ├── test_guardrails.py
-    ├── test_validator.py
-    └── test_idempotency.py
+├── plugin/                       # Claude Code plugin (.claude-plugin/, commands/)
+└── tests/                         # 38 files, 816 tests — see docs/testing/testing-guide.md
 ```
 
 ---
@@ -92,34 +115,31 @@ github-autopilot/
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.10+ (CI matrix covers 3.10, 3.11, 3.12)
 - A GitHub account
-- A Groq API key — [console.groq.com](https://console.groq.com)
+- A Groq API key — [console.groq.com](https://console.groq.com) (free tier), or an [Ollama](https://ollama.com) install for local-only development
 
 ### Install dependencies
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # includes pytest, ruff, pytest-cov
 ```
 
 ### Environment variables
 
-Create a `.env` file in the root:
+Copy `.env.example` to `.env` and fill in your credentials — it's kept
+up to date with every environment variable the app reads, including the
+optional V6 features (event queue tuning, local-LLM privacy mode, memory).
 
-```env
-GITHUB_APP_ID=your_app_id
-GITHUB_PRIVATE_KEY=your_private_key_contents
-GITHUB_WEBHOOK_SECRET=your_webhook_secret
-GROQ_API_KEY=your_groq_api_key
+```bash
+cp .env.example .env
 ```
 
 ### Run locally
 
 ```bash
-# Terminal 1 — Web server
 python server.py
-
-# Terminal 2 — Worker
+# Optional — only for the paid-tier scale-out path (see event_queue.py):
 python worker.py
 ```
 
@@ -133,27 +153,34 @@ Each layer has strict boundaries. Please follow them:
 
 | Layer | Rule |
 |-------|------|
-| `app/core/` | No Streamlit, no external API calls, no side effects |
+| `app/core/` | No GitHub/AI API calls, no side effects beyond Redis |
 | `app/github/` | Only GitHub API calls, no AI calls |
-| `app/ai/` | Only Groq API calls, always validate responses |
+| `app/ai/` | Only LLM provider calls (Groq/Gemini/OpenRouter/Ollama via `router.py`), always validate responses |
 | `app/handlers/` | Orchestrate only — delegate to core/github/ai |
-| `app/security/` | Pure functions where possible, no GitHub API calls |
+| `app/security/` | Pure functions where possible, no GitHub API calls (`scanner.py` is the exception — it reads GitHub's own Security APIs) |
 
 ### Adding a new slash command
 
-1. Add command name to `ALL_COMMANDS` in `app/handlers/comments.py`
-2. Add routing in the `handle()` function
-3. Implement `_cmd_yourcommand()` function
+The command table lives in `app/handlers/comments/`, not the old
+`comments.py` monolith (that file is now a 2-line backward-compat shim).
+
+1. Add the command name to `ALL_COMMANDS` in `app/handlers/comments/constants.py`
+2. Implement `cmd_yourcommand()` in `generator.py` (AI content), `reviewer.py`
+   (read-only analysis), or `publisher.py` (GitHub writes) — whichever fits
+3. Add a `case "/yourcommand":` branch in `_dispatch()` in
+   `app/handlers/comments/service.py`
 4. Add to `DEFAULTS["commands"]["enabled"]` in `app/core/config.py`
-5. Add to `.ai-repo-manager.yml` commands list
-6. Write a test in `tests/`
+5. Add to `.ai-repo-manager.yml`'s commands list
+6. Write a test in `tests/test_comments_service_integration.py` (routing) and
+   alongside the command's own module
 
 ### Adding a new security scanner
 
 1. Create `app/security/yourscanner.py`
 2. Implement `scan_X(content: str) -> list[Finding]`
 3. Implement `format_findings(findings: list) -> str`
-4. Hook into `app/handlers/push.py`
+4. Hook into `app/handlers/push.py` (diff scanning) or `app/security/scanner.py`
+   (if it reads a GitHub Security API instead of scanning content directly)
 
 ---
 

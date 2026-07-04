@@ -14,6 +14,7 @@ from app.github.helpers import fmt_error
 
 from .constants import SKIP_AUTHORS
 from .dispatcher import (
+    augment_with_memory,
     check_user_rate_limit,
     extract_command,
     is_providers_down,
@@ -108,6 +109,10 @@ def handle_comment_event(payload: dict) -> None:
 
     # ── Context building ──────────────────────────────────────────────────
     context = f"Title: {issue.get('title', '')}\nBody: {(issue.get('body') or '')[:1500]}"
+
+    # ── Repository memory ("the brain") ────────────────────────────────────
+    # No-op in default cloud mode (privacy guard); enriches context on local models.
+    context = augment_with_memory(context, repo, f"{issue.get('title', '')} {cmd_args}".strip())
 
     # ── Dispatch ──────────────────────────────────────────────────────────
     response = _dispatch(

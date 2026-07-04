@@ -143,6 +143,39 @@ class TestEncryptedBackup:
         assert memory_backup.is_configured() is False
         assert memory_backup.export_encrypted(["o/r"]) is None
 
+class TestAugmentWithMemory:
+    """The comment-flow integration point (dispatcher.augment_with_memory)."""
+
+    def test_no_injection_in_cloud_mode(self, monkeypatch):
+        from app.handlers.comments.dispatcher import augment_with_memory
+
+        memory.remember("o/r", "internal decision about auth flow")
+        base = "Title: fix auth\nBody: ..."
+        # Default (cloud) mode → context returned unchanged, memory not leaked.
+        assert augment_with_memory(base, "o/r", "auth flow") == base
+
+    def test_injects_relevant_memory_when_local(self, monkeypatch):
+        from app.handlers.comments.dispatcher import augment_with_memory
+
+        monkeypatch.setenv("LLM_LOCAL_ONLY", "1")
+        memory.remember("o/r", "auth uses JWT RS256 with 15-minute expiry", kind="pattern")
+        out = augment_with_memory("Title: token bug", "o/r", "JWT auth expiry")
+        assert "Title: token bug" in out
+        assert "JWT RS256" in out
+        assert "Repository Memory" in out
+
+    def test_never_raises_on_error(self, monkeypatch):
+        from app.handlers.comments import dispatcher
+
+        # Force recall_context to blow up — augment must swallow and return input.
+        monkeypatch.setattr(
+            "app.intelligence.memory.recall_context",
+            lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+        assert dispatcher.augment_with_memory("ctx", "o/r", "q") == "ctx"
+
+
+class TestGithubTransport:
     def test_backup_to_github_pushes_ciphertext(self, monkeypatch):
         from unittest.mock import MagicMock
         from app.core import memory_backup

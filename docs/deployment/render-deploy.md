@@ -245,7 +245,7 @@ Fill in:
 
 | Field | Value |
 |-------|-------|
-| **GitHub App name** | `AI Repo Manager` (must be globally unique — add your username if needed) |
+| **GitHub App name** | `GitHub Autopilot` (must be globally unique — add your username if needed) |
 | **Homepage URL** | `https://your-service-name.onrender.com` |
 | **Webhook URL** | `https://your-service-name.onrender.com/webhook` |
 | **Webhook secret** | The exact value you set as `GITHUB_WEBHOOK_SECRET` in Render |

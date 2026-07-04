@@ -11,10 +11,6 @@
       "description": "Call GitHub Autopilot's AI tools (analyze PR, fix issue, scan secrets, repo health) from Claude Code via MCP.",
       "version": "5.0.0",
       "source": "./plugin",
-      "author": {
-        "name": "Shweta Mishra",
-        "url": "https://github.com/Shweta-Mishra-ai"
-      },
       "homepage": "https://github.com/Shweta-Mishra-ai/github-autopilot",
       "license": "MIT",
       "keywords": ["github", "mcp", "ai", "code-review", "security", "automation"]

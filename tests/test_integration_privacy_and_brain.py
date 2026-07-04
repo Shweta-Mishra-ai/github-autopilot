@@ -140,8 +140,14 @@ class TestMemoryBackupRoundTripIntegration:
 
         blob = memory_backup.export_encrypted([repo])
         assert blob is not None
-        assert b"Celery" not in blob
-        assert b"JWT" not in blob
+        # Check reasonably long, near-unique substrings — a short one like "JWT"
+        # (3 chars) has a real, measurable chance of appearing by pure coincidence
+        # in ~700 chars of high-entropy base64 ciphertext (~0.2% per run observed
+        # empirically), which is exactly the kind of statistically flaky assertion
+        # that must not ship. Longer substrings make the collision probability
+        # astronomically small while still proving no plaintext leaked.
+        assert b"Celery too heavy" not in blob
+        assert b"JWT RS256" not in blob
 
         memory.clear(repo)
         assert memory.count(repo) == 0

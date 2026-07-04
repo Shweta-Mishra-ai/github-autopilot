@@ -140,7 +140,7 @@ def format_report_comment(repo: str) -> str:
 **Total actions:** {bot["total_actions"]}
 
 ---
-*🤖 AI Repo Manager V4 — Use `/report` anytime for fresh stats*"""
+*🤖 GitHub Autopilot — Use `/report` anytime for fresh stats*"""
 
 
 def _today() -> str:

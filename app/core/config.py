@@ -35,7 +35,7 @@ _CONFIG_TTL = 300  # 5 minutes in seconds
 DEFAULTS: dict = {
     "bot": {
         "enabled": True,
-        "footer": ("🤖 [AI Repo Manager V4](https://github.com/Shweta-Mishra-ai/github-autopilot)"),
+        "footer": ("🤖 [GitHub Autopilot](https://github.com/Shweta-Mishra-ai/github-autopilot)"),
     },
     "pull_requests": {
         "enabled": True,
@@ -245,7 +245,7 @@ class Config:
 
     @property
     def footer(self) -> str:
-        text = self.get("bot", "footer", default="🤖 AI Repo Manager V4")
+        text = self.get("bot", "footer", default="🤖 GitHub Autopilot")
         return f"\n\n---\n*{text}*"
 
 

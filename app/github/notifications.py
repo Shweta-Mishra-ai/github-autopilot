@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 
 import requests
 
+from app import __version__
+
 log = logging.getLogger(__name__)
 
 SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
@@ -109,7 +111,7 @@ def _send_slack(title: str, message: str, severity: str):
                     "color": color_map.get(severity, "#3498DB"),
                     "title": title,
                     "text": message[:1000],
-                    "footer": "AI Repo Manager V4",
+                    "footer": "GitHub Autopilot",
                     "ts": int(datetime.now(timezone.utc).timestamp()),
                 }
             ]
@@ -137,7 +139,7 @@ def _send_discord(
             "description": message[:4096],
             "color": color,
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "footer": {"text": "AI Repo Manager V4"},
+            "footer": {"text": "GitHub Autopilot"},
         }
         if url:
             embed["url"] = url
@@ -323,14 +325,14 @@ def test_discord() -> tuple[bool, str]:
         payload = {
             "embeds": [
                 {
-                    "title": "✅ AI Repo Manager V4 — Discord Test",
+                    "title": "✅ GitHub Autopilot — Discord Test",
                     "description": "Discord webhook is connected and working correctly!",
                     "color": _COLORS["success"],
                     "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "footer": {"text": "AI Repo Manager V4"},
+                    "footer": {"text": "GitHub Autopilot"},
                     "fields": [
                         {"name": "Status", "value": "Connected", "inline": True},
-                        {"name": "Version", "value": "V4.0", "inline": True},
+                        {"name": "Version", "value": __version__, "inline": True},
                     ],
                 }
             ]

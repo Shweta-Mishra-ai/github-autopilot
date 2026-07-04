@@ -294,15 +294,9 @@ Found a vulnerability? Please email rather than opening a public issue.
 
 ## Support
 
-GitHub Autopilot is free and open source, built and maintained by one person.
-If it saves your team time, consider sponsoring — it funds the free-tier hosting
-and keeps development going:
-
-<div align="center">
-
-[![Sponsor GitHub Autopilot](https://img.shields.io/badge/❤%20Sponsor-GitHub%20Sponsors-db61a2?logo=githubsponsors&logoColor=white&style=for-the-badge)](https://github.com/sponsors/Shweta-Mishra-ai)
-
-</div>
+Free and open source. If you'd like to support development, sponsorship is
+available via [GitHub Sponsors](https://github.com/sponsors/Shweta-Mishra-ai) —
+entirely optional.
 
 ---
 

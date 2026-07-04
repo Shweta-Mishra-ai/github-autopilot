@@ -74,3 +74,32 @@ Shipped and tested (726 passing, CI green):
   provider down → circuit breaker, queue full → 503 → GitHub retries). "Never
   fails" is not achievable; "fails safe and visibly" is — and that's the target.
   Every remaining silent path is now instrumented.
+
+## V6.0.0 retrospective — 2026-07-04
+
+Released after the durable queue, local-LLM privacy mode, private memory +
+encrypted backup, ops dashboard, Claude Code plugin, and a full reliability
+audit shipped and merged. 777 tests passing, 0 open issues, 0 open PRs, main CI
+green. Validated live (not just via mocks): real HMAC webhook → dispatch pipeline,
+`LLM_LOCAL_ONLY` refusing a real unreachable network target rather than
+falling back to cloud, and a full memory → encrypted-backup → restore round
+trip with an explicit assertion that no plaintext reaches the ciphertext.
+
+Two real bugs were caught and fixed *during* this release, not after:
+duplicate/stale content in the auto-generated GitHub Release notes (two
+workflows both reacting to the tag), and a scanner flagging its own test
+fixtures as leaked secrets. Both are now regression-tested.
+
+**What to watch next:** `app/security/scanner.py` (20% coverage) and
+`app/github/notifications.py` (26%) are the largest coverage gaps in the
+codebase — both pre-date V6 and weren't touched this round, so they need real
+test-writing, not just validation.
+
+`app/ai/client.py` and `app/handlers/schedule.py` show 0% coverage —
+**verified dead, not just untested**: grepped `app/`, `server.py`, `worker.py`,
+`tests/`, `render.yaml`, and the CLI entrypoint, and nothing imports either
+module. `client.py` is the pre-router V4 Groq client, superseded by
+`app/ai/router.py` + `app/ai/providers/*`. `schedule.py` is a V3 cron handler
+with no cron trigger wired anywhere (no scheduled Render service, no caller).
+Recommend deleting both rather than writing tests for them — same reasoning
+as the `archive/` purge in the V6 hardening pass.

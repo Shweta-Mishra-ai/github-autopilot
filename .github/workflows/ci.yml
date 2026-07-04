@@ -175,6 +175,9 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          name: "GitHub Autopilot ${{ github.ref_name }}"
           generate_release_notes: true
+          body: |
+            See the [README Changelog](https://github.com/${{ github.repository }}#changelog) for full details.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

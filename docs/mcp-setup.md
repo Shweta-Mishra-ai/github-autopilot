@@ -24,7 +24,7 @@ installation IDs) so a leaked key cannot act on other installations.
 
 ```bash
 claude mcp add --transport http github-autopilot \
-  https://your-app.onrender.com/mcp \
+  https://github-autopilot-1.onrender.com/mcp \
   --header "Authorization: Bearer YOUR_MCP_API_KEY"
 ```
 
@@ -35,7 +35,7 @@ claude mcp add --transport http github-autopilot \
   "mcpServers": {
     "github-autopilot": {
       "type": "http",
-      "url": "https://your-app.onrender.com/mcp",
+      "url": "https://github-autopilot-1.onrender.com/mcp",
       "headers": { "Authorization": "Bearer YOUR_MCP_API_KEY" }
     }
   }
@@ -48,7 +48,7 @@ claude mcp add --transport http github-autopilot \
 {
   "mcpServers": {
     "github-autopilot": {
-      "url": "https://your-app.onrender.com/mcp",
+      "url": "https://github-autopilot-1.onrender.com/mcp",
       "headers": { "Authorization": "Bearer YOUR_MCP_API_KEY" }
     }
   }
@@ -59,7 +59,7 @@ claude mcp add --transport http github-autopilot \
 
 ```toml
 [mcp_servers.github-autopilot]
-url = "https://your-app.onrender.com/mcp"
+url = "https://github-autopilot-1.onrender.com/mcp"
 http_headers = { "Authorization" = "Bearer YOUR_MCP_API_KEY" }
 ```
 
@@ -84,16 +84,16 @@ there is a visible audit trail.
 
 ```bash
 # Discovery (no auth)
-curl https://your-app.onrender.com/mcp
+curl https://github-autopilot-1.onrender.com/mcp
 
 # List tools (auth required)
-curl -X POST https://your-app.onrender.com/mcp \
+curl -X POST https://github-autopilot-1.onrender.com/mcp \
   -H "Authorization: Bearer YOUR_MCP_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"method": "tools/list", "params": {}}'
 
 # Call a tool
-curl -X POST https://your-app.onrender.com/mcp \
+curl -X POST https://github-autopilot-1.onrender.com/mcp \
   -H "Authorization: Bearer YOUR_MCP_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"method": "tools/call", "params": {"name": "scan_secrets", "arguments": {"content": "api_key = \"AKIAIOSFODNN7EXAMPLE\""}}}'

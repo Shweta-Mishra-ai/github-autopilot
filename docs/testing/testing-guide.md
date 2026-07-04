@@ -27,10 +27,12 @@
 ## 1. Overview
 
 ```
-Tests across 18 files (count updated automatically by CI)
-Zero network calls — all GitHub API and LLM calls mocked
-Zero environment variables required
-Execution time: ~2 seconds
+816 tests across 38 files, 75% line coverage
+Zero network calls in the unit suite — all GitHub API and LLM calls mocked
+A handful of integration tests (test_integration_e2e.py, test_dashboard.py)
+  boot the real Flask app in-process via test_client() — still no real
+  network egress, but real internal wiring instead of mocked internals
+Execution time: ~6 seconds
 ```
 
 The test suite runs anywhere: locally, in CI, without Redis, without API
@@ -68,26 +70,50 @@ ruff check app/ --select E,F,W --ignore E501
 
 ## 3. Test File Map
 
+Counts below are exact (`pytest --collect-only -q`), not estimates — a
+stale count here (this table previously listed a `test_storage.py` that no
+longer exists) is worse than no table.
+
 | File | Tests | What is covered |
 |------|-------|----------------|
-| `test_webhook_security.py` | 35 | Signature verify, empty-secret regression, replay, rate limit, bot detection, pipeline, startup, authorization |
-| `test_enhanced_secrets.py` | 26 | 10+ credential patterns, false positives, entropy, redaction, dedup |
-| `test_push.py` | 25 | Secret scan dedup regression, dep scan, commit lint, skip guards |
-| `test_pull_request.py` | 22 | PR routing, blast radius, code review, test gap detection |
-| `test_issues.py` | 15 | Issue triage, labels, welcome comment, notifications |
-| `test_ci.py` | 18 | CI failure analysis, pattern tracking, skip conditions |
-| `test_autofix.py` | 15 | Fix plan, apply fix, 70% safety guard, branch creation |
-| `test_router.py` | — | Provider selection, task routing, fallback chain |
-| `test_hallucination.py` | — | Confidence scoring, pattern detection, thresholds |
-| `test_idempotency.py` | — | Redis SET NX, in-memory fallback, fingerprinting |
-| `test_guardrails.py` | — | PR merge guards, confidence thresholds |
-| `test_analytics.py` | — | Record/retrieve analytics, weekly report format |
-| `test_secrets.py` | — | Original secrets.py (kept alongside enhanced) |
-| `test_providers.py` | — | Per-provider API call mocking, response parsing |
-| `test_confidence.py` | — | Per-action confidence gates, threshold enforcement |
-| `test_comments.py` | — | Slash command dispatch, permission denial, rate limit |
-| `test_storage.py` | — | SQLite event log, fixture capture, replay |
-| `test_validator.py` | — | JSON schema validation, type checking |
+| `test_commands_fixed.py` | 62 | Slash command parsing/dispatch across the full command set |
+| `test_v6_fixes.py` | 44 | V6 hardening regressions: version SSOT, fail-closed MCP, config isolation |
+| `test_mcp.py` | 42 | MCP protocol handlers, tool schemas, fail-closed auth, installation allowlist |
+| `test_autofix.py` | 42 | Fix plan, apply fix, 70% safety guard, branch creation, path blocklist |
+| `test_webhook_security.py` | 41 | Signature verify, replay, rate limit, bot detection, startup checks |
+| `test_comments_service_integration.py` | 40 | `handle_comment_event` end-to-end: rate limit, auth, memory augmentation, dispatch routing table (all 25 commands), error containment |
+| `test_comments_package.py` | 38 | `comments/` package structure and public API shims |
+| `test_week1_fixes.py` | 32 | Early reliability fixes regression suite |
+| `test_redis_client.py` | 32 | `_FakeRedis` fallback, connection pooling, production fail-fast |
+| `test_analytics.py` | 29 | Record/retrieve analytics, weekly report format |
+| `test_push.py` | 27 | Secret scan dedup, dependency scan, commit lint, path-skip guards |
+| `test_guardrails.py` | 27 | PR merge guards, confidence thresholds |
+| `test_notifications.py` | 26 | Slack + Discord dispatch, event filtering, failure containment |
+| `test_enhanced_secrets.py` | 26 | Credential patterns, false positives, entropy, redaction, dedup |
+| `test_hallucination.py` | 25 | Confidence scoring, pattern detection, thresholds |
+| `test_validator.py` | 22 | JSON schema validation, type checking |
+| `test_memory.py` | 21 | Repo memory recall, privacy guard, encrypted backup round trip |
+| `test_ci.py` | 20 | CI failure analysis, pattern tracking, skip conditions |
+| `test_pull_request.py` | 19 | PR routing, blast radius, code review, test gap detection |
+| `test_event_queue.py` | 19 | Durable Redis queue: enqueue, consumer thread lifecycle, crash recovery |
+| `test_idempotency.py` | 18 | Redis SET NX, in-memory fallback, fingerprinting |
+| `test_comments.py` | 18 | Slash command dispatch, permission denial, rate limit |
+| `test_secrets.py` | 15 | Secret pattern/entropy detection, placeholder allowlist |
+| `test_scanner.py` | 13 | GitHub Security API reader (Dependabot/CodeQL/secret-scanning) |
+| `test_providers.py` | 13 | Per-provider API call mocking, response parsing |
+| `test_issues.py` | 13 | Issue triage, labels, welcome comment, notifications |
+| `test_hardening_v6.py` | 13 | Installation allowlist, config deepcopy isolation |
+| `test_plugin.py` | 12 | Claude Code plugin/marketplace manifest validation |
+| `test_snapshot.py` | 11 | Rollback snapshots, atomic bot-action recording |
+| `test_router.py` | 11 | Provider selection, task routing, fallback chain |
+| `test_ollama_local.py` | 11 | Local LLM provider + `LLM_LOCAL_ONLY`/`LLM_PREFER_LOCAL` router modes |
+| `test_learning.py` | 11 | Fix-acceptance tracking (see §11 — not currently wired into any handler) |
+| `test_confidence.py` | 11 | Per-action confidence gates, threshold enforcement |
+| `test_integration_e2e.py` | 10 | Real Flask app + real HMAC webhook, no mocked internals |
+| `test_coverage_boost.py` | 8 | Misc small-function coverage top-ups |
+| `test_observability_brain.py` | 7 | Boot-time auth warnings, explainable memory decisions |
+| `test_integration_privacy_and_brain.py` | 5 | Full-path proof that `LLM_LOCAL_ONLY` never calls a cloud provider |
+| `test_dashboard.py` | 3 | `/dashboard` route, no-secret-in-shell guarantee |
 
 ---
 
@@ -590,6 +616,21 @@ class TestFeatureFlags:
 
 ## 11. Known Gotchas
 
+### `app/core/learning.py` + `app/ai/prompt_builder.py` are unwired
+
+Both modules are fully implemented and unit-tested (`test_learning.py`,
+11 tests) — `record_fix_accepted`, `record_autofix_merged`,
+`get_repo_patterns`, prompt customization from learned patterns. But no
+handler currently calls into either one; `prompt_builder.py` is never
+imported outside its own module, and nothing outside `learning.py` calls
+its public functions. This is different from dead code (like the V4
+`app/ai/client.py` and V3 `app/handlers/schedule.py`, removed in V6.1 —
+those were superseded/orphaned duplicates): this is a coherent, tested
+feature that was built but never wired into the live event flow. Wiring
+it in (e.g. recording outcomes on `/apply` and `/merge`, feeding
+`get_repo_patterns` into prompt construction) is a real, scoped follow-up
+— see `docs/architecture/roadmap.md`.
+
 ### `format_budget_comment` patches at wrong location
 
 ```python
@@ -659,67 +700,84 @@ and manual dismissal to resolve.
 
 ## 12. Coverage Targets
 
-Run: `python -m pytest --cov=app --cov-report=term-missing tests/`
+Run: `python -m pytest --cov=app --cov-report=term-missing tests/`. CI enforces
+a 60% floor (`--cov-fail-under=60`); overall is 75% as of V6.1. Numbers below
+are the actual measured values, not estimates — remeasure before editing this
+table rather than guessing.
 
-| Module | Current | Target |
-|--------|---------|--------|
-| `app/handlers/comments.py` | ~55% | 70% |
-| `app/handlers/pull_request.py` | ~60% | 70% |
-| `app/handlers/issues.py` | ~55% | 65% |
-| `app/handlers/push.py` | ~60% | 70% |
-| `app/handlers/ci.py` | ~60% | 70% |
-| `app/handlers/autofix.py` | ~65% | 75% |
-| `app/ai/router.py` | ~70% | 80% |
-| `app/ai/circuit_breaker.py` | ~85% | 90% |
-| `app/ai/hallucination.py` | ~80% | 85% |
-| `app/core/idempotency.py` | ~90% | 90% |
-| `app/core/config.py` | ~75% | 80% |
-| `app/security/enhanced_secrets.py` | ~80% | 85% |
-| `server.py` | ~40% | 60% |
+| Module | Current | Target | Notes |
+|--------|---------|--------|-------|
+| `app/security/scanner.py` | 98% | — | Closed from 20% in V6.1 |
+| `app/github/notifications.py` | 96% | — | Closed from 26% in V6.1 |
+| `app/handlers/comments/service.py` | 99% | — | Closed from 41% in V6.1 — the real entry point every slash command flows through |
+| `app/handlers/pull_request.py` | 80% | 85% | |
+| `app/handlers/issues.py` | 89% | 90% | |
+| `app/handlers/push.py` | 76% | 80% | |
+| `app/handlers/autofix.py` | 76% | 85% | |
+| `app/ai/router.py` | 69% | 80% | |
+| `app/ai/circuit_breaker.py` | 92% | 95% | |
+| `app/core/config.py` | 45% | 70% | Largest real remaining gap — validation edge cases |
+| `app/github/client.py` | 38% | 60% | Retry/backoff branches under-exercised |
+| `app/security/dependencies.py` | 38% | 60% | |
+| `server.py` | not measured standalone | — | Exercised via `test_integration_e2e.py` + `test_dashboard.py` |
 
 ---
 
 ## 13. CI Configuration
 
+The real, current workflow — reproduced here rather than a simplified example,
+since a "simplified for docs" version is exactly what went stale last time.
+See `.github/workflows/ci.yml` for the source of truth; this is a summary.
+
 ```yaml
-# .github/workflows/ci.yml
+name: CI
+on: [push, pull_request]           # pull_request only targets main
+permissions: { contents: read }
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
-      - run: pip install -r requirements.txt
-      - run: python -m pytest tests/ -q
-        # Zero network calls, runs in < 30s
-
   lint:
-    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - run: pip install ruff
-      - run: |
-          ruff check app/ \
-            --select E,F,W \
-            --ignore E501 \
-            --output-format=github
+      - ruff check app/ --select E,F,W,B,C4,SIM --ignore E501,B008
+      - ruff format --check app/
+
+  test:
+    needs: lint
+    strategy:
+      matrix: { python-version: ["3.10", "3.11", "3.12"] }
+    services: { redis: "redis:7-alpine" }
+    steps:
+      - pip install -r requirements-dev.txt
+      - Smoke test: import every core module (catches boot-time regressions)
+      - pytest tests/ --cov=app --cov-fail-under=60 -m "not e2e and not integration" -x
+
+  security:
+    needs: lint
+    steps:
+      - pip-audit --requirement requirements.txt
+
+  release:                          # tag-triggered only, gated on the above
+    needs: [test, lint, security]
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - softprops/action-gh-release@v2   # name + body point at the README changelog
 ```
 
 **Rules enforced:**
-- `E` — pycodestyle errors (syntax, spacing, indentation)
-- `F` — pyflakes (undefined names, unused imports, unused variables)
-- `W` — pycodestyle warnings
-- `E501` ignored — line length not enforced
+- `E,F,W,B,C4,SIM` — pycodestyle, pyflakes, bugbear, comprehensions, simplify
+- `E501,B008` ignored — line length and function-call-as-default-arg not enforced
+- Coverage floor: 60% (`--cov-fail-under=60`)
+- `release` only runs after `test`, `lint`, and `security` all pass — see
+  `docs/architecture/roadmap.md`'s V6.0.0 retrospective for why this matters
+  (a second, ungated release workflow used to also react to tags and caused
+  duplicated release notes; it was removed in V6.0.0's hotfix)
 
 **Reproduce CI locally:**
 
 ```bash
-python -m pytest tests/ -q
-pip install ruff
-ruff check app/ --select E,F,W --ignore E501
+pip install -r requirements-dev.txt
+ruff check app/ --select E,F,W,B,C4,SIM --ignore E501,B008
+ruff format --check app/
+pytest tests/ --cov=app --cov-report=term-missing --cov-fail-under=60
 ```
 
 **Common CI failures and fixes:**

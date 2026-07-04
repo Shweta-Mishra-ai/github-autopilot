@@ -167,6 +167,28 @@ Full client configs, tool reference, and troubleshooting: **[docs/mcp-setup.md](
 
 ---
 
+## Use it from your IDE (Claude Code plugin)
+
+Install the commands + MCP server in one step:
+
+```
+/plugin marketplace add Shweta-Mishra-ai/github-autopilot
+/plugin install github-autopilot
+```
+
+Point it at your deployed instance:
+
+```bash
+export GITHUB_AUTOPILOT_URL="https://your-app.onrender.com/mcp"
+export MCP_API_KEY="<your server's MCP_API_KEY>"
+```
+
+Then, from Claude Code: `/github-autopilot:review owner/repo 42` ·
+`/github-autopilot:fix owner/repo 17` · `/github-autopilot:security file.py` ·
+`/github-autopilot:health owner/repo`. Full details in [`plugin/README.md`](plugin/README.md).
+
+---
+
 ## Private mode — keep code on your own hardware
 
 By default the bot sends code to Groq/Gemini/OpenRouter. For private or

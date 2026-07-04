@@ -643,11 +643,15 @@ class TestServerRoutes(unittest.TestCase):
         self.assertEqual(data["status"], "ok")
 
     def test_index(self):
+        from app import __version__
+
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, 200)
         data = json.loads(resp.data)
         self.assertIn("version", data)
-        self.assertEqual(data["version"], "5.0.0")
+        # Compare against the SSOT rather than a hardcoded string — this is
+        # exactly the drift the version-SSOT hardening was meant to prevent.
+        self.assertEqual(data["version"], __version__)
 
     def test_webhook_rejects_missing_signature(self):
         """Webhook without HMAC signature must be rejected 401."""

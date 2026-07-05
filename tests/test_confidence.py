@@ -85,5 +85,5 @@ class TestConfidenceGate:
         with caplog.at_level(logging.INFO, logger="handler.confidence"):
             result = self.gate.evaluate("pr_title_rewrite", {"confidence": 0.9})
         assert result["auto_apply"] is True
-        assert any("confidence.evaluated" in r.message for r in caplog.records)
+        assert any("confidence.evaluated" in record.message for record in caplog.records)
 

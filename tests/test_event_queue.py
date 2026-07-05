@@ -17,6 +17,7 @@ from app.core.redis_client import _FakeRedis
 def fake_redis(monkeypatch):
     r = _FakeRedis()
     monkeypatch.setattr(eq, "get_redis", lambda: r)
+    monkeypatch.setattr(eq, "get_redis_blocking", lambda: r)
     monkeypatch.setattr(eq, "is_redis_available", lambda: True)
     return r
 

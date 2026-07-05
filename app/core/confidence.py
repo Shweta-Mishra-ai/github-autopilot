@@ -4,9 +4,14 @@ V3: Per-action confidence scoring.
 Low confidence = suggest only, don't auto-apply.
 """
 
-from app.core.logger import get_logger
+from app.core.logger import EventLogger
 
-log = get_logger(__name__)
+# get_logger() returns a plain stdlib logging.Logger, which does not accept
+# arbitrary keyword args (action=, score=, ...) — that raises
+# "TypeError: Logger._log() got an unexpected keyword argument". EventLogger
+# is this codebase's structured-logging wrapper (see app/core/logger.py) and
+# is what every log.info(msg, key=val, ...) call site below actually needs.
+log = EventLogger("confidence")
 
 # Default thresholds per action (0.0 - 1.0)
 DEFAULT_THRESHOLDS = {

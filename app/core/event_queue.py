@@ -59,6 +59,9 @@ import time
 from typing import Callable
 
 from app.core.metrics import metrics
+
+# get_redis_blocking() (not get_redis()) is required for the BLMOVE call in
+# _consume_once() -- see redis_client.BLOCKING_SOCKET_TIMEOUT for why.
 from app.core.redis_client import get_redis, get_redis_blocking, is_redis_available
 
 log = logging.getLogger(__name__)

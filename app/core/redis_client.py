@@ -19,7 +19,10 @@ _IS_PRODUCTION = (
 
 _pool: redis_lib.ConnectionPool | None = None
 _client = None
-_client_lock = threading.Lock()
+# RLock (not Lock): get_redis_blocking()'s no-REDIS_URL fallback calls get_redis()
+# from inside its own `with _client_lock:` block. A plain Lock would deadlock the
+# same thread against itself there; RLock allows that same-thread reentry.
+_client_lock = threading.RLock()
 
 
 def get_redis() -> "redis_lib.Redis | _FakeRedis":

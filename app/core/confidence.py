@@ -6,11 +6,8 @@ Low confidence = suggest only, don't auto-apply.
 
 from app.core.logger import EventLogger
 
-# get_logger() returns a plain stdlib logging.Logger, which does not accept
-# arbitrary keyword args (action=, score=, ...) — that raises
-# "TypeError: Logger._log() got an unexpected keyword argument". EventLogger
-# is this codebase's structured-logging wrapper (see app/core/logger.py) and
-# is what every log.info(msg, key=val, ...) call site below actually needs.
+# EventLogger (not get_logger/stdlib Logger) because evaluate() below logs
+# structured kwargs (action=, score=, ...) that a plain Logger rejects.
 log = EventLogger("confidence")
 
 # Default thresholds per action (0.0 - 1.0)

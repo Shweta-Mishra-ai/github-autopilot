@@ -3,6 +3,8 @@ Tests - tests/test_confidence.py
 V3: Unit tests for confidence scoring system.
 """
 
+import logging
+
 from app.core.confidence import ConfidenceGate, DEFAULT_THRESHOLDS
 
 
@@ -68,4 +70,20 @@ class TestConfidenceGate:
     def test_all_default_thresholds_are_valid(self):
         for action, threshold in DEFAULT_THRESHOLDS.items():
             assert 0.0 <= threshold <= 1.0, f"{action} threshold out of range"
+
+    def test_evaluate_logs_at_info_without_raising(self, caplog):
+        """
+        Regression guard: evaluate() logs via log.info("...", action=, score=,
+        auto_apply=, threshold=). A plain stdlib logging.Logger does not accept
+        arbitrary kwargs and raises TypeError -- but only once INFO-level
+        logging is actually enabled (Python short-circuits the kwargs check
+        when the level is disabled). This suite's conftest sets LOG_LEVEL=
+        WARNING globally, which is exactly why this bug shipped to production
+        (Render runs LOG_LEVEL=INFO) without ever failing a test. Force INFO
+        here so this test would have caught it.
+        """
+        with caplog.at_level(logging.INFO, logger="handler.confidence"):
+            result = self.gate.evaluate("pr_title_rewrite", {"confidence": 0.9})
+        assert result["auto_apply"] is True
+        assert any("confidence.evaluated" in record.message for record in caplog.records)
 

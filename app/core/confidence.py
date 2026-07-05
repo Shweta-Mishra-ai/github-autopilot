@@ -4,9 +4,11 @@ V3: Per-action confidence scoring.
 Low confidence = suggest only, don't auto-apply.
 """
 
-from app.core.logger import get_logger
+from app.core.logger import EventLogger
 
-log = get_logger(__name__)
+# EventLogger (not get_logger/stdlib Logger) because evaluate() below logs
+# structured kwargs (action=, score=, ...) that a plain Logger rejects.
+log = EventLogger("confidence")
 
 # Default thresholds per action (0.0 - 1.0)
 DEFAULT_THRESHOLDS = {

@@ -35,6 +35,18 @@ FAILURE MODES (all explicit, all observable via metrics)
   Queue full       → FULL → 503 → GitHub redelivers (up to ~1h of retries).
   Handler crashes  → event requeued once (attempts+1), then dead-lettered.
   Process killed   → events in evq:processing requeued on next boot.
+
+FIXED: consumers were logging a spurious "queue.consumer_error ... Timeout
+  reading from socket" on nearly every idle poll cycle in production. Root
+  cause: BLMOVE's own blocking wait (BLOCK_SECONDS=5) was racing the shared
+  Redis client's socket read timeout (also 5s, in redis_client.py) — when the
+  server legitimately blocked for the full 5s waiting for new work, the
+  client's own read timeout fired at essentially the same instant, so nearly
+  every idle poll raised a false error. _consume_once() now uses
+  get_redis_blocking() (redis_client.py), a dedicated connection with a
+  generous 30s socket timeout, for exactly this reason. Fast (non-blocking)
+  operations elsewhere keep using get_redis()'s tight 5s timeout so they still
+  fail fast if Redis is genuinely down.
 """
 
 from __future__ import annotations
@@ -47,7 +59,10 @@ import time
 from typing import Callable
 
 from app.core.metrics import metrics
-from app.core.redis_client import get_redis, is_redis_available
+
+# get_redis_blocking() (not get_redis()) is required for the BLMOVE call in
+# _consume_once() -- see redis_client.BLOCKING_SOCKET_TIMEOUT for why.
+from app.core.redis_client import get_redis, get_redis_blocking, is_redis_available
 
 log = logging.getLogger(__name__)
 
@@ -170,8 +185,14 @@ def _consume_once(handler: Callable[[str, dict, str], None]) -> bool:
     """
     One consume step: BLMOVE pending→processing, run handler, LREM processing.
     Returns True if an event was processed. Split out of the loop for tests.
+
+    Uses get_redis_blocking() (generous socket timeout) rather than get_redis()
+    (tight 5s timeout) for the BLMOVE call: a client socket timeout equal to or
+    below BLOCK_SECONDS races the server's own blocking wait and raises a
+    spurious "Timeout reading from socket" error on nearly every idle poll —
+    see redis_client.BLOCKING_SOCKET_TIMEOUT for the full explanation.
     """
-    r = get_redis()
+    r = get_redis_blocking()
     # LPUSH producer + RIGHT-pop consumer = FIFO ordering
     raw = r.blmove(PENDING_KEY, PROCESSING_KEY, timeout=BLOCK_SECONDS, src="RIGHT", dest="LEFT")
     if raw is None:

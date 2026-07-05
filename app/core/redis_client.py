@@ -19,7 +19,10 @@ _IS_PRODUCTION = (
 
 _pool: redis_lib.ConnectionPool | None = None
 _client = None
-_client_lock = threading.Lock()
+# RLock (not Lock): get_redis_blocking()'s no-REDIS_URL fallback calls get_redis()
+# from inside its own `with _client_lock:` block. A plain Lock would deadlock the
+# same thread against itself there; RLock allows that same-thread reentry.
+_client_lock = threading.RLock()
 
 
 def get_redis() -> "redis_lib.Redis | _FakeRedis":
@@ -75,6 +78,70 @@ def get_redis() -> "redis_lib.Redis | _FakeRedis":
         return _client
 
 
+# Blocking commands (BLPOP/BRPOP/BLMOVE) hold the connection open server-side
+# for up to their own `timeout` argument while waiting for data. If the
+# client's socket read timeout is <= that duration, the client can time out
+# client-side while the server is still legitimately blocking — a classic
+# redis-py footgun that produces spurious "Timeout reading from socket" errors
+# on essentially every idle poll. This must stay comfortably larger than the
+# longest blocking-command timeout used anywhere in the app (currently
+# app.core.event_queue.BLOCK_SECONDS = 5s).
+BLOCKING_SOCKET_TIMEOUT = 30
+
+_blocking_pool: redis_lib.ConnectionPool | None = None
+_blocking_client = None
+
+
+def get_redis_blocking() -> "redis_lib.Redis | _FakeRedis":
+    """
+    Like get_redis(), but backed by a connection pool with a generous socket
+    timeout suitable for blocking commands. Use this for BLPOP/BRPOP/BLMOVE;
+    use get_redis() for everything else so fast operations still fail fast
+    when Redis is genuinely down.
+
+    Falls back to get_redis()'s own in-memory stub when REDIS_URL is unset,
+    so dev/test callers share the identical fake store.
+    """
+    global _blocking_pool, _blocking_client
+
+    if _blocking_client is not None:
+        return _blocking_client
+
+    with _client_lock:
+        if _blocking_client is not None:
+            return _blocking_client
+
+        redis_url = os.environ.get("REDIS_URL", "")
+        if not redis_url:
+            _blocking_client = get_redis()
+            return _blocking_client
+
+        try:
+            _blocking_pool = redis_lib.ConnectionPool.from_url(
+                redis_url,
+                max_connections=6,
+                socket_connect_timeout=5,
+                socket_timeout=BLOCKING_SOCKET_TIMEOUT,
+                retry_on_timeout=True,
+                decode_responses=True,
+            )
+            _blocking_client = redis_lib.Redis(connection_pool=_blocking_pool)
+            _blocking_client.ping()
+            log.info(f"redis.blocking_connected url={redis_url[:30]}...")
+        except Exception as e:
+            if _IS_PRODUCTION:
+                raise RuntimeError(
+                    f"Redis (blocking pool) connection failed in production: {e}. "
+                    "Check REDIS_URL and that the Redis service is running."
+                ) from e
+            log.warning(
+                f"Redis blocking-pool connection failed: {e} — using in-memory fallback (dev/test only)"
+            )
+            _blocking_client = _FakeRedis()
+
+        return _blocking_client
+
+
 def is_redis_available() -> bool:
     """Returns True if real Redis is connected (not in-memory fallback)."""
     try:
@@ -88,11 +155,13 @@ def is_redis_available() -> bool:
 
 
 def reset_client() -> None:
-    """Force-reset the singleton (tests only)."""
-    global _pool, _client
+    """Force-reset the singleton(s) (tests only)."""
+    global _pool, _client, _blocking_pool, _blocking_client
     with _client_lock:
         _pool = None
         _client = None
+        _blocking_pool = None
+        _blocking_client = None
 
 
 class _FakeRedis:

@@ -74,6 +74,77 @@ class TestSingleton:
         assert isinstance(r, rc._FakeRedis)
 
 
+class TestBlockingClient:
+    """
+    get_redis_blocking() backs BLPOP/BRPOP/BLMOVE callers with a generous
+    socket timeout. A client socket timeout <= the server-side blocking
+    `timeout` argument races the server's legitimate blocking wait and raises
+    spurious "Timeout reading from socket" errors on nearly every idle poll —
+    this is exactly the bug this dedicated client exists to avoid.
+    """
+
+    def test_blocking_timeout_exceeds_event_queue_block_seconds(self):
+        from app.core.event_queue import BLOCK_SECONDS
+
+        assert rc.BLOCKING_SOCKET_TIMEOUT > BLOCK_SECONDS, (
+            "the blocking client's socket timeout must stay comfortably larger "
+            "than any blocking command's server-side timeout, or the client "
+            "will race the server and raise spurious read-timeout errors"
+        )
+
+    def test_returns_same_instance_every_call(self):
+        r1 = rc.get_redis_blocking()
+        r2 = rc.get_redis_blocking()
+        assert r1 is r2
+
+    def test_no_redis_url_shares_get_redis_fake(self):
+        """In dev/test fallback, both getters must share one fake store."""
+        with patch.dict(os.environ, {"REDIS_URL": ""}):
+            rc.reset_client()
+            plain = rc.get_redis()
+            blocking = rc.get_redis_blocking()
+        assert plain is blocking
+        assert isinstance(blocking, rc._FakeRedis)
+
+    def test_connection_failure_falls_back_to_fake(self):
+        import redis as redis_lib
+        with patch.dict(os.environ, {"REDIS_URL": "redis://unreachable:9999/0"}):
+            rc.reset_client()
+            with patch.object(redis_lib.Redis, "ping", side_effect=Exception("refused")):
+                r = rc.get_redis_blocking()
+        assert isinstance(r, rc._FakeRedis)
+
+    def test_reset_client_clears_blocking_singleton_too(self):
+        with patch.dict(os.environ, {"REDIS_URL": ""}):
+            rc.reset_client()
+            r1 = rc.get_redis_blocking()
+            rc.reset_client()
+            r2 = rc.get_redis_blocking()
+        assert r1 is not r2
+
+    def test_real_connection_uses_generous_socket_timeout(self):
+        """The pool actually created for a real Redis URL uses the generous timeout,
+        not the tight 5s default used by get_redis()."""
+        import redis as redis_lib
+
+        captured = {}
+        real_from_url = redis_lib.ConnectionPool.from_url
+
+        def spy_from_url(url, **kwargs):
+            captured.update(kwargs)
+            return real_from_url(url, **kwargs)
+
+        with patch.dict(os.environ, {"REDIS_URL": "redis://unreachable:9999/0"}):
+            rc.reset_client()
+            with (
+                patch.object(redis_lib.ConnectionPool, "from_url", side_effect=spy_from_url),
+                patch.object(redis_lib.Redis, "ping", side_effect=Exception("refused")),
+            ):
+                rc.get_redis_blocking()
+
+        assert captured.get("socket_timeout") == rc.BLOCKING_SOCKET_TIMEOUT
+
+
 class TestFakeRedis:
 
     def setup_method(self):

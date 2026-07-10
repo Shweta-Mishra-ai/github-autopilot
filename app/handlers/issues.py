@@ -25,6 +25,7 @@ SKIP_AUTHORS = {
     "renovate[bot]",
     "github-actions[bot]",
     "ai-repo-manager[bot]",
+    "github-autopilot[bot]",
 }
 
 

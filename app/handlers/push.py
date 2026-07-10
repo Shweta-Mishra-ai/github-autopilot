@@ -55,6 +55,7 @@ SKIP_AUTHORS = {
     "renovate[bot]",
     "github-actions[bot]",
     "ai-repo-manager[bot]",
+    "github-autopilot[bot]",
 }
 
 # Sprint 8: TTL for secret-finding dedup (seconds).

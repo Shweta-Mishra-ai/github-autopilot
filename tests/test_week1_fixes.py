@@ -258,27 +258,66 @@ class TestWorkerSafe:
 class TestCLIWorkerConfig:
 
     def test_default_workers_is_1(self):
-        with open(str(_ROOT / 'ai_repo_manager/cli.py'), encoding='utf-8') as f:
+        with open(str(_ROOT / 'github_autopilot/cli.py'), encoding='utf-8') as f:
             src = f.read()
         assert 'default=2' not in src, "cli.py must not default to 2 workers"
         assert 'default=1' in src
 
     def test_worker_class_is_gthread(self):
-        with open(str(_ROOT / 'ai_repo_manager/cli.py'), encoding='utf-8') as f:
+        with open(str(_ROOT / 'github_autopilot/cli.py'), encoding='utf-8') as f:
             src = f.read()
         assert 'gthread' in src
         assert '--worker-class=sync' not in src
 
     def test_threads_flag_present(self):
-        with open(str(_ROOT / 'ai_repo_manager/cli.py'), encoding='utf-8') as f:
+        with open(str(_ROOT / 'github_autopilot/cli.py'), encoding='utf-8') as f:
             src = f.read()
         assert '--threads' in src
 
     def test_no_v4_version_strings(self):
-        with open(str(_ROOT / 'ai_repo_manager/cli.py'), encoding='utf-8') as f:
+        with open(str(_ROOT / 'github_autopilot/cli.py'), encoding='utf-8') as f:
             src = f.read()
         assert 'v4.7' not in src
         assert 'V4 —' not in src
+
+    def test_no_hardcoded_semver_anywhere(self):
+        """--version must come from app.__version__ (the SSOT), never a literal.
+        A hardcoded version="4.0.0" survived here until V6.1.1 — exactly the
+        drift this file was supposed to prevent."""
+        import re
+        with open(str(_ROOT / 'github_autopilot/cli.py'), encoding='utf-8') as f:
+            src = f.read()
+        assert not re.search(r'version\s*=\s*"\d+\.\d+\.\d+"', src), \
+            "cli.py must not hardcode a semver string — use app.__version__"
+        assert 'version=__version__' in src
+
+    def test_cli_version_matches_app_version(self):
+        """`github-autopilot --version` prints the real app version."""
+        import io
+        import contextlib
+        import pytest
+        import github_autopilot.cli as cli
+        from app import __version__
+
+        argv_backup = sys.argv
+        sys.argv = ["github-autopilot", "--version"]
+        buf = io.StringIO()
+        try:
+            with pytest.raises(SystemExit) as exc:
+                with contextlib.redirect_stdout(buf):
+                    cli.main()
+        finally:
+            sys.argv = argv_backup
+        assert exc.value.code == 0
+        assert __version__ in buf.getvalue()
+
+    def test_old_package_name_gone(self):
+        """The legacy ai_repo_manager package must not resurface."""
+        assert not (_ROOT / 'ai_repo_manager').exists()
+        with open(str(_ROOT / 'pyproject.toml'), encoding='utf-8') as f:
+            pyproject = f.read()
+        assert 'ai_repo_manager' not in pyproject
+        assert 'name = "github-autopilot"' in pyproject
 
 
 # ══════════════════════════════════════════════════════

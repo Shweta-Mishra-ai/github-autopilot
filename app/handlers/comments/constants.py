@@ -9,6 +9,7 @@ SKIP_AUTHORS = frozenset(
         "renovate[bot]",
         "github-actions[bot]",
         "ai-repo-manager[bot]",
+        "github-autopilot[bot]",
     }
 )
 

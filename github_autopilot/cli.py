@@ -1,18 +1,18 @@
 """
-app/cli.py
+github_autopilot/cli.py
 CLI entry point for pip-installed usage.
 
-After pip install ai-repo-manager:
-    ai-repo-manager start           → start server
-    ai-repo-manager setup           → interactive setup wizard
-    ai-repo-manager test-webhook    → test GitHub webhook connection
-    ai-repo-manager health          → check all components
-    ai-repo-manager version         → show version info
+After pip install github-autopilot:
+    github-autopilot start           → start server
+    github-autopilot setup           → interactive setup wizard
+    github-autopilot test-webhook    → test GitHub webhook connection
+    github-autopilot health          → check all components
+    github-autopilot version         → show version info
 
 Short alias:
-    arm start
-    arm setup
-    arm health
+    autopilot start
+    autopilot setup
+    autopilot health
 """
 
 import argparse
@@ -21,7 +21,7 @@ import sys
 
 
 def cmd_start(args):
-    """Start the AI Repo Manager server."""
+    """Start the GitHub Autopilot server."""
     workers = getattr(args, "workers", 1)
     port    = getattr(args, "port", 5000)
     timeout = getattr(args, "timeout", 120)
@@ -107,7 +107,7 @@ This wizard will help you configure the bot.
 ✅ Configuration saved to .env
 
 Next steps:
-  1. Run: arm start
+  1. Run: autopilot start
   2. Install GitHub App: github.com/settings/apps
   3. Set Webhook URL to your server URL + /webhook
   4. Install app on your repositories
@@ -169,14 +169,14 @@ def cmd_version(args):
     """Show version info."""
     from app import __version__
     print(f"""
-AI Repo Manager v{__version__}
+GitHub Autopilot v{__version__}
 
 GitHub:  https://github.com/Shweta-Mishra-ai/github-autopilot
 Author:  Shweta Mishra
 License: MIT
 
-Commands: ai-repo-manager --help
-Alias:    arm --help
+Commands: github-autopilot --help
+Alias:    autopilot --help
 """)
 
 
@@ -215,18 +215,20 @@ def _check_required_env(silent: bool = False) -> bool:
     missing = [v for v in required if not os.environ.get(v)]
     if missing and not silent:
         print(f"❌ Missing required environment variables: {', '.join(missing)}")
-        print("   Run: arm setup  (to configure interactively)")
+        print("   Run: autopilot setup  (to configure interactively)")
         print("   Or:  set them in .env file")
         sys.exit(1)
     return not missing
 
 
 def main():
+    from app import __version__
+
     parser = argparse.ArgumentParser(
-        prog="ai-repo-manager",
+        prog="github-autopilot",
         description="GitHub Autopilot — AI-powered GitHub automation",
     )
-    parser.add_argument("--version", action="version", version="4.0.0")
+    parser.add_argument("--version", action="version", version=__version__)
 
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
     sub.required = True

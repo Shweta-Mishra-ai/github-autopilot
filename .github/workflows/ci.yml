@@ -161,6 +161,61 @@ jobs:
           pip install -r requirements.txt
           pip-audit --requirement requirements.txt --ignore-vuln PYSEC-2023-62 || true
 
+  # ── Test-count badge (main only) ─────────────────────────────────────────────
+  # Publishes the real pytest pass count from THIS run to the `badges` branch.
+  # README's "tests: N passing" badge reads that JSON via shields.io/endpoint,
+  # so the number can never drift from an actual green CI run.
+  badge:
+    name: Publish test badge
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Count passing tests
+        env:
+          GROQ_API_KEY: "test_key_not_real"
+          GITHUB_APP_ID: "99999"
+          GITHUB_PRIVATE_KEY: ""
+          GITHUB_WEBHOOK_SECRET: "test-webhook-secret-32chars-abc!"
+          METRICS_AUTH_TOKEN: "test_metrics_token"
+          MCP_API_KEY: "test-mcp-api-key-xyz"
+          LOG_FORMAT: "text"
+        run: |
+          pytest tests/ -q -m "not e2e and not integration" | tee pytest-out.txt
+          COUNT=$(grep -oE '[0-9]+ passed' pytest-out.txt | grep -oE '[0-9]+')
+          test -n "$COUNT"
+          echo "PASS_COUNT=$COUNT" >> "$GITHUB_ENV"
+
+      - name: Push badge JSON to badges branch
+        run: |
+          mkdir /tmp/badges
+          cat > /tmp/badges/tests.json <<EOF
+          {"schemaVersion": 1, "label": "tests", "message": "${PASS_COUNT} passing", "color": "22c55e", "namedLogo": "pytest", "logoColor": "white"}
+          EOF
+          cd /tmp/badges
+          git init -b badges
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests.json
+          git commit -m "chore: update test-count badge from CI run ${GITHUB_RUN_ID}"
+          git push --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   # ── Release (tag-triggered only) ─────────────────────────────────────────────
   release:
     name: Release

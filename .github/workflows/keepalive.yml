@@ -1,0 +1,40 @@
+# .github/workflows/keepalive.yml
+# Two jobs in one:
+#   1. Keep-alive — Render's free tier sleeps a service after 15 min idle,
+#      giving the next visitor a ~50 s cold start. Pinging /ping every
+#      10 min keeps the instance warm (a single always-on free service
+#      fits within Render's 750 instance-hours/month).
+#   2. Health check — if production stops answering, this workflow goes
+#      red (badge in the README) and GitHub emails the repo owner.
+# Note: GitHub cron is best-effort and can lag a few minutes under load;
+# the retry loop below absorbs a cold start if one slips through.
+
+name: Server Health
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    name: Ping production
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: GET /ping
+        run: |
+          URL="https://github-autopilot-1.onrender.com/ping"
+          for attempt in 1 2 3; do
+            code=$(curl -sS -o /tmp/body -w '%{http_code}' --max-time 75 "$URL" || echo "000")
+            if [ "$code" = "200" ]; then
+              echo "OK (attempt ${attempt}): $(cat /tmp/body)"
+              exit 0
+            fi
+            echo "Attempt ${attempt}: HTTP ${code} — retrying in 20s (cold start takes ~50s)"
+            sleep 20
+          done
+          echo "::error::Production /ping unhealthy after 3 attempts (last HTTP ${code})"
+          exit 1

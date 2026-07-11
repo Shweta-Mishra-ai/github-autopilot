@@ -6,6 +6,10 @@
 
 **Your repository's AI co-pilot. Fix bugs, review PRs, scan secrets — from a single comment.**
 
+**The self-hosted one**: runs on your own free-tier infra, and in
+[local-LLM mode](#private-mode--keep-code-on-your-own-hardware) your code
+**never leaves your hardware** — the private-repo alternative to SaaS review bots.
+
 [![CI](https://github.com/Shweta-Mishra-ai/github-autopilot/actions/workflows/ci.yml/badge.svg)](https://github.com/Shweta-Mishra-ai/github-autopilot/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://python.org)
 [![Tests](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FShweta-Mishra-ai%2Fgithub-autopilot%2Fbadges%2Ftests.json)](https://github.com/Shweta-Mishra-ai/github-autopilot/actions/workflows/ci.yml)
@@ -15,7 +19,9 @@
 [![Deploy to Render](https://img.shields.io/badge/deploy-Render-46E3B7?logo=render&logoColor=white)](https://render.com/deploy)
 [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-db61a2?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/Shweta-Mishra-ai)
 
-<img src="assets/demo.svg" alt="Demo: /fix command in a GitHub issue, bot replies with root cause, fix and test in 4.2 seconds" width="720"/>
+<img src="assets/demo.svg" alt="Illustration: /fix command in a GitHub issue, bot replies with root cause, fix and test" width="720"/>
+
+<sub>*Simulated output for illustration — see the [eval suite](evals/) for measured behaviour.*</sub>
 
 </div>
 
@@ -27,11 +33,13 @@
 |---|---|
 | ⚡ **26 slash commands** | `/fix` `/security` `/merge` `/autofix` `/rollback` … right in issue/PR comments |
 | 🛡️ **Safety-first automation** | Confidence gates, guardrails, human-in-the-loop `/apply`, maintainer-only permissions |
-| 🔁 **Durable event queue** | Webhooks parked in Redis, survive restarts & deploys — no event ever silently lost |
+| 🔁 **Durable event queue** | Webhooks parked in Redis — survive restarts, deploys and crashes; if Redis itself dies, degrades to best-effort in-process dispatch (and says so in the logs) |
 | 🧠 **5-provider AI failover** | Groq 70B → Groq 8B → Gemini → OpenRouter, with per-provider circuit breakers |
 | 🔒 **Local-LLM privacy mode** | Run on your own Ollama — set `LLM_LOCAL_ONLY=1` and code **never** leaves your infra |
 | 🧩 **Private repo memory** | Learns your repo's fixes & decisions; sensitive context stays local, [encrypted backup](docs/ai-system/memory.md) for durability |
 | 🔐 **Security scanning** | Secret detection on **every push to every branch**, dependency CVE checks |
+| 📍 **Inline PR reviews** | Findings land as line-anchored review comments with committable suggestions — not a wall-of-text comment |
+| 📏 **Honest AI output** | Every comment discloses which model wrote it; optional [quality floor](#changelog) refuses to degrade reviews to a small model; [measured by evals](evals/), not vibes |
 | 🔌 **MCP server built in** | Call Autopilot tools from Claude Code, Cursor, or Codex — [setup guide](docs/mcp-setup.md) |
 | 📊 **Live ops dashboard** | `/dashboard` — queue depth, event throughput, provider circuit-breakers, thread pool. Zero build, no CDN |
 | 💸 **Runs on free tier** | Render free web service + free Redis. $0/month |
@@ -74,7 +82,7 @@ Install the GitHub App on your repos, then:
 
 ```bash
 curl https://github-autopilot-1.onrender.com/ping
-# → {"status": "ok", "version": "6.1.1"}
+# → {"status": "ok", "version": "6.2.0"}
 ```
 
 > **Cold starts** — the demo instance runs on Render's free tier. A scheduled
@@ -280,6 +288,14 @@ Found a vulnerability? Please email rather than opening a public issue.
 ---
 
 ## Changelog
+
+### V6.2.0 — 2026-07-11
+- **Inline PR reviews**: findings now post as a real GitHub Review with line-anchored comments, snapped onto actual diff lines, with committable ```suggestion blocks for safe single-line fixes. Automatic fallback to the classic issue comment if the Reviews API rejects a payload — a mapping bug can never lose a review.
+- **AI evals** ([evals/](evals/)): golden issues + PR diffs with planted bugs (SQL injection, hardcoded secret, N+1, path traversal, plus a clean-diff over-flagging check), pushed through the *real* production code paths and scored deterministically. Manual `Evals` workflow in Actions.
+- **Model disclosure**: every bot comment states which model produced it. **Quality floor** (`LLM_QUALITY_FLOOR=high`): reviews/fixes refuse to run on a basic-tier model instead of silently degrading to 8B.
+- **Learning loop finally wired** (shipped unit-tested-but-unused in V6.0): `/apply` and merging a bot autofix branch now record acceptance; future `/fix` prompts inject the learned repo conventions.
+- **Command rate limit enforced during Redis outages** (was fail-open) via a bounded in-memory window. **MCP named API keys** (`MCP_API_KEYS=laptop:tok1,ci:tok2`) with per-client revocation and an attributable audit log. **Redis memory watermark** on `/health` (the 25MB free tier fails writes when full — now visible before it bites).
+- Honesty pass: durability claim corrected (Redis-down fallback is best-effort and now says so), demo labeled as simulated, `/` endpoint no longer reports the pre-rename app name.
 
 ### V6.1.1 — 2026-07-10
 - **Honest badges**: the "tests: N passing" badge is now generated by CI itself — a `badges` job counts the passes from a real run on `main` and publishes the number; it can no longer drift from reality. New **Server Health** badge backed by a scheduled production ping.

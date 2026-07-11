@@ -9,9 +9,16 @@ Compatible with:
   OpenCode               — .opencode/mcp.json
 
 Protocol: JSON-RPC 2.0 over HTTP POST /mcp
-Auth:     Bearer token via MCP_API_KEY env var, read at request time.
-          FAIL CLOSED — if MCP_API_KEY is unset the server rejects every
-          request with 503. A constant-time compare guards the token.
+Auth:     Bearer token, read at request time (zero-downtime rotation).
+          Two forms, combinable:
+            MCP_API_KEY   — single key, client label "default" (legacy)
+            MCP_API_KEYS  — comma-separated name:key pairs, e.g.
+                            "laptop:tok1,ci:tok2" — enables per-client
+                            revocation and an attributable audit log.
+          FAIL CLOSED — if neither is set the server rejects every request
+          with 503. Constant-time compares guard every candidate token.
+Audit:    every tools/call is logged as mcp.audit with the client label and
+          tool name (never the arguments — they can contain source code).
 Tenant:   MCP_ALLOWED_INSTALLATIONS (optional) restricts which GitHub App
           installation IDs the tools may act on.
 """
@@ -62,18 +69,53 @@ def _mcp_api_key() -> str:
     return os.environ.get("MCP_API_KEY", "")
 
 
+def _mcp_named_keys() -> dict[str, str]:
+    """
+    Parse MCP_API_KEYS ("name:key,name2:key2") into {name: key}.
+    Malformed entries (no colon, empty name/key) are skipped with a warning —
+    a typo must not silently disable a *different*, valid key.
+    """
+    raw = os.environ.get("MCP_API_KEYS", "")
+    keys: dict[str, str] = {}
+    for entry in filter(None, (e.strip() for e in raw.split(","))):
+        name, sep, key = entry.partition(":")
+        if not sep or not name.strip() or not key.strip():
+            log.warning(f"mcp.bad_key_entry skipped (want name:key): {entry[:20]!r}...")
+            continue
+        keys[name.strip()] = key.strip()
+    return keys
+
+
+def _resolve_client(auth_token: str) -> str | None:
+    """
+    Return the client label for a valid token, else None.
+    Compares against EVERY candidate (no early exit) so response timing does
+    not reveal which key position matched.
+    """
+    token = auth_token or ""
+    matched: str | None = None
+    legacy = _mcp_api_key()
+    if legacy and hmac.compare_digest(token, legacy):
+        matched = "default"
+    for name, key in _mcp_named_keys().items():
+        if hmac.compare_digest(token, key) and matched is None:
+            matched = name
+    return matched
+
+
 def handle_mcp_request(method: str, params: dict, auth_token: str) -> tuple[dict, int]:
     """
     Main MCP request handler. Called from server.py /mcp endpoint.
     Returns (response_dict, http_status_code).
     """
     # FAIL CLOSED: no configured key → refuse everything (503, not open).
-    _mcp_key = _mcp_api_key()
-    if not _mcp_key:
-        log.error("mcp.no_api_key — refusing request (fail closed). Set MCP_API_KEY.")
+    if not _mcp_api_key() and not _mcp_named_keys():
+        log.error(
+            "mcp.no_api_key — refusing request (fail closed). Set MCP_API_KEY or MCP_API_KEYS."
+        )
         return {"error": {"code": -32001, "message": "Server auth not configured"}}, 503
-    # Constant-time compare to avoid token-timing side channel.
-    if not hmac.compare_digest(auth_token or "", _mcp_key):
+    client = _resolve_client(auth_token)
+    if client is None:
         return {"error": {"code": -32001, "message": "Unauthorized"}}, 401
 
     start = time.time()
@@ -98,13 +140,17 @@ def handle_mcp_request(method: str, params: dict, auth_token: str) -> tuple[dict
         try:
             result_text = handler(tool_args)
             latency_ms = int((time.time() - start) * 1000)
-            log.info(f"mcp.tool_call tool={tool_name} latency={latency_ms}ms")
+            # Audit line: WHO did WHAT — never the arguments (may contain code).
+            log.info(f"mcp.audit client={client} tool={tool_name} status=ok latency={latency_ms}ms")
+            from app.core.metrics import metrics
+
+            metrics.increment(f"mcp.calls.{client}")
             return {
                 "content": [{"type": "text", "text": result_text}],
                 "latency_ms": latency_ms,
             }, 200
         except Exception as e:
-            log.error(f"mcp.tool_call error tool={tool_name}: {e}")
+            log.error(f"mcp.audit client={client} tool={tool_name} status=error: {e}")
             return {"error": {"code": -32000, "message": str(e)[:200]}}, 500
 
     if method == "initialize":

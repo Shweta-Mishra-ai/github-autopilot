@@ -65,6 +65,30 @@ COST_PER_1K = {
     "ollama": 0.0,  # local — free and private
 }
 
+# Quality tiers for the LLM_QUALITY_FLOOR guard. "basic" providers are fine
+# for fast tasks (labels, lint) but produce visibly weaker code reviews/fixes.
+# Ollama counts as "high": running local is an explicit operator choice.
+PROVIDER_TIER = {
+    "groq_70b": "high",
+    "gemini": "high",
+    "ollama": "high",
+    "groq_8b": "basic",
+    "openrouter": "basic",
+}
+
+# Task types where output quality is the product (reviews, fixes, analyses).
+QUALITY_SENSITIVE_TASK_TYPES = {"standard", "deep", "long"}
+
+
+def _quality_floor_active() -> bool:
+    """
+    LLM_QUALITY_FLOOR=high → quality-sensitive tasks refuse to run on a
+    basic-tier provider instead of silently degrading. Users see an honest
+    "providers down, retry later" rather than an 8B model reviewing their
+    code with no disclosure. Fast tasks (labels, commit lint) are unaffected.
+    """
+    return os.environ.get("LLM_QUALITY_FLOOR", "").strip().lower() == "high"
+
 
 class LLMRouter:
     def __init__(self):
@@ -217,6 +241,8 @@ class LLMRouter:
             raise AllProvidersDown()
 
         # Standard / Deep → 70B first
+        floor = _quality_floor_active() and task_type in QUALITY_SENSITIVE_TASK_TYPES
+
         pct_70b = self._usage_pct("groq_70b")
         if get_breaker("groq_70b").is_available() and pct_70b < 0.80:
             return self._groq_70b
@@ -224,12 +250,20 @@ class LLMRouter:
         if pct_70b >= 0.80:
             log.warning(f"router.groq_70b_high_usage pct={pct_70b:.0%} task={task}")
 
-        if task_type == "standard" and get_breaker("groq_8b").is_available():
+        if task_type == "standard" and not floor and get_breaker("groq_8b").is_available():
             return self._groq_8b
 
         g = self._get_gemini()
         if g and get_breaker("gemini").is_available():
             return g
+
+        if floor:
+            # Only basic-tier providers remain. Refuse honestly instead of
+            # letting an 8B model review code with no disclosure.
+            log.warning(
+                f"router.quality_floor_refusal task={task} — no high-tier provider available"
+            )
+            raise AllProvidersDown()
 
         if get_breaker("groq_8b").is_available():
             return self._groq_8b
@@ -281,7 +315,7 @@ class LLMRouter:
         if meta.error:
             log.warning(f"router.primary_failed provider={meta.provider} error={meta.error}")
             fallback = self._try_fallback(
-                system, user, max_tokens, temperature, timeout, meta.provider
+                system, user, max_tokens, temperature, timeout, meta.provider, task
             )
             if fallback:
                 result, meta = fallback
@@ -306,7 +340,9 @@ class LLMRouter:
         text, meta = provider.ask_text(system, user, max_tokens, timeout)
 
         if meta.error:
-            fallback = self._try_fallback_text(system, user, max_tokens, timeout, meta.provider)
+            fallback = self._try_fallback_text(
+                system, user, max_tokens, timeout, meta.provider, task
+            )
             if fallback:
                 text, meta = fallback
             else:
@@ -315,21 +351,34 @@ class LLMRouter:
         self._log_and_track(task, meta)
         return text, meta
 
-    def _fallback_candidates(self) -> list:
+    def _fallback_candidates(self, task: str = "standard") -> list:
         """
         Provider order for fallback. In LLM_LOCAL_ONLY mode the list contains
         ONLY Ollama — cloud providers are never appended, so a local failure
         can never silently leak code to a cloud API.
+
+        When LLM_QUALITY_FLOOR=high, basic-tier providers are excluded for
+        quality-sensitive tasks — the same guarantee _select_provider gives
+        must hold on the fallback path too.
         """
         if self._local_only():
             return [self._get_ollama()]
         candidates = [self._groq_70b, self._groq_8b, self._get_gemini(), self._get_openrouter()]
         if self._prefer_local():
             candidates.insert(0, self._get_ollama())
+        task_type = TASK_MAP.get(task, "standard")
+        if _quality_floor_active() and task_type in QUALITY_SENSITIVE_TASK_TYPES:
+            candidates = [
+                p
+                for p in candidates
+                if p is not None and PROVIDER_TIER.get(p.provider_key, "basic") == "high"
+            ]
         return candidates
 
-    def _try_fallback(self, system, user, max_tokens, temperature, timeout, failed_key):
-        candidates = self._fallback_candidates()
+    def _try_fallback(
+        self, system, user, max_tokens, temperature, timeout, failed_key, task="standard"
+    ):
+        candidates = self._fallback_candidates(task)
         for p in candidates:
             if p is None or p.provider_key == failed_key:
                 continue
@@ -341,8 +390,8 @@ class LLMRouter:
                 return result, meta
         return None
 
-    def _try_fallback_text(self, system, user, max_tokens, timeout, failed_key):
-        candidates = self._fallback_candidates()
+    def _try_fallback_text(self, system, user, max_tokens, timeout, failed_key, task="standard"):
+        candidates = self._fallback_candidates(task)
         for p in candidates:
             if p is None or p.provider_key == failed_key:
                 continue
@@ -355,6 +404,10 @@ class LLMRouter:
         return None
 
     def _log_and_track(self, task: str, meta: LLMResponse):
+        # Remembered per-thread so comment assembly can disclose which model
+        # actually produced the output (handlers run one event per thread).
+        _last_call.provider = meta.provider
+        _last_call.model = meta.model
         cost_est = (meta.total_tokens / 1000) * COST_PER_1K.get(meta.provider, 0)
         log.info(
             f"router.call task={task} provider={meta.provider} "
@@ -460,6 +513,29 @@ class LLMRouter:
                 "openrouter": bool(os.environ.get("OPENROUTER_API_KEY")),
             },
         }
+
+
+# Per-thread record of the last completed LLM call (provider + model).
+_last_call = threading.local()
+
+
+def reset_last_call() -> None:
+    """Clear this thread's model record (call at the start of each event)."""
+    _last_call.provider = ""
+    _last_call.model = ""
+
+
+def last_model_disclosure() -> str:
+    """
+    Human-readable "which model wrote this" line for bot output, from the
+    last completed LLM call on this thread. Empty string when nothing has
+    run yet — callers append it blindly.
+    """
+    provider = getattr(_last_call, "provider", "")
+    model = getattr(_last_call, "model", "")
+    if not provider:
+        return ""
+    return f" · model: `{model or provider}`"
 
 
 # Module-level singleton — thread-safe via instance locks above

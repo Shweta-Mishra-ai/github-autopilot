@@ -233,13 +233,19 @@ class TestRateLimiting:
             result = check_user_rate_limit("org/repo", "user1")
         assert result is False
 
-    def test_redis_failure_allows(self):
-        """Fail-open: Redis down → still allow the command."""
-        from app.handlers.comments.dispatcher import check_user_rate_limit
+    def test_redis_failure_falls_back_to_local_enforcement(self):
+        """Redis down → the limit is still enforced via the in-memory window
+        (fail-open removed in V6.2). First call passes; the limit still bites."""
+        from app.handlers.comments import dispatcher
+        from app.handlers.comments.constants import USER_CMD_LIMIT
         from unittest.mock import patch
+        dispatcher._local_cmd_counts.clear()
         with patch('app.core.redis_client.get_redis', side_effect=Exception("Redis down")):
-            result = check_user_rate_limit("org/repo", "user1")
-        assert result is True
+            assert dispatcher.check_user_rate_limit("org/repo", "user1") is True
+            for _ in range(USER_CMD_LIMIT):
+                dispatcher.check_user_rate_limit("org/repo", "user1")
+            assert dispatcher.check_user_rate_limit("org/repo", "user1") is False
+        dispatcher._local_cmd_counts.clear()
 
 
 class TestFileSize:
@@ -264,7 +270,10 @@ class TestFileSize:
             )
 
     def test_service_py_is_thin(self):
-        """service.py is an orchestration layer — should stay under 150 lines."""
+        """service.py is an orchestration layer — keep it thin.
+        Budget history: 260 pre-V6.2; +5 for model-disclosure reset/footer
+        (cross-cutting, belongs in orchestration). Raise consciously, never
+        casually."""
         import os
         fpath = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -272,6 +281,6 @@ class TestFileSize:
         )
         with open(fpath, encoding='utf-8') as f:
             lines = f.readlines()
-        assert len(lines) <= 260, (
-            f"service.py has {len(lines)} lines — should stay under 260 lines as an orchestration layer."
+        assert len(lines) <= 265, (
+            f"service.py has {len(lines)} lines — should stay under 265 lines as an orchestration layer."
         )

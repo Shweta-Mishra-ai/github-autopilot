@@ -31,13 +31,21 @@ sys.modules.setdefault("requests", _req_mock)
 sys.modules.setdefault("requests.adapters", _req_mock.adapters)
 sys.modules.setdefault("requests.exceptions", _req_mock.exceptions)
 
+# Mock ONLY genuinely-missing deps. This list used to blanket-mock flask,
+# which (as the alphabetically-first offender at collection time) poisoned
+# sys.modules for every later test file and permanently skipped 21
+# real-Flask tests. Real module available → use it; missing → mock it.
+import importlib
+
 for _mod in ["structlog", "redis", "groq", "google", "google.generativeai",
              "flask_limiter", "flask_limiter.util", "apscheduler",
              "apscheduler.schedulers", "apscheduler.schedulers.background",
              "sentence_transformers", "qdrant_client", "scipy",
              "flask", "flask.logging"]:
-    sys.modules.setdefault(_mod, MagicMock())
-sys.modules.setdefault("scipy", MagicMock())
+    try:
+        importlib.import_module(_mod)
+    except ImportError:
+        sys.modules.setdefault(_mod, MagicMock())
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 

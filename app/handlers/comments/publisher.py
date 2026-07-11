@@ -103,6 +103,15 @@ def cmd_merge(
             with contextlib.suppress(Exception):
                 gh_delete(f"/repos/{repo}/git/refs/heads/{head_branch}", token)
 
+            # Learning loop: merging a bot-authored autofix branch is the
+            # strongest acceptance signal we get.
+            if head_branch.startswith("fix/bot-issue-"):
+                with contextlib.suppress(Exception):
+                    from app.core.learning import record_autofix_merged
+
+                    m = re.search(r"issue-(\d+)", head_branch)
+                    record_autofix_merged(repo, issue_number, int(m.group(1)) if m else 0)
+
             return (
                 f"## ✅ Merged!\n\n"
                 f"**`{head_branch}`** → **`{base_branch}`**\n"
@@ -180,6 +189,13 @@ def cmd_apply(
                 "draft": False,
             },
         )
+
+        # Learning loop: a maintainer choosing to open a PR from a bot fix IS
+        # the acceptance signal. Feeds get_pattern_summary() → future /fix prompts.
+        with contextlib.suppress(Exception):
+            from app.core.learning import record_fix_accepted
+
+            record_fix_accepted(repo, issue_number, "autofix")
 
         return f"## ✅ PR Created\n\n**PR #{pr.get('number', '?')}:** [{pr.get('title', '')}]({pr.get('html_url', '')})\n\n**Branch:** `{branch}` → `{default_branch}`\n\n> Review changes carefully before merging."
 

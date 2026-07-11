@@ -154,6 +154,44 @@ def is_redis_available() -> bool:
         return False
 
 
+REDIS_MEMORY_WARN_PCT = int(os.environ.get("REDIS_MEMORY_WARN_PCT", "80"))
+
+
+def redis_memory_status() -> dict:
+    """
+    Memory watermark for the shared Redis budget.
+
+    On the 25MB free tier the event queue, idempotency keys, rate limits,
+    analytics and the repo-memory brain all share one `noeviction` instance:
+    when it fills, WRITES FAIL (queue 503s, dedup breaks). This surfaces the
+    watermark on /health so the operator sees it before it bites.
+
+    Returns {level, used_bytes, max_bytes, used_pct}; level is
+    ok | warn (≥REDIS_MEMORY_WARN_PCT%) | unknown (fake/unreachable/no limit).
+    """
+    try:
+        client = get_redis()
+        if isinstance(client, _FakeRedis):
+            return {"level": "unknown", "used_bytes": None, "max_bytes": None, "used_pct": None}
+        info = client.info("memory")
+        used = int(info.get("used_memory", 0))
+        maxm = int(info.get("maxmemory", 0))
+        if maxm <= 0:
+            # No server-side cap configured — report usage, can't compute %.
+            return {"level": "ok", "used_bytes": used, "max_bytes": None, "used_pct": None}
+        pct = round(used * 100.0 / maxm, 1)
+        level = "warn" if pct >= REDIS_MEMORY_WARN_PCT else "ok"
+        if level == "warn":
+            log.warning(
+                f"redis.memory_watermark used={used} max={maxm} pct={pct}% "
+                f"(warn threshold {REDIS_MEMORY_WARN_PCT}%) — writes fail when full (noeviction)"
+            )
+        return {"level": level, "used_bytes": used, "max_bytes": maxm, "used_pct": pct}
+    except Exception as e:
+        log.debug(f"redis.memory_status_unavailable: {e}")
+        return {"level": "unknown", "used_bytes": None, "max_bytes": None, "used_pct": None}
+
+
 def reset_client() -> None:
     """Force-reset the singleton(s) (tests only)."""
     global _pool, _client, _blocking_pool, _blocking_client

@@ -14,15 +14,27 @@ from .dispatcher import safe_router_ask
 log = logging.getLogger(__name__)
 
 
-def cmd_fix(ctx_title: str, context: str) -> str:
+def cmd_fix(ctx_title: str, context: str, repo: str = "") -> str:
     """Generate a precise bug fix with root cause, code, and test."""
     from app.handlers.comments import router
+
+    # Learned conventions: what this repo previously accepted via /apply//merge.
+    # Empty string when nothing has been learned yet — prompt is unchanged then.
+    learned = ""
+    if repo:
+        try:
+            from app.core.learning import get_pattern_summary
+
+            learned = get_pattern_summary(repo)
+        except Exception:
+            learned = ""
 
     r, _ = router.ask(
         "Senior engineer. Give precise, working fix. JSON only.",
         f"""Fix this issue:
 Title: {ctx_title}
 Context: {context[:2000]}
+{f"Repo conventions (learned from previously accepted fixes):{learned}" if learned else ""}
 
 Return JSON:
 {{

@@ -115,6 +115,10 @@ def handle_comment_event(payload: dict) -> None:
     context = augment_with_memory(context, repo, f"{issue.get('title', '')} {cmd_args}".strip())
 
     # ── Dispatch ──────────────────────────────────────────────────────────
+    # Reset per-thread model record — reused pool threads must not disclose stale models.
+    from app.ai.router import last_model_disclosure, reset_last_call
+
+    reset_last_call()
     response = _dispatch(
         cmd=cmd,
         cmd_args=cmd_args,
@@ -136,9 +140,11 @@ def handle_comment_event(payload: dict) -> None:
     if isinstance(response, dict) and is_providers_down(response):
         response = make_degraded_response(response)
 
-    # ── Post to GitHub ────────────────────────────────────────────────────
+    # ── Post to GitHub (with model disclosure) ─────────────────────────────
     footer = getattr(config, "footer", "")
-    full = f"{response}\n\n---\n*🤖 `{cmd}` — requested by @{author}*{footer}"
+    full = (
+        f"{response}\n\n---\n*🤖 `{cmd}` — requested by @{author}{last_model_disclosure()}*{footer}"
+    )
     _post_comment(repo, issue_number, token, full, log_ctx)
 
 
@@ -190,7 +196,7 @@ def _dispatch(
         match cmd:
             # ── Generator: AI content ──────────────────────────────────
             case "/fix":
-                return G.cmd_fix(ctx_title, context)
+                return G.cmd_fix(ctx_title, context, repo)
             case "/explain":
                 return G.cmd_explain(context)
             case "/improve":

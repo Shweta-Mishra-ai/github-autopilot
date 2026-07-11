@@ -256,6 +256,17 @@ pytest --cov=app tests/
 
 Tests run in full isolation — no network access required.
 
+### AI output evals
+
+The unit suite tests the plumbing; [`evals/`](evals/) tests the AI output
+itself (planted bugs, must-mention checks) through the real code paths.
+Run them before merging any change to prompts, provider order, or
+sanitization — they need a real `GROQ_API_KEY` and spend quota:
+
+```bash
+python -m evals.run
+```
+
 ---
 
 ## Good First Issues

@@ -1,0 +1,44 @@
+[
+  {
+    "id": "fix-off-by-one-slice",
+    "title": "Pagination returns 9 items per page instead of 10",
+    "context": "def get_page(items, page, size=10):\n    start = page * size\n    return items[start:start + size - 1]\n\nUsers report every page shows 9 results. PAGE_SIZE is 10 everywhere else.",
+    "must_mention": ["off.by.one|size - 1|start \\+ size"],
+    "require_code_block": true
+  },
+  {
+    "id": "fix-mutable-default-arg",
+    "title": "Tags from one request leak into other requests",
+    "context": "def add_tags(item, tags=[]):\n    tags.append(item.default_tag)\n    item.tags = tags\n    return item\n\nIntermittently, items get tags belonging to previously processed items. Only happens under load, resets on restart.",
+    "must_mention": ["mutable default|tags=\\[\\]|default argument|tags=None"],
+    "require_code_block": true
+  },
+  {
+    "id": "fix-unclosed-file-handle",
+    "context": "def read_config(path):\n    data = open(path).read()\n    return json.loads(data)\n\nOn Windows CI we get PermissionError: file in use when tests clean up temp config files.",
+    "title": "PermissionError deleting config files on Windows",
+    "must_mention": ["with open|close|context manager"],
+    "require_code_block": true
+  },
+  {
+    "id": "fix-timezone-naive-compare",
+    "title": "TypeError: can't compare offset-naive and offset-aware datetimes",
+    "context": "def is_expired(token):\n    return token.expires_at < datetime.now()\n\nexpires_at comes from the database as timezone-aware UTC. Crashes in production, passes locally.",
+    "must_mention": ["timezone|tzinfo|utc"],
+    "require_code_block": true
+  },
+  {
+    "id": "fix-race-check-then-act",
+    "title": "Duplicate rows created despite exists() check",
+    "context": "def ensure_user(email):\n    if not User.objects.filter(email=email).exists():\n        User.objects.create(email=email)\n\nUnder concurrent signups we still get IntegrityError / duplicate users.",
+    "must_mention": ["race|get_or_create|unique|atomic|integrity"],
+    "require_code_block": true
+  },
+  {
+    "id": "fix-swallowed-exception",
+    "title": "Payment webhook silently drops events",
+    "context": "def handle_webhook(payload):\n    try:\n        process_payment(payload)\n    except Exception:\n        pass\n    return 'ok'\n\nFinance reports missing payment records but the endpoint always returns 200 and logs show nothing.",
+    "must_mention": ["except|swallow|log|silent"],
+    "require_code_block": true
+  }
+]

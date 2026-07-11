@@ -6,12 +6,20 @@ Command extraction, rate limiting, and provider-down handling.
 from __future__ import annotations
 
 import re
+import threading
 import time
 import logging
 
 from .constants import ALL_COMMANDS, USER_CMD_LIMIT, USER_CMD_WINDOW
 
 log = logging.getLogger(__name__)
+
+# In-memory fallback for the per-user command rate limit when Redis is down.
+# Bounded: entries are pruned on every check, and the dict is hard-capped so a
+# spray of unique (repo, author) pairs cannot grow it without limit.
+_local_cmd_counts: dict[str, list] = {}
+_local_cmd_lock = threading.Lock()
+_LOCAL_CMD_MAX_KEYS = 5000
 
 
 def extract_command(body: str) -> str | None:
@@ -31,7 +39,9 @@ def extract_command(body: str) -> str | None:
 def check_user_rate_limit(repo: str, author: str) -> bool:
     """
     Returns True if user is within limit (USER_CMD_LIMIT / USER_CMD_WINDOW).
-    Fail-open when Redis unavailable — bot stays usable.
+    Redis is the source of truth; when it is unavailable the limit is still
+    enforced by a bounded in-memory sliding window (single-process deploys —
+    gunicorn runs --workers 1 — so local counts are authoritative enough).
     """
     try:
         from app.core.redis_client import get_redis
@@ -42,13 +52,33 @@ def check_user_rate_limit(repo: str, author: str) -> bool:
         r.expire(key, USER_CMD_WINDOW)
         return int(cnt) <= USER_CMD_LIMIT
     except Exception as e:
-        # Explicit, observable fail-open: Redis down must not brick the bot,
-        # but operators need to see when the guard was bypassed.
         from app.core.metrics import metrics
 
-        metrics.increment("ratelimit.failopen")
-        log.warning(f"ratelimit.redis_unavailable failopen repo={repo} author={author}: {e}")
-        return True  # Redis unavailable → allow
+        metrics.increment("ratelimit.redis_fallback")
+        log.warning(f"ratelimit.redis_unavailable local_fallback repo={repo} author={author}: {e}")
+        return _check_local_rate_limit(f"{repo}:{author}")
+
+
+def _check_local_rate_limit(key: str) -> bool:
+    """Bounded in-memory sliding window — same semantics as the Redis path."""
+    now = time.time()
+    with _local_cmd_lock:
+        window = [t for t in _local_cmd_counts.get(key, []) if now - t < USER_CMD_WINDOW]
+        window.append(now)
+        if len(_local_cmd_counts) >= _LOCAL_CMD_MAX_KEYS and key not in _local_cmd_counts:
+            # Cap reached: prune every expired window before admitting a new key.
+            for k in [
+                k
+                for k, w in _local_cmd_counts.items()
+                if all(now - t >= USER_CMD_WINDOW for t in w)
+            ]:
+                _local_cmd_counts.pop(k, None)
+            if len(_local_cmd_counts) >= _LOCAL_CMD_MAX_KEYS:
+                # Still full of live windows → deny rather than grow unbounded.
+                log.warning(f"ratelimit.local_capacity_deny key={key}")
+                return False
+        _local_cmd_counts[key] = window
+        return len(window) <= USER_CMD_LIMIT
 
 
 def augment_with_memory(context: str, repo: str, query: str) -> str:

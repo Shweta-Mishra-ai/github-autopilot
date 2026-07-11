@@ -27,11 +27,20 @@ _req.exceptions.Timeout = TimeoutError
 sys.modules.setdefault('requests', _req)
 sys.modules.setdefault('requests.adapters', _req.adapters)
 sys.modules.setdefault('requests.exceptions', _req.exceptions)
+# Mock ONLY the deps that are genuinely missing. Blanket-mocking installed
+# modules (this list used to include flask unconditionally) poisoned
+# sys.modules for every later-collected test file and permanently skipped 21
+# real-Flask tests. Real module available → use it; missing → mock it.
+import importlib
+
 for _m in ['structlog','redis','groq','google','google.generativeai',
            'flask_limiter','flask_limiter.util','apscheduler',
            'apscheduler.schedulers','apscheduler.schedulers.background',
            'sentence_transformers','qdrant_client','scipy','flask','flask.logging']:
-    sys.modules.setdefault(_m, MagicMock())
+    try:
+        importlib.import_module(_m)
+    except ImportError:
+        sys.modules.setdefault(_m, MagicMock())
 
 # Determine which module name GitHub used
 _mcp_server_path = _ROOT / "app" / "mcp" / "mcp_server.py"
@@ -428,6 +437,62 @@ class TestToolsCallDispatch:
             mod.TOOL_HANDLERS["explain_code"] = original
         assert status == 500
         assert "boom" in resp["error"]["message"]
+
+
+class TestMCPNamedKeys:
+    """V6.2: MCP_API_KEYS name:key pairs — per-client revocation + audit labels."""
+
+    def _env(self, **vars):
+        import os
+        return patch.dict(os.environ, vars, clear=False)
+
+    def test_named_key_authenticates(self):
+        mod = _import_mcp()
+        with self._env(MCP_API_KEY="", MCP_API_KEYS="laptop:tok-a,ci:tok-b"):
+            resp, status = mod.handle_mcp_request("tools/list", {}, "tok-b")
+        assert status == 200
+
+    def test_wrong_token_rejected_401(self):
+        mod = _import_mcp()
+        with self._env(MCP_API_KEY="", MCP_API_KEYS="laptop:tok-a"):
+            resp, status = mod.handle_mcp_request("tools/list", {}, "tok-WRONG")
+        assert status == 401
+
+    def test_legacy_and_named_coexist(self):
+        mod = _import_mcp()
+        with self._env(MCP_API_KEY="legacy-tok", MCP_API_KEYS="ci:tok-b"):
+            assert mod.handle_mcp_request("tools/list", {}, "legacy-tok")[1] == 200
+            assert mod.handle_mcp_request("tools/list", {}, "tok-b")[1] == 200
+
+    def test_no_keys_at_all_fails_closed_503(self):
+        mod = _import_mcp()
+        with self._env(MCP_API_KEY="", MCP_API_KEYS=""):
+            resp, status = mod.handle_mcp_request("tools/list", {}, "anything")
+        assert status == 503
+
+    def test_malformed_entry_skipped_not_fatal(self):
+        """A typo'd entry must not break the valid one — and must never
+        accidentally authenticate."""
+        mod = _import_mcp()
+        with self._env(MCP_API_KEY="", MCP_API_KEYS="brokenentry,ci:tok-b"):
+            assert mod.handle_mcp_request("tools/list", {}, "tok-b")[1] == 200
+            assert mod.handle_mcp_request("tools/list", {}, "brokenentry")[1] == 401
+
+    def test_audit_metric_labeled_by_client(self):
+        from app.core.metrics import metrics
+        mod = _import_mcp()
+        with self._env(MCP_API_KEY="", MCP_API_KEYS="ci:tok-b"):
+            before = metrics.get("mcp.calls.ci")
+            original = mod.TOOL_HANDLERS["explain_code"]
+            mod.TOOL_HANDLERS["explain_code"] = lambda _: "ok"
+            try:
+                _, status = mod.handle_mcp_request(
+                    "tools/call", {"name": "explain_code", "arguments": {"code": "x"}}, "tok-b"
+                )
+            finally:
+                mod.TOOL_HANDLERS["explain_code"] = original
+        assert status == 200
+        assert metrics.get("mcp.calls.ci") == before + 1
 
 
 if __name__ == "__main__":

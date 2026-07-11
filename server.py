@@ -91,7 +91,7 @@ signal.signal(signal.SIGTERM, _handle_sigterm)
 def index():
     return jsonify(
         {
-            "app": "AI Repo Manager",
+            "app": "GitHub Autopilot",
             "version": VERSION,
             "status": "running",
             "docs": "https://github.com/Shweta-Mishra-ai/github-autopilot",
@@ -127,9 +127,11 @@ def health():
         return jsonify({"error": "Unauthorized"}), 401
 
     from app.ai.circuit_breaker import status_all
+    from app.core.redis_client import redis_memory_status
     from app.github.rate_limit import get_status as gh_rl_status
 
     redis_ok = is_redis_available()
+    redis_mem = redis_memory_status()
     gh_ok = gh_rl_status().get("remaining", 5000) > 50
     breaker_status = status_all()
     any_llm_ok = any(s["state"] == "closed" for s in breaker_status.values())
@@ -145,6 +147,7 @@ def health():
             "uptime_seconds": int(time.time() - START_TIME),
             "checks": {
                 "redis": "ok" if redis_ok else "unavailable",
+                "redis_memory": redis_mem,
                 "github_api": "ok" if gh_ok else "rate_limited",
                 "llm_providers": breaker_status,
                 "thread_pool": "saturated" if pool_saturated else "ok",

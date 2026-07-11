@@ -331,7 +331,22 @@ Only report real gaps. If tests are adequate, set has_gaps to false.""",
 
 
 def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
-    """Run AI code review on changed files."""
+    """
+    Run AI code review on changed files.
+
+    V6.2: findings that map onto diff lines are posted as a real PR Review
+    with line-anchored comments (committable ```suggestion blocks for safe
+    single-line fixes). Findings that don't map — and the per-file summaries —
+    go in the review body. If the Reviews API rejects the payload we fall back
+    to the pre-V6.2 issue comment so a mapping bug can never lose a review.
+    """
+    from app.github.patch_parser import (
+        commentable_lines,
+        make_suggestion_block,
+        nearest_commentable,
+        parse_line_ref,
+    )
+
     max_files = config.get("pull_requests", "max_files_reviewed", default=4)
     reviewable = [
         f for f in files[:max_files] if f.get("patch") and not _is_generated(f["filename"])
@@ -340,11 +355,13 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
     if not reviewable:
         return
 
-    reviews = []
+    reviews = []  # per-file markdown for the review body
+    inline_comments = []  # line-anchored comments for the Reviews API
 
     for f in reviewable:
         filename = f["filename"]
         patch = f.get("patch", "")[:1500]
+        diff_lines = commentable_lines(f.get("patch", ""))
 
         r, _meta = router.ask(
             "Senior code reviewer. Give precise, actionable feedback. JSON only.",
@@ -379,30 +396,83 @@ Return JSON:
         score = r.get("score", 8)
         issues = r.get("issues", [])
 
-        if issues:
-            issues_md = "\n".join(
-                f"- **{i.get('severity', 'minor').upper()}** ~line {i.get('line', '?')}: "
-                f"{i.get('issue', '')} → `{i.get('fix', '')[:80]}`"
-                for i in issues[:4]
+        unanchored = []
+        for i in issues[:4]:
+            severity = i.get("severity", "minor").upper()
+            issue_text = i.get("issue", "")
+            fix = i.get("fix", "")
+            anchor = nearest_commentable(parse_line_ref(i.get("line")), diff_lines)
+            if anchor is None:
+                unanchored.append(
+                    f"- **{severity}** ~line {i.get('line', '?')}: " f"{issue_text} → `{fix[:80]}`"
+                )
+                continue
+            suggestion = make_suggestion_block(fix, anchor, diff_lines)
+            fix_md = (
+                suggestion if suggestion else (f"Proposed fix:\n```\n{fix}\n```" if fix else "")
             )
-        else:
-            issues_md = "✅ No issues found."
+            inline_comments.append(
+                {
+                    "path": filename,
+                    "line": anchor,
+                    "side": "RIGHT",
+                    "body": f"**{severity}** — {issue_text}\n\n{fix_md}".strip(),
+                    # Not part of the GitHub payload — popped before posting.
+                    # Lets the fallback path render this finding in the body.
+                    "_fallback_md": f"- **{severity}** `{filename}:{anchor}`: {issue_text} → `{fix[:80]}`",
+                }
+            )
 
+        issues_md = (
+            "\n".join(unanchored)
+            if unanchored
+            else (
+                "✅ No issues found." if not issues else "_All findings posted as inline comments._"
+            )
+        )
         reviews.append(
             f"### `{filename}` — Score: {score}/10\n{r.get('summary', '')}\n\n{issues_md}"
         )
 
-    if reviews:
-        review_body = "## 🔍 AI Code Review\n\n" + "\n\n---\n\n".join(reviews)
+    if not reviews:
+        return
+
+    review_body = "## 🔍 AI Code Review\n\n" + "\n\n---\n\n".join(reviews)
+
+    if inline_comments:
+        fallback_md = [c.pop("_fallback_md") for c in inline_comments]
         try:
             gh_post(
-                f"/repos/{repo}/issues/{pr_number}/comments",
+                f"/repos/{repo}/pulls/{pr_number}/reviews",
                 token,
-                {"body": review_body + config.footer},
+                {
+                    "commit_id": pr.get("head", {}).get("sha", ""),
+                    "event": "COMMENT",
+                    "body": review_body + config.footer,
+                    "comments": inline_comments,
+                },
             )
-            log.done(f"code_review_posted: {len(reviews)} files")
+            log.done(
+                f"code_review_posted_inline: {len(reviews)} files, "
+                f"{len(inline_comments)} line comments"
+            )
+            return
         except GitHubError as e:
-            log.error(f"Failed to post code review: {e}")
+            # Most likely a 422 from a line the API considers non-commentable.
+            # Never lose the review — degrade to the classic issue comment,
+            # WITH the findings that would have been inline.
+            log.warning(f"inline_review_rejected — falling back to issue comment: {e}")
+            review_body += "\n\n### Findings\n" + "\n".join(fallback_md)
+
+    try:
+        gh_post(
+            f"/repos/{repo}/issues/{pr_number}/comments",
+            token,
+            {"body": review_body + config.footer},
+        )
+        log.done(f"code_review_posted: {len(reviews)} files")
+    except GitHubError as e:
+        log.error(f"Failed to post code review: {e}")
 
 
 def _is_test_file(filename: str) -> bool:

@@ -1,0 +1,38 @@
+[
+  {
+    "id": "review-sql-injection",
+    "filename": "app/db/users.py",
+    "patch": "@@ -10,4 +10,6 @@ def get_user(conn, username):\n     cur = conn.cursor()\n+    query = \"SELECT * FROM users WHERE name = '\" + username + \"'\"\n+    cur.execute(query)\n     return cur.fetchone()\n ",
+    "planted": "string-concatenated SQL query — injection",
+    "must_mention": ["injection|parameteriz|placeholder|%s|\\?"]
+  },
+  {
+    "id": "review-secret-in-code",
+    "filename": "app/config.py",
+    "patch": "@@ -3,3 +3,4 @@ import os\n \n DEBUG = False\n+PAYMENT_API_TOKEN = \"prod-9f8e7d6c5b4a32100123456789abcdef\"\n TIMEOUT = 30\n",
+    "planted": "hardcoded production payment API credential (pattern chosen NOT to trip GitHub push protection — a real sk_live_ key gets the push blocked)",
+    "must_mention": ["secret|hardcode|env|credential|key|token"]
+  },
+  {
+    "id": "review-n-plus-one",
+    "filename": "app/api/orders.py",
+    "patch": "@@ -20,5 +20,8 @@ def list_orders(request):\n     orders = Order.objects.all()\n+    result = []\n+    for o in orders:\n+        result.append({\"id\": o.id, \"customer\": o.customer.name, \"items\": [i.sku for i in o.items.all()]})\n     return JsonResponse(result, safe=False)\n",
+    "planted": "N+1 query in loop over orders touching o.customer and o.items",
+    "must_mention": ["n\\+1|select_related|prefetch|query.*loop|loop.*quer"]
+  },
+  {
+    "id": "review-path-traversal",
+    "filename": "app/files.py",
+    "patch": "@@ -5,3 +5,5 @@ UPLOAD_DIR = \"/srv/uploads\"\n \n def read_upload(name):\n+    path = os.path.join(UPLOAD_DIR, name)\n+    return open(path, \"rb\").read()\n",
+    "planted": "user-controlled filename joined into path — traversal via ../",
+    "must_mention": ["traversal|\\.\\.|sanitiz|basename|realpath|validate"]
+  },
+  {
+    "id": "review-clean-change",
+    "filename": "app/util/strings.py",
+    "patch": "@@ -1,2 +1,5 @@\n+def truncate(text: str, limit: int = 80) -> str:\n+    \"\"\"Truncate text to limit chars, appending an ellipsis when cut.\"\"\"\n+    return text if len(text) <= limit else text[: limit - 1] + \"\\u2026\"\n",
+    "planted": "nothing — clean helper; reviewer should NOT invent critical issues",
+    "must_not_mention": ["critical"],
+    "min_length": 40
+  }
+]

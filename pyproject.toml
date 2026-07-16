@@ -1,6 +1,6 @@
 [project]
 name = "github-autopilot"
-version = "6.2.0"
+version = "6.3.0"
 description = "AI-powered GitHub automation bot — auto-fix, PR review, secret scanning, and more"
 readme = "README.md"
 requires-python = ">=3.10"

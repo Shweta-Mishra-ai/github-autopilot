@@ -54,8 +54,8 @@ def record_latency(provider: str, latency_ms: int, is_error: bool = False):
         vals = vals[-50:]  # keep last 50
         r.set(key, json.dumps(vals), ex=3600)
 
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug(f"health_check.record_latency_failed provider={provider}: {e}")
 
 
 def get_system_health() -> dict:

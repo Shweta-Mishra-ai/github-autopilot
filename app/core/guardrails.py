@@ -125,8 +125,8 @@ def check_repo_rate_limit(repo: str) -> GuardrailResult:
             return GuardrailResult(
                 False, f"Daily AI call limit ({limit}) reached. Resets at midnight UTC."
             )
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug(f"guardrails.repo_rate_limit_check_failed repo={repo}: {e}")
     return GuardrailResult(True, "OK")
 
 
@@ -140,5 +140,5 @@ def increment_repo_usage(repo: str):
         key = f"limit:{repo}:ai_calls:{today}"
         r.incr(key)
         r.expire(key, 86400)
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug(f"guardrails.increment_repo_usage_failed repo={repo}: {e}")

@@ -168,5 +168,5 @@ def record_call(provider_key: str, tokens: int):
         ):
             redis_client.incr(k)
             redis_client.expire(k, 86400)
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug(f"metrics.record_call_failed provider={provider_key}: {e}")

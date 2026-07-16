@@ -54,8 +54,8 @@ def _bump_version(version: str) -> str:
         if m:
             prefix, major, minor, patch = m.groups()
             return f"{prefix}{major}.{minor}.{int(patch) + 1}"
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug(f"reviewer.bump_version_parse_failed version={version!r}: {e}")
     return "v0.1.0"
 
 

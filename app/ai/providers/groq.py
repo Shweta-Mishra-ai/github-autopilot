@@ -180,5 +180,5 @@ class GroqProvider(LLMProvider):
             r.incr(req_key)
             r.expire(req_key, 86400)
 
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug(f"groq.track_usage_failed provider={self.provider_key}: {e}")

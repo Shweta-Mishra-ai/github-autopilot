@@ -203,8 +203,10 @@ def check_ip_rate_limit(ip: str) -> bool:
             if not ok:
                 log.warning(f"webhook_security.rate_limit_redis ip={ip} count={count}")
             return ok
-    except Exception:
-        pass
+    except Exception as e:
+        log.warning(
+            f"webhook_security.rate_limit_redis_unavailable ip={ip}: {e} — falling back to in-memory"
+        )
 
     # In-memory sliding window fallback
     now = time.time()

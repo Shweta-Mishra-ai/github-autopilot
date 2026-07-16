@@ -616,20 +616,16 @@ class TestFeatureFlags:
 
 ## 11. Known Gotchas
 
-### `app/core/learning.py` + `app/ai/prompt_builder.py` are unwired
+### `app/ai/prompt_builder.py` was removed as dead code (V6.3)
 
-Both modules are fully implemented and unit-tested (`test_learning.py`,
-11 tests) — `record_fix_accepted`, `record_autofix_merged`,
-`get_repo_patterns`, prompt customization from learned patterns. But no
-handler currently calls into either one; `prompt_builder.py` is never
-imported outside its own module, and nothing outside `learning.py` calls
-its public functions. This is different from dead code (like the V4
-`app/ai/client.py` and V3 `app/handlers/schedule.py`, removed in V6.1 —
-those were superseded/orphaned duplicates): this is a coherent, tested
-feature that was built but never wired into the live event flow. Wiring
-it in (e.g. recording outcomes on `/apply` and `/merge`, feeding
-`get_repo_patterns` into prompt construction) is a real, scoped follow-up
-— see `docs/architecture/roadmap.md`.
+`app/core/learning.py` is wired in: `record_fix_accepted` and
+`record_autofix_merged` are called from `handlers/comments/publisher.py`,
+and `get_pattern_summary` is called from `handlers/comments/generator.py`.
+`prompt_builder.py`, however, was never imported outside its own module and
+had no tests — a genuinely dead, tested-nowhere duplicate of the ad hoc
+prompt construction handlers already do inline. It was removed in the V6.3
+audit pass (see `docs/architecture/roadmap.md`). `get_repo_patterns` still
+isn't fed into prompt construction — that remains a real, scoped follow-up.
 
 ### `format_budget_comment` patches at wrong location
 

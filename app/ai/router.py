@@ -450,8 +450,8 @@ class LLMRouter:
                     f"router.budget_alert provider={provider_key} "
                     f"tokens_used={used} limit={token_limit} pct={pct:.0%}"
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug(f"router.budget_alert_check_failed provider={provider_key}: {e}")
 
     def safe_ask(
         self,
@@ -502,8 +502,8 @@ class LLMRouter:
                     "tokens_today": tok,
                     "cost_usd_today": round(cost, 5),
                 }
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug(f"router.status_usage_fetch_failed: {e}")
         return {
             "circuit_breakers": status_all(),
             "daily_usage": usage,

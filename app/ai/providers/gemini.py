@@ -156,6 +156,12 @@ class GeminiProvider(LLMProvider):
             )
 
     def _track(self, total_tokens: int):
+        """
+        FIXED: tokens key now uses incrby(total_tokens) instead of incr(1) --
+        same V4 bug already fixed in groq.py's _track() but missed here.
+        The old code added 1 to the token counter per call regardless of how
+        many tokens were consumed, making /budget data meaningless for Gemini.
+        """
         try:
             import datetime
             from app.core.redis_client import get_redis
@@ -164,11 +170,13 @@ class GeminiProvider(LLMProvider):
                 return
             r = get_redis()
             today = datetime.date.today().isoformat()
-            for k in (
-                f"llm:tokens:gemini:{today}",
-                f"llm:requests:gemini:{today}",
-            ):
-                r.incr(k)
-                r.expire(k, 86400)
-        except Exception:
-            pass
+
+            tok_key = f"llm:tokens:gemini:{today}"
+            r.incrby(tok_key, total_tokens)
+            r.expire(tok_key, 86400)
+
+            req_key = f"llm:requests:gemini:{today}"
+            r.incr(req_key)
+            r.expire(req_key, 86400)
+        except Exception as e:
+            log.debug(f"gemini.track_usage_failed: {e}")

@@ -119,8 +119,8 @@ def _track_failure_pattern(repo: str, check_name: str, root_cause: str):
                 f"count={count} root_cause={root_cause[:60]}"
             )
             return True  # Caller posts pattern alert
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug(f"ci.track_failure_pattern_failed repo={repo} check={check_name}: {e}")
     return False
 
 

@@ -278,8 +278,8 @@ def cmd_arch(repo: str, issue_number: int, issue: dict, token: str) -> str:
         try:
             files = gh_get(f"/repos/{repo}/pulls/{issue_number}/files", token)
             context = "Files changed:\n" + "\n".join(f["filename"] for f in files[:15])
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug(f"generator.cmd_arch_files_fetch_failed repo={repo} pr={issue_number}: {e}")
 
     if not context:
         context = f"Title: {issue.get('title', '')}\nBody: {(issue.get('body') or '')[:500]}"

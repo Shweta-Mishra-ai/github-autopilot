@@ -49,8 +49,8 @@ def invalidate_repo(repo: str):
         keys = r.keys(f"ghcache:*{repo}*")
         if keys:
             r.delete(*keys)
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug(f"cache.invalidate_repo_failed repo={repo}: {e}")
 
 
 def get_stats() -> dict:

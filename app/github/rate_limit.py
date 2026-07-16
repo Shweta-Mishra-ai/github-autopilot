@@ -45,8 +45,8 @@ def update_from_headers(headers: dict):
         _state["last_checked"] = time.time()
         _state["resource"] = resource  # track which resource was last checked
 
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug(f"rate_limit.update_from_headers_failed: {e}")
 
 
 def check_and_wait():
@@ -127,5 +127,5 @@ def _try_redis_set(key: str, value, ttl: int = 3600):
 
         r = get_redis()
         r.set(f"github:{key}", str(value), ex=ttl)
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug(f"rate_limit.redis_set_failed key={key}: {e}")

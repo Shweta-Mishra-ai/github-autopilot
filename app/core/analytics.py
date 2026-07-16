@@ -158,8 +158,8 @@ def _incr(key: str, ttl: int = 604800):
         r = redis_client.get_redis()
         r.incr(key)
         r.expire(key, ttl)
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug(f"analytics.incr_failed key={key}: {e}")
 
 
 def _lpush(key: str, value, ttl: int = 604800):
@@ -168,8 +168,8 @@ def _lpush(key: str, value, ttl: int = 604800):
         r.lpush(key, str(value))
         r.ltrim(key, 0, 999)
         r.expire(key, ttl)
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug(f"analytics.lpush_failed key={key}: {e}")
 
 
 def _get_int(key: str) -> int:
@@ -229,8 +229,8 @@ def _get_top_commands(repo: str, top_n: int = 5) -> dict:
             val = r.get(f"analytics:{repo}:cmd_total:{cmd}")
             if val and int(val) > 0:
                 counts[cmd] = int(val)
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug(f"analytics.top_commands_failed repo={repo}: {e}")
     return dict(sorted(counts.items(), key=lambda x: x[1], reverse=True)[:top_n])
 
 

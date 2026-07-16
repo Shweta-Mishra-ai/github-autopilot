@@ -159,7 +159,7 @@ jobs:
       - name: Audit dependencies
         run: |
           pip install -r requirements.txt
-          pip-audit --requirement requirements.txt --ignore-vuln PYSEC-2023-62 || true
+          pip-audit --requirement requirements.txt --ignore-vuln PYSEC-2023-62
 
   # ── Test-count badge (main only) ─────────────────────────────────────────────
   # Publishes the real pytest pass count from THIS run to the `badges` branch.

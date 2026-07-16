@@ -82,7 +82,7 @@ Install the GitHub App on your repos, then:
 
 ```bash
 curl https://github-autopilot-1.onrender.com/ping
-# → {"status": "ok", "version": "6.2.0"}
+# → {"status": "ok", "version": "6.3.0"}
 ```
 
 > **Cold starts** — the demo instance runs on Render's free tier. A scheduled
@@ -288,6 +288,13 @@ Found a vulnerability? Please email rather than opening a public issue.
 ---
 
 ## Changelog
+
+### V6.3.0 — 2026-07-16
+- **CI security gate actually gates**: `pip-audit` had a trailing `|| true`, so the "Security" job could never fail even though `release` depends on it. 17 real CVEs across `flask`, `requests`, `PyJWT`, and `cryptography` (used for JWT signing and the encrypted memory backup) had gone silently unpatched as a result — all bumped, `pip-audit` now clean and blocking.
+- **Gemini token-tracking bug fixed**: `_track()` used `incr()` (+1 per call) instead of `incrby(tokens)` — the identical V4 bug already fixed in `groq.py` but missed in `gemini.py`. `/budget` data for Gemini has been meaningless since it shipped. Caught by new tests (`gemini.py` coverage 23% → 90%).
+- **Silent-failure audit**: all 26 bare `except Exception: pass` blocks in `app/` now log at debug/warning, so Redis and GitHub API degradation is observable instead of invisible.
+- **Dead code removed**: `app/ai/prompt_builder.py` (297 lines, zero callers, zero tests) — a duplicate of prompt construction handlers already do inline. `learning.py` itself is confirmed wired (`record_fix_accepted`, `record_autofix_merged`).
+- Local dev checkout re-synced (was 3+ weeks behind `main`) and MCP registration re-verified live against the deployed server.
 
 ### V6.2.0 — 2026-07-11
 - **Inline PR reviews**: findings now post as a real GitHub Review with line-anchored comments, snapped onto actual diff lines, with committable ```suggestion blocks for safe single-line fixes. Automatic fallback to the classic issue comment if the Reviews API rejects a payload — a mapping bug can never lose a review.

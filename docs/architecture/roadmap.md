@@ -6,7 +6,7 @@ how do we get people to adopt it?"*
 
 ## Where V6 landed
 
-Shipped and tested (726 passing, CI green):
+Shipped and tested (905 passing, CI green):
 
 - **Durable event queue** (Redis, bounded, at-least-once, dead-letter, fallback)
 - **Security hardening** — fail-closed MCP auth, constant-time compares, tenant allowlist, boot-time config warnings
@@ -14,6 +14,20 @@ Shipped and tested (726 passing, CI green):
 - **Private repo memory** — explainable ("knows *why*"), encrypted backup
 - **Live ops dashboard**, **Claude Code plugin + marketplace**, **MCP registration**
 - **Maintainability** — `mcp_server.py` split into `tools.py` / `handlers.py` / dispatch
+- **Auto-capture decisions** — `/apply` and merge outcomes feed `learning.py`
+  (`record_fix_accepted`, `record_autofix_merged`); dead `prompt_builder.py`
+  (never wired, no tests) removed in the V6.3 audit pass
+- **Silent-failure audit** — every bare `except Exception: pass` in `app/`
+  (26 sites) now logs at debug/warning so Redis/GitHub-API degradation is
+  observable instead of invisible
+- **CI security gate actually gates** — `pip-audit` had `|| true`, so the
+  "Security" job could never fail even though `release` depends on it; 17
+  real CVEs across flask/requests/PyJWT/cryptography were silently unpatched
+  as a result. Both fixed in the V6.3 audit pass
+- **Gemini token-tracking bug fixed** — `_track()` used `incr()` (+1) instead
+  of `incrby(tokens)`, the same V4 bug already fixed in `groq.py` but missed
+  in `gemini.py`; `/budget` data for Gemini was meaningless. Caught by new
+  tests (`gemini.py` coverage 23% → 90%)
 
 ## How to improve — prioritized
 
@@ -36,20 +50,31 @@ Shipped and tested (726 passing, CI green):
    `events.dropped`, `queue.dead`, `ratelimit.failopen`, all-providers-down.
 7. **Dashboard hardening.** Add auth in front of `/dashboard` itself (not just
    its data), and surface `intelligence.index_failed` + queue depth trends.
+7b. **Replace `KEYS` with `SCAN` in `app/core/cache.py`.** `invalidate_repo()`
+    and `get_stats()` both call `r.keys(...)`, which blocks the whole Redis
+    instance for O(N) — fine at today's scale (TTL'd cache, bounded queue)
+    but a real risk once the keyspace grows. Swap for `SCAN` cursor iteration.
+7c. **Track usage for `openrouter.py` and `ollama.py`.** Unlike `groq.py`/
+    `gemini.py`, neither provider calls a `_track()` equivalent — their
+    requests are invisible to `/budget`.
 
 ### P2 — smarter brain
 8. **Semantic memory.** Swap lexical recall for local Ollama embeddings
    (`/api/embeddings`) — still 100% local, much sharper retrieval.
-9. **Auto-capture decisions.** When a maintainer merges or `/apply`s a fix,
-   record a `decision` with the rationale automatically (feed `learning.py`).
+9. **Feed learned patterns into prompts.** `learning.py::get_repo_patterns`
+   is recorded but not yet read back into prompt construction.
 10. **Feedback loop.** Track which suggestions get accepted and bias future
     confidence thresholds per repo.
 
 ### P3 — maintainability
-11. Split the remaining long files: `handlers/comments/publisher.py` (570),
-    `handlers/pull_request.py` (480), `handlers/autofix.py` (451).
-12. Raise the coverage floor from 60% toward 80%; add integration tests for
-    the Redis-down and queue-saturation paths.
+11. Split the remaining long files: `handlers/comments/publisher.py` (586),
+    `handlers/pull_request.py` (551), `ai/router.py` (542),
+    `handlers/autofix.py` (451).
+12. Raise the coverage floor from 60% toward 80% (currently 78% overall).
+    `gemini.py` went 23% → 90% in the V6.3 pass; still weak: `openrouter.py`
+    (44%), `github/rate_limit.py` (45%), `core/config.py` (45%),
+    `github/client.py` (38%), `security/dependencies.py` (38%). Add
+    integration tests for the Redis-down and queue-saturation paths too.
 
 ## How to get others to use it (adoption)
 

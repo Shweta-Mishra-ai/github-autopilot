@@ -61,8 +61,8 @@ def _index_repo(r, repo: str) -> None:
             v.encode() if isinstance(v, str) else v for v in (r.lrange(_INDEX_KEY, 0, -1) or [])
         ):
             r.lpush(_INDEX_KEY, repo)
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug(f"memory.index_repo_failed repo={repo}: {e}")
 
 
 def known_repos() -> list[str]:
@@ -249,5 +249,5 @@ def clear(repo: str) -> None:
         from app.core.redis_client import get_redis
 
         get_redis().delete(_key(repo))
-    except Exception:
-        pass
+    except Exception as e:
+        log.warning(f"memory.clear_failed repo={repo}: {e} — repo memory may not have been deleted")

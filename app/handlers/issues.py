@@ -67,8 +67,8 @@ def handle(payload: dict):
     try:
         repo_data = gh_get(f"/repos/{repo}", token)
         repo_lang = repo_data.get("language", "") or ""
-    except Exception:
-        pass
+    except Exception as e:
+        log.info(f"issues.repo_language_fetch_failed: {e}")
 
     if config.get("labels", "auto_create", default=True):
         with contextlib.suppress(Exception):

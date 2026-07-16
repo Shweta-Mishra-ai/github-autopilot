@@ -93,18 +93,15 @@ def _get_all_fix_types(repo: str, r) -> list[str]:
                 t = entry.get("data", {}).get("type", "")
                 if t:
                     known.add(t)
-            except Exception:
-                pass
-    except Exception:
-        pass
+            except Exception as e:
+                log.debug(f"learning.fix_type_event_parse_failed repo={repo}: {e}")
+    except Exception as e:
+        log.debug(f"learning.fix_type_discovery_failed repo={repo}: {e}")
     return list(known)
 
 
 def get_repo_patterns(repo: str) -> dict:
-    """
-    Returns learned patterns for this repo.
-    Used by prompt_builder.py to customize AI prompts.
-    """
+    """Returns learned patterns for this repo."""
     try:
         r = get_redis()
         raw = r.get(f"learn:{repo}:patterns")
@@ -120,8 +117,8 @@ def update_repo_patterns(repo: str, patterns: dict):
         existing = get_repo_patterns(repo)
         existing.update(patterns)
         r.set(f"learn:{repo}:patterns", json.dumps(existing), ex=LEARNING_TTL)
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug(f"learning.update_repo_patterns_failed repo={repo}: {e}")
 
 
 def get_learning_summary(repo: str) -> dict:
@@ -151,8 +148,8 @@ def _record_event(repo: str, event_type: str, data: dict):
         r.lpush(key, json.dumps(entry))
         r.ltrim(key, 0, 199)
         r.expire(key, LEARNING_TTL)
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug(f"learning.record_event_failed repo={repo} event_type={event_type}: {e}")
 
 
 def _incr(key: str):
@@ -160,8 +157,8 @@ def _incr(key: str):
         r = get_redis()
         r.incr(key)
         r.expire(key, LEARNING_TTL)
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug(f"learning.incr_failed key={key}: {e}")
 
 
 # ==== Helper functions expected by tests ====

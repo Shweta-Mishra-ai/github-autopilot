@@ -161,7 +161,7 @@ def cmd_apply(
             raise
 
         # Check for existing open PR
-        owner = repo.split("/")[1] if "/" in repo else repo
+        owner = repo.split("/")[0] if "/" in repo else repo
         existing = gh_get(f"/repos/{repo}/pulls?head={owner}:{branch}&state=open&per_page=5", token)
         if isinstance(existing, list) and existing:
             pr = existing[0]

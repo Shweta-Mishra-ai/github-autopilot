@@ -248,6 +248,35 @@ class TestRateLimiting:
         dispatcher._local_cmd_counts.clear()
 
 
+class TestApplyPrExistenceCheck:
+    """Regression: the open-PR lookup must filter by head=<owner>:<branch>.
+    A prior bug used repo.split('/')[1] (the repo NAME) as the owner, so the
+    filter never matched and /apply could open duplicate PRs."""
+
+    def test_head_filter_uses_owner_not_repo_name(self):
+        from unittest.mock import patch
+        from app.handlers.comments import publisher as P
+
+        seen = {}
+
+        def fake_gh_get(url, token=None):
+            if url.startswith("/repos/octo/proj/pulls?head="):
+                seen["url"] = url
+                # Report an existing PR so the function returns early.
+                return [{"number": 7, "title": "existing", "html_url": "u"}]
+            if url == "/repos/octo/proj":
+                return {"default_branch": "main"}
+            if url.startswith("/repos/octo/proj/branches/"):
+                return {"name": "fix/bot-issue-1"}
+            return {}
+
+        with patch.object(P, "gh_get", side_effect=fake_gh_get):
+            res = P.cmd_apply("octo/proj", 1, "token", "fix/bot-issue-1")
+
+        assert "head=octo:fix/bot-issue-1" in seen.get("url", "")
+        assert "PR Already Exists" in res
+
+
 class TestFileSize:
 
     def test_no_single_file_exceeds_500_lines(self):

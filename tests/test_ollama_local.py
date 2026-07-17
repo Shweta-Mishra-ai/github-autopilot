@@ -10,7 +10,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import app.ai.circuit_breaker as cb
-from app.ai.providers.base import LLMResponse
 from app.ai.providers.ollama import OllamaProvider, is_configured
 from app.ai.router import LLMRouter
 

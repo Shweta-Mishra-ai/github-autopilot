@@ -104,8 +104,8 @@ def handle_comment_event(payload: dict) -> None:
         )
         return
 
-    # ── Command arguments (text after the command) ─────────────────────────
-    cmd_args = body.lower().split(cmd, 1)[-1].strip() if cmd in body.lower() else ""
+    idx = body.lower().find(cmd)  # slice ORIGINAL body so args keep their case
+    cmd_args = body[idx + len(cmd) :].strip() if idx != -1 else ""
 
     # ── Context building ──────────────────────────────────────────────────
     context = f"Title: {issue.get('title', '')}\nBody: {(issue.get('body') or '')[:1500]}"

@@ -275,7 +275,6 @@ def _req(auth_value):
 
 
 def test_authorized_open_when_no_token(monkeypatch):
-    import importlib
     import server
     monkeypatch.setattr(server, "METRICS_TOKEN", "")
     assert server._authorized(_req("")) is True

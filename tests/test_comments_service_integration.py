@@ -65,7 +65,7 @@ class TestHappyPath:
         assert dispatch.called
         common_mocks["post"].assert_called_once()
         posted_path, _token, body = common_mocks["post"].call_args[0]
-        assert "/repos/test/repo/issues/1/comments" == posted_path
+        assert posted_path == "/repos/test/repo/issues/1/comments"
         assert "Do the thing." in body["body"]
         assert "requested by @alice" in body["body"]
 
@@ -137,6 +137,27 @@ class TestRateLimitAndAuthorization:
         _, _, body = common_mocks["post"].call_args[0]
         assert "Permission Denied" in body["body"]
         assert "needs write access" in body["body"]
+
+
+class TestCommandArgs:
+    def test_args_preserve_original_case(self, common_mocks):
+        """Regression: args must NOT be lowercased — they were sliced from
+        body.lower(), which mangled /notify messages and branch names."""
+        with patch(
+            "app.handlers.comments.service._dispatch", return_value="ok"
+        ) as dispatch:
+            handle_comment_event(_payload(body="/notify Deploy FAILED on Prod"))
+
+        assert dispatch.called
+        assert dispatch.call_args.kwargs["cmd_args"] == "Deploy FAILED on Prod"
+
+    def test_args_empty_when_no_trailing_text(self, common_mocks):
+        with patch(
+            "app.handlers.comments.service._dispatch", return_value="ok"
+        ) as dispatch:
+            handle_comment_event(_payload(body="/fix"))
+
+        assert dispatch.call_args.kwargs["cmd_args"] == ""
 
 
 class TestDispatchOutcomes:

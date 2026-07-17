@@ -303,9 +303,8 @@ class TestCLIWorkerConfig:
         sys.argv = ["github-autopilot", "--version"]
         buf = io.StringIO()
         try:
-            with pytest.raises(SystemExit) as exc:
-                with contextlib.redirect_stdout(buf):
-                    cli.main()
+            with pytest.raises(SystemExit) as exc, contextlib.redirect_stdout(buf):
+                cli.main()
         finally:
             sys.argv = argv_backup
         assert exc.value.code == 0

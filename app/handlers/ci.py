@@ -3,8 +3,8 @@ app/handlers/ci.py
 V4 Sprint 4: CI check_run event handler.
 
 Triggers when a CI check completes.
-On failure: posts analysis comment with AI-suggested fix.
-On success: posts encouragement only if previously failed.
+On failure: posts an AI analysis comment with a suggested fix, and flags
+recurring failures (same check failing 3+ times in 24h) as a pattern alert.
 """
 
 import logging
@@ -91,7 +91,18 @@ def handle(payload: dict):
         if fix_text and not fix_text.startswith("-"):
             fix_text = "- " + fix_text.replace("\n", "\n- ")
 
-        comment = f"## {cat_emoji} CI Failure — `{check_name}`\n\n**Root cause:** {r.get('root_cause', 'See details below')}\n\n### Fix\n{fix_text}\n{flaky_note}\n\n---\n*🤖 GitHub Autopilot — CI Analysis*{config.footer}"
+        # Recurring-failure detection: if this same check has now failed 3 times
+        # in 24h, surface a pattern alert so maintainers know it isn't a one-off.
+        root_cause = r.get("root_cause", "See details below")
+        pattern_note = ""
+        if _track_failure_pattern(repo, check_name, root_cause):
+            pattern_note = (
+                f"\n\n> 🔁 **Recurring failure** — `{check_name}` has failed "
+                "3+ times in the last 24h. This looks like a persistent issue, "
+                "not a flake."
+            )
+
+        comment = f"## {cat_emoji} CI Failure — `{check_name}`\n\n**Root cause:** {root_cause}\n\n### Fix\n{fix_text}\n{flaky_note}{pattern_note}\n\n---\n*🤖 GitHub Autopilot — CI Analysis*{config.footer}"
 
         gh_post(f"/repos/{repo}/issues/{pr_number}/comments", token, {"body": comment})
         log_ctx.done(f"CI failure comment posted PR #{pr_number}")

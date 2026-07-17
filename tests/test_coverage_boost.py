@@ -1,4 +1,3 @@
-import pytest
 import os
 import base64
 from unittest.mock import MagicMock, patch
@@ -272,12 +271,12 @@ def test_metrics_collector():
     collector.increment("test.counter", 2)
     assert collector.get("test.counter") == 2
     assert collector.get("nonexistent") == 0
-    
+
     snap = collector.snapshot()
     assert snap["test.counter"] == 2
     assert "uptime_seconds" in snap
     assert "uptime_human" in snap
-    
+
     collector.reset()
     assert collector.get("test.counter") == 0
 
@@ -285,17 +284,17 @@ def test_thread_pool():
     # Test pool initialization and config
     pool = tp_mod.get_pool()
     assert pool is not None
-    
+
     # Test pool stats
     stats = tp_mod.pool_stats()
     assert stats["max_workers"] == tp_mod.MAX_DISPATCH_WORKERS
     assert stats["queue_capacity"] == 50
-    
+
     # Test bounded dispatch
     called = []
     def sample_task():
         called.append(True)
-        
+
     future = tp_mod.dispatch(sample_task)
     assert not tp_mod.is_saturated(future)
     future.result() # Wait for task
@@ -303,7 +302,7 @@ def test_thread_pool():
 
     # Test saturation sentinel
     assert tp_mod.is_saturated(tp_mod._SATURATED)
-    
+
     # Test shutdown
     tp_mod.shutdown(wait=True)
     assert tp_mod._pool is None
@@ -315,26 +314,26 @@ def test_licenses_scan(mock_get):
     mock_resp.status_code = 200
     mock_resp.json.return_value = {"info": {"license": "GPL-3.0 License"}}
     mock_get.return_value = mock_resp
-    
+
     res = lic_mod.check_package_license("gpl-pkg")
     assert res["package"] == "gpl-pkg"
     assert res["risk"] == "copyleft"
-    
+
     # Scan requirements.txt content
     findings = lic_mod.scan_requirements("gpl-pkg==1.0")
     assert len(findings) == 1
     assert findings[0]["package"] == "gpl-pkg"
-    
+
     # Format findings
     formatted = lic_mod.format_findings(findings)
     assert "gpl-pkg" in formatted
     assert "copyleft" in formatted
-    
+
     # Non-copyleft case
     mock_resp.json.return_value = {"info": {"license": "MIT"}}
     res_mit = lic_mod.check_package_license("mit-pkg")
     assert res_mit["risk"] == "safe"
-    
+
     # Empty findings formatting
     empty_formatted = lic_mod.format_findings([])
     assert "permissive" in empty_formatted
@@ -351,23 +350,23 @@ def test_system_health(mock_get_redis, mock_redis_avail, mock_gh_status, mock_br
         "groq": {"state": "closed"},
         "gemini": {"state": "open"} # degraded
     }
-    
+
     # Mock redis instance for record_latency
     mock_redis = MagicMock()
     mock_redis.get.return_value = None
     mock_get_redis.return_value = mock_redis
-    
+
     # Record latency
     hc_mod.record_latency("groq", 150)
     mock_redis.set.assert_called()
-    
+
     # Get system health
     health = hc_mod.get_system_health()
     assert health["status"] == "partial"
     assert health["is_degraded"] is True
     assert health["providers"]["gemini"]["is_degraded"] is True
     assert health["providers"]["groq"]["is_degraded"] is False
-    
+
     # Get degraded message
     msg = hc_mod.get_degraded_message()
     assert "gemini" in msg

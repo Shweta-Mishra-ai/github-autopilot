@@ -182,20 +182,34 @@ class LLMRouter:
         try:
             from app.core.sanitizer import sanitize_user_input
 
-            return sanitize_user_input(text)
+            result = sanitize_user_input(text)
+            if result is None:
+                # Fail-closed: critical injection detected
+                return "[INPUT_REJECTED_DUE_TO_INJECTION]"
+            return result
         except Exception:
-            # Fallback: basic injection filter
-            for pattern in [
-                "ignore all previous",
-                "you are now",
-                "jailbreak",
-                "disregard",
-                "forget your instructions",
-            ]:
-                lower = text.lower()
-                if pattern in lower:
-                    idx = lower.index(pattern)
-                    text = text[:idx] + "[FILTERED]" + text[idx + len(pattern) :]
+            # Fallback: hardened injection filter
+            import re
+            import unicodedata
+            try:
+                text = unicodedata.normalize("NFKC", text)
+            except Exception:
+                pass
+            text = re.sub(r"[\u200b\u200c\u200d\u2060\ufeff]", "", text)
+            text = re.sub(r"\s+", " ", text)
+            patterns = [
+                r"ignore\s+(all\s+)?previous\s+instructions?",
+                r"you\s+are\s+now",
+                r"jailbreak",
+                r"disregard",
+                r"forget\s+your\s+instructions",
+            ]
+            lower = text.lower()
+            for pat in patterns:
+                m = re.search(pat, lower)
+                if m:
+                    text = text[:m.start()] + "[FILTERED]" + text[m.end():]
+                    lower = text.lower()
             return text
 
     def _select_provider(self, task: str, context_tokens: int = 0) -> LLMProvider:

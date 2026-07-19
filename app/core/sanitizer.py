@@ -36,12 +36,14 @@ _INJECTION_PATTERNS: list[tuple[re.Pattern, str]] = [
 ]
 
 
-def sanitize_user_input(text: str, max_chars: int = 8_000) -> str:
+def sanitize_user_input(text: str, max_chars: int = 8_000) -> str | None:
     """
     Sanitize text from user-controlled sources (GitHub webhook payloads).
-    Applies Unicode normalization + injection pattern replacement.
+    Applies Unicode normalization, zero-width stripping, whitespace collapse,
+    and injection pattern replacement.
 
-    Does NOT raise. Returns sanitized string.
+    Returns sanitized string, or None if a critical-severity injection is
+    detected (fail-closed policy).
     """
     if not text:
         return ""
@@ -53,13 +55,23 @@ def sanitize_user_input(text: str, max_chars: int = 8_000) -> str:
     with contextlib.suppress(Exception):
         text = unicodedata.normalize("NFKC", text)
 
+    # Strip zero-width / invisible characters used for evasion
+    text = re.sub(r"[\u200b\u200c\u200d\u2060\ufeff]", "", text)
+
+    # Collapse whitespace (newlines/tabs -> space) so 'ignore\nprevious' matches
+    text = re.sub(r"\s+", " ", text)
+
     # Pattern replacement
     hits = []
+    critical_labels = {"JAILBREAK", "EXFIL"}
     for pattern, label in _INJECTION_PATTERNS:
         new_text, n = pattern.subn(f"[{label}]", text)
         if n:
             hits.append(label)
             text = new_text
+            if label in critical_labels:
+                log.warning(f"sanitizer.critical_injection_detected label={label}")
+                return None
 
     if hits:
         log.warning(f"sanitizer.injection_detected patterns={hits}")

@@ -16,18 +16,73 @@ An attacker can post malicious content in an issue/PR that manipulates the LLM i
 ## Defense Architecture
 
 Our defense follows a **defense-in-depth** strategy:
-Layer 1: Input Validation
-Unicode normalization (NFKC)
-Zero-width character stripping
-Pattern detection with 15+ injection signatures
-Layer 2: Structural Separation
-User content wrapped in non-guessable delimiters
-System prompt wrapped in separate delimiters
-Explicit security rule in system prompt
-Layer 3: Fail-Closed Policy
-Critical injections → reject input entirely
-High injections → truncate at first finding
-All attempts logged with severity
+┌─────────────────────────────────────────────────────────────────┐
+│  LAYER 1: INPUT VALIDATION                                      │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  • Unicode NFKC normalization                           │    │
+│  │  • Zero-width character stripping                       │    │
+│  │  • 15+ injection pattern signatures                     │    │
+│  └─────────────────────────────────────────────────────────┘    │
+└──────────────────────────────────┬──────────────────────────────┘
+│
+▼
+┌─────────────────────────────────────────────────────────────────┐
+│  LAYER 2: STRUCTURAL SEPARATION                                 │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  • User content wrapped in non-guessable delimiters     │    │
+│  │  • System prompt wrapped in separate delimiters           │    │
+│  │  • Explicit security rule in system prompt              │    │
+│  └─────────────────────────────────────────────────────────┘    │
+└──────────────────────────────────┬──────────────────────────────┘
+│
+▼
+┌─────────────────────────────────────────────────────────────────┐
+│  LAYER 3: FAIL-CLOSED POLICY                                    │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  🔴 Critical → Reject input entirely                    │    │
+│  │  🟡 High     → Truncate at first finding                │    │
+│  │  🟢 Medium   → Log and continue with caution            │    │
+│  └─────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+
+## Data Flow
+GitHub Issue/PR Comment
+│
+▼
+┌─────────────────┐
+│  Raw User Input │  ← Untrusted
+└────────┬────────┘
+│
+▼
+┌─────────────────────────┐
+│  _normalize_for_scan()  │  ← NFKC + strip zero-width + collapse
+└────────┬────────────────┘
+│
+▼
+┌─────────────────────────┐
+│ _detect_injection()     │  ← 15+ regex patterns
+└────────┬────────────────┘
+│
+┌─────┴─────┐
+▼           ▼
+Critical     Safe/Benign
+│              │
+▼              ▼
+Reject      ┌─────────────┐
+(empty)     │ _sanitize() │
+└──────┬──────┘
+│
+▼
+┌──────────────┐
+│  Wrap in     │
+│  delimiters  │
+└──────┬───────┘
+│
+▼
+┌──────────────┐
+│  Send to LLM │
+│  (secured)   │
+└──────────────┘
 
 ## Bypass Techniques We Defend Against
 

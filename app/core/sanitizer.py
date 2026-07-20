@@ -72,7 +72,6 @@ def sanitize_user_input(text: str, max_chars: int = 8_000) -> str | None:
             if label in critical_labels:
                 log.warning(f"sanitizer.critical_injection_detected label={label}")
                 return "[INPUT_REJECTED_DUE_TO_INJECTION]"
-                return None
 
     if hits:
         log.warning(f"sanitizer.injection_detected patterns={hits}")

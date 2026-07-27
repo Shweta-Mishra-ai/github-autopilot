@@ -103,16 +103,32 @@ Return JSON:
   "labels": ["bug 🐛"],
   "welcome": "2-3 sentence personalized response that acknowledges their specific issue",
   "needs_info": true,
-  "questions": ["specific question about reproduction steps", "version/environment info"],
-  "is_duplicate_risk": false,
-  "similar_search_terms": ["search terms to find duplicates"],
-  "auto_close_reason": ""
+  "questions": ["specific question about reproduction steps", "version/environment info"]
 }}""",
         task="issue_triage",
         max_tokens=1000,
     )
 
     result = validate_issue_triage(raw)
+
+    # The model gave us nothing usable. Post a plain acknowledgement rather
+    # than a table of fabricated type/priority/complexity values.
+    if result.get("_degraded"):
+        log.error(f"issues.triage_degraded issue=#{issue_number} — posting plain acknowledgement")
+        with contextlib.suppress(GitHubError):
+            gh_post(
+                f"/repos/{repo}/issues/{issue_number}/comments",
+                token,
+                {
+                    "body": (
+                        f"## 👋 Thanks for the issue, @{author}!\n\n"
+                        "A maintainer will take a look shortly.\n\n"
+                        "> Automated triage was unavailable for this issue."
+                        f"{config.footer}"
+                    )
+                },
+            )
+        return
 
     # Priority → emoji + label
     priority = result["priority"]

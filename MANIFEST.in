@@ -1,5 +1,7 @@
 include README.md
 include LICENSE
+include LICENSE-MIT
+include LICENSE-APACHE
 include requirements.txt
 include Procfile
 include render.yaml

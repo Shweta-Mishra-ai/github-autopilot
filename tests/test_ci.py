@@ -96,7 +96,7 @@ class TestHandleRouting:
     def test_auth_failure_returns_early(self):
         with patch("app.handlers.ci.get_installation_token",
                    side_effect=Exception("auth fail")), \
-             patch("app.handlers.ci.router.ask") as mock_ask:
+             patch("app.ai.guarded.safe_router_ask") as mock_ask:
             from app.handlers.ci import handle
             handle(_payload())
             mock_ask.assert_not_called()
@@ -105,7 +105,7 @@ class TestHandleRouting:
         with patch("app.handlers.ci.get_installation_token", return_value="tok"), \
              patch("app.handlers.ci.load_config",
                    return_value=_mock_config(ci_enabled=False)), \
-             patch("app.handlers.ci.router.ask") as mock_ask:
+             patch("app.ai.guarded.safe_router_ask") as mock_ask:
             from app.handlers.ci import handle
             handle(_payload())
             mock_ask.assert_not_called()
@@ -117,11 +117,11 @@ class TestHandleRouting:
         analysis = {"root_cause": "err", "category": "other", "fix": "-f", "is_flaky": False, "confidence": 0.8}
         with patch.object(ci_mod, "get_installation_token", return_value="tok"), \
              patch.object(ci_mod, "load_config", return_value=_mock_config()), \
-             patch.object(ci_mod, "router") as mock_router, \
-             patch.object(ci_mod, "gh_post") as mock_post:
-            mock_router.ask.return_value = (analysis, meta)
+             patch("app.ai.guarded.safe_router_ask") as mock_ask, \
+             patch("app.github.sticky.upsert_sticky") as mock_post:
+            mock_ask.return_value = (analysis, meta)
             ci_mod.handle(_payload(pr_numbers=[]))
-            mock_router.ask.assert_not_called()
+            mock_ask.assert_not_called()
             mock_post.assert_not_called()
 
 

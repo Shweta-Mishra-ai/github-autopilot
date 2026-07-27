@@ -188,8 +188,6 @@ def cmd_summarize(repo: str, issue_number: int, token: str) -> str:
 
 def cmd_ci(context: str, repo: str = "", token: str = "") -> str:
     """Analyze a CI failure — from pasted log or latest failed run."""
-    from app.handlers.comments import router
-
     ci_context = context.strip() if context else ""
 
     if not ci_context and repo and token:
@@ -304,7 +302,6 @@ def cmd_impact(repo: str, issue_number: int, issue: dict, token: str) -> str:
         return "## ℹ️ `/impact` only works on Pull Requests."
 
     try:
-        from app.handlers.comments import router
         from app.handlers.pull_request import _blast_radius
 
         files = gh_get(f"/repos/{repo}/pulls/{issue_number}/files", token)

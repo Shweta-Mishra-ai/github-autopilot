@@ -125,9 +125,14 @@ def validate_pr_analysis(raw: dict) -> dict:
 
 def validate_issue_triage(raw: dict) -> dict:
     """Validate and sanitize issue triage response."""
-    VALID_TYPES = {"bug", "feature", "question", "docs", "performance", "security"}
-    VALID_PRIORITIES = {"high", "medium", "low"}
-    VALID_COMPLEXITY = {"trivial", "simple", "moderate", "complex"}
+    # These MUST stay in sync with the enums the triage prompt asks for in
+    # app/handlers/issues.py. When they drifted, "critical" fell out of the
+    # allow-list and every critical issue was silently relabelled "medium" —
+    # which is why security issue #76 carries `priority: medium`.
+    VALID_TYPES = {"bug", "feature", "question", "docs", "performance", "security", "refactor"}
+    VALID_PRIORITIES = {"critical", "high", "medium", "low"}
+    VALID_COMPLEXITY = {"trivial", "simple", "moderate", "complex", "epic"}
+    VALID_ESTIMATES = {"< 1 hour", "1-4 hours", "1-3 days", "1-2 weeks", "> 2 weeks"}
 
     if is_unusable(raw):
         log.warning(f"validate_issue_triage: unusable payload — {str(raw)[:120]}")
@@ -160,6 +165,10 @@ def validate_issue_triage(raw: dict) -> dict:
         questions = []
     questions = [str(q)[:200] for q in questions if q][:3]
 
+    time_estimate = _str(raw.get("time_estimate", ""), 20)
+    if time_estimate not in VALID_ESTIMATES:
+        time_estimate = ""
+
     return {
         "type": issue_type,
         "priority": priority,
@@ -168,6 +177,7 @@ def validate_issue_triage(raw: dict) -> dict:
         "needs_info": bool(raw.get("needs_info", False)),
         "questions": questions,
         "complexity": complexity,
+        "time_estimate": time_estimate,
     }
 
 

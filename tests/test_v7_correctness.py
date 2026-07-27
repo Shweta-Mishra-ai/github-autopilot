@@ -50,6 +50,85 @@ class TestUnusableGuard:
         assert out.get("_degraded", False) is False
 
 
+class TestTriageVocabulary:
+    def test_critical_priority_survives(self):
+        """Live evidence: issue #76 (a security vuln) was labelled 'priority: medium'."""
+        out = validate_issue_triage(
+            {
+                "type": "security",
+                "priority": "critical",
+                "complexity": "epic",
+                "time_estimate": "1-3 days",
+                "welcome": "thanks",
+                "labels": ["security"],
+            }
+        )
+        assert out["priority"] == "critical"
+
+    def test_refactor_type_survives(self):
+        out = validate_issue_triage({"type": "refactor", "priority": "low", "welcome": "hi"})
+        assert out["type"] == "refactor"
+
+    def test_epic_complexity_survives(self):
+        out = validate_issue_triage({"type": "bug", "complexity": "epic", "welcome": "hi"})
+        assert out["complexity"] == "epic"
+
+    def test_time_estimate_passes_through(self):
+        out = validate_issue_triage(
+            {"type": "bug", "time_estimate": "1-4 hours", "welcome": "hi"}
+        )
+        assert out["time_estimate"] == "1-4 hours"
+
+    def test_bogus_time_estimate_is_dropped(self):
+        out = validate_issue_triage(
+            {"type": "bug", "time_estimate": "about a fortnight", "welcome": "hi"}
+        )
+        assert out["time_estimate"] == ""
+
+    def test_unknown_priority_still_falls_back(self):
+        out = validate_issue_triage({"type": "bug", "priority": "urgent-ish", "welcome": "hi"})
+        assert out["priority"] == "medium"
+
+
+class TestDegradedTriage:
+    def test_degraded_triage_posts_no_fabricated_table(self):
+        from app.handlers import issues as issues_mod
+
+        posted = {}
+        payload = {
+            "action": "opened",
+            "issue": {
+                "number": 1,
+                "title": "t",
+                "body": "b",
+                "user": {"login": "dev"},
+            },
+            "repository": {"full_name": "o/r"},
+            "installation": {"id": 1},
+        }
+        cfg = MagicMock()
+        cfg.footer = ""
+        cfg.issues_enabled.return_value = True
+        cfg.get.side_effect = lambda *a, **kw: kw.get("default", True)
+
+        with (
+            patch.object(issues_mod, "get_installation_token", return_value="tok"),
+            patch.object(issues_mod, "load_config", return_value=cfg),
+            patch.object(issues_mod, "gh_get", return_value={"language": "Python"}),
+            patch.object(
+                issues_mod, "gh_post", side_effect=lambda p, t, d: posted.update(body=d["body"])
+            ),
+            patch.object(
+                issues_mod.router, "ask", return_value=({"raw": "I cannot help"}, MagicMock())
+            ),
+        ):
+            issues_mod.handle(payload)
+
+        body = posted.get("body", "")
+        assert "**Priority**" not in body
+        assert "**Complexity**" not in body
+
+
 def _review_cfg():
     cfg = MagicMock()
     cfg.footer = ""

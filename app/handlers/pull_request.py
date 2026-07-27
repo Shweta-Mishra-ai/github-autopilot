@@ -544,8 +544,32 @@ Return JSON with one entry per file:
                 "✅ No issues found." if not issues else "_All findings posted as inline comments._"
             )
         )
+
+        # Score this file's review on evidence: how many of its findings mapped
+        # to real diff lines, and whether it actually said anything. The gate
+        # was passed into this function and never called before V7.
+        total_findings = len(unanchored) + len(
+            [c for c in inline_comments if c["path"] == filename]
+        )
+        anchored = len([c for c in inline_comments if c["path"] == filename])
+        anchor_rate = (anchored / total_findings) if total_findings else 1.0
+        verdict = gate.evaluate(
+            "code_review", r, anchor_rate=anchor_rate, required_fields=("summary",)
+        )
+        low_confidence = ""
+        if not verdict.get("auto_apply", True):
+            log.info(
+                f"code_review.low_confidence file={filename} "
+                f"score={verdict.get('confidence_score')}"
+            )
+            low_confidence = (
+                f"\n\n> ⚠️ Confidence {verdict.get('confidence_score', 0):.0%} — "
+                "treat this file's review as a prompt to look, not a verdict."
+            )
+
         reviews.append(
-            f"### `{filename}` — Score: {score}/10\n{r.get('summary', '')}\n\n{issues_md}"
+            f"### `{filename}` — Score: {score}/10\n"
+            f"{r.get('summary', '')}\n\n{issues_md}{low_confidence}"
         )
 
     if not reviews:

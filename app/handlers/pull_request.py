@@ -393,7 +393,17 @@ Return JSON:
         )
 
         r = validate_code_review(r)
-        score = r.get("score", 8)
+
+        # A degraded payload means the model returned nothing usable for this
+        # file. Skip it — rendering the defaults publishes a clean bill of
+        # health for a review that never happened.
+        if r.get("_degraded"):
+            log.warning(f"code_review.degraded_skipped file={filename}")
+            continue
+
+        # `or 8` not `.get("score", 8)`: the key exists with a None value on
+        # some paths, which rendered as "Score: None/10".
+        score = r.get("score") or 8
         issues = r.get("issues", [])
 
         unanchored = []

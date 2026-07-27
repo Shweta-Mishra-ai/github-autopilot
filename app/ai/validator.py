@@ -226,9 +226,15 @@ def validate_code_review(raw: dict) -> dict:
     except (TypeError, ValueError):
         pass
 
+    # The model's overall assessment. Exposed under BOTH names: renderers read
+    # "summary", while app/mcp/handlers.py and evals/ read "verdict". Returning
+    # only one of them is how every code review shipped with a blank summary.
+    assessment = _str(raw.get("summary") or raw.get("verdict", ""), 200)
+
     return {
         "score": score,
-        "verdict": _str(raw.get("verdict") or raw.get("summary", ""), 200),
+        "summary": assessment,  # canonical — what renderers read
+        "verdict": assessment,  # retained for app/mcp/handlers.py + evals/
         "issues": clean_issues,
         "positives": _list_of_str(raw.get("positives"), max_items=5, max_item_len=200),
         "confidence": confidence,

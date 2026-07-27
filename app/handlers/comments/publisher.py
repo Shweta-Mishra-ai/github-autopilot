@@ -112,6 +112,19 @@ def cmd_merge(
                     m = re.search(r"issue-(\d+)", head_branch)
                     record_autofix_merged(repo, issue_number, int(m.group(1)) if m else 0)
 
+                # Write it to the brain too. Nothing in the application called
+                # remember() before V7, so the memory store only ever held what
+                # a backup restored into it.
+                with contextlib.suppress(Exception):
+                    from app.intelligence.memory import remember
+
+                    remember(
+                        repo,
+                        f"Accepted fix merged for #{issue_number}: {issue.get('title', '')}",
+                        kind="fix",
+                        meta={"pr": issue_number, "by": author},
+                    )
+
             return (
                 f"## ✅ Merged!\n\n"
                 f"**`{head_branch}`** → **`{base_branch}`**\n"
@@ -196,6 +209,15 @@ def cmd_apply(
             from app.core.learning import record_fix_accepted
 
             record_fix_accepted(repo, issue_number, "autofix")
+
+        with contextlib.suppress(Exception):
+            from app.intelligence.memory import remember
+
+            remember(
+                repo,
+                f"Maintainer opened a PR from bot branch {branch} for issue #{issue_number}",
+                kind="pattern",
+            )
 
         return f"## ✅ PR Created\n\n**PR #{pr.get('number', '?')}:** [{pr.get('title', '')}]({pr.get('html_url', '')})\n\n**Branch:** `{branch}` → `{default_branch}`\n\n> Review changes carefully before merging."
 
@@ -531,56 +553,3 @@ def cmd_notify(
     except Exception as exc:
         log.error(f"cmd_notify error: {exc}")
         return f"## ⚠️ Notify error: `{str(exc)[:200]}`"
-
-
-def cmd_security(repo: str, issue_number: int, issue: dict, token: str) -> str:
-    """Scan PR files for secrets and vulnerable dependencies."""
-    if "pull_request" not in issue:
-        return "## ℹ️ `/security` works best on Pull Requests."
-
-    try:
-        from app.security.enhanced_secrets import format_findings as fmt_secrets, scan_diff
-        from app.security.dependencies import scan_requirements_txt, format_dep_findings
-
-        pr_files = gh_get(f"/repos/{repo}/pulls/{issue_number}/files", token)
-        all_findings = []
-        for f in pr_files[:10]:
-            patch = f.get("patch", "")
-            if patch:
-                all_findings.extend(scan_diff(patch, file_path=f.get("filename", "")))
-
-        dep_findings = []
-        for f in pr_files:
-            if f["filename"] == "requirements.txt":
-                import base64
-
-                raw = gh_get(f"/repos/{repo}/contents/{f['filename']}", token)
-                content = base64.b64decode(raw["content"]).decode()
-                dep_findings.extend(scan_requirements_txt(content))
-
-        lines = ["## 🔒 Security Scan Results\n"]
-        lines.append(
-            fmt_secrets(all_findings, repo)
-            if all_findings
-            else "✅ **No secrets detected** in changed files.\n"
-        )
-        lines.append(
-            format_dep_findings(dep_findings)
-            if dep_findings
-            else "✅ **No vulnerable dependencies** found.\n"
-        )
-        return "\n\n".join(lines)
-
-    except Exception as exc:
-        return fmt_error("Security scan failed", exc)
-
-
-def cmd_secfull(repo: str, token: str) -> str:
-    """Full repository security scan."""
-    try:
-        from app.security.scanner import run_security_scan
-
-        report = run_security_scan(repo, token)
-        return report.to_markdown(include_low=True)
-    except Exception as exc:
-        return fmt_error("Security scan failed", exc)

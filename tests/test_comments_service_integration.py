@@ -238,8 +238,8 @@ class TestDispatchRoutingTable:
             ("/release", "app.handlers.comments.publisher.cmd_release"),
             ("/runtests", "app.handlers.comments.publisher.cmd_runtests"),
             ("/notify", "app.handlers.comments.publisher.cmd_notify"),
-            ("/security", "app.handlers.comments.publisher.cmd_security"),
-            ("/secfull", "app.handlers.comments.publisher.cmd_secfull"),
+            ("/security", "app.handlers.comments.security.cmd_security"),
+            ("/secfull", "app.handlers.comments.security.cmd_secfull"),
         ],
     )
     def test_command_routes_to_expected_handler(self, cmd, target):

@@ -276,6 +276,45 @@ class _FakeRedis:
             self._evict(key)
             return 1 if key in self._store else 0
 
+    def sadd(self, key: str, *values) -> int:
+        """Returns the number of values actually added (0 if all present)."""
+        with self._lock:
+            self._evict(key)
+            s = self._store.get(key)
+            if not isinstance(s, set):
+                s = set()
+            added = 0
+            for v in values:
+                if str(v) not in s:
+                    s.add(str(v))
+                    added += 1
+            self._store[key] = s
+            return added
+
+    def sismember(self, key: str, value) -> bool:
+        with self._lock:
+            self._evict(key)
+            s = self._store.get(key)
+            return isinstance(s, set) and str(value) in s
+
+    def srem(self, key: str, *values) -> int:
+        with self._lock:
+            s = self._store.get(key)
+            if not isinstance(s, set):
+                return 0
+            removed = 0
+            for v in values:
+                if str(v) in s:
+                    s.discard(str(v))
+                    removed += 1
+            return removed
+
+    def scard(self, key: str) -> int:
+        with self._lock:
+            self._evict(key)
+            s = self._store.get(key)
+            return len(s) if isinstance(s, set) else 0
+
     def lpush(self, key: str, *values):
         with self._lock:
             lst = self._store.get(key, [])

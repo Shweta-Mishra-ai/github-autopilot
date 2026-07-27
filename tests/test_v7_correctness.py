@@ -48,3 +48,82 @@ class TestUnusableGuard:
     def test_good_payload_is_not_degraded(self):
         out = validate_code_review({"score": 9, "issues": [], "summary": "fine"})
         assert out.get("_degraded", False) is False
+
+
+def _review_cfg():
+    cfg = MagicMock()
+    cfg.footer = ""
+    cfg.get.return_value = 4
+    return cfg
+
+
+class TestReviewRendering:
+    def test_validator_exposes_summary_and_verdict(self):
+        out = validate_code_review({"score": 8, "issues": [], "summary": "Looks solid."})
+        assert out["summary"] == "Looks solid."
+        assert out["verdict"] == "Looks solid."
+
+    def test_rendered_review_contains_model_summary(self):
+        """Regression: renderer read 'summary', validator only returned 'verdict'."""
+        from app.handlers import pull_request as pr_mod
+
+        posted = {}
+        files = [
+            {
+                "filename": "app/x.py",
+                "patch": "@@ -1,1 +1,1 @@\n-x = 0\n+x = 1\n",
+                "additions": 1,
+                "deletions": 1,
+            }
+        ]
+        llm = ({"score": 8, "issues": [], "summary": "Change is well scoped."}, MagicMock())
+
+        with (
+            patch.object(pr_mod.router, "ask", return_value=llm),
+            patch.object(
+                pr_mod, "gh_post", side_effect=lambda p, t, d: posted.update(body=d["body"])
+            ),
+        ):
+            pr_mod._review_code(
+                {"head": {"sha": "abc"}},
+                "o/r",
+                1,
+                files,
+                "t",
+                _review_cfg(),
+                MagicMock(),
+                "",
+                MagicMock(),
+            )
+
+        assert "Change is well scoped." in posted.get("body", "")
+
+    def test_degraded_file_is_skipped_not_rendered_as_clean(self):
+        from app.handlers import pull_request as pr_mod
+
+        posted = {}
+        files = [{"filename": "app/x.py", "patch": "@@ -1,1 +1,1 @@\n-x = 0\n+x = 1\n"}]
+        llm = ({"raw": "Sorry, I cannot help with that."}, MagicMock())
+
+        with (
+            patch.object(pr_mod.router, "ask", return_value=llm),
+            patch.object(
+                pr_mod, "gh_post", side_effect=lambda p, t, d: posted.update(body=d["body"])
+            ),
+        ):
+            pr_mod._review_code(
+                {"head": {"sha": "abc"}},
+                "o/r",
+                1,
+                files,
+                "t",
+                _review_cfg(),
+                MagicMock(),
+                "",
+                MagicMock(),
+            )
+
+        body = posted.get("body", "")
+        assert "Score: 7" not in body
+        assert "No issues found" not in body
+        assert "Score: None" not in body

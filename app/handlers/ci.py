@@ -13,6 +13,7 @@ from app.github.client import gh_post
 from app.ai.router import router
 from app.core.config import load_config
 from app.core.logger import EventLogger
+from app.core.sanitizer import wrap_user_content
 
 log = logging.getLogger(__name__)
 
@@ -69,7 +70,13 @@ def handle(payload: dict):
         log_ctx.info(f"ci.duplicate_suppressed pr={pr_number} sha={head_sha[:7]}")
         return
 
-    failure_context = f"""CI Check: {check_name}\nConclusion: {conclusion}\nTitle: {title}\nSummary: {summary}\nDetails: {details}"""
+    # CI logs are attacker-reachable: anything a contributor's test prints ends
+    # up here. Delimit it so the model treats it as a log, not as instructions.
+    failure_context = wrap_user_content(
+        f"CI Check: {check_name}\nConclusion: {conclusion}\n"
+        f"Title: {title}\nSummary: {summary}\nDetails: {details}",
+        "CI_LOG",
+    )
 
     try:
         from app.ai.guarded import guarded_ask, is_degraded

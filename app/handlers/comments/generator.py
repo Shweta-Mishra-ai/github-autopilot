@@ -10,6 +10,7 @@ import logging
 
 from app.ai.hallucination import add_confidence_footer
 from app.ai.guarded import degraded_comment, guarded_ask, is_degraded
+from app.core.sanitizer import wrap_user_content
 
 log = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ def cmd_fix(ctx_title: str, context: str, repo: str = "") -> str:
         "Senior engineer. Give precise, working fix. JSON only.",
         f"""Fix this issue:
 Title: {ctx_title}
-Context: {context[:2000]}
+{wrap_user_content(context[:2000], "ISSUE_CONTEXT")}
 {f"Repo conventions (learned from previously accepted fixes):{learned}" if learned else ""}
 
 Return JSON:
@@ -67,7 +68,7 @@ def cmd_explain(context: str) -> str:
     try:
         text, _ = router.ask_text(
             "Senior engineer. Explain clearly in plain English.",
-            f"Explain this:\n{context[:2000]}",
+            f"Explain this:\n{wrap_user_content(context[:2000], 'ISSUE_CONTEXT')}",
             task="explain",
         )
     except Exception as exc:
@@ -87,7 +88,7 @@ def cmd_improve(context: str) -> str:
     r, _ = guarded_ask(
         "Staff engineer. Suggest concrete improvements. JSON only.",
         f"""Suggest improvements for:
-{context[:2000]}
+{wrap_user_content(context[:2000], "ISSUE_CONTEXT")}
 
 Return JSON:
 {{
@@ -119,7 +120,7 @@ def cmd_test(context: str) -> str:
     r, _ = guarded_ask(
         "Senior QA engineer. Generate tests. JSON only.",
         f"""Write tests for:
-{context[:2000]}
+{wrap_user_content(context[:2000], "ISSUE_CONTEXT")}
 
 Return JSON:
 {{
@@ -152,7 +153,7 @@ def cmd_docs(context: str) -> str:
     r, _ = guarded_ask(
         "Technical writer. Generate documentation. JSON only.",
         f"""Generate docs for:
-{context[:2000]}
+{wrap_user_content(context[:2000], "ISSUE_CONTEXT")}
 
 Return JSON:
 {{
@@ -181,7 +182,7 @@ def cmd_refactor(context: str) -> str:
     r, _ = guarded_ask(
         "Principal engineer. Suggest refactoring. JSON only.",
         f"""Suggest refactoring for:
-{context[:2500]}
+{wrap_user_content(context[:2500], "ISSUE_CONTEXT")}
 
 Return JSON:
 {{
@@ -218,7 +219,7 @@ def cmd_gaps(context: str) -> str:
     r, _ = guarded_ask(
         "Senior QA engineer. Identify test gaps. JSON only.",
         f"""Analyze this code for test coverage gaps:
-{context[:2500]}
+{wrap_user_content(context[:2500], "ISSUE_CONTEXT")}
 
 Return JSON:
 {{
@@ -252,7 +253,7 @@ def cmd_perf(context: str) -> str:
     r, _ = guarded_ask(
         "Performance engineer. Analyze code for performance issues. JSON only.",
         f"""Analyze for performance problems:
-{context[:2500]}
+{wrap_user_content(context[:2500], "ISSUE_CONTEXT")}
 
 Return JSON:
 {{
@@ -319,7 +320,7 @@ def cmd_arch(repo: str, issue_number: int, issue: dict, token: str) -> str:
     r, _ = guarded_ask(
         "Software architect with 15+ years. Review architecture. JSON only.",
         f"""Review this for architectural issues:
-{context}
+{wrap_user_content(context, "ISSUE_CONTEXT")}
 
 Return JSON:
 {{

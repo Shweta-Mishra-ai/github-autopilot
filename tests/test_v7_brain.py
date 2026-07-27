@@ -144,3 +144,97 @@ class TestWriteSitesAreWired:
                 "o/r", 9, {"pull_request": {}, "title": "t"}, "tok", "dev", MagicMock()
             )
         assert "Merged" in out
+
+
+# ── Confidence ────────────────────────────────────────────────────────────────
+
+from app.ai.hallucination import HallucinationResult  # noqa: E402
+from app.core.confidence import ConfidenceGate, compute_confidence  # noqa: E402
+
+
+class TestComputedConfidence:
+    def test_self_reported_confidence_cannot_carry_a_bad_payload(self):
+        """A hallucinating model happily reports 0.99."""
+        payload = {"confidence": 0.99, "summary": "", "issues": []}
+        score = compute_confidence(
+            payload,
+            hallucination=HallucinationResult(confidence=0.1, is_acceptable=False),
+            anchor_rate=0.0,
+            required_fields=("summary",),
+        )
+        assert score < 0.5
+
+    def test_strong_evidence_scores_high(self):
+        payload = {
+            "confidence": 0.8,
+            "summary": "clear and specific assessment of the change",
+            "issues": [{"severity": "major"}],
+        }
+        score = compute_confidence(
+            payload,
+            hallucination=HallucinationResult(confidence=0.95, is_acceptable=True),
+            anchor_rate=1.0,
+            required_fields=("summary",),
+        )
+        assert score > 0.8
+
+    def test_degraded_payload_scores_zero(self):
+        assert compute_confidence({"_degraded": True}) == 0.0
+
+    def test_non_dict_scores_zero(self):
+        assert compute_confidence("not a dict") == 0.0
+
+    def test_missing_signals_are_dropped_not_penalised(self):
+        """A caller that can't supply anchor_rate must not be punished for it."""
+        payload = {"confidence": 0.9, "summary": "a clear and specific assessment"}
+        with_signal = compute_confidence(
+            payload,
+            hallucination=HallucinationResult(confidence=0.9, is_acceptable=True),
+            required_fields=("summary",),
+        )
+        assert with_signal > 0.85
+
+    def test_non_numeric_reported_confidence_does_not_crash(self):
+        assert 0.0 <= compute_confidence({"confidence": "high", "summary": "x"}) <= 1.0
+
+    def test_gate_uses_computed_not_reported(self):
+        gate = ConfidenceGate(None)
+        out = gate.evaluate(
+            "code_review",
+            {"confidence": 0.99, "summary": "", "issues": []},
+            hallucination=HallucinationResult(confidence=0.1, is_acceptable=False),
+            anchor_rate=0.0,
+        )
+        assert out["auto_apply"] is False
+        assert out["confidence_score"] < 0.99
+
+    def test_gate_without_signals_still_works(self):
+        """Existing callers pass no signals — they must not break."""
+        gate = ConfidenceGate(None)
+        out = gate.evaluate("pr_title_rewrite", {"confidence": 0.9, "suggested_title": "feat: x"})
+        assert "confidence_score" in out
+        assert isinstance(out["auto_apply"], bool)
+
+
+class TestGateIsWiredIntoReview:
+    def test_review_code_actually_calls_the_gate(self):
+        """The gate was passed to _review_code and never used."""
+        from app.handlers import pull_request as pr_mod
+
+        files = [{"filename": "app/a.py", "patch": "@@ -1,1 +1,1 @@\n-x = 0\n+x = 1\n"}]
+        payload = {
+            "files": [{"file": "app/a.py", "score": 7, "issues": [], "summary": "looks fine"}]
+        }
+        cfg = MagicMock()
+        cfg.footer = ""
+        cfg.get.return_value = 4
+        gate = MagicMock()
+        gate.evaluate.return_value = {"auto_apply": True, "confidence_score": 0.9}
+
+        with patch.object(pr_mod.router, "ask", return_value=(payload, MagicMock())):
+            pr_mod._review_code(
+                {"head": {"sha": "s"}}, "o/r", 1, files, "t", cfg, gate, "", MagicMock()
+            )
+
+        gate.evaluate.assert_called()
+        assert gate.evaluate.call_args[0][0] == "code_review"

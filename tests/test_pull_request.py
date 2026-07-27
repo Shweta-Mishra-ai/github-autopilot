@@ -240,13 +240,18 @@ class TestBlastRadius:
 class TestReviewCode:
 
     def test_review_posts_comment(self):
+        # V7: _review_code makes ONE batched call for the whole PR, so the
+        # response carries a "files" list keyed by filename.
         review = {
-            "overall_score": 8.5,
-            "summary": "Good PR overall",
-            "issues": [],
-            "suggestions": ["Add docstrings"],
-            "security_concerns": [],
-            "approved": True,
+            "files": [
+                {
+                    "file": "app/auth.py",
+                    "score": 8.5,
+                    "summary": "Good PR overall",
+                    "issues": [],
+                }
+            ],
+            "confidence": 0.8,
         }
         files = [
             {"filename": "app/auth.py", "patch": "+def login(): pass",
@@ -256,8 +261,6 @@ class TestReviewCode:
         cfg.get.side_effect = lambda *a, **kw: kw.get("default", True)
         with patch("app.handlers.pull_request.router.ask",
                    return_value=_fake_router_response(review)), \
-             patch("app.handlers.pull_request.validate_code_review",
-                   return_value=review), \
              patch("app.handlers.pull_request.gh_post") as mock_post:
             from app.handlers.pull_request import _review_code
             pr = _pr()["pull_request"]

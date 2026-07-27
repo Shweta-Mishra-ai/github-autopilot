@@ -67,11 +67,20 @@ def handle(payload: dict):
     failure_context = f"""CI Check: {check_name}\nConclusion: {conclusion}\nTitle: {title}\nSummary: {summary}\nDetails: {details}"""
 
     try:
-        r, _meta = router.ask(
+        from app.ai.guarded import guarded_ask, is_degraded
+
+        r, _verdict = guarded_ask(
             "Senior DevOps engineer. Analyze CI failures concisely. JSON only.",
             f'Analyze this CI failure and suggest a fix:\n\n{failure_context}\n\nReturn JSON:\n{{\n  "root_cause": "one sentence — exact reason",\n  "category": "test_failure|build_error|lint_error|dependency|timeout|other",\n  "fix": "concrete steps to fix — 2-4 bullet points",\n  "is_flaky": false,\n  "confidence": 0.8\n}}',
             task="ci_analysis",
+            response_type="ci",
         )
+
+        # No usable analysis means no comment. A CI failure is already visible
+        # in the checks UI; a bot comment that says nothing is pure noise.
+        if is_degraded(r):
+            log_ctx.warning(f"ci.analysis_degraded pr={pr_number} — no comment posted")
+            return
 
         category = r.get("category", "other")
         cat_emoji = {

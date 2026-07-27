@@ -8,16 +8,14 @@ from __future__ import annotations
 
 import logging
 
-from app.ai.hallucination import add_confidence_footer, check_response
-from .dispatcher import safe_router_ask
+from app.ai.hallucination import add_confidence_footer
+from app.ai.guarded import degraded_comment, guarded_ask, is_degraded
 
 log = logging.getLogger(__name__)
 
 
 def cmd_fix(ctx_title: str, context: str, repo: str = "") -> str:
     """Generate a precise bug fix with root cause, code, and test."""
-    from app.handlers.comments import router
-
     # Learned conventions: what this repo previously accepted via /apply//merge.
     # Empty string when nothing has been learned yet — prompt is unchanged then.
     learned = ""
@@ -29,7 +27,7 @@ def cmd_fix(ctx_title: str, context: str, repo: str = "") -> str:
         except Exception:
             learned = ""
 
-    r, _ = router.ask(
+    r, verdict = guarded_ask(
         "Senior engineer. Give precise, working fix. JSON only.",
         f"""Fix this issue:
 Title: {ctx_title}
@@ -45,7 +43,12 @@ Return JSON:
   "confidence": 0.85
 }}""",
         task="fix_command",
+        response_type="fix",
     )
+
+    if is_degraded(r):
+        return degraded_comment(r, "fix")
+
     comment = (
         f"## 🔧 Fix\n\n"
         f"**Root cause:** {r.get('root_cause', 'See fix below')}\n\n"
@@ -53,24 +56,35 @@ Return JSON:
         f"**Why:** {r.get('explanation', '')}\n\n"
         f"**Test:**\n```\n{r.get('test', '')}\n```"
     )
-    return add_confidence_footer(comment, check_response(r, response_type="fix"))
+    # Reuse the verdict guarded_ask already computed — no second check_response pass.
+    return add_confidence_footer(comment, verdict)
 
 
 def cmd_explain(context: str) -> str:
     """Explain an issue or code in plain English."""
     from app.handlers.comments import router
 
-    text, _ = router.ask_text(
-        "Senior engineer. Explain clearly in plain English.",
-        f"Explain this:\n{context[:2000]}",
-        task="explain",
-    )
+    try:
+        text, _ = router.ask_text(
+            "Senior engineer. Explain clearly in plain English.",
+            f"Explain this:\n{context[:2000]}",
+            task="explain",
+        )
+    except Exception as exc:
+        log.error(f"cmd_explain failed: {exc}")
+        text = ""
+
+    # ask_text returns "" on a provider error. Posting the heading with nothing
+    # under it looks like the bot had nothing to say rather than that it failed.
+    if not text or not text.strip():
+        return degraded_comment({"_reason": "unparseable"}, "explanation")
+
     return f"## 💡 Explanation\n\n{text}"
 
 
 def cmd_improve(context: str) -> str:
     """Suggest concrete, actionable improvements."""
-    r, _ = safe_router_ask(
+    r, _ = guarded_ask(
         "Staff engineer. Suggest concrete improvements. JSON only.",
         f"""Suggest improvements for:
 {context[:2000]}
@@ -85,7 +99,10 @@ Return JSON:
   ]
 }}""",
         task="improve",
+        response_type="improve",
     )
+    if is_degraded(r):
+        return degraded_comment(r, "improvement analysis")
     if not r or not r.get("improvements"):
         return "## ✨ Improvements\n\n_No improvements identified._"
 
@@ -99,7 +116,7 @@ Return JSON:
 
 def cmd_test(context: str) -> str:
     """Generate test cases with full pytest code."""
-    r, _ = safe_router_ask(
+    r, _ = guarded_ask(
         "Senior QA engineer. Generate tests. JSON only.",
         f"""Write tests for:
 {context[:2000]}
@@ -113,7 +130,10 @@ Return JSON:
   ]
 }}""",
         task="test_generation",
+        response_type="test",
     )
+    if is_degraded(r):
+        return degraded_comment(r, "test generation")
     if not r or not r.get("tests"):
         return "## 🧪 Tests\n\n_Could not generate tests._"
 
@@ -129,7 +149,7 @@ Return JSON:
 
 def cmd_docs(context: str) -> str:
     """Generate docstring, usage example, and README section."""
-    r, _ = safe_router_ask(
+    r, _ = guarded_ask(
         "Technical writer. Generate documentation. JSON only.",
         f"""Generate docs for:
 {context[:2000]}
@@ -141,7 +161,10 @@ Return JSON:
   "readme_section": "markdown section"
 }}""",
         task="docs",
+        response_type="docs",
     )
+    if is_degraded(r):
+        return degraded_comment(r, "documentation")
     if not r or not r.get("docstring"):
         return "## 📚 Documentation\n\n_Could not generate docs._"
 
@@ -155,7 +178,7 @@ Return JSON:
 
 def cmd_refactor(context: str) -> str:
     """Suggest targeted refactoring with before/after examples."""
-    r, _ = safe_router_ask(
+    r, _ = guarded_ask(
         "Principal engineer. Suggest refactoring. JSON only.",
         f"""Suggest refactoring for:
 {context[:2500]}
@@ -172,7 +195,10 @@ Return JSON:
   ]
 }}""",
         task="refactor",
+        response_type="refactor",
     )
+    if is_degraded(r):
+        return degraded_comment(r, "refactoring analysis")
     if not r or not r.get("refactors"):
         return "## ♻️ Refactor\n\n_No refactoring opportunities identified._"
 
@@ -189,7 +215,7 @@ Return JSON:
 
 def cmd_gaps(context: str) -> str:
     """Identify test coverage gaps with risk ratings."""
-    r, _ = safe_router_ask(
+    r, _ = guarded_ask(
         "Senior QA engineer. Identify test gaps. JSON only.",
         f"""Analyze this code for test coverage gaps:
 {context[:2500]}
@@ -204,7 +230,10 @@ Return JSON:
   ]
 }}""",
         task="gaps",
+        response_type="gaps",
     )
+    if is_degraded(r):
+        return degraded_comment(r, "coverage analysis")
     if not r or not r.get("gaps"):
         return "## 🔍 Test Coverage Gaps\n\n_No gaps identified._"
 
@@ -220,7 +249,7 @@ Return JSON:
 
 def cmd_perf(context: str) -> str:
     """Analyze code for performance issues — complexity, memory, N+1."""
-    r, _ = safe_router_ask(
+    r, _ = guarded_ask(
         "Performance engineer. Analyze code for performance issues. JSON only.",
         f"""Analyze for performance problems:
 {context[:2500]}
@@ -241,8 +270,11 @@ Return JSON:
   "summary": "2 sentence overall assessment"
 }}""",
         task="perf",
+        response_type="perf",
         max_tokens=1500,
     )
+    if is_degraded(r):
+        return degraded_comment(r, "performance analysis")
     if not r:
         return "## ⚡ Performance Analysis\n\n_Could not complete analysis._"
 
@@ -284,7 +316,7 @@ def cmd_arch(repo: str, issue_number: int, issue: dict, token: str) -> str:
     if not context:
         context = f"Title: {issue.get('title', '')}\nBody: {(issue.get('body') or '')[:500]}"
 
-    r, _ = safe_router_ask(
+    r, _ = guarded_ask(
         "Software architect with 15+ years. Review architecture. JSON only.",
         f"""Review this for architectural issues:
 {context}
@@ -306,8 +338,11 @@ Return JSON:
   "summary": "2 sentence assessment"
 }}""",
         task="arch",
+        response_type="arch",
         max_tokens=1500,
     )
+    if is_degraded(r):
+        return degraded_comment(r, "architecture review")
     if not r:
         return "## 🏗️ Architecture Review\n\n_Could not complete analysis._"
 

@@ -121,26 +121,18 @@ def safe_router_ask(
     max_tokens: int = 1000,
 ) -> tuple[dict, object]:
     """
-    Wrapper around router.ask() with structured error handling.
+    Deprecated alias — the implementation now lives in app/ai/guarded.py.
 
-    Returns (result_dict, meta).
-    - AllProvidersDown → ({_providers_down: True, _retry_in: N}, None)
-    - Other errors    → ({}, None)
+    It moved down a layer because app.ai must not import from app.handlers:
+    guarded.py is imported by generator.py, which app.handlers.comments imports
+    at package init, so the old direction was a circular import.
 
-    Never raises. Callers check result.get('_providers_down') and post
-    a visible degraded message rather than silently doing nothing.
+    Prefer app.ai.guarded.guarded_ask(), which adds the hallucination check.
+    This shim remains for callers that only need the never-raises behaviour.
     """
-    from app.handlers.comments import router
-    from app.ai.circuit_breaker import AllProvidersDown
+    from app.ai.guarded import safe_router_ask as _impl
 
-    try:
-        return router.ask(system, user, task=task, max_tokens=max_tokens)
-    except AllProvidersDown as exc:
-        log.error(f"router.all_providers_down task={task} retry_in={exc.retry_in_seconds}s")
-        return {"_providers_down": True, "_retry_in": exc.retry_in_seconds}, None
-    except Exception as exc:
-        log.error(f"router.ask failed task={task}: {exc}")
-        return {}, None
+    return _impl(system, user, task=task, max_tokens=max_tokens)
 
 
 def is_providers_down(result: dict) -> bool:

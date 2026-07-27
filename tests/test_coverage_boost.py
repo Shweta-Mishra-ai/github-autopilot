@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 import app.handlers.comments.generator as G
 import app.handlers.comments.reviewer as R
 import app.handlers.comments.publisher as P
+import app.handlers.comments.security as SEC
 import app.handlers.comments.service as S
 
 # Mock responses
@@ -235,7 +236,7 @@ def test_publisher_commands(mock_router, mock_gh_delete, mock_gh_put, mock_gh_po
     # cmd_security
     mock_gh_get.side_effect = None
     mock_gh_get.return_value = [{"filename": "f.py", "patch": "diff"}]
-    res = P.cmd_security("repo", 1, {"pull_request": {}}, "token")
+    res = SEC.cmd_security("repo", 1, {"pull_request": {}}, "token")
     assert "Security" in res
 
     # cmd_secfull
@@ -243,7 +244,7 @@ def test_publisher_commands(mock_router, mock_gh_delete, mock_gh_put, mock_gh_po
         mock_report = MagicMock()
         mock_report.to_markdown.return_value = "report"
         mock_scan.return_value = mock_report
-        res = P.cmd_secfull("repo", "token")
+        res = SEC.cmd_secfull("repo", "token")
         assert "report" in res
 
 @patch("app.handlers.comments.service.get_installation_token")

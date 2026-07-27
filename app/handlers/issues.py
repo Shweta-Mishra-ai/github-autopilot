@@ -203,6 +203,16 @@ Return JSON:
     except GitHubError as e:
         log.error(f"Comment failed: {e}")
 
+    # Remember the shape of this issue so recurring patterns surface later.
+    with contextlib.suppress(Exception):
+        from app.intelligence.memory import remember
+
+        remember(
+            repo,
+            f"Issue #{issue_number} '{title}' triaged as {result['type']}/{priority}",
+            kind="pattern",
+        )
+
     # Notification
     with contextlib.suppress(Exception):
         notify_new_issue(repo=repo, issue_number=issue_number, title=title, labels=all_labels)

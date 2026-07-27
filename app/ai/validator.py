@@ -34,6 +34,20 @@ def _list_of_str(val: Any, max_items: int = 10, max_item_len: int = 100) -> list
     return [str(item)[:max_item_len] for item in val if item][:max_items]
 
 
+def is_unusable(raw: Any) -> bool:
+    """
+    True when an LLM payload must NOT be rendered as a real result.
+
+    `_extract_json` returns {"raw": text} when the model produced no parseable
+    JSON. That dict has no "error" key, so the old validators fell through to
+    their defaults and published a fabricated result (e.g. "Score: 7/10 — no
+    issues found") for a review that never happened. Treat it as a hard failure.
+    """
+    if not isinstance(raw, dict):
+        return True
+    return bool(raw.get("error")) or ("raw" in raw)
+
+
 # ── PR Analysis ───────────────────────────────────────────────────────────────
 
 
@@ -58,8 +72,8 @@ def validate_pr_analysis(raw: dict) -> dict:
         "build",
     }
 
-    if not isinstance(raw, dict) or raw.get("error"):
-        log.warning(f"validate_pr_analysis: invalid response — {raw}")
+    if is_unusable(raw):
+        log.warning(f"validate_pr_analysis: unusable payload — {str(raw)[:120]}")
         return {
             "suggested_title": "",  # ✅ FIXED field name
             "description": "",
@@ -68,7 +82,8 @@ def validate_pr_analysis(raw: dict) -> dict:
             "risk_reason": "Could not analyze — using safe defaults",
             "review_focus": [],
             "pr_type": "chore",
-            "confidence": 0.5,
+            "confidence": 0.0,
+            "_degraded": True,
         }
 
     risk = _get(raw, "risk_level", "medium").lower()
@@ -114,7 +129,8 @@ def validate_issue_triage(raw: dict) -> dict:
     VALID_PRIORITIES = {"high", "medium", "low"}
     VALID_COMPLEXITY = {"trivial", "simple", "moderate", "complex"}
 
-    if not isinstance(raw, dict) or raw.get("error"):
+    if is_unusable(raw):
+        log.warning(f"validate_issue_triage: unusable payload — {str(raw)[:120]}")
         return {
             "type": "question",
             "priority": "medium",
@@ -123,6 +139,8 @@ def validate_issue_triage(raw: dict) -> dict:
             "needs_info": False,
             "questions": [],
             "complexity": "moderate",
+            "time_estimate": "",
+            "_degraded": True,
         }
 
     issue_type = _get(raw, "type", "question").lower()
@@ -158,8 +176,18 @@ def validate_issue_triage(raw: dict) -> dict:
 
 def validate_code_review(raw: dict) -> dict:
     """Validate code review for a single file."""
-    if not isinstance(raw, dict) or raw.get("error"):
-        return {"score": None, "verdict": "", "issues": [], "positives": []}
+    if is_unusable(raw):
+        log.warning(f"validate_code_review: unusable payload — {str(raw)[:120]}")
+        return {
+            "score": None,
+            "summary": "",
+            "verdict": "",
+            "issues": [],
+            "positives": [],
+            "confidence": 0.0,
+            "refactor_opportunity": "",
+            "_degraded": True,
+        }
 
     # Score: float 0-10
     score = None

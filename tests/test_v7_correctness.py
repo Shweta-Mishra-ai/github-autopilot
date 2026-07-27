@@ -146,7 +146,6 @@ class TestReviewRendering:
         """Regression: renderer read 'summary', validator only returned 'verdict'."""
         from app.handlers import pull_request as pr_mod
 
-        posted = {}
         files = [
             {
                 "filename": "app/x.py",
@@ -157,13 +156,8 @@ class TestReviewRendering:
         ]
         llm = ({"score": 8, "issues": [], "summary": "Change is well scoped."}, MagicMock())
 
-        with (
-            patch.object(pr_mod.router, "ask", return_value=llm),
-            patch.object(
-                pr_mod, "gh_post", side_effect=lambda p, t, d: posted.update(body=d["body"])
-            ),
-        ):
-            pr_mod._review_code(
+        with patch.object(pr_mod.router, "ask", return_value=llm):
+            md, _inline = pr_mod._review_code(
                 {"head": {"sha": "abc"}},
                 "o/r",
                 1,
@@ -175,22 +169,16 @@ class TestReviewRendering:
                 MagicMock(),
             )
 
-        assert "Change is well scoped." in posted.get("body", "")
+        assert "Change is well scoped." in md
 
     def test_degraded_file_is_skipped_not_rendered_as_clean(self):
         from app.handlers import pull_request as pr_mod
 
-        posted = {}
         files = [{"filename": "app/x.py", "patch": "@@ -1,1 +1,1 @@\n-x = 0\n+x = 1\n"}]
         llm = ({"raw": "Sorry, I cannot help with that."}, MagicMock())
 
-        with (
-            patch.object(pr_mod.router, "ask", return_value=llm),
-            patch.object(
-                pr_mod, "gh_post", side_effect=lambda p, t, d: posted.update(body=d["body"])
-            ),
-        ):
-            pr_mod._review_code(
+        with patch.object(pr_mod.router, "ask", return_value=llm):
+            md, inline = pr_mod._review_code(
                 {"head": {"sha": "abc"}},
                 "o/r",
                 1,
@@ -202,7 +190,8 @@ class TestReviewRendering:
                 MagicMock(),
             )
 
-        body = posted.get("body", "")
-        assert "Score: 7" not in body
-        assert "No issues found" not in body
-        assert "Score: None" not in body
+        assert md == ""
+        assert inline == []
+        assert "Score: 7" not in md
+        assert "No issues found" not in md
+        assert "Score: None" not in md

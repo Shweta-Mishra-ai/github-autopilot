@@ -154,7 +154,19 @@ class TestReviewRendering:
                 "deletions": 1,
             }
         ]
-        llm = ({"score": 8, "issues": [], "summary": "Change is well scoped."}, MagicMock())
+        llm = (
+            {
+                "files": [
+                    {
+                        "file": "app/x.py",
+                        "score": 8,
+                        "issues": [],
+                        "summary": "Change is well scoped.",
+                    }
+                ]
+            },
+            MagicMock(),
+        )
 
         with patch.object(pr_mod.router, "ask", return_value=llm):
             md, _inline = pr_mod._review_code(

@@ -442,41 +442,61 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
     reviews = []  # per-file markdown for the review body
     inline_comments = []  # line-anchored comments for the Reviews API
 
-    for f in reviewable:
-        filename = f["filename"]
-        patch = f.get("patch", "")[:1500]
-        diff_lines = commentable_lines(f.get("patch", ""))
+    # One call for the whole PR. Reviewing file-by-file meant a 4-file PR cost
+    # four LLM calls here plus analysis, summary and gaps — about seven per
+    # open. It also denied the model any cross-file view of the change.
+    files_block = "\n\n".join(
+        f"### FILE: {f['filename']}\n```\n{f.get('patch', '')[:1200]}\n```" for f in reviewable
+    )
 
-        r, _meta = router.ask(
-            "Senior code reviewer. Give precise, actionable feedback. JSON only.",
-            f"""Review this code change:
+    batch, _meta = router.ask(
+        "Senior code reviewer. Give precise, actionable feedback. JSON only.",
+        f"""Review each changed file below. Report only real problems.
 
-File: {filename}
-Patch:
-```
-{patch}
-```
+{files_block}
 
 {context[:600] if context else ""}
 
-Return JSON:
+Return JSON with one entry per file:
 {{
-  "score": 8,
-  "issues": [
+  "files": [
     {{
-      "severity": "critical|major|minor|nit",
-      "line": "approximate line",
-      "issue": "what is wrong",
-      "fix": "exact fix"
+      "file": "exact filename as given above",
+      "score": 8,
+      "summary": "overall assessment of this file",
+      "issues": [
+        {{
+          "severity": "critical|major|minor|nit",
+          "line": "approximate line",
+          "issue": "what is wrong",
+          "fix": "exact fix"
+        }}
+      ]
     }}
   ],
-  "summary": "overall assessment",
   "confidence": 0.80
 }}""",
-            task="code_review",
-        )
+        task="code_review",
+    )
 
-        r = validate_code_review(r)
+    if is_unusable(batch):
+        log.warning("code_review.degraded — no review produced")
+        return "", []
+
+    by_name = {f["filename"]: f for f in reviewable}
+
+    for entry in (batch.get("files") or [])[: len(reviewable)]:
+        f = by_name.get(entry.get("file", "")) if isinstance(entry, dict) else None
+        if not f:
+            # The model named a file that isn't in this PR. Don't render a
+            # review for something it invented.
+            log.warning(f"code_review.unknown_file_skipped name={str(entry)[:60]}")
+            continue
+
+        filename = f["filename"]
+        diff_lines = commentable_lines(f.get("patch", ""))
+
+        r = validate_code_review(entry)
 
         # A degraded payload means the model returned nothing usable for this
         # file. Skip it — rendering the defaults publishes a clean bill of

@@ -260,3 +260,68 @@ class TestPatternAlert:
         with patch("app.core.redis_client.get_redis", return_value=fake2):
             ci_mod._track_failure_pattern("o/r", "build", "x")
         fake2.expire.assert_not_called()
+
+
+# ── Review batching ───────────────────────────────────────────────────────────
+
+
+class TestBatchedReview:
+    def test_four_files_cost_one_llm_call(self):
+        """Was one call per file: a 4-file PR open cost ~7 LLM calls total."""
+        files = [
+            {"filename": f"app/m{i}.py", "patch": f"@@ -1,1 +1,1 @@\n-x = 0\n+x = {i}\n"}
+            for i in range(4)
+        ]
+        payload = {
+            "files": [
+                {"file": f"app/m{i}.py", "score": 8, "issues": [], "summary": f"file {i} fine"}
+                for i in range(4)
+            ]
+        }
+        cfg = MagicMock()
+        cfg.footer = ""
+        cfg.get.return_value = 4
+
+        with patch.object(pr_mod.router, "ask", return_value=(payload, MagicMock())) as ask:
+            md, _inline = pr_mod._review_code(
+                {"head": {"sha": "s"}}, "o/r", 1, files, "t", cfg, MagicMock(), "", MagicMock()
+            )
+
+        assert ask.call_count == 1
+        assert "file 0 fine" in md
+        assert "file 3 fine" in md
+
+    def test_unknown_filename_in_response_is_ignored(self):
+        """The model can hallucinate a filename — don't render a review for it."""
+        files = [{"filename": "app/real.py", "patch": "@@ -1,1 +1,1 @@\n-x = 0\n+x = 1\n"}]
+        payload = {
+            "files": [
+                {"file": "app/real.py", "score": 9, "issues": [], "summary": "real file"},
+                {"file": "app/invented.py", "score": 2, "issues": [], "summary": "not a file"},
+            ]
+        }
+        cfg = MagicMock()
+        cfg.footer = ""
+        cfg.get.return_value = 4
+
+        with patch.object(pr_mod.router, "ask", return_value=(payload, MagicMock())):
+            md, _inline = pr_mod._review_code(
+                {"head": {"sha": "s"}}, "o/r", 1, files, "t", cfg, MagicMock(), "", MagicMock()
+            )
+
+        assert "real file" in md
+        assert "invented.py" not in md
+
+    def test_unusable_batch_produces_no_review(self):
+        files = [{"filename": "app/a.py", "patch": "@@ -1,1 +1,1 @@\n-x = 0\n+x = 1\n"}]
+        cfg = MagicMock()
+        cfg.footer = ""
+        cfg.get.return_value = 4
+
+        with patch.object(pr_mod.router, "ask", return_value=({"raw": "nope"}, MagicMock())):
+            md, inline = pr_mod._review_code(
+                {"head": {"sha": "s"}}, "o/r", 1, files, "t", cfg, MagicMock(), "", MagicMock()
+            )
+
+        assert md == ""
+        assert inline == []

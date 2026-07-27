@@ -132,11 +132,26 @@ def _cfg():
 
 
 def _review_with_issue(line_ref="11", fix="if token is None:  # check"):
+    """
+    V7: _review_code makes ONE batched call for the whole PR, so the response
+    is {"files": [...]} with a "file" key per entry rather than a bare
+    single-file object.
+    """
     return {
-        "score": 6,
-        "summary": "Needs a guard",
-        "issues": [
-            {"severity": "major", "line": line_ref, "issue": "missing null check", "fix": fix}
+        "files": [
+            {
+                "file": "app/auth.py",
+                "score": 6,
+                "summary": "Needs a guard",
+                "issues": [
+                    {
+                        "severity": "major",
+                        "line": line_ref,
+                        "issue": "missing null check",
+                        "fix": fix,
+                    }
+                ],
+            }
         ],
         "confidence": 0.9,
     }
@@ -161,8 +176,9 @@ def _run_review(review, post_mock, sticky_mock=None):
     cfg = _cfg()
     pr = {"head": {"sha": "abc1234"}}
 
+    # The real validator now runs per-entry — patching it out would hide the
+    # summary/verdict contract this suite is meant to protect.
     with patch("app.handlers.pull_request.router.ask", return_value=(review, meta)), \
-         patch("app.handlers.pull_request.validate_code_review", return_value=review), \
          patch("app.handlers.pull_request.gh_post", post_mock), \
          patch("app.handlers.pull_request.upsert_sticky", sticky_mock or MagicMock()):
         from app.handlers.pull_request import _post_inline_review, _review_code

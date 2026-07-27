@@ -111,3 +111,91 @@ class TestReportAssembly:
         assert "SUMMARY_ONLY" in body
         assert "Code review" not in body
         assert "Test coverage" not in body
+
+
+# ── Secret scanning ───────────────────────────────────────────────────────────
+
+from app.handlers import push as push_mod  # noqa: E402
+from app.security.enhanced_secrets import SecretFinding  # noqa: E402
+
+
+class TestSecretSeverityFloor:
+    def test_only_critical_and_high_are_actionable(self):
+        findings = [
+            SecretFinding("AWS Access Key ID", 3, "critical", "AKIA...1234"),
+            SecretFinding("Stripe Publishable Key", 9, "medium", "pk_li...cdef"),
+            SecretFinding("GCP API Key", 4, "high", "AIza...wxyz"),
+        ]
+        out = push_mod._actionable_secrets(findings)
+        assert {f.severity for f in out} == {"critical", "high"}
+
+    def test_medium_only_findings_open_no_issue(self):
+        findings = [SecretFinding("Stripe Publishable Key", 9, "medium", "pk_li...cdef")]
+        assert push_mod._actionable_secrets(findings) == []
+
+    def test_push_uses_the_enhanced_scanner(self):
+        """The legacy scanner has no per-path suppression and drove the FP noise."""
+        import inspect
+
+        src = inspect.getsource(push_mod)
+        assert "enhanced_secrets" in src
+        assert "from app.security.secrets import" not in src
+
+
+class TestDedupFailsClosed:
+    def test_redis_error_suppresses_rather_than_duplicates(self):
+        """Seven duplicate secret issues in 73s came from failing open."""
+        with patch("app.core.redis_client.get_redis", side_effect=Exception("redis down")):
+            assert push_mod._already_reported("o/r", "secret_alert") is True
+
+    def test_first_report_in_window_is_allowed(self):
+        fake = MagicMock()
+        fake.set.return_value = True  # NX succeeded — key was absent
+        with patch("app.core.redis_client.get_redis", return_value=fake):
+            assert push_mod._already_reported("o/r", "secret_alert") is False
+
+    def test_second_report_in_window_is_suppressed(self):
+        fake = MagicMock()
+        fake.set.return_value = None  # NX failed — key present
+        with patch("app.core.redis_client.get_redis", return_value=fake):
+            assert push_mod._already_reported("o/r", "secret_alert") is True
+
+
+class TestSecretAlertReuse:
+    def test_second_finding_set_comments_on_the_open_issue(self):
+        fake = MagicMock()
+        fake.get.return_value = "123"  # existing alert issue
+        finding = SecretFinding("AWS Access Key ID", 3, "critical", "AKIA...1234")
+        with (
+            patch("app.core.redis_client.get_redis", return_value=fake),
+            patch.object(push_mod, "gh_get", return_value={"state": "open"}),
+            patch.object(push_mod, "gh_post") as post,
+            patch.object(push_mod, "notify_secret_detected"),
+        ):
+            push_mod._open_secret_issue("o/r", "tok", [finding], MagicMock())
+        assert post.call_args[0][0] == "/repos/o/r/issues/123/comments"
+
+    def test_no_open_alert_creates_a_new_issue(self):
+        fake = MagicMock()
+        fake.get.return_value = None
+        finding = SecretFinding("AWS Access Key ID", 3, "critical", "AKIA...1234")
+        with (
+            patch("app.core.redis_client.get_redis", return_value=fake),
+            patch.object(push_mod, "gh_post", return_value={"number": 55}) as post,
+            patch.object(push_mod, "notify_secret_detected"),
+        ):
+            push_mod._open_secret_issue("o/r", "tok", [finding], MagicMock())
+        assert post.call_args[0][0] == "/repos/o/r/issues"
+
+    def test_closed_alert_issue_opens_a_fresh_one(self):
+        fake = MagicMock()
+        fake.get.return_value = "123"
+        finding = SecretFinding("AWS Access Key ID", 3, "critical", "AKIA...1234")
+        with (
+            patch("app.core.redis_client.get_redis", return_value=fake),
+            patch.object(push_mod, "gh_get", return_value={"state": "closed"}),
+            patch.object(push_mod, "gh_post", return_value={"number": 56}) as post,
+            patch.object(push_mod, "notify_secret_detected"),
+        ):
+            push_mod._open_secret_issue("o/r", "tok", [finding], MagicMock())
+        assert post.call_args[0][0] == "/repos/o/r/issues"

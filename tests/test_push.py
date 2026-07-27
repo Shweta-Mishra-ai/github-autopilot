@@ -156,6 +156,7 @@ class TestScanSecrets:
     def test_findings_creates_issue(self):
         fake_finding = MagicMock()
         fake_finding.pattern_name = "GitHub PAT (classic)"
+        fake_finding.severity = "critical"
         with patch("app.handlers.push.gh_get", return_value={"files": [{"patch": "+token=ghp_xxx"}]}), \
              patch("app.handlers.push.gh_post") as mock_post, \
              patch("app.handlers.push.scan_diff", return_value=[fake_finding]), \
@@ -173,6 +174,7 @@ class TestScanSecrets:
         """SPRINT 8 KEY TEST: same finding set within 1h → only 1 issue."""
         fake_finding = MagicMock()
         fake_finding.pattern_name = "GitHub PAT (classic)"
+        fake_finding.severity = "critical"
 
         post_calls = []
 
@@ -198,32 +200,69 @@ class TestScanSecrets:
             "second push with same secrets created duplicate issue"
         )
 
-    def test_different_findings_not_deduped(self):
-        """Different secret patterns → different dedup key → both issues created."""
-        call_count = [0]
+    def test_different_findings_reuse_the_same_alert_issue(self):
+        """
+        V7: two pushes with different secret patterns must NOT open two issues.
 
-        def mock_already(repo, key, ttl_seconds=3600):
-            call_count[0] += 1
-            return False  # Always allow — different keys
-
+        This test previously asserted the opposite — "different patterns →
+        different dedup key → both issues created" — which is the defect that
+        put seven secret issues in this repo inside 73 seconds. The dedup key
+        is now per-repo, and later findings comment on the open alert.
+        """
         finding1 = MagicMock()
         finding1.pattern_name = "GitHub PAT (classic)"
+        finding1.severity = "critical"
         finding2 = MagicMock()
         finding2.pattern_name = "AWS Access Key ID"
+        finding2.severity = "critical"
+
+        fake_redis = MagicMock()
+        fake_redis.get.return_value = None      # no alert recorded yet
+        fake_redis.set.return_value = True
 
         with patch("app.handlers.push.gh_get", return_value={"files": [{"patch": "+t=x"}]}), \
-             patch("app.handlers.push.gh_post") as mock_post, \
+             patch("app.handlers.push.gh_post", return_value={"number": 9}) as mock_post, \
              patch("app.handlers.push.format_secret_findings", return_value="## S"), \
-             patch("app.handlers.push._already_reported", side_effect=mock_already), \
+             patch("app.handlers.push._already_reported", return_value=False), \
+             patch("app.core.redis_client.get_redis", return_value=fake_redis), \
              patch("app.handlers.push.notify_secret_detected"):
             from app.handlers.push import _scan_secrets
             log = MagicMock()
             with patch("app.handlers.push.scan_diff", return_value=[finding1]):
                 _scan_secrets("org/repo", [_commit()], "tok", MagicMock(), log)
-            with patch("app.handlers.push.scan_diff", return_value=[finding2]):
+
+            # Second push: the alert issue from the first is now on record.
+            # gh_get serves two different lookups here — the commit diff and
+            # the state of the existing alert issue — so dispatch on path.
+            fake_redis.get.return_value = "9"
+
+            def _gh_get(path, _token):
+                if "/commits/" in path:
+                    return {"files": [{"patch": "+t=x", "filename": "app/a.py"}]}
+                return {"state": "open"}
+
+            with patch("app.handlers.push.scan_diff", return_value=[finding2]), \
+                 patch("app.handlers.push.gh_get", side_effect=_gh_get):
                 _scan_secrets("org/repo", [_commit()], "tok", MagicMock(), log)
 
-        assert mock_post.call_count == 2
+        paths = [c[0][0] for c in mock_post.call_args_list]
+        assert paths[0] == "/repos/org/repo/issues"
+        assert paths[1] == "/repos/org/repo/issues/9/comments"
+
+    def test_medium_severity_alone_opens_no_issue(self):
+        """The entropy heuristic fires on hashes and UUIDs — those are medium."""
+        finding = MagicMock()
+        finding.pattern_name = "High Entropy String"
+        finding.severity = "medium"
+
+        with patch("app.handlers.push.gh_get", return_value={"files": [{"patch": "+h=abc"}]}), \
+             patch("app.handlers.push.gh_post") as mock_post, \
+             patch("app.handlers.push.scan_diff", return_value=[finding]), \
+             patch("app.handlers.push._already_reported", return_value=False), \
+             patch("app.handlers.push.notify_secret_detected"):
+            from app.handlers.push import _scan_secrets
+            _scan_secrets("org/repo", [_commit()], "tok", MagicMock(), MagicMock())
+            mock_post.assert_not_called()
 
     def test_gh_get_error_handled_gracefully(self):
         with patch("app.handlers.push.gh_get", side_effect=Exception("network error")), \
@@ -232,29 +271,6 @@ class TestScanSecrets:
             log = MagicMock()
             _scan_secrets("org/repo", [_commit()], "tok", MagicMock(), log)
             mock_post.assert_not_called()
-
-
-# ── Findings dedup key tests ──────────────────────────────────────────────────
-
-class TestFindingsDedupKey:
-
-    def test_same_patterns_same_key(self):
-        from app.handlers.push import _findings_dedup_key
-        f1, f2 = MagicMock(), MagicMock()
-        f1.pattern_name = "GitHub PAT (classic)"
-        f2.pattern_name = "AWS Access Key ID"
-        key_a = _findings_dedup_key([f1, f2])
-        key_b = _findings_dedup_key([f2, f1])   # Different order
-        assert key_a == key_b   # Order-independent
-
-    def test_different_patterns_different_key(self):
-        from app.handlers.push import _findings_dedup_key
-        f1, f2 = MagicMock(), MagicMock()
-        f1.pattern_name = "GitHub PAT (classic)"
-        f2.pattern_name = "Stripe Secret Key"
-        key_a = _findings_dedup_key([f1])
-        key_b = _findings_dedup_key([f2])
-        assert key_a != key_b
 
 
 # ── Dependency scan tests ─────────────────────────────────────────────────────

@@ -64,6 +64,11 @@ def handle(payload: dict):
 
     pr_number = pull_requests[0]["number"]
 
+    head_sha = check_run.get("head_sha", "") or check_run.get("check_suite", {}).get("head_sha", "")
+    if _ci_already_alerted(repo, pr_number, head_sha):
+        log_ctx.info(f"ci.duplicate_suppressed pr={pr_number} sha={head_sha[:7]}")
+        return
+
     failure_context = f"""CI Check: {check_name}\nConclusion: {conclusion}\nTitle: {title}\nSummary: {summary}\nDetails: {details}"""
 
     try:
@@ -113,17 +118,52 @@ def handle(payload: dict):
 
         comment = f"## {cat_emoji} CI Failure — `{check_name}`\n\n**Root cause:** {root_cause}\n\n### Fix\n{fix_text}\n{flaky_note}{pattern_note}\n\n---\n*🤖 GitHub Autopilot — CI Analysis*{config.footer}"
 
-        gh_post(f"/repos/{repo}/issues/{pr_number}/comments", token, {"body": comment})
-        log_ctx.done(f"CI failure comment posted PR #{pr_number}")
+        from app.github.sticky import MARKER_CI_REPORT, upsert_sticky
+
+        upsert_sticky(repo, pr_number, token, MARKER_CI_REPORT, comment)
+        log_ctx.done(f"CI failure comment upserted PR #{pr_number}")
 
     except Exception as e:
         log_ctx.error(f"CI handler failed: {e}")
 
 
+_CI_ALERT_TTL = 21600  # 6h — covers a matrix plus a couple of re-runs
+_CI_PATTERN_WINDOW = 86400
+_CI_PATTERN_THRESHOLD = 3
+
+
+def _ci_already_alerted(repo: str, pr_number: int, head_sha: str) -> bool:
+    """
+    True when this commit already produced a CI comment.
+
+    A 5-job matrix failing on one commit fires five check_run events, and each
+    one used to run its own AI analysis and post its own comment. Keyed on the
+    SHA, the first wins and the rest are silent.
+
+    Fails closed, like every other dedup helper: a missed comment beats five
+    duplicates, and the failure is visible in the checks UI regardless.
+    """
+    try:
+        from app.core.redis_client import get_redis
+
+        key = f"ci_alert:{repo}:{pr_number}:{head_sha}"
+        return get_redis().set(key, "1", nx=True, ex=_CI_ALERT_TTL) is None
+    except Exception as e:
+        log.warning(f"ci.dedup_unavailable repo={repo} sha={head_sha[:7]}: {e} — suppressing")
+        return True
+
+
 def _track_failure_pattern(repo: str, check_name: str, root_cause: str):
     """
-    Sprint 5: Track CI failure patterns.
-    If same check fails 3+ times in 24h → post pattern alert.
+    True the first time this check crosses the failure threshold in the window.
+
+    Two fixes over the Sprint 5 version:
+      - `== 3` fired exactly once and never again if the counter skipped a
+        value (concurrent events increment it more than one at a time). Now
+        `>= threshold` with an NX flag so it fires once per window regardless.
+      - expire() ran on EVERY increment, which reset the TTL continuously, so
+        a check failing steadily kept the window alive forever. It now starts
+        on the first failure only and is allowed to roll.
     """
     try:
         from app.core.redis_client import get_redis
@@ -131,14 +171,16 @@ def _track_failure_pattern(repo: str, check_name: str, root_cause: str):
         r = get_redis()
         key = f"ci_fail:{repo}:{check_name}"
         count = r.incr(key)
-        r.expire(key, 86400)
+        if int(count) == 1:
+            r.expire(key, _CI_PATTERN_WINDOW)
 
-        if int(count) == 3:
-            log.warning(
-                f"ci.pattern_detected repo={repo} check={check_name} "
-                f"count={count} root_cause={root_cause[:60]}"
-            )
-            return True  # Caller posts pattern alert
+        if int(count) >= _CI_PATTERN_THRESHOLD:
+            if r.set(f"{key}:alerted", "1", nx=True, ex=_CI_PATTERN_WINDOW) is not None:
+                log.warning(
+                    f"ci.pattern_detected repo={repo} check={check_name} "
+                    f"count={count} root_cause={root_cause[:60]}"
+                )
+                return True  # Caller posts pattern alert
     except Exception as e:
         log.debug(f"ci.track_failure_pattern_failed repo={repo} check={check_name}: {e}")
     return False

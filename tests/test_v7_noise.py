@@ -199,3 +199,64 @@ class TestSecretAlertReuse:
         ):
             push_mod._open_secret_issue("o/r", "tok", [finding], MagicMock())
         assert post.call_args[0][0] == "/repos/o/r/issues"
+
+
+# ── CI ────────────────────────────────────────────────────────────────────────
+
+from app.handlers import ci as ci_mod  # noqa: E402
+
+
+class TestCIDedup:
+    def test_matrix_of_failures_on_one_sha_alerts_once(self):
+        """A 5-job matrix failing on one commit fired five separate analyses."""
+        fake = MagicMock()
+        fake.set.side_effect = [True, None, None, None, None]  # NX: first wins only
+        with patch("app.core.redis_client.get_redis", return_value=fake):
+            results = [ci_mod._ci_already_alerted("o/r", 1, "sha1") for _ in range(5)]
+        assert results == [False, True, True, True, True]
+
+    def test_a_new_commit_alerts_again(self):
+        fake = MagicMock()
+        fake.set.return_value = True
+        with patch("app.core.redis_client.get_redis", return_value=fake):
+            assert ci_mod._ci_already_alerted("o/r", 1, "sha2") is False
+
+    def test_redis_error_fails_closed(self):
+        with patch("app.core.redis_client.get_redis", side_effect=Exception("down")):
+            assert ci_mod._ci_already_alerted("o/r", 1, "sha1") is True
+
+
+class TestPatternAlert:
+    def test_fires_at_threshold_not_only_on_exactly_three(self):
+        fake = MagicMock()
+        fake.incr.return_value = 7  # counter jumped past 3
+        fake.set.return_value = True  # alerted-flag NX succeeds
+        with patch("app.core.redis_client.get_redis", return_value=fake):
+            assert ci_mod._track_failure_pattern("o/r", "build", "flaky") is True
+
+    def test_does_not_refire_inside_the_window(self):
+        fake = MagicMock()
+        fake.incr.return_value = 9
+        fake.set.return_value = None  # alerted flag already set
+        with patch("app.core.redis_client.get_redis", return_value=fake):
+            assert ci_mod._track_failure_pattern("o/r", "build", "flaky") is False
+
+    def test_below_threshold_does_not_fire(self):
+        fake = MagicMock()
+        fake.incr.return_value = 2
+        with patch("app.core.redis_client.get_redis", return_value=fake):
+            assert ci_mod._track_failure_pattern("o/r", "build", "flaky") is False
+
+    def test_window_starts_on_first_failure_only(self):
+        """expire() on every incr meant the 24h window never actually rolled."""
+        fake = MagicMock()
+        fake.incr.return_value = 1
+        with patch("app.core.redis_client.get_redis", return_value=fake):
+            ci_mod._track_failure_pattern("o/r", "build", "x")
+        fake.expire.assert_called_once()
+
+        fake2 = MagicMock()
+        fake2.incr.return_value = 2
+        with patch("app.core.redis_client.get_redis", return_value=fake2):
+            ci_mod._track_failure_pattern("o/r", "build", "x")
+        fake2.expire.assert_not_called()

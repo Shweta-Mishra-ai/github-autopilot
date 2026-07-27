@@ -139,11 +139,15 @@ class TestFailureAnalysis:
         }
         config = config or _mock_config()
         meta   = _meta()
+        # V7: the analysis goes through app.ai.guarded.guarded_ask, and the
+        # comment through the sticky upsert rather than a bare gh_post. The
+        # per-SHA dedup is stubbed off so each test starts from a clean slate.
         with patch("app.handlers.ci.get_installation_token", return_value="tok"), \
              patch("app.handlers.ci.load_config", return_value=config), \
-             patch("app.handlers.ci.router.ask",
+             patch("app.handlers.ci._ci_already_alerted", return_value=False), \
+             patch("app.ai.guarded.safe_router_ask",
                    return_value=(analysis, meta)) as mock_ask, \
-             patch("app.handlers.ci.gh_post") as mock_post:
+             patch("app.github.sticky.upsert_sticky") as mock_post:
             from app.handlers.ci import handle
             handle(_payload())
             return mock_ask, mock_post
@@ -152,7 +156,7 @@ class TestFailureAnalysis:
         _, mock_post = self._run()
         mock_post.assert_called_once()
         args = mock_post.call_args[0]
-        assert "comments" in args[0]
+        assert args[0] == "org/repo"  # V7: upsert_sticky(repo, pr, token, marker, body)
 
     def test_comment_contains_root_cause(self):
         analysis = {
@@ -163,7 +167,7 @@ class TestFailureAnalysis:
             "confidence": 0.85,
         }
         _, mock_post = self._run(analysis=analysis)
-        body = mock_post.call_args[0][2]["body"]
+        body = mock_post.call_args[0][4]
         assert "REDIS_URL" in body
 
     def test_flaky_note_included(self):
@@ -175,7 +179,7 @@ class TestFailureAnalysis:
             "confidence": 0.5,
         }
         _, mock_post = self._run(analysis=analysis)
-        body = mock_post.call_args[0][2]["body"]
+        body = mock_post.call_args[0][4]
         assert "flaky" in body.lower() or "Flaky" in body
 
     def test_category_emoji_in_comment(self):
@@ -196,19 +200,21 @@ class TestFailureAnalysis:
             meta = _meta()
             with patch("app.handlers.ci.get_installation_token", return_value="tok"), \
                  patch("app.handlers.ci.load_config", return_value=_mock_config()), \
-                 patch("app.handlers.ci.router.ask", return_value=(analysis, meta)), \
-                 patch("app.handlers.ci.gh_post") as mock_post:
+                 patch("app.handlers.ci._ci_already_alerted", return_value=False), \
+                 patch("app.ai.guarded.safe_router_ask", return_value=(analysis, meta)), \
+                 patch("app.github.sticky.upsert_sticky") as mock_post:
                 from app.handlers.ci import handle
                 handle(_payload())
-                body = mock_post.call_args[0][2]["body"]
+                body = mock_post.call_args[0][4]
                 assert expected in body, f"Expected {expected} for category {category}"
 
     def test_router_exception_handled(self):
         with patch("app.handlers.ci.get_installation_token", return_value="tok"), \
              patch("app.handlers.ci.load_config", return_value=_mock_config()), \
-             patch("app.handlers.ci.router.ask",
+             patch("app.handlers.ci._ci_already_alerted", return_value=False), \
+             patch("app.ai.guarded.safe_router_ask",
                    side_effect=Exception("LLM timeout")), \
-             patch("app.handlers.ci.gh_post") as mock_post:
+             patch("app.github.sticky.upsert_sticky") as mock_post:
             from app.handlers.ci import handle
             handle(_payload())  # Must not raise
             mock_post.assert_not_called()
@@ -224,12 +230,12 @@ class TestFailureAnalysis:
         meta = _meta()
         with patch("app.handlers.ci.get_installation_token", return_value="tok"), \
              patch("app.handlers.ci.load_config", return_value=_mock_config()), \
-             patch("app.handlers.ci.router.ask", return_value=(analysis, meta)), \
-             patch("app.handlers.ci.gh_post") as mock_post:
+             patch("app.handlers.ci._ci_already_alerted", return_value=False), \
+             patch("app.ai.guarded.safe_router_ask", return_value=(analysis, meta)), \
+             patch("app.github.sticky.upsert_sticky") as mock_post:
             from app.handlers.ci import handle
             handle(_payload(pr_numbers=[{"number": 42}]))
-            url = mock_post.call_args[0][0]
-            assert "/42/comments" in url
+            assert mock_post.call_args[0][1] == 42  # V7: upsert_sticky(repo, pr, ...)
 
 
 # ── Failure pattern tracking tests ───────────────────────────────────────────

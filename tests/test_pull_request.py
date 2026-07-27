@@ -68,7 +68,7 @@ class TestHandleRouting:
     def test_auth_failure_returns_early(self):
         with patch("app.handlers.pull_request.get_installation_token",
                    side_effect=Exception("auth failed")), \
-             patch("app.handlers.pull_request._analyze_pr") as mock_analyze:
+             patch("app.handlers.pull_request._analyze_pr", return_value="") as mock_analyze:
             from app.handlers.pull_request import handle
             handle(_pr())
             mock_analyze.assert_not_called()
@@ -77,7 +77,7 @@ class TestHandleRouting:
         with patch("app.handlers.pull_request.get_installation_token", return_value="tok"), \
              patch("app.handlers.pull_request.load_config",
                    return_value=_mock_config(pr_enabled=False)), \
-             patch("app.handlers.pull_request._analyze_pr") as mock_analyze:
+             patch("app.handlers.pull_request._analyze_pr", return_value="") as mock_analyze:
             from app.handlers.pull_request import handle
             handle(_pr())
             mock_analyze.assert_not_called()
@@ -86,10 +86,10 @@ class TestHandleRouting:
         with patch("app.handlers.pull_request.get_installation_token", return_value="tok"), \
              patch("app.handlers.pull_request.load_config", return_value=_mock_config()), \
              patch("app.handlers.pull_request.gh_get", return_value=[]), \
-             patch("app.handlers.pull_request._analyze_pr") as mock_analyze, \
-             patch("app.handlers.pull_request._post_pr_summary") as mock_sum, \
-             patch("app.handlers.pull_request._review_code"), \
-             patch("app.handlers.pull_request._detect_test_gaps"), \
+             patch("app.handlers.pull_request._analyze_pr", return_value="") as mock_analyze, \
+             patch("app.handlers.pull_request._build_pr_summary", return_value="") as mock_sum, \
+             patch("app.handlers.pull_request._review_code", return_value=("", [])), \
+             patch("app.handlers.pull_request._detect_test_gaps", return_value=""), \
              patch("app.handlers.pull_request.notify_pr_opened"):
             from app.handlers.pull_request import handle
             handle(_pr(action="opened"))
@@ -100,9 +100,9 @@ class TestHandleRouting:
         with patch("app.handlers.pull_request.get_installation_token", return_value="tok"), \
              patch("app.handlers.pull_request.load_config", return_value=_mock_config()), \
              patch("app.handlers.pull_request.gh_get", return_value=[]), \
-             patch("app.handlers.pull_request._analyze_pr") as mock_analyze, \
-             patch("app.handlers.pull_request._review_code"), \
-             patch("app.handlers.pull_request._detect_test_gaps"):
+             patch("app.handlers.pull_request._analyze_pr", return_value="") as mock_analyze, \
+             patch("app.handlers.pull_request._review_code", return_value=("", [])), \
+             patch("app.handlers.pull_request._detect_test_gaps", return_value=""):
             from app.handlers.pull_request import handle
             handle(_pr(action="synchronize"))
             mock_analyze.assert_not_called()
@@ -112,10 +112,10 @@ class TestHandleRouting:
              patch("app.handlers.pull_request.load_config",
                    return_value=_mock_config(code_review=False)), \
              patch("app.handlers.pull_request.gh_get", return_value=[]), \
-             patch("app.handlers.pull_request._analyze_pr"), \
-             patch("app.handlers.pull_request._post_pr_summary"), \
-             patch("app.handlers.pull_request._review_code") as mock_review, \
-             patch("app.handlers.pull_request._detect_test_gaps"), \
+             patch("app.handlers.pull_request._analyze_pr", return_value=""), \
+             patch("app.handlers.pull_request._build_pr_summary", return_value=""), \
+             patch("app.handlers.pull_request._review_code", return_value=("", [])) as mock_review, \
+             patch("app.handlers.pull_request._detect_test_gaps", return_value=""), \
              patch("app.handlers.pull_request.notify_pr_opened"):
             from app.handlers.pull_request import handle
             handle(_pr(action="opened"))
@@ -156,10 +156,11 @@ class TestAnalyzePR:
             from app.handlers.pull_request import _analyze_pr
             pr = _pr()["pull_request"]
             log = MagicMock()
-            _analyze_pr(pr, "org/repo", 1, self._files(), "tok", cfg,
+            out = _analyze_pr(pr, "org/repo", 1, self._files(), "tok", cfg,
                         MagicMock(), "", log)
             # Should attempt to post/update something
-            assert mock_post.called or mock_put.called
+            # V7: _analyze_pr returns markdown; handle() does the single upsert.
+            assert isinstance(out, str) and out.strip()
 
     def test_analyze_high_risk_sends_notification(self):
         analysis = {
@@ -185,7 +186,7 @@ class TestAnalyzePR:
             from app.handlers.pull_request import _analyze_pr
             pr = _pr()["pull_request"]
             log = MagicMock()
-            _analyze_pr(pr, "org/repo", 1, self._files(), "tok", cfg,
+            out = _analyze_pr(pr, "org/repo", 1, self._files(), "tok", cfg,
                         MagicMock(), "", log)
             mock_notif.assert_called_once()
 
@@ -201,7 +202,7 @@ class TestAnalyzePR:
             pr = _pr()["pull_request"]
             log = MagicMock()
             with pytest.raises(Exception, match="LLM timeout"):
-                _analyze_pr(pr, "org/repo", 1, self._files(), "tok", cfg,
+                out = _analyze_pr(pr, "org/repo", 1, self._files(), "tok", cfg,
                             MagicMock(), "", log)
 
 
@@ -261,9 +262,9 @@ class TestReviewCode:
             from app.handlers.pull_request import _review_code
             pr = _pr()["pull_request"]
             log = MagicMock()
-            _review_code(pr, "org/repo", 1, files, "tok", cfg,
+            md, inline = _review_code(pr, "org/repo", 1, files, "tok", cfg,
                          MagicMock(), "", log)
-            mock_post.assert_called_once()
+            assert md.strip()  # V7: returned, not posted
 
     def test_no_files_with_patches_skips(self):
         files = [{"filename": "app/auth.py"}]  # no patch key
@@ -273,10 +274,10 @@ class TestReviewCode:
             from app.handlers.pull_request import _review_code
             pr = _pr()["pull_request"]
             log = MagicMock()
-            _review_code(pr, "org/repo", 1, files, "tok", cfg,
+            md, inline = _review_code(pr, "org/repo", 1, files, "tok", cfg,
                          MagicMock(), "", log)
             mock_ask.assert_not_called()
-            mock_post.assert_not_called()
+            assert md == "" and inline == []
 
 
 # ── _detect_test_gaps tests ───────────────────────────────────────────────────
@@ -290,7 +291,7 @@ class TestDetectTestGaps:
             from app.handlers.pull_request import _detect_test_gaps
             pr = _pr()["pull_request"]
             log = MagicMock()
-            _detect_test_gaps(pr, "org/repo", 1, files, "tok", cfg, log)
+            gaps_md = _detect_test_gaps(pr, "org/repo", 1, files, "tok", cfg, log)
             mock_ask.assert_not_called()
 
     def test_test_files_only_skips(self):
@@ -301,7 +302,7 @@ class TestDetectTestGaps:
             from app.handlers.pull_request import _detect_test_gaps
             pr = _pr()["pull_request"]
             log = MagicMock()
-            _detect_test_gaps(pr, "org/repo", 1, files, "tok", cfg, log)
+            gaps_md = _detect_test_gaps(pr, "org/repo", 1, files, "tok", cfg, log)
             mock_ask.assert_not_called()
 
     def test_source_file_triggers_gap_analysis(self):
@@ -324,8 +325,9 @@ class TestDetectTestGaps:
             from app.handlers.pull_request import _detect_test_gaps
             pr = _pr()["pull_request"]
             log = MagicMock()
-            _detect_test_gaps(pr, "org/repo", 1, files, "tok", cfg, log)
-            mock_post.assert_called_once()
+            gaps_md = _detect_test_gaps(pr, "org/repo", 1, files, "tok", cfg, log)
+            assert "Missing edge case tests" in gaps_md  # V7: returned, not posted
+            mock_post.assert_not_called()
 
     def test_no_gaps_detected_no_comment(self):
         files = [
@@ -345,6 +347,7 @@ class TestDetectTestGaps:
             from app.handlers.pull_request import _detect_test_gaps
             pr = _pr()["pull_request"]
             log = MagicMock()
-            _detect_test_gaps(pr, "org/repo", 1, files, "tok", cfg, log)
+            gaps_md = _detect_test_gaps(pr, "org/repo", 1, files, "tok", cfg, log)
+            assert gaps_md == ""  # V7: no gaps → no section, nothing posted
             mock_post.assert_not_called()
 

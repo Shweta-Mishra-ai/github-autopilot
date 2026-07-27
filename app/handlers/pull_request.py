@@ -1,17 +1,23 @@
 """
 Pull Request Handler - app/handlers/pull_request.py
-V3: PR analysis + AI code review + embedding-based context
-    + AI PR Summary auto-post + Test gap detection
 
-FIXED (ruff F401 line 7):  Removed unused `import logging`.
-FIXED (ruff F401 line 16): Removed unused `check_pr_description_update` import.
+V7: every sub-analysis RETURNS markdown; handle() assembles one report and
+    upserts it into a single sticky comment. Before V7 each sub-analysis
+    posted its own comment — four on open, two more on every push, none of
+    them ever updated — which is what made the bot exhausting to work with.
+
+V3: PR analysis + AI code review + embedding-based context
+    + AI PR Summary + Test gap detection
 """
+
+import datetime
 
 from app.github.auth import get_installation_token
 from app.github.client import gh_get, gh_post, gh_put, GitHubError
 from app.github.notifications import notify_high_risk_pr, notify_pr_opened
+from app.github.sticky import MARKER_PR_REPORT, upsert_sticky
 from app.ai.router import router
-from app.ai.validator import validate_pr_analysis, validate_code_review
+from app.ai.validator import is_unusable, validate_pr_analysis, validate_code_review
 from app.core.config import load_config
 from app.core.logger import EventLogger
 from app.core.confidence import ConfidenceGate
@@ -70,6 +76,9 @@ def handle(payload: dict):
     except Exception as e:
         log.debug(f"Context retrieval skipped: {e}")
 
+    analysis_md = summary_md = review_md = gaps_md = ""
+    inline_comments: list = []
+
     if action == "opened":
         with contextlib.suppress(Exception):
             notify_pr_opened(
@@ -79,18 +88,109 @@ def handle(payload: dict):
                 risk="unknown",
             )
 
-        _analyze_pr(pr, repo, pr_number, files, token, config, gate, context, log)
-        _post_pr_summary(pr, repo, pr_number, files, token, config, log)
+        analysis_md = _analyze_pr(pr, repo, pr_number, files, token, config, gate, context, log)
+        summary_md = _build_pr_summary(pr, repo, pr_number, files, token, config, log)
 
     if config.get("pull_requests", "code_review", default=True):
-        _review_code(pr, repo, pr_number, files, token, config, gate, context, log)
+        review_md, inline_comments = _review_code(
+            pr, repo, pr_number, files, token, config, gate, context, log
+        )
 
     if config.get("pull_requests", "detect_test_gaps", default=True):
-        _detect_test_gaps(pr, repo, pr_number, files, token, config, log)
+        gaps_md = _detect_test_gaps(pr, repo, pr_number, files, token, config, log)
+
+    # Silence. A re-push with a clean review and no gaps produces no comment
+    # at all — the previous sticky already says what the bot thinks, and
+    # "still fine" is not worth a notification to every subscriber.
+    if not any([analysis_md, summary_md, review_md, gaps_md]):
+        log.info("pr.nothing_to_report — staying silent")
+        return
+
+    # Line-anchored findings still go through the Reviews API: they land on
+    # the diff itself, which is the one place bot output is unambiguously
+    # useful. Only the conversation-tab noise is being consolidated.
+    if inline_comments:
+        _post_inline_review(pr, repo, pr_number, token, config, review_md, inline_comments, log)
+
+    body = _build_pr_report(analysis_md, summary_md, review_md, gaps_md, pr, files)
+    try:
+        upsert_sticky(repo, pr_number, token, MARKER_PR_REPORT, body + config.footer)
+        log.done("pr_report_upserted")
+    except GitHubError as e:
+        log.error(f"Failed to upsert PR report: {e}")
 
 
-def _analyze_pr(pr, repo, pr_number, files, token, config, gate, context, log):
-    """Run PR analysis: title rewrite, description, risk assessment."""
+def _build_pr_report(
+    analysis_md: str,
+    summary_md: str,
+    review_md: str,
+    gaps_md: str,
+    pr: dict,
+    files: list,
+) -> str:
+    """
+    Assemble the single sticky body.
+
+    Collapsible <details> sections keep the comment scannable: a reviewer sees
+    the headline and opens only the section they care about, instead of
+    scrolling past four full-length comments.
+    """
+    adds = sum(f.get("additions", 0) for f in files)
+    dels = sum(f.get("deletions", 0) for f in files)
+
+    parts = [
+        f"## 🤖 Autopilot — PR #{pr.get('number', '?')}\n",
+        f"**Files:** {len(files)} · **+{adds} −{dels}**",
+    ]
+    if summary_md:
+        parts.append(summary_md)
+    if analysis_md:
+        parts.append(f"<details><summary>📋 Analysis</summary>\n\n{analysis_md}\n</details>")
+    if review_md:
+        parts.append(f"<details><summary>🔍 Code review</summary>\n\n{review_md}\n</details>")
+    if gaps_md:
+        parts.append(f"<details><summary>🧪 Test coverage</summary>\n\n{gaps_md}\n</details>")
+
+    stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    parts.append(f"\n*Updated {stamp}*")
+    return "\n\n".join(parts)
+
+
+def _post_inline_review(pr, repo, pr_number, token, config, review_body, inline_comments, log):
+    """
+    Post line-anchored findings as a real PR Review.
+
+    Falls back to nothing on rejection — the findings are already rendered in
+    the sticky report, so a 422 here loses no information.
+    """
+    fallback_md = [c.pop("_fallback_md", "") for c in inline_comments]
+    try:
+        gh_post(
+            f"/repos/{repo}/pulls/{pr_number}/reviews",
+            token,
+            {
+                "commit_id": pr.get("head", {}).get("sha", ""),
+                "event": "COMMENT",
+                "body": "## 🔍 Inline findings" + config.footer,
+                "comments": inline_comments,
+            },
+        )
+        log.done(f"code_review_posted_inline: {len(inline_comments)} line comments")
+    except GitHubError as e:
+        # Most likely a 422 from a line the API considers non-commentable.
+        log.warning(f"inline_review_rejected — findings remain in the sticky report: {e}")
+        return "\n".join(m for m in fallback_md if m)
+    return ""
+
+
+def _analyze_pr(pr, repo, pr_number, files, token, config, gate, context, log) -> str:
+    """
+    Run PR analysis: title rewrite, description, risk assessment.
+
+    Returns the analysis markdown (empty when degraded). Side effects that are
+    NOT comments — the title update and the high-risk notification — still
+    happen here.
+    """
     title = pr.get("title", "")
     body = pr.get("body", "") or ""
     base_branch = pr["base"]["ref"]
@@ -127,15 +227,17 @@ Return JSON:
     )
 
     r = validate_pr_analysis(r)
+    if r.get("_degraded"):
+        log.warning("pr_analysis.degraded — omitting section")
+        return ""
+
     result = gate.evaluate("pr_title_rewrite", r)
 
     risk_emoji = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(r.get("risk_level", "low"), "🟢")
     focus_items = "\n".join(f"- {f}" for f in r.get("review_focus", [])[:3])
     confidence_note = result.get("confidence_note", "")
 
-    comment = f"""## 🤖 PR Analysis
-
-{risk_emoji} **Risk Level:** `{r.get("risk_level", "low").upper()}`
+    comment = f"""{risk_emoji} **Risk Level:** `{r.get("risk_level", "low").upper()}`
 **Reason:** {r.get("risk_reason", "")}
 
 ### Review Focus
@@ -148,16 +250,6 @@ Return JSON:
 
 {f"> ⚠️ {confidence_note}" if confidence_note else ""}
 """
-
-    try:
-        gh_post(
-            f"/repos/{repo}/issues/{pr_number}/comments",
-            token,
-            {"body": comment + config.footer},
-        )
-        log.done("pr_analysis_posted")
-    except GitHubError as e:
-        log.error(f"Failed to post PR analysis: {e}")
 
     if result["auto_apply"] and r.get("suggested_title"):
         guard = check_pr_title_update(pr, config)
@@ -176,9 +268,11 @@ Return JSON:
         with contextlib.suppress(Exception):
             notify_high_risk_pr(repo, pr_number, title)
 
+    return comment
 
-def _post_pr_summary(pr, repo, pr_number, files, token, config, log):
-    """Auto-generate and post a human-readable PR summary on open."""
+
+def _build_pr_summary(pr, repo, pr_number, files, token, config, log) -> str:
+    """Generate the reviewer-facing summary. Returns markdown, empty on failure."""
     try:
         title = pr.get("title", "")
         body = pr.get("body", "") or ""
@@ -211,30 +305,20 @@ Keep it concise and helpful.""",
             task="pr_summary",
         )
 
-        comment = f"""## 📋 PR Summary
+        # ask_text returns "" on a provider error — don't render an empty section.
+        if not summary or not summary.strip():
+            log.warning("pr_summary.empty — omitting section")
+            return ""
 
-{summary}
-
-| Stat | Value |
-|------|-------|
-| 📁 Files changed | {len(files)} |
-| ➕ Lines added | {total_additions} |
-| ➖ Lines removed | {total_deletions} |
-"""
-
-        gh_post(
-            f"/repos/{repo}/issues/{pr_number}/comments",
-            token,
-            {"body": comment + config.footer},
-        )
-        log.done("pr_summary_posted")
+        return summary.strip()
 
     except Exception as e:
         log.error(f"PR summary failed: {e}")
+        return ""
 
 
-def _detect_test_gaps(pr, repo, pr_number, files, token, config, log):
-    """Detect test coverage gaps in changed files."""
+def _detect_test_gaps(pr, repo, pr_number, files, token, config, log) -> str:
+    """Detect test coverage gaps. Returns markdown, empty when there are none."""
     try:
         source_files = [
             f
@@ -247,7 +331,7 @@ def _detect_test_gaps(pr, repo, pr_number, files, token, config, log):
         test_files = [f for f in files if _is_test_file(f.get("filename", ""))]
 
         if not source_files:
-            return
+            return ""
 
         source_context = "\n\n".join(
             f"### {f['filename']}\n```\n{f.get('patch', '')[:600]}\n```" for f in source_files[:4]
@@ -287,13 +371,17 @@ Only report real gaps. If tests are adequate, set has_gaps to false.""",
             task="gaps",
         )
 
+        if is_unusable(r):
+            log.warning("test_gaps.degraded — omitting section")
+            return ""
+
         if not r.get("has_gaps", False):
             log.info("test_gaps.none_found", pr=pr_number)
-            return
+            return ""
 
         gaps = r.get("gaps", [])
         if not gaps:
-            return
+            return ""
 
         gaps_md = "\n".join(
             f"| `{g.get('file', '?')}` | `{g.get('function', '?')}` | "
@@ -304,9 +392,7 @@ Only report real gaps. If tests are adequate, set has_gaps to false.""",
         score = r.get("coverage_score", 5)
         score_emoji = "🟢" if score >= 8 else "🟡" if score >= 5 else "🔴"
 
-        comment = f"""## 🔍 Test Coverage Analysis
-
-{score_emoji} **Coverage Score: {score}/10**
+        comment = f"""{score_emoji} **Coverage Score: {score}/10**
 {r.get("summary", "")}
 
 ### Gaps Found
@@ -315,30 +401,28 @@ Only report real gaps. If tests are adequate, set has_gaps to false.""",
 |------|----------|------|----------------|
 {gaps_md}
 
-> 💡 Use `/gaps` command for a detailed test gap analysis.
-> 💡 Use `/test` command to auto-generate missing tests.
+> 💡 Use `/gaps` for a detailed analysis, or `/test` to generate the missing tests.
 """
 
-        gh_post(
-            f"/repos/{repo}/issues/{pr_number}/comments",
-            token,
-            {"body": comment + config.footer},
-        )
-        log.done(f"test_gaps_posted: {len(gaps)} gaps found")
+        log.done(f"test_gaps_found: {len(gaps)}")
+        return comment
 
     except Exception as e:
         log.error(f"Test gap detection failed: {e}")
+        return ""
 
 
 def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
     """
     Run AI code review on changed files.
 
-    V6.2: findings that map onto diff lines are posted as a real PR Review
-    with line-anchored comments (committable ```suggestion blocks for safe
-    single-line fixes). Findings that don't map — and the per-file summaries —
-    go in the review body. If the Reviews API rejects the payload we fall back
-    to the pre-V6.2 issue comment so a mapping bug can never lose a review.
+    Returns (review_markdown, inline_comments). The caller decides where each
+    goes: the markdown into the sticky report, the anchored comments through
+    the Reviews API. This function posts nothing itself.
+
+    V6.2: findings that map onto diff lines become line-anchored comments with
+    committable ```suggestion blocks for safe single-line fixes. Findings that
+    don't map — and the per-file summaries — go in the markdown.
     """
     from app.github.patch_parser import (
         commentable_lines,
@@ -353,7 +437,7 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
     ]
 
     if not reviewable:
-        return
+        return "", []
 
     reviews = []  # per-file markdown for the review body
     inline_comments = []  # line-anchored comments for the Reviews API
@@ -445,44 +529,10 @@ Return JSON:
         )
 
     if not reviews:
-        return
+        return "", []
 
-    review_body = "## 🔍 AI Code Review\n\n" + "\n\n---\n\n".join(reviews)
-
-    if inline_comments:
-        fallback_md = [c.pop("_fallback_md") for c in inline_comments]
-        try:
-            gh_post(
-                f"/repos/{repo}/pulls/{pr_number}/reviews",
-                token,
-                {
-                    "commit_id": pr.get("head", {}).get("sha", ""),
-                    "event": "COMMENT",
-                    "body": review_body + config.footer,
-                    "comments": inline_comments,
-                },
-            )
-            log.done(
-                f"code_review_posted_inline: {len(reviews)} files, "
-                f"{len(inline_comments)} line comments"
-            )
-            return
-        except GitHubError as e:
-            # Most likely a 422 from a line the API considers non-commentable.
-            # Never lose the review — degrade to the classic issue comment,
-            # WITH the findings that would have been inline.
-            log.warning(f"inline_review_rejected — falling back to issue comment: {e}")
-            review_body += "\n\n### Findings\n" + "\n".join(fallback_md)
-
-    try:
-        gh_post(
-            f"/repos/{repo}/issues/{pr_number}/comments",
-            token,
-            {"body": review_body + config.footer},
-        )
-        log.done(f"code_review_posted: {len(reviews)} files")
-    except GitHubError as e:
-        log.error(f"Failed to post code review: {e}")
+    log.done(f"code_review_built: {len(reviews)} files, {len(inline_comments)} anchored")
+    return "\n\n---\n\n".join(reviews), inline_comments
 
 
 def _is_test_file(filename: str) -> bool:

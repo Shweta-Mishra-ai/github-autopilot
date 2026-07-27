@@ -4,6 +4,8 @@ V3: Per-action confidence scoring.
 Low confidence = suggest only, don't auto-apply.
 """
 
+import contextlib
+
 from app.core.logger import EventLogger
 
 # EventLogger (not get_logger/stdlib Logger) because evaluate() below logs
@@ -74,10 +76,8 @@ def compute_confidence(
         terms.append((_W_HALLUCINATION, float(getattr(hallucination, "confidence", 0.5))))
 
     if anchor_rate is not None:
-        try:
+        with contextlib.suppress(TypeError, ValueError):
             terms.append((_W_ANCHOR_RATE, max(0.0, min(1.0, float(anchor_rate)))))
-        except (TypeError, ValueError):
-            pass
 
     if required_fields:
         present = sum(

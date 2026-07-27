@@ -1,15 +1,16 @@
 [project]
 name = "github-autopilot"
-version = "6.3.0"
+version = "7.0.0"
 description = "AI-powered GitHub automation bot — auto-fix, PR review, secret scanning, and more"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { text = "MIT OR Apache-2.0" }
 keywords = ["github", "ai", "automation", "bot", "llm", "devops"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",

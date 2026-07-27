@@ -9,8 +9,6 @@ recurring failures (same check failing 3+ times in 24h) as a pattern alert.
 
 import logging
 from app.github.auth import get_installation_token
-from app.github.client import gh_post
-from app.ai.router import router
 from app.core.config import load_config
 from app.core.logger import EventLogger
 from app.core.sanitizer import wrap_user_content
@@ -181,13 +179,16 @@ def _track_failure_pattern(repo: str, check_name: str, root_cause: str):
         if int(count) == 1:
             r.expire(key, _CI_PATTERN_WINDOW)
 
-        if int(count) >= _CI_PATTERN_THRESHOLD:
-            if r.set(f"{key}:alerted", "1", nx=True, ex=_CI_PATTERN_WINDOW) is not None:
-                log.warning(
-                    f"ci.pattern_detected repo={repo} check={check_name} "
-                    f"count={count} root_cause={root_cause[:60]}"
-                )
-                return True  # Caller posts pattern alert
+        # NX flag: fires once per window, not on every failure past the threshold.
+        if (
+            int(count) >= _CI_PATTERN_THRESHOLD
+            and r.set(f"{key}:alerted", "1", nx=True, ex=_CI_PATTERN_WINDOW) is not None
+        ):
+            log.warning(
+                f"ci.pattern_detected repo={repo} check={check_name} "
+                f"count={count} root_cause={root_cause[:60]}"
+            )
+            return True  # Caller posts pattern alert
     except Exception as e:
         log.debug(f"ci.track_failure_pattern_failed repo={repo} check={check_name}: {e}")
     return False

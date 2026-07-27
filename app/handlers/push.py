@@ -26,8 +26,6 @@ import base64
 import logging
 import re
 
-_log = logging.getLogger(__name__)
-
 from app.github.auth import get_installation_token
 from app.github.client import gh_get, gh_post, GitHubError
 from app.github.notifications import notify_secret_detected
@@ -39,6 +37,8 @@ from app.security.dependencies import (
     get_actionable_findings,
     format_dep_findings,
 )
+
+_log = logging.getLogger(__name__)
 
 CONVENTIONAL_TYPES = {
     "feat",

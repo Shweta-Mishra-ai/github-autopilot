@@ -23,7 +23,6 @@ from app.core.logger import EventLogger
 from app.core.confidence import ConfidenceGate
 from app.core.guardrails import check_pr_title_update
 from app.core.sanitizer import wrap_user_content
-import contextlib
 
 SKIP_AUTHORS = {
     "dependabot[bot]",
@@ -81,13 +80,15 @@ def handle(payload: dict):
     inline_comments: list = []
 
     if action == "opened":
-        with contextlib.suppress(Exception):
+        try:
             notify_pr_opened(
                 repo=repo,
                 pr_number=pr_number,
                 title=pr.get("title", ""),
                 risk="unknown",
             )
+        except Exception as e:
+            log.debug(f"notify_pr_opened skipped: {e}")
 
         analysis_md = _analyze_pr(pr, repo, pr_number, files, token, config, gate, context, log)
         summary_md = _build_pr_summary(pr, repo, pr_number, files, token, config, log)
@@ -269,8 +270,10 @@ Return JSON:
                 log.error(f"Title update failed: {e}")
 
     if r.get("risk_level") == "high":
-        with contextlib.suppress(Exception):
+        try:
             notify_high_risk_pr(repo, pr_number, title)
+        except Exception as e:
+            log.debug(f"notify_high_risk_pr skipped: {e}")
 
     return comment
 

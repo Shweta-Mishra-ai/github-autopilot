@@ -12,8 +12,14 @@ pull_requests:
   enabled: true
   auto_polish_title: true
   auto_fill_description: true
-  code_review: true
-  detect_test_gaps: true
+  # TEMPORARY — re-enable once the V7 fix is deployed.
+  # The v6.3.0 bot currently in production reviews only the first
+  # max_files_reviewed files alphabetically, so on a PR that touches
+  # LICENSE/CONTRIBUTING/MANIFEST it never reaches a .py file — and then
+  # scores the test coverage of code it never read. It posted 25 comments
+  # across two rounds on PR #79 with no correct findings.
+  code_review: false
+  detect_test_gaps: false
   max_files_reviewed: 4
 
 issues:

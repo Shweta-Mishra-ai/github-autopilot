@@ -10,6 +10,9 @@ IMPROVED:
 - Similar issues detection to prevent duplicates
 """
 
+import logging
+import contextlib
+
 from app.github.auth import get_installation_token
 from app.github.client import gh_get, gh_post, GitHubError
 from app.github.notifications import notify_new_issue
@@ -19,7 +22,8 @@ from app.core.config import load_config
 from app.core.guardrails import check_auto_label
 from app.core.logger import EventLogger
 from app.core.sanitizer import wrap_user_content
-import contextlib
+
+logger = logging.getLogger(__name__)
 
 SKIP_AUTHORS = {
     "dependabot[bot]",
@@ -238,5 +242,11 @@ def _ensure_labels(repo: str, token: str):
         ("help wanted 🙏", "008672"),
     ]
     for name, color in LABELS:
-        with contextlib.suppress(Exception):
+        try:
             gh_post(f"/repos/{repo}/labels", token, {"name": name, "color": color})
+        except GitHubError as e:
+            # 422 indicates label already exists — expected for existing labels
+            if "422" not in str(e) and "already_exists" not in str(e).lower():
+                logger.debug(f"Label creation skipped for {name}: {e}")
+        except Exception as e:
+            logger.warning(f"Unexpected error creating label {name}: {e}")

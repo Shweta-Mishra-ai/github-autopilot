@@ -221,8 +221,7 @@ def _scan_secrets(repo, commits, token, config, log) -> None:
     actionable = _actionable_secrets(all_findings)
     if not actionable:
         log.info(
-            f"push.secret_scan_ok repo={repo} "
-            f"low_severity={len(all_findings)} — no issue created"
+            f"push.secret_scan_ok repo={repo} low_severity={len(all_findings)} — no issue created"
         )
         return
 

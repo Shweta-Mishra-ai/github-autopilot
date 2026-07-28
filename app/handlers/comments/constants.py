@@ -27,6 +27,7 @@ ALL_COMMANDS: list[str] = sorted(
         "/fix",
         "/gaps",
         "/health",
+        "/ignore",
         "/impact",
         "/improve",
         "/merge",

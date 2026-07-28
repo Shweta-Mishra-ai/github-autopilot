@@ -607,15 +607,19 @@ IMPORTANT: If a file has no bugs or vulnerabilities, return an empty array `[]` 
             "code_review", r, anchor_rate=anchor_rate, required_fields=("summary",)
         )
         low_confidence = ""
-        if not verdict.get("auto_apply", True):
+        if (
+            not verdict.get("auto_apply", True)
+            or float(verdict.get("confidence_score", 1.0)) < 0.70
+        ):
             log.info(
-                f"code_review.low_confidence file={filename} "
+                f"code_review.low_confidence_suppressing_inline file={filename} "
                 f"score={verdict.get('confidence_score')}"
             )
             low_confidence = (
                 f"\n\n> ⚠️ Confidence {verdict.get('confidence_score', 0):.0%} — "
                 "treat this file's review as a prompt to look, not a verdict."
             )
+            inline_comments = [c for c in inline_comments if c["path"] != filename]
 
         reviews.append(
             f"### `{filename}` — Score: {score}/10\n"

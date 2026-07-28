@@ -107,11 +107,8 @@ def handle_comment_event(payload: dict) -> None:
     idx = body.lower().find(cmd)  # slice ORIGINAL body so args keep their case
     cmd_args = body[idx + len(cmd) :].strip() if idx != -1 else ""
 
-    # ── Context building ──────────────────────────────────────────────────
+    # ── Context building & Memory ─────────────────────────────────────────
     context = f"Title: {issue.get('title', '')}\nBody: {(issue.get('body') or '')[:1500]}"
-
-    # ── Repository memory ("the brain") ────────────────────────────────────
-    # No-op in default cloud mode (privacy guard); enriches context on local models.
     context = augment_with_memory(context, repo, f"{issue.get('title', '')} {cmd_args}".strip())
 
     # ── Dispatch ──────────────────────────────────────────────────────────
@@ -214,6 +211,8 @@ def _dispatch(
                 return G.cmd_perf(context)
             case "/arch":
                 return G.cmd_arch(repo, issue_number, issue, token)
+            case "/ignore":
+                return G.cmd_ignore(repo, cmd_args, author)
 
             # ── Reviewer: read-only analysis ───────────────────────────
             case "/health":

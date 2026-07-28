@@ -263,4 +263,19 @@ class TestRollbackCommand:
         assert "Not Found" in result or "not found" in result.lower() or result
 
 
-# ── Context Manager Tests ─────────────────────────────────────────────────────
+class TestIgnoreCommand:
+
+    def test_ignore_returns_confirmation(self):
+        from app.handlers.comments.generator import cmd_ignore
+
+        with patch("app.intelligence.memory.remember", return_value=True):
+            res = cmd_ignore("org/repo", "line-length nitpicks", "shweta")
+            assert "Rule Ignored & Remembered" in res
+            assert "line-length nitpicks" in res
+
+    def test_ignore_empty_args_prompts_user(self):
+        from app.handlers.comments.generator import cmd_ignore
+
+        res = cmd_ignore("org/repo", "", "shweta")
+        assert "Please specify what rule" in res
+

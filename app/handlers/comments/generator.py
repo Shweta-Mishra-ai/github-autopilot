@@ -374,3 +374,37 @@ Return JSON:
         f"\n### Issues Found\n{violations_md or '_No violations found._'}\n"
         f"\n### ✅ Good Patterns\n{pos_md or '_None identified._'}"
     )
+
+
+def cmd_ignore(repo: str, cmd_args: str, author: str) -> str:
+    """Record a maintainer preference to ignore a rule or pattern in repository memory."""
+    rule = cmd_args.strip()
+    if not rule:
+        return (
+            "## 🙈 Ignored Rule\n\n"
+            "Please specify what rule or pattern to ignore:\n"
+            "```\n/ignore line-length nitpicks on test files\n```"
+        )
+
+    try:
+        from app.intelligence.memory import remember
+
+        stored = remember(
+            repo,
+            text=f"Ignored rule / preference set by @{author}: {rule}",
+            kind="preference",
+            meta={"author": author, "source": "command_ignore"},
+        )
+        if stored:
+            return (
+                f"## 🙈 Rule Ignored & Remembered\n\n"
+                f'Recorded repository preference: **"{rule}"**.\n\n'
+                "The bot will take this preference into account during future reviews."
+            )
+        return (
+            f"## 🙈 Rule Already Ignored\n\n"
+            f'Preference **"{rule}"** is already stored in repository memory.'
+        )
+    except Exception as exc:
+        log.error(f"cmd_ignore failed: {exc}")
+        return f"## ⚠️ Could not save ignore preference\n\n`{str(exc)[:200]}`"

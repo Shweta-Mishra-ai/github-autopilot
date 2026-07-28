@@ -179,10 +179,16 @@ class LLMRouter:
         if not text:
             return ""
         text = text[:max_chars]
+        from app.core.sanitizer import InjectionRejected
+
         try:
             from app.core.sanitizer import sanitize_user_input
 
             return sanitize_user_input(text)
+        except InjectionRejected:
+            # A critical-severity injection attempt. Must propagate — the whole
+            # point of fail-closed is that the request does not proceed.
+            raise
         except Exception:
             # Fallback: basic injection filter
             for pattern in [

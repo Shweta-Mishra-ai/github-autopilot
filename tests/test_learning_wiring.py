@@ -82,14 +82,25 @@ class TestFixPromptRecallsPatterns:
 
         captured = {}
 
+        # V7: cmd_fix goes through app.ai.guarded.guarded_ask, which calls
+        # app.ai.guarded.safe_router_ask. Patch there — patching
+        # app.handlers.comments.router no longer intercepts and lets the call
+        # reach the real provider.
         def _fake_ask(system, user, **kw):
             captured["user"] = user
-            return ({"root_cause": "x", "fix": "y", "explanation": "z", "test": "t",
-                     "confidence": 0.9}, MagicMock())
+            return (
+                {
+                    "root_cause": "x",
+                    "fix": "y — a sufficiently long fix body",
+                    "explanation": "z — why this works",
+                    "test": "t",
+                    "confidence": 0.9,
+                },
+                MagicMock(),
+            )
 
-        with patch("app.handlers.comments.router") as mock_router, \
+        with patch("app.ai.guarded.safe_router_ask", side_effect=_fake_ask), \
              patch("app.core.learning.get_pattern_summary", return_value=pattern_summary):
-            mock_router.ask.side_effect = _fake_ask
             generator.cmd_fix("bug title", "some context", repo="o/r")
         return captured["user"]
 
@@ -105,8 +116,8 @@ class TestFixPromptRecallsPatterns:
     def test_no_repo_arg_skips_learning_entirely(self):
         from app.handlers.comments import generator
 
-        with patch("app.handlers.comments.router") as mock_router, \
+        with patch("app.ai.guarded.safe_router_ask",
+                   return_value=({"root_cause": "x"}, MagicMock())), \
              patch("app.core.learning.get_pattern_summary") as gps:
-            mock_router.ask.return_value = ({"root_cause": "x"}, MagicMock())
             generator.cmd_fix("t", "c")  # no repo
         gps.assert_not_called()

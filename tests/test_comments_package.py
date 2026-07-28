@@ -69,10 +69,10 @@ class TestPackageStructure:
     def test_publisher_module(self):
         from app.handlers.comments.publisher import (
             cmd_merge, cmd_apply, cmd_rollback, cmd_release,
-            cmd_runtests, cmd_notify, cmd_security, cmd_secfull,
+            cmd_runtests, cmd_notify,
         )
         for fn in [cmd_merge, cmd_apply, cmd_rollback, cmd_release,
-                   cmd_runtests, cmd_notify, cmd_security, cmd_secfull]:
+                   cmd_runtests, cmd_notify]:
             assert callable(fn)
 
     def test_service_module(self):
@@ -300,7 +300,8 @@ class TestFileSize:
 
     def test_service_py_is_thin(self):
         """service.py is an orchestration layer — keep it thin.
-        Budget history: 260 pre-V6.2; +5 for model-disclosure reset/footer
+        Budget history: 260 pre-V6.2; +5 for model-disclosure reset/footer;
+        +1 for the security module import (V7 publisher split).
         (cross-cutting, belongs in orchestration). Raise consciously, never
         casually."""
         import os
@@ -310,6 +311,6 @@ class TestFileSize:
         )
         with open(fpath, encoding='utf-8') as f:
             lines = f.readlines()
-        assert len(lines) <= 265, (
-            f"service.py has {len(lines)} lines — should stay under 265 lines as an orchestration layer."
+        assert len(lines) <= 266, (
+            f"service.py has {len(lines)} lines — should stay under 266 lines as an orchestration layer."
         )

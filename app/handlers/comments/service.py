@@ -189,6 +189,7 @@ def _dispatch(
     from . import generator as G
     from . import reviewer as R
     from . import publisher as P
+    from . import security as SEC
 
     try:
         ctx_title = issue.get("title", "")
@@ -246,9 +247,9 @@ def _dispatch(
             case "/notify":
                 return P.cmd_notify(repo, issue_number, issue, token, cmd_args)
             case "/security":
-                return P.cmd_security(repo, issue_number, issue, token)
+                return SEC.cmd_security(repo, issue_number, issue, token)
             case "/secfull":
-                return P.cmd_secfull(repo, token)
+                return SEC.cmd_secfull(repo, token)
 
             # ── Shared handlers ────────────────────────────────────────
             case "/autofix":

@@ -66,9 +66,19 @@ class TestRememberRecall:
 
 
 class TestPrivacyGuard:
-    def test_no_injection_by_default(self):
-        memory.remember("o/r", "secret internal architecture detail")
-        # Default (cloud) mode → memory must NOT be injected into the prompt.
+    def test_injected_by_default(self, monkeypatch):
+        """
+        V7: recall is ON by default. It used to require a local-model env var,
+        which left the brain inert in every standard cloud deployment — it
+        never recalled anything. Writes are redacted instead.
+        """
+        monkeypatch.delenv("MEMORY_ALLOW_CLOUD", raising=False)
+        memory.remember("o/r", "the architecture uses hexagonal ports")
+        assert "hexagonal" in memory.recall_context("o/r", "architecture")
+
+    def test_explicit_opt_out_suppresses_injection(self, monkeypatch):
+        monkeypatch.setenv("MEMORY_ALLOW_CLOUD", "0")
+        memory.remember("o/r", "internal architecture detail")
         assert memory.recall_context("o/r", "architecture") == ""
 
     def test_injected_in_local_only(self, monkeypatch):
@@ -88,9 +98,10 @@ class TestPrivacyGuard:
         assert "render" in memory.recall_context("o/r", "deploy")
 
     def test_injection_allowed_flag(self, monkeypatch):
-        assert memory.injection_allowed() is False
-        monkeypatch.setenv("LLM_LOCAL_ONLY", "1")
-        assert memory.injection_allowed() is True
+        monkeypatch.delenv("MEMORY_ALLOW_CLOUD", raising=False)
+        assert memory.injection_allowed() is True      # V7: on by default
+        monkeypatch.setenv("MEMORY_ALLOW_CLOUD", "0")
+        assert memory.injection_allowed() is False     # explicit opt-out
 
 
 # ── Encrypted backup ──────────────────────────────────────────────────────────
@@ -146,12 +157,13 @@ class TestEncryptedBackup:
 class TestAugmentWithMemory:
     """The comment-flow integration point (dispatcher.augment_with_memory)."""
 
-    def test_no_injection_in_cloud_mode(self, monkeypatch):
+    def test_opt_out_returns_context_unchanged(self, monkeypatch):
         from app.handlers.comments.dispatcher import augment_with_memory
 
+        # V7: recall is on by default; MEMORY_ALLOW_CLOUD=0 is the opt-out.
+        monkeypatch.setenv("MEMORY_ALLOW_CLOUD", "0")
         memory.remember("o/r", "internal decision about auth flow")
         base = "Title: fix auth\nBody: ..."
-        # Default (cloud) mode → context returned unchanged, memory not leaked.
         assert augment_with_memory(base, "o/r", "auth flow") == base
 
     def test_injects_relevant_memory_when_local(self, monkeypatch):

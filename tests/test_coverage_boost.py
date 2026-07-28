@@ -5,18 +5,24 @@ from unittest.mock import MagicMock, patch
 import app.handlers.comments.generator as G
 import app.handlers.comments.reviewer as R
 import app.handlers.comments.publisher as P
+import app.handlers.comments.security as SEC
 import app.handlers.comments.service as S
 
 # Mock responses
 mock_router_response = ({"root_cause": "cause", "fix": "fix", "explanation": "exp", "test": "test", "confidence": 0.9}, None)
 mock_router_text_response = ("some text", None)
 
+# V7: generator commands now go through app.ai.guarded.guarded_ask, which
+# returns (payload, HallucinationResult) instead of (payload, meta).
+from app.ai.hallucination import HallucinationResult
+_clean_verdict = HallucinationResult(confidence=0.9, is_acceptable=True)
+
 @patch("app.handlers.comments.router")
-@patch("app.handlers.comments.generator.safe_router_ask")
+@patch("app.handlers.comments.generator.guarded_ask")
 def test_generator_commands(mock_safe_ask, mock_router):
     mock_router.ask.return_value = mock_router_response
     mock_router.ask_text.return_value = mock_router_text_response
-    mock_safe_ask.return_value = mock_router_response
+    mock_safe_ask.return_value = (mock_router_response[0], _clean_verdict)
 
     # cmd_fix
     res = G.cmd_fix("title", "context")
@@ -27,45 +33,46 @@ def test_generator_commands(mock_safe_ask, mock_router):
     assert "Explanation" in res
 
     # cmd_improve
-    mock_safe_ask.return_value = ({"summary": "sum", "improvements": [{"area": "perf", "suggestion": "sug", "example": "ex"}]}, None)
+    mock_safe_ask.return_value = ({"summary": "sum", "improvements": [{"area": "perf", "suggestion": "sug", "example": "ex"}]}, _clean_verdict)
     res = G.cmd_improve("context")
     assert "Improvements" in res
 
     # cmd_test
-    mock_safe_ask.return_value = ({"framework": "pytest", "tests": [{"name": "t1", "type": "unit", "desc": "d", "code": "c"}]}, None)
+    mock_safe_ask.return_value = ({"framework": "pytest", "tests": [{"name": "t1", "type": "unit", "desc": "d", "code": "c"}]}, _clean_verdict)
     res = G.cmd_test("context")
     assert "pytest" in res
 
     # cmd_docs
-    mock_safe_ask.return_value = ({"docstring": "doc", "usage": "use", "readme_section": "readme"}, None)
+    mock_safe_ask.return_value = ({"docstring": "doc", "usage": "use", "readme_section": "readme"}, _clean_verdict)
     res = G.cmd_docs("context")
     assert "documentation" in res.lower()
 
     # cmd_refactor
-    mock_safe_ask.return_value = ({"summary": "sum", "refactors": [{"type": "extract_function", "description": "desc", "before": "before", "after": "after", "benefit": "benefit"}]}, None)
+    mock_safe_ask.return_value = ({"summary": "sum", "refactors": [{"type": "extract_function", "description": "desc", "before": "before", "after": "after", "benefit": "benefit"}]}, _clean_verdict)
     res = G.cmd_refactor("context")
     assert "refactor" in res.lower()
 
     # cmd_gaps
-    mock_safe_ask.return_value = ({"gaps": [{"area": "perf", "risk": "high", "suggested_test": "t"}]}, None)
+    mock_safe_ask.return_value = ({"gaps": [{"area": "perf", "risk": "high", "suggested_test": "t"}]}, _clean_verdict)
     res = G.cmd_gaps("context")
     assert "Gaps" in res
 
     # cmd_perf
-    mock_safe_ask.return_value = ({"overall_rating": "fast", "complexity_issues": [{"location": "loc", "current_complexity": "O(n)", "issue": "i", "fix": "f", "improvement": "imp"}], "quick_wins": ["w"]}, None)
+    mock_safe_ask.return_value = ({"overall_rating": "fast", "complexity_issues": [{"location": "loc", "current_complexity": "O(n)", "issue": "i", "fix": "f", "improvement": "imp"}], "quick_wins": ["w"]}, _clean_verdict)
     res = G.cmd_perf("context")
     assert "Performance" in res
 
     # cmd_arch
     with patch("app.handlers.comments.generator.gh_get", create=True) as mock_gh_get:
         mock_gh_get.return_value = [{"filename": "f.py"}]
-        mock_safe_ask.return_value = ({"health": "good", "violations": [{"type": "layer", "severity": "high", "location": "loc", "description": "d", "recommendation": "r"}], "positive_patterns": ["p"], "refactoring_priority": "planned", "summary": "s"}, None)
+        mock_safe_ask.return_value = ({"health": "good", "violations": [{"type": "layer", "severity": "high", "location": "loc", "description": "d", "recommendation": "r"}], "positive_patterns": ["p"], "refactoring_priority": "planned", "summary": "s"}, _clean_verdict)
         res = G.cmd_arch("repo", 1, {"pull_request": {}}, "token")
         assert "Architecture" in res
 
 @patch("app.handlers.comments.reviewer.gh_get")
 @patch("app.handlers.comments.router")
-def test_reviewer_commands(mock_router, mock_gh_get):
+@patch("app.ai.guarded.safe_router_ask")
+def test_reviewer_commands(mock_guarded_ask, mock_router, mock_gh_get):
     mock_router.ask_text.return_value = mock_router_text_response
     mock_router.ask.return_value = ({"version": "v1.0.0", "title": "t", "release_notes": "notes", "highlights": ["h"]}, None)
 
@@ -131,7 +138,12 @@ def test_reviewer_commands(mock_router, mock_gh_get):
     # cmd_impact
     mock_gh_get.side_effect = None
     mock_gh_get.return_value = [{"filename": "f.py", "additions": 10, "deletions": 5}]
-    mock_router.ask.return_value = ({"rating": "low", "risk_factors": ["r"], "summary": "s", "breaking_change_risk": "low"}, None)
+    mock_guarded_ask.return_value = ({"summary": "a clear one sentence impact statement",
+                                      "affected_systems": ["api"],
+                                      "breaking_change_risk": "low",
+                                      "requires_migration": False,
+                                      "review_priority": "low",
+                                      "notes": ""}, None)
     res = R.cmd_impact("repo", 1, {"pull_request": {}}, "token")
     assert "Impact" in res
 
@@ -224,7 +236,7 @@ def test_publisher_commands(mock_router, mock_gh_delete, mock_gh_put, mock_gh_po
     # cmd_security
     mock_gh_get.side_effect = None
     mock_gh_get.return_value = [{"filename": "f.py", "patch": "diff"}]
-    res = P.cmd_security("repo", 1, {"pull_request": {}}, "token")
+    res = SEC.cmd_security("repo", 1, {"pull_request": {}}, "token")
     assert "Security" in res
 
     # cmd_secfull
@@ -232,7 +244,7 @@ def test_publisher_commands(mock_router, mock_gh_delete, mock_gh_put, mock_gh_po
         mock_report = MagicMock()
         mock_report.to_markdown.return_value = "report"
         mock_scan.return_value = mock_report
-        res = P.cmd_secfull("repo", "token")
+        res = SEC.cmd_secfull("repo", "token")
         assert "report" in res
 
 @patch("app.handlers.comments.service.get_installation_token")

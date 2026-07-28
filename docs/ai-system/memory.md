@@ -21,21 +21,54 @@ Redis. Retrieval is deterministic lexical similarity (set-cosine over tokens) �
 **no 350 MB ML models**, works on the free tier, good enough to surface the
 right memory. Semantic embeddings (via local Ollama) are a future drop-in.
 
-## The privacy rule (why this is safe)
+## What writes to it
 
-Memory can contain source code and internal decisions, so it is treated as
-**sensitive**. `recall_context()` injects memory into an LLM prompt **only** when
-the model is local or you explicitly opt in:
+Memory is written where a real signal exists — not on every event:
+
+| Trigger | kind | Stored |
+|---------|------|--------|
+| `/merge` on a `fix/bot-issue-*` branch | `fix` | the strongest acceptance signal available |
+| `/apply` opens a PR from a bot branch | `pattern` | a maintainer chose to act on a bot fix |
+| Issue triaged | `pattern` | the shape of issues this repo receives |
+
+> Before V7 **nothing in the application called `remember()`** — only the backup
+> module touched the store. The brain could not learn.
+
+## The privacy rule (V7)
+
+Memory can contain source code and internal decisions, so protection is applied
+**at write time**: everything passes through `app/core/redaction.py` before
+storage.
+
+| Removed before storage | Kept |
+|------------------------|------|
+| Fenced and indented code blocks | Prose and rationale |
+| Anything matching a secret pattern | File paths |
+| | Symbol and function names |
+
+Recall is then **on by default**:
 
 | Config | Memory injected into prompt? |
 |--------|------------------------------|
-| default (cloud LLM) | ❌ No — stored & searchable, but never sent to a cloud provider |
-| `LLM_LOCAL_ONLY=1` | ✅ Yes — runs on your Ollama, nothing leaves your infra |
-| `LLM_PREFER_LOCAL=1` | ✅ Yes |
-| `MEMORY_ALLOW_CLOUD=1` | ✅ Yes — you explicitly accept cloud egress |
+| default | ✅ Yes — redacted at write time |
+| `LLM_LOCAL_ONLY=1` / `LLM_PREFER_LOCAL=1` | ✅ Yes — and nothing leaves your infra at all |
+| `MEMORY_ALLOW_CLOUD=0` | ❌ No — stored & searchable, never sent to a provider |
 
-This is the "smart brain, but sensitive code never leaves your infra" guarantee,
-enforced in one place: `memory.injection_allowed()`.
+**This inverts the V6 behaviour.** Recall used to require `LLM_LOCAL_ONLY`,
+`LLM_PREFER_LOCAL` or `MEMORY_ALLOW_CLOUD=1`, which meant that in every standard
+cloud deployment `recall_context()` returned `""` and the brain never recalled
+anything. The "gets sharper the more the repo is used" promise did not apply to
+most users. Redacting at the boundary makes "on" defensible; set
+`MEMORY_ALLOW_CLOUD=0` to restore the old behaviour.
+
+The guarantee is enforced in one place: `memory.injection_allowed()`.
+
+## Cost
+
+| Operation | V6 | V7 |
+|-----------|----|----|
+| `remember()` dedup | O(n) — full list deserialised as JSON per write | O(1) — per-repo hash set |
+| `recall()` scan | entire list (up to `MEMORY_MAX_ITEMS`) | bounded by `MEMORY_RECALL_SCAN` (default 200) |
 
 ## Durability — encrypted backup
 
@@ -71,7 +104,7 @@ from app.intelligence import memory
 
 memory.remember(repo, "decision: use Redis lists for the queue", kind="decision")
 memory.recall(repo, "how is the queue built")        # -> [MemoryItem, ...]
-memory.recall_context(repo, "queue")                 # -> prompt block, or "" if privacy disallows
+memory.recall_context(repo, "queue")                 # -> prompt block, or "" if MEMORY_ALLOW_CLOUD=0
 memory.count(repo); memory.clear(repo); memory.known_repos()
 ```
 

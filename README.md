@@ -15,7 +15,7 @@
 [![Tests](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FShweta-Mishra-ai%2Fgithub-autopilot%2Fbadges%2Ftests.json)](https://github.com/Shweta-Mishra-ai/github-autopilot/actions/workflows/ci.yml)
 [![Server Health](https://github.com/Shweta-Mishra-ai/github-autopilot/actions/workflows/keepalive.yml/badge.svg)](https://github.com/Shweta-Mishra-ai/github-autopilot/actions/workflows/keepalive.yml)
 [![MCP](https://img.shields.io/badge/MCP-server-a371f7?logo=anthropic&logoColor=white)](docs/mcp-setup.md)
-[![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg)](LICENSE)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-22c55e.svg)](LICENSE)
 [![Deploy to Render](https://img.shields.io/badge/deploy-Render-46E3B7?logo=render&logoColor=white)](https://render.com/deploy)
 [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-db61a2?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/Shweta-Mishra-ai)
 
@@ -24,6 +24,29 @@
 <sub>*Simulated output for illustration — see the [eval suite](evals/) for measured behaviour.*</sub>
 
 </div>
+
+---
+
+## ⚠️ V7 behaviour changes
+
+If you ran V6, three things now behave differently. All three exist to make the
+bot quieter and more honest.
+
+| Before | Now |
+|--------|-----|
+| A PR open posted **4 comments**, every push posted 2 more, none ever edited | **One sticky comment per PR**, edited in place. Collapsible sections. |
+| Every secret finding opened an issue | Only **critical/high** severity does. Medium/low are logged. |
+| A push with nothing to report still commented | The bot **stays silent** when it has nothing to say. |
+
+Two more, less visible:
+
+- **Repo memory is on by default.** It was opt-in, which meant it never worked in
+  cloud deployments. Content is now redacted before storage — code bodies stripped,
+  secret-shaped strings replaced. Set `MEMORY_ALLOW_CLOUD=0` for the old behaviour.
+  See [docs/ai-system/memory.md](docs/ai-system/memory.md).
+- **Unparseable model output no longer renders.** Previously a non-JSON response
+  fell through to defaults and published "Score: 7/10 — no issues found" for a
+  review that never ran. The bot now says it could not analyse the change.
 
 ---
 
@@ -82,7 +105,7 @@ Install the GitHub App on your repos, then:
 
 ```bash
 curl https://github-autopilot-1.onrender.com/ping
-# → {"status": "ok", "version": "6.3.0"}
+# → {"status": "ok", "version": "7.0.0"}
 ```
 
 > **Cold starts** — the demo instance runs on Render's free tier. A scheduled
@@ -289,6 +312,32 @@ Found a vulnerability? Please email rather than opening a public issue.
 
 ## Changelog
 
+### V7.0.0 — 2026-07-27
+
+**Correctness — the bot no longer fabricates output**
+- Unparseable model responses (`{"raw": ...}`) fail closed instead of falling through to validator defaults. A non-JSON response used to render as "Score: 7/10 — ✅ No issues found" for a review that never happened.
+- `validate_code_review` returned the assessment as `verdict` while the renderer read `summary` — **every** code review shipped with a blank summary. Second occurrence of this bug class after `improved_title`/`suggested_title`.
+- `critical` was missing from `VALID_PRIORITIES`, so every critical issue was silently relabelled `medium` (this repo's own security issue #76 carries `priority: medium`). Same for type `refactor` and complexity `epic`. `time_estimate` was requested and discarded, so the Est. Effort row could never render.
+- Hallucination detection guarded `/fix` and nothing else — 29 of ~30 output paths were unchecked. All commands now route through `app/ai/guarded.py`, with a structural test so a new command cannot skip it.
+
+**Noise — comment volume cut hard**
+- One sticky comment per PR, edited in place, replacing four on open plus two per push.
+- Secret scanning switched to `enhanced_secrets` (the "drop-in replacement with false-positive reduction" that `push.py` never actually used) with a critical/high severity floor.
+- Dedup now **fails closed**. `_already_reported` returned `False` on Redis errors — meaning "file it" — and the key hashed the *set of pattern names*, so different finding mixes bypassed each other. Evidence: issues #47/#50/#52/#54/#55/#59/#60 opened inside 73 seconds.
+- CI had no dedup at all: a 5-job matrix failure produced 5 AI analyses and 5 comments. Now one per commit SHA.
+- Code review batched into one LLM call instead of one per file (~7 calls per PR open → ~3).
+
+**Intelligence — the subsystems are actually connected**
+- Repo memory had **no write path**: nothing in the application called `remember()`. Added at `/merge`, `/apply` and triage.
+- Recall was opt-in and therefore inert in every cloud deployment. Now on by default with write-time redaction; `MEMORY_ALLOW_CLOUD=0` opts out.
+- `ConfidenceGate` compared every threshold against the model's *self-reported* confidence — a number it invents. Replaced with computed signals (field completeness, hallucination check, diff-anchor rate), with the model's claim at the lowest weight. `_review_code` was also passed the gate and never called it.
+
+**Security (#76)**
+- Zero-width stripping, whitespace collapse, and fail-closed rejection for critical-severity patterns.
+- `wrap_user_content` had **zero production callers** — every handler interpolated raw user text into prompts. Now wired into every prompt site. See [docs/security/prompt-injection.md](docs/security/prompt-injection.md).
+
+**Tests:** 908 → 1017. New tests assert on *rendered output* rather than validator return values — the gap that let all four correctness bugs survive the previous suite.
+
 ### V6.3.0 — 2026-07-16
 - **CI security gate actually gates**: `pip-audit` had a trailing `|| true`, so the "Security" job could never fail even though `release` depends on it. 17 real CVEs across `flask`, `requests`, `PyJWT`, and `cryptography` (used for JWT signing and the encrypted memory backup) had gone silently unpatched as a result — all bumped, `pip-audit` now clean and blocking.
 - **Gemini token-tracking bug fixed**: `_track()` used `incr()` (+1 per call) instead of `incrby(tokens)` — the identical V4 bug already fixed in `groq.py` but missed in `gemini.py`. `/budget` data for Gemini has been meaningless since it shipped. Caught by new tests (`gemini.py` coverage 23% → 90%).
@@ -335,6 +384,59 @@ Found a vulnerability? Please email rather than opening a public issue.
 
 ---
 
+## Contributing
+
+Contributions are welcome — bug reports, security findings, docs, and code alike.
+Start with [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, test
+commands, and coding conventions.
+
+**Good places to start**
+
+| If you want to… | Look at |
+|---|---|
+| Fix a bug | Issues labelled [`good first issue 👋`](https://github.com/Shweta-Mishra-ai/github-autopilot/labels/good%20first%20issue%20%F0%9F%91%8B) |
+| Report a security issue | [SECURITY.md](docs/security/) — please report privately first |
+| Improve AI output quality | `evals/` — add a case, then run `python -m evals.run` |
+| Add a provider | `app/ai/providers/` — subclass `LLMProvider`, register in `router.py` |
+
+**Ground rules that make review fast**
+
+- One concern per PR. A focused 40-line diff lands; a 300-line rewrite of a core
+  module stalls.
+- Tests assert on **rendered output**, not on internal return values. This project
+  shipped four user-visible bugs past a 908-test suite because the tests checked
+  what functions returned rather than what users saw.
+- `python -m pytest -q` and `ruff check app/` must pass. CI runs Python 3.10–3.12.
+
+### Contributors
+
+| Contributor | Contribution |
+|---|---|
+| [Shweta Mishra](https://github.com/Shweta-Mishra-ai) | Author and maintainer |
+
+Contributors are added here once their pull request is merged. Add yourself in
+your PR — the list is maintained by hand, not generated by a bot.
+
+---
+
+## License
+
+Dual-licensed under **either** of:
+
+- **MIT** — [LICENSE-MIT](LICENSE-MIT)
+- **Apache-2.0** — [LICENSE-APACHE](LICENSE-APACHE)
+
+at your option. SPDX: `MIT OR Apache-2.0`
+
+You only need to satisfy one of them, whichever your organisation prefers. MIT is
+short and widely pre-approved; Apache-2.0 adds an explicit patent grant that some
+corporate legal teams require before approving a dependency. Offering both means
+neither requirement blocks adoption.
+
+Contributions are accepted under the same dual licence — see [LICENSE](LICENSE).
+
+---
+
 ## Support
 
 Free and open source. If you'd like to support development, sponsorship is
@@ -345,7 +447,7 @@ entirely optional.
 
 <div align="center">
 
-Built by [Shweta Mishra](https://github.com/Shweta-Mishra-ai) · MIT License
+Built by [Shweta Mishra](https://github.com/Shweta-Mishra-ai) · Licensed under MIT OR Apache-2.0
 
 ⭐ Star this repo if Autopilot saved you time!
 

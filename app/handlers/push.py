@@ -23,7 +23,7 @@ FIXED (Sprint 8): _scan_secrets was missing dedup entirely.
 """
 
 import base64
-import hashlib
+import logging
 import re
 
 from app.github.auth import get_installation_token
@@ -31,12 +31,14 @@ from app.github.client import gh_get, gh_post, GitHubError
 from app.github.notifications import notify_secret_detected
 from app.core.config import load_config
 from app.core.logger import EventLogger
-from app.security.secrets import scan_diff, format_findings as format_secret_findings
+from app.security.enhanced_secrets import scan_diff, format_findings as format_secret_findings
 from app.security.dependencies import (
     scan_requirements_txt,
     get_actionable_findings,
     format_dep_findings,
 )
+
+_log = logging.getLogger(__name__)
 
 CONVENTIONAL_TYPES = {
     "feat",
@@ -119,8 +121,13 @@ def handle(payload: dict) -> None:
 
 def _already_reported(repo: str, report_type: str, ttl_seconds: int = 86400) -> bool:
     """
-    Redis NX key — True if same report created recently.
-    Prevents duplicate issues on every push.
+    True when this report was already filed inside the window.
+
+    FAILS CLOSED. The old implementation returned False on any Redis error —
+    meaning "not reported yet, go ahead and file it" — so a Redis blip produced
+    a burst of duplicate issues. A missed alert during an outage is strictly
+    better than seven duplicates; the suppression is logged and metered so an
+    operator can see it happening.
     """
     try:
         from app.core.redis_client import get_redis
@@ -128,19 +135,14 @@ def _already_reported(repo: str, report_type: str, ttl_seconds: int = 86400) -> 
         r = get_redis()
         key = f"push_reported:{repo}:{report_type}"
         return r.set(key, "1", nx=True, ex=ttl_seconds) is None
-    except Exception:
-        return False
+    except Exception as e:
+        from app.core.metrics import metrics
 
-
-def _findings_dedup_key(findings: list) -> str:
-    """
-    Sprint 8: Stable dedup key for a set of secret findings.
-    Derived from the sorted list of pattern names so that the same
-    secrets always produce the same key regardless of line order.
-    """
-    pattern_names = sorted(f.pattern_name for f in findings)
-    digest = hashlib.md5(",".join(pattern_names).encode()).hexdigest()[:12]
-    return f"secret_patterns_{digest}"
+        metrics.increment("dedup.redis_unavailable")
+        _log.warning(
+            f"push.dedup_unavailable repo={repo} type={report_type}: {e} — suppressing report"
+        )
+        return True
 
 
 # ── Secret scan ────────────────────────────────────────────────────────────────
@@ -170,14 +172,29 @@ def _skip_secret_scan(filename: str) -> bool:
     return any(d in fn for d in _SECRET_SCAN_SKIP_DIRS)
 
 
+# Only these open a GitHub issue. medium/low are logged — the same policy the
+# dependency scanner has always applied. This is the single biggest lever on
+# secret-alert noise: the entropy heuristic fires on hashes, UUIDs and lockfile
+# digests, and those land in the medium bucket.
+_ACTIONABLE_SECRET_SEVERITIES = {"critical", "high"}
+
+# How long one open alert issue is reused before a new one is opened.
+_SECRET_ALERT_TTL = 86400
+
+
+def _actionable_secrets(findings: list) -> list:
+    """Findings severe enough to be worth interrupting a maintainer for."""
+    return [f for f in findings if getattr(f, "severity", "") in _ACTIONABLE_SECRET_SEVERITIES]
+
+
 def _scan_secrets(repo, commits, token, config, log) -> None:
     """
     Scan all added/modified file patches in `commits` for secrets.
 
-    Sprint 8 fix: deduplicate using _already_reported.
-    Previously this function had NO dedup, creating a new GitHub issue on
-    every push — including force-pushes and repeated pushes of the same
-    commit — leading to dozens of duplicate security issues in active repos.
+    Uses enhanced_secrets, which the codebase already documents as a drop-in
+    replacement with false-positive reduction. push.py — the only path that
+    files GitHub issues — was still importing the legacy scanner, so the
+    quieter one was reachable only via /security and MCP.
     """
     all_findings = []
     for commit in commits:
@@ -187,40 +204,87 @@ def _scan_secrets(repo, commits, token, config, log) -> None:
         try:
             diff_data = gh_get(f"/repos/{repo}/commits/{sha}", token)
             for f in diff_data.get("files", []):
-                if _skip_secret_scan(f.get("filename", "")):
+                filename = f.get("filename", "")
+                if _skip_secret_scan(filename):
                     continue  # test/example/docs — dummy secrets expected, skip
                 patch = f.get("patch", "")
                 if patch:
-                    all_findings.extend(scan_diff(patch))
+                    # Passing file_path engages the scanner's own per-path
+                    # false-positive suppression.
+                    all_findings.extend(scan_diff(patch, file_path=filename))
         except Exception as e:
             log.error(f"Secret scan failed for {sha[:7]}: {e}")
 
     if not all_findings:
         return
 
-    # Sprint 8: dedup — one issue per unique finding set per 1 h
-    dedup_key = _findings_dedup_key(all_findings)
-    if _already_reported(repo, dedup_key, ttl_seconds=_SECRET_DEDUP_TTL):
+    actionable = _actionable_secrets(all_findings)
+    if not actionable:
         log.info(
-            f"push.secret_scan_dedup repo={repo} "
-            f"findings={len(all_findings)} (same patterns reported within last 1h)"
+            f"push.secret_scan_ok repo={repo} "
+            f"low_severity={len(all_findings)} — no issue created"
         )
         return
 
+    if _already_reported(repo, "secret_scan", ttl_seconds=_SECRET_DEDUP_TTL):
+        log.info(f"push.secret_scan_dedup repo={repo} findings={len(actionable)}")
+        return
+
     try:
-        gh_post(
-            f"/repos/{repo}/issues",
-            token,
-            {
-                "title": (f"🚨 Secret detected in push — {len(all_findings)} finding(s)"),
-                "body": format_secret_findings(all_findings, repo),
-                "labels": ["security", "critical"],
-            },
-        )
-        notify_secret_detected(repo, len(all_findings))
-        log.warning(f"Secret scan: {len(all_findings)} findings posted as issue")
+        _open_secret_issue(repo, token, actionable, log)
     except Exception as e:
         log.error(f"Failed to post secret alert: {e}")
+
+
+def _open_secret_issue(repo: str, token: str, findings: list, log) -> None:
+    """
+    One open secret alert per repo per 24h.
+
+    Subsequent findings comment on that issue rather than opening another. The
+    old key hashed the SET OF PATTERN NAMES, so two pushes with different
+    finding mixes produced different keys and bypassed each other entirely —
+    seven issues landed in this repo inside 73 seconds that way.
+    """
+    body = format_secret_findings(findings, repo)
+    key = f"secret_alert:{repo}"
+
+    existing = None
+    try:
+        from app.core.redis_client import get_redis
+
+        existing = get_redis().get(key)
+    except Exception as e:
+        log.error(f"push.secret_alert_lookup_failed repo={repo}: {e}")
+
+    if existing:
+        try:
+            issue = gh_get(f"/repos/{repo}/issues/{int(existing)}", token)
+            if issue.get("state") == "open":
+                gh_post(f"/repos/{repo}/issues/{int(existing)}/comments", token, {"body": body})
+                log.info(f"push.secret_alert_appended issue=#{existing}")
+                return
+        except Exception as e:
+            log.warning(f"push.secret_alert_reuse_failed issue=#{existing}: {e} — opening new")
+
+    created = gh_post(
+        f"/repos/{repo}/issues",
+        token,
+        {
+            "title": f"🚨 Secret detected in push — {len(findings)} finding(s)",
+            "body": body,
+            "labels": ["security", "critical"],
+        },
+    )
+
+    try:
+        from app.core.redis_client import get_redis
+
+        get_redis().set(key, str(created.get("number", "")), ex=_SECRET_ALERT_TTL)
+    except Exception as e:
+        log.debug(f"push.secret_alert_record_failed: {e}")
+
+    notify_secret_detected(repo, len(findings))
+    log.warning(f"Secret scan: {len(findings)} actionable findings posted")
 
 
 # ── Dependency scan ────────────────────────────────────────────────────────────

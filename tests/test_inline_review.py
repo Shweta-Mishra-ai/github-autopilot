@@ -132,11 +132,26 @@ def _cfg():
 
 
 def _review_with_issue(line_ref="11", fix="if token is None:  # check"):
+    """
+    V7: _review_code makes ONE batched call for the whole PR, so the response
+    is {"files": [...]} with a "file" key per entry rather than a bare
+    single-file object.
+    """
     return {
-        "score": 6,
-        "summary": "Needs a guard",
-        "issues": [
-            {"severity": "major", "line": line_ref, "issue": "missing null check", "fix": fix}
+        "files": [
+            {
+                "file": "app/auth.py",
+                "score": 6,
+                "summary": "Needs a guard",
+                "issues": [
+                    {
+                        "severity": "major",
+                        "line": line_ref,
+                        "issue": "missing null check",
+                        "fix": fix,
+                    }
+                ],
+            }
         ],
         "confidence": 0.9,
     }
@@ -146,17 +161,36 @@ def _files():
     return [{"filename": "app/auth.py", "patch": PATCH, "additions": 2, "deletions": 1}]
 
 
-def _run_review(review, post_mock):
+def _run_review(review, post_mock, sticky_mock=None):
+    """
+    Drive the V7 flow: _review_code builds, _post_inline_review posts.
+
+    Before V7 _review_code posted directly; the split lets handle() consolidate
+    the conversation-tab output into one sticky comment while line-anchored
+    findings keep going through the Reviews API. Returns the review markdown
+    so tests can assert on what lands in the sticky body.
+    """
     from app.ai.providers.base import LLMResponse
 
     meta = LLMResponse(text="ok", provider="groq_70b", model="llama", total_tokens=10)
-    with patch("app.handlers.pull_request.router.ask", return_value=(review, meta)), \
-         patch("app.handlers.pull_request.validate_code_review", return_value=review), \
-         patch("app.handlers.pull_request.gh_post", post_mock):
-        from app.handlers.pull_request import _review_code
+    cfg = _cfg()
+    pr = {"head": {"sha": "abc1234"}}
 
-        pr = {"head": {"sha": "abc1234"}}
-        _review_code(pr, "org/repo", 1, _files(), "tok", _cfg(), MagicMock(), "", MagicMock())
+    # The real validator now runs per-entry — patching it out would hide the
+    # summary/verdict contract this suite is meant to protect.
+    with patch("app.handlers.pull_request.router.ask", return_value=(review, meta)), \
+         patch("app.handlers.pull_request.gh_post", post_mock), \
+         patch("app.handlers.pull_request.upsert_sticky", sticky_mock or MagicMock()):
+        from app.handlers.pull_request import _post_inline_review, _review_code
+
+        md, inline = _review_code(
+            pr, "org/repo", 1, _files(), "tok", cfg, MagicMock(), "", MagicMock()
+        )
+        if inline:
+            _post_inline_review(
+                pr, "org/repo", 1, "tok", cfg, md, inline, MagicMock()
+            )
+        return md
 
 
 class TestReviewCodeInline:
@@ -177,26 +211,26 @@ class TestReviewCodeInline:
         assert "MAJOR" in comment["body"]
         assert "_fallback_md" not in comment  # internal key stripped before POST
 
-    def test_unmappable_issue_stays_in_issue_comment(self):
+    def test_unmappable_issue_stays_in_the_report_body(self):
+        """A finding that maps to no diff line must still reach the reader."""
         post = MagicMock()
-        _run_review(_review_with_issue(line_ref="500"), post)  # far outside diff
+        md = _run_review(_review_with_issue(line_ref="500"), post)  # far outside diff
 
-        post.assert_called_once()
-        path, _token, payload = post.call_args[0]
-        assert path == "/repos/org/repo/issues/1/comments"  # classic path
-        assert "missing null check" in payload["body"]
+        post.assert_not_called()  # nothing anchored → no Reviews API call
+        assert "missing null check" in md
 
-    def test_reviews_api_rejection_falls_back_with_findings(self):
+    def test_reviews_api_rejection_does_not_lose_findings(self):
+        """
+        A 422 from the Reviews API is survivable: the finding is already in the
+        markdown that handle() puts in the sticky comment, so nothing is lost.
+        """
         from app.github.client import GitHubError
 
-        post = MagicMock(side_effect=[GitHubError("422 line not in diff", 422), {"id": 1}])
-        _run_review(_review_with_issue(), post)
+        post = MagicMock(side_effect=GitHubError("422 line not in diff", 422))
+        md = _run_review(_review_with_issue(), post)
 
-        assert post.call_count == 2
-        second_path, _tok, second_payload = post.call_args_list[1][0]
-        assert second_path == "/repos/org/repo/issues/1/comments"
-        assert "### Findings" in second_payload["body"]
-        assert "missing null check" in second_payload["body"]
+        assert post.call_count == 1
+        assert "Needs a guard" in md
 
     def test_committable_suggestion_for_single_line_fix_on_added_line(self):
         post = MagicMock()

@@ -30,6 +30,7 @@ DURABILITY
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -40,6 +41,10 @@ from dataclasses import dataclass, asdict
 log = logging.getLogger(__name__)
 
 MEMORY_MAX_ITEMS = int(os.environ.get("MEMORY_MAX_ITEMS", "500"))
+# Upper bound on how many items recall() deserialises per query. The whole list
+# was scanned and JSON-parsed on every single read; capping it keeps recall
+# cost flat as a repo's memory grows.
+MEMORY_RECALL_SCAN = int(os.environ.get("MEMORY_RECALL_SCAN", "200"))
 MAX_TEXT_CHARS = 2000
 DEFAULT_TOP_K = 4
 MAX_CONTEXT_CHARS = 3000
@@ -48,10 +53,18 @@ VALID_KINDS = {"fix", "decision", "pattern", "preference", "fact"}
 
 _TOKEN_RE = re.compile(r"[a-z0-9_]+")
 _INDEX_KEY = "mem:__index__"  # list of repos that have memory (for backup enumeration)
+# Dedup hashes outlive nothing in particular — 90 days is long enough that the
+# same fact isn't re-stored, short enough that the keys expire on a free tier.
+_HASH_TTL = 90 * 86400
 
 
 def _key(repo: str) -> str:
     return f"mem:{repo}"
+
+
+def _hash_key(repo: str) -> str:
+    """Set of content hashes for this repo — the O(1) write-dedup index."""
+    return f"mem:hashes:{repo}"
 
 
 def _index_repo(r, repo: str) -> None:
@@ -115,17 +128,21 @@ class MemoryItem:
 
 def injection_allowed() -> bool:
     """
-    True only when it is safe to inject memory into the LLM prompt for this
-    process's configuration:
-      - LLM_LOCAL_ONLY / LLM_PREFER_LOCAL  → local model, sensitive text stays in
-      - MEMORY_ALLOW_CLOUD=1               → operator explicitly accepts cloud egress
-    Otherwise memory is stored/searchable but NOT sent to any cloud provider.
+    True unless the operator explicitly opts out with MEMORY_ALLOW_CLOUD=0.
+
+    This was an opt-IN gate: recall_context() returned "" unless a local model
+    was configured, which meant the brain was inert in every standard cloud
+    deployment — it never recalled anything, so the "gets sharper the more the
+    repo is used" promise never applied to most users.
+
+    Content is now redacted at write time (app/core/redaction.py): code bodies
+    are stripped and secret-shaped strings replaced, so what can leave the
+    deployment is prose, file paths and symbol names. That makes "on" a
+    defensible default. Operators who want the old behaviour set
+    MEMORY_ALLOW_CLOUD=0.
     """
-
-    def _truthy(name: str) -> bool:
-        return os.environ.get(name, "").strip().lower() in ("1", "true", "yes")
-
-    return _truthy("LLM_LOCAL_ONLY") or _truthy("LLM_PREFER_LOCAL") or _truthy("MEMORY_ALLOW_CLOUD")
+    raw = os.environ.get("MEMORY_ALLOW_CLOUD", "").strip().lower()
+    return raw not in ("0", "false", "no")
 
 
 def remember(repo: str, text: str, kind: str = "fact", meta: dict | None = None) -> bool:
@@ -133,7 +150,11 @@ def remember(repo: str, text: str, kind: str = "fact", meta: dict | None = None)
     Store one memory. Deduplicates on exact text. Returns True if stored.
     Never raises — memory is an enhancement, not a critical path.
     """
-    text = (text or "").strip()[:MAX_TEXT_CHARS]
+    from app.core.redaction import redact
+
+    # Redact BEFORE anything else: nothing secret-shaped and no code body
+    # should ever reach the store, regardless of who called us.
+    text = redact((text or "").strip())[:MAX_TEXT_CHARS].strip()
     if not text or not repo:
         return False
     if kind not in VALID_KINDS:
@@ -151,11 +172,16 @@ def remember(repo: str, text: str, kind: str = "fact", meta: dict | None = None)
 
         r = get_redis()
         key = _key(repo)
-        # Dedup: skip if identical text already present.
-        for raw in r.lrange(key, 0, MEMORY_MAX_ITEMS - 1) or []:
-            existing = MemoryItem.from_json(raw)
-            if existing and existing.text == text:
-                return False
+
+        # O(1) dedup via a per-repo set of content hashes. The old loop
+        # deserialised the ENTIRE list as JSON on every single write just to
+        # compare strings. A set (rather than one key per hash) keeps clear()
+        # able to drop the whole thing in one delete.
+        digest = hashlib.sha256(text.encode()).hexdigest()[:16]
+        if r.sadd(_hash_key(repo), digest) == 0:
+            return False  # identical text already stored
+        r.expire(_hash_key(repo), _HASH_TTL)
+
         r.lpush(key, json.dumps(asdict(item), separators=(",", ":")))
         r.ltrim(key, 0, MEMORY_MAX_ITEMS - 1)  # keep newest N, bound memory
         _index_repo(r, repo)
@@ -192,7 +218,7 @@ def recall(repo: str, query: str, top_k: int = DEFAULT_TOP_K) -> list[MemoryItem
         from app.core.redis_client import get_redis
 
         r = get_redis()
-        raws = r.lrange(_key(repo), 0, MEMORY_MAX_ITEMS - 1) or []
+        raws = r.lrange(_key(repo), 0, MEMORY_RECALL_SCAN - 1) or []
         q_tokens = _tokens(query)
         scored: list[tuple[float, int, MemoryItem]] = []
         for raw in raws:
@@ -245,9 +271,15 @@ def count(repo: str) -> int:
 
 
 def clear(repo: str) -> None:
+    """
+    Drop this repo's memory AND its write-dedup index.
+
+    Clearing only the list would leave the hash set behind, so re-storing a
+    previously-known fact after a clear would silently no-op.
+    """
     try:
         from app.core.redis_client import get_redis
 
-        get_redis().delete(_key(repo))
+        get_redis().delete(_key(repo), _hash_key(repo))
     except Exception as e:
         log.warning(f"memory.clear_failed repo={repo}: {e} — repo memory may not have been deleted")

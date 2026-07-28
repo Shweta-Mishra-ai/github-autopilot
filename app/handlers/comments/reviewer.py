@@ -188,8 +188,6 @@ def cmd_summarize(repo: str, issue_number: int, token: str) -> str:
 
 def cmd_ci(context: str, repo: str = "", token: str = "") -> str:
     """Analyze a CI failure — from pasted log or latest failed run."""
-    from app.handlers.comments import router
-
     ci_context = context.strip() if context else ""
 
     if not ci_context and repo and token:
@@ -223,7 +221,9 @@ def cmd_ci(context: str, repo: str = "", token: str = "") -> str:
         )
 
     try:
-        r, _ = router.ask(
+        from app.ai.guarded import degraded_comment, guarded_ask, is_degraded
+
+        r, _verdict = guarded_ask(
             "DevOps expert. Analyze CI failures precisely. JSON only.",
             f"""Analyze this CI failure:
 {ci_context[:3000]}
@@ -236,7 +236,11 @@ Return JSON:
   "confidence": 0.85
 }}""",
             task="ci_analysis",
+            response_type="ci",
         )
+
+        if is_degraded(r):
+            return degraded_comment(r, "CI analysis")
 
         if not isinstance(r, dict) or "root_cause" not in r:
             return f"## ⚠️ CI Analysis Incomplete\n\nRaw output:\n\n```\n{str(r)[:500]}\n```"
@@ -298,14 +302,15 @@ def cmd_impact(repo: str, issue_number: int, issue: dict, token: str) -> str:
         return "## ℹ️ `/impact` only works on Pull Requests."
 
     try:
-        from app.handlers.comments import router
         from app.handlers.pull_request import _blast_radius
 
         files = gh_get(f"/repos/{repo}/pulls/{issue_number}/files", token)
         blast = _blast_radius(files)
         filenames = [f["filename"] for f in files[:15]]
 
-        r, _ = router.ask(
+        from app.ai.guarded import degraded_comment, guarded_ask, is_degraded
+
+        r, _verdict = guarded_ask(
             "Senior architect. Analyze PR impact on system. JSON only.",
             f"""Analyze blast radius of these file changes:
 {chr(10).join(filenames)}
@@ -320,7 +325,11 @@ Return JSON:
   "notes": "any considerations"
 }}""",
             task="arch",
+            response_type="impact",
         )
+
+        if is_degraded(r):
+            return degraded_comment(r, "impact analysis")
 
         bc_risk = r.get("breaking_change_risk", "low")
         bc_emoji = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(bc_risk, "🟡")

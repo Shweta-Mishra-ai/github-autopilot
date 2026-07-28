@@ -57,6 +57,8 @@ from .publisher import (
     cmd_release as _cmd_release,
     cmd_runtests as _cmd_runtests,
     cmd_notify as _cmd_notify,
+)
+from .security import (
     cmd_security as _cmd_security,
     cmd_secfull as _cmd_secfull,
 )

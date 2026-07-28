@@ -36,33 +36,76 @@ _INJECTION_PATTERNS: list[tuple[re.Pattern, str]] = [
 ]
 
 
-def sanitize_user_input(text: str, max_chars: int = 8_000) -> str:
+# Zero-width and invisible formatting characters. Interleaving these lets
+# "ignore previous instructions" survive any literal or whitespace-tolerant
+# pattern, because the characters render as nothing but break the match.
+_ZERO_WIDTH_RE = re.compile("[​‌‍⁠﻿­]")
+
+_WHITESPACE_RE = re.compile(r"\s+")
+
+# Labels indicating a deliberate override or exfiltration attempt rather than
+# an unlucky turn of phrase. Masking these still feeds the surrounding
+# attacker-authored text to the model, so the input is rejected instead.
+_CRITICAL_LABELS = frozenset({"EXFIL", "DELIM_INJ", "XML_INJ"})
+
+
+class InjectionRejected(Exception):
+    """Raised when input contains a critical-severity injection attempt."""
+
+
+def sanitize_user_input(text: str, max_chars: int = 8_000, fail_closed: bool = True) -> str:
     """
     Sanitize text from user-controlled sources (GitHub webhook payloads).
-    Applies Unicode normalization + injection pattern replacement.
 
-    Does NOT raise. Returns sanitized string.
+    Defence in depth, in order:
+      1. Hard length cap
+      2. NFKC normalisation      — collapses homoglyphs (Cyrillic е → Latin e)
+      3. Zero-width stripping    — removes ​-style separators
+      4. Whitespace collapse     — so "ignore\\n previous\\n instructions"
+                                   cannot slip past a single-space pattern
+      5. Pattern replacement
+      6. Fail-closed on critical severity
+
+    Raises InjectionRejected for a critical hit when fail_closed is True.
+    Otherwise does not raise.
     """
     if not text:
         return ""
 
-    # Hard cap
     text = text[:max_chars]
 
-    # Unicode normalization — collapse lookalike characters
     with contextlib.suppress(Exception):
         text = unicodedata.normalize("NFKC", text)
 
-    # Pattern replacement
+    # The probe replaces zero-width characters with a SPACE, while the returned
+    # text simply drops them. That matters: an attacker can use a zero-width
+    # character *instead of* a space ("ignore<ZWSP>previous<ZWSP>instructions"),
+    # so deleting it would fuse the words and defeat the pattern. Substituting
+    # a space in the matching copy catches both that and the interleaved form.
+    probe = _WHITESPACE_RE.sub(" ", _ZERO_WIDTH_RE.sub(" ", text)).strip()
+    text = _ZERO_WIDTH_RE.sub("", text)
+
     hits = []
     for pattern, label in _INJECTION_PATTERNS:
-        new_text, n = pattern.subn(f"[{label}]", text)
-        if n:
-            hits.append(label)
-            text = new_text
+        if not pattern.search(probe):
+            continue
+        hits.append(label)
+
+        if fail_closed and label in _CRITICAL_LABELS:
+            log.warning(f"sanitizer.injection_rejected label={label}")
+            raise InjectionRejected(f"Input rejected: {label}")
+
+        text = pattern.sub(f"[{label}]", text)
+        probe = pattern.sub(f"[{label}]", probe)
 
     if hits:
         log.warning(f"sanitizer.injection_detected patterns={hits}")
+
+    # A pattern split across whitespace is masked in the probe but not in the
+    # original. When that happens the original still carries the payload, so
+    # return the collapsed form instead of leaking it.
+    if hits and any(f"[{h}]" not in text for h in hits):
+        return probe
 
     return text
 

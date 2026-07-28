@@ -159,14 +159,31 @@ class TestMemoryBackupRoundTripIntegration:
         assert "why:" in ctx_after
         assert "Celery" in ctx_after
 
-    def test_memory_never_reaches_cloud_prompt_by_default(self, monkeypatch):
+    def test_memory_reaches_the_prompt_by_default_and_is_redacted(self, monkeypatch):
         """
-        Default (no privacy env vars set) is cloud mode: memory must exist and
-        be recallable directly, but recall_context() — the function actually
-        wired into the outgoing prompt — must return nothing.
+        V7 inverts this. Recall used to be opt-in, which meant the brain was
+        inert in every standard cloud deployment — it never recalled anything,
+        so it never got sharper with use. Recall is on by default now, and the
+        protection moved to write time: code bodies and secret-shaped strings
+        are redacted before storage.
         """
+        monkeypatch.delenv("MEMORY_ALLOW_CLOUD", raising=False)
         repo = "integration-test/cloud-default"
-        memory.remember(repo, "internal architecture decision — sensitive", kind="decision")
+        memory.remember(repo, "architecture decision: queue is redis-backed", kind="decision")
         assert memory.count(repo) == 1
+        assert memory.recall(repo, "architecture") != []
+        assert "redis-backed" in memory.recall_context(repo, "architecture queue")
+
+    def test_explicit_opt_out_keeps_memory_out_of_the_prompt(self, monkeypatch):
+        monkeypatch.setenv("MEMORY_ALLOW_CLOUD", "0")
+        repo = "integration-test/opt-out"
+        memory.remember(repo, "internal architecture decision", kind="decision")
         assert memory.recall(repo, "architecture") != []  # still stored/searchable
-        assert memory.recall_context(repo, "architecture") == ""  # but never injected
+        assert memory.recall_context(repo, "architecture") == ""  # but not injected
+
+    def test_secrets_are_redacted_before_storage(self, monkeypatch):
+        repo = "integration-test/redaction"
+        memory.clear(repo)
+        memory.remember(repo, "rotated key AKIAIOSFODNN7REALKEY after the leak", kind="fact")
+        stored = " ".join(i.text for i in memory.recall(repo, "rotated key leak"))
+        assert "AKIAIOSFODNN7REALKEY" not in stored

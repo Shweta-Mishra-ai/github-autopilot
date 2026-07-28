@@ -354,3 +354,43 @@ class TestDetectTestGaps:
             assert gaps_md == ""  # V7: no gaps → no section, nothing posted
             mock_post.assert_not_called()
 
+
+class TestFileReviewPriority:
+
+    def test_priority_ordering(self):
+        from app.handlers.pull_request import _file_review_priority, _review_code
+
+        assert _file_review_priority("app/main.py") == 3
+        assert _file_review_priority("tests/test_main.py") == 2
+        assert _file_review_priority(".ai-repo-manager.yml") == 1
+        assert _file_review_priority("LICENSE") == 0
+
+    def test_review_code_prioritizes_source_code_over_docs(self):
+        from app.handlers.pull_request import _review_code
+        files = [
+            {"filename": ".ai-repo-manager.yml", "patch": "+bot: enabled"},
+            {"filename": "CONTRIBUTING.md", "patch": "+how to contribute"},
+            {"filename": "LICENSE", "patch": "+MIT License"},
+            {"filename": "MANIFEST.in", "patch": "+include docs/*"},
+            {"filename": "app/handlers/pull_request.py", "patch": "+def handle(): pass"},
+        ]
+        cfg = _mock_config()
+        cfg.get.return_value = 4  # max_files_reviewed = 4
+        gate = MagicMock()
+        gate.evaluate.return_value = {"auto_apply": True}
+        log = MagicMock()
+
+        batch_resp = {
+            "files": [
+                {"file": "app/handlers/pull_request.py", "score": 9, "summary": "Looks good", "issues": []}
+            ]
+        }
+
+        with patch("app.handlers.pull_request.router.ask", return_value=_fake_router_response(batch_resp)) as mock_ask:
+            review_md, inline = _review_code(_pr()["pull_request"], "org/repo", 1, files, "tok", cfg, gate, "", log)
+            assert "app/handlers/pull_request.py" in review_md
+            # Ensure the prompt contains app/handlers/pull_request.py diff block
+            args, _ = mock_ask.call_args
+            assert "app/handlers/pull_request.py" in args[1]
+
+

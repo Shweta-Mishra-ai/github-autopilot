@@ -84,6 +84,20 @@ def handle(payload: dict):
         return
     increment_repo_usage(repo)
 
+    # Archived repositories are read-only by intent. check_archived_repo()
+    # existed with zero callers, so the bot commented, labelled and reviewed
+    # on them regardless.
+    try:
+        from app.core.guardrails import check_archived_repo
+
+        repo_meta = gh_get(f"/repos/{repo}", token)
+        archived = check_archived_repo(repo_meta)
+        if not archived.passed:
+            log.info(f"skip_archived repo={repo}: {archived.reason}")
+            return
+    except Exception as e:
+        log.debug(f"archived_check_skipped repo={repo}: {e}")
+
     # Get repo context for better triage
     repo_lang = ""
     try:

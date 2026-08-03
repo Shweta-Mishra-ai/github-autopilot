@@ -52,6 +52,32 @@ def safe_router_ask(
         return {}, None
 
 
+# One alert per outage, not one per affected request. A total provider outage
+# affects every command at once, so an un-deduplicated notification would page
+# the operator dozens of times for a single incident — the same noise problem
+# this release exists to fix.
+_PROVIDERS_DOWN_ALERT_TTL = 900  # 15 minutes
+
+
+def _alert_providers_down() -> None:
+    """Notify once per window that every provider is unavailable. Never raises."""
+    try:
+        from app.core.redis_client import get_redis
+
+        if (
+            get_redis().set("alert:providers_down", "1", nx=True, ex=_PROVIDERS_DOWN_ALERT_TTL)
+            is None
+        ):
+            return  # already alerted inside this window
+
+        from app.github.notifications import notify_all_providers_down
+
+        notify_all_providers_down()
+        log.error("guarded.all_providers_down_alert_sent")
+    except Exception as e:
+        log.debug(f"guarded.providers_down_alert_failed: {e}")
+
+
 def guarded_ask(
     system: str,
     user: str,
@@ -72,6 +98,7 @@ def guarded_ask(
     payload, _meta = safe_router_ask(system, user, task=task, max_tokens=max_tokens)
 
     if isinstance(payload, dict) and payload.get("_providers_down"):
+        _alert_providers_down()
         return (
             {
                 "_degraded": True,

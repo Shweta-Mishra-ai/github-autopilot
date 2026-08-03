@@ -53,6 +53,34 @@ _EMOJIS: dict[str, str] = {
 }
 
 
+# Maps an internal event_type to the repo-config key that governs it.
+# Before this, the notifications.on_* keys existed only in DEFAULTS — a user
+# who set on_secret_detected: false still got pinged on every secret.
+_CONFIG_EVENT_KEYS = {
+    "secret_detected": "on_secret_detected",
+    "high_risk_pr": "on_high_risk_pr",
+    "health_degraded": "on_health_degraded",
+    "all_providers_down": "on_all_providers_down",
+}
+
+
+def _event_allowed(event_type: str, config=None) -> bool:
+    """
+    Repo config wins over the module-level default filter.
+
+    config is passed per call rather than held in module state: this process
+    serves many repositories, and one repo's preferences must never leak into
+    another's notifications.
+    """
+    if not event_type:
+        return True
+    if config is not None:
+        key = _CONFIG_EVENT_KEYS.get(event_type)
+        if key is not None:
+            return bool(config.get("notifications", key, default=True))
+    return NOTIFY_FILTER.get(event_type, True)
+
+
 def notify(
     title: str,
     message: str,
@@ -61,13 +89,20 @@ def notify(
     event_type: str = "",
     fields: list[dict] | None = None,
     url: str = "",
+    config=None,
 ):
-    if event_type and not NOTIFY_FILTER.get(event_type, True):
+    if not _event_allowed(event_type, config):
         log.debug(f"notification.suppressed event_type={event_type}")
         return
 
-    if not SLACK_ENABLED and not DISCORD_ENABLED:
-        log.debug("notification.skipped no_webhooks_configured")
+    slack_on = SLACK_ENABLED and (
+        config is None or config.get("notifications", "slack", default=True)
+    )
+    discord_on = DISCORD_ENABLED and (
+        config is None or config.get("notifications", "discord", default=True)
+    )
+    if not slack_on and not discord_on:
+        log.debug("notification.skipped no_enabled_channel")
         return
 
     emoji = _EMOJIS.get(severity, "ℹ️")
@@ -77,7 +112,7 @@ def notify(
 
     threads: list[threading.Thread] = []
 
-    if SLACK_ENABLED:
+    if slack_on:
         t = threading.Thread(
             target=_send_slack,
             args=(full_title, message, severity),
@@ -85,7 +120,7 @@ def notify(
         )
         threads.append(t)
 
-    if DISCORD_ENABLED:
+    if discord_on:
         t = threading.Thread(
             target=_send_discord,
             args=(full_title, message, severity, fields or [], url),
@@ -170,13 +205,14 @@ def _send_discord(
         log.error(f"notification.discord_error: {e}")
 
 
-def notify_secret_detected(repo: str, findings_count: int):
+def notify_secret_detected(repo: str, findings_count: int, config=None):
     notify(
         title="Secret Detected in Push",
         message=f"{findings_count} potential secret(s) found. Rotate credentials immediately.",
         severity="critical",
         repo=repo,
         event_type="secret_detected",
+        config=config,
         fields=[
             {"name": "Findings", "value": str(findings_count), "inline": True},
             {"name": "Repository", "value": repo, "inline": True},
@@ -184,13 +220,14 @@ def notify_secret_detected(repo: str, findings_count: int):
     )
 
 
-def notify_high_risk_pr(repo: str, pr_number: int, title: str):
+def notify_high_risk_pr(repo: str, pr_number: int, title: str, config=None):
     notify(
         title="High Risk PR Opened",
         message=f"PR #{pr_number} flagged as HIGH risk.",
         severity="warning",
         repo=repo,
         event_type="high_risk_pr",
+        config=config,
         fields=[
             {"name": "PR", "value": f"#{pr_number}", "inline": True},
             {"name": "Risk", "value": "🔴 HIGH", "inline": True},
@@ -200,13 +237,14 @@ def notify_high_risk_pr(repo: str, pr_number: int, title: str):
     )
 
 
-def notify_health_degraded(repo: str, grade: str, score: int):
+def notify_health_degraded(repo: str, grade: str, score: int, config=None):
     notify(
         title="Repo Health Degraded",
         message=f"Repository health is now **{grade}** ({score}/100).",
         severity="warning",
         repo=repo,
         event_type="health_degraded",
+        config=config,
         fields=[
             {"name": "Grade", "value": grade, "inline": True},
             {"name": "Score", "value": f"{score}/100", "inline": True},
@@ -290,7 +328,7 @@ def notify_vulnerability(repo: str, package: str, severity: str, cve_id: str):
     )
 
 
-def notify_all_providers_down():
+def notify_all_providers_down(config=None):
     try:
         from app.ai.circuit_breaker import status_all
 
@@ -313,6 +351,7 @@ def notify_all_providers_down():
         message="No AI provider available. Tasks queued for automatic retry.",
         severity="critical",
         event_type="all_providers_down",
+        config=config,
         fields=fields,
     )
 

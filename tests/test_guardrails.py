@@ -64,17 +64,31 @@ class MockConfig:
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 def make_pr(mergeable=True, mergeable_state="clean", draft=False,
-            base_ref="feature/test", commits=3, title="update readme", body=""):
-    return {
+            base_ref="feature/test", commits=3, title="update readme", body="",
+            risk="low"):
+    """
+    A PR fixture.
+
+    `risk` records an analysed risk level for this head SHA, because
+    auto_merge.allowed_risk_levels is now enforced and fails closed when no
+    analysis is on record. Pass risk=None to exercise that path.
+    """
+    pr = {
         "mergeable":       mergeable,
         "mergeable_state": mergeable_state,
         "draft":           draft,
         "commits":         commits,
+        "number":          1,
         "title":           title,
         "body":            body,
-        "base":            {"ref": base_ref},
+        "base":            {"ref": base_ref, "repo": {"full_name": "org/repo"}},
+        "head":            {"sha": "abc1234567890"},
         "labels":          [],
     }
+    if risk is not None:
+        from app.core.guardrails import record_pr_risk
+        record_pr_risk("org/repo", 1, "abc1234567890", risk)
+    return pr
 
 
 def make_checks(passing=True):
@@ -280,3 +294,45 @@ class TestAutoLabelGuardrail:
         issue  = {"labels": [{"name": "bug 🐛"}]}
         result = check_auto_label(issue, ["bug 🐛", "priority: high 🔥"], config)
         assert result.passed is True
+
+
+class TestAutoMergeRiskLevels:
+    """
+    auto_merge.allowed_risk_levels was documented and never consulted — a user
+    who restricted auto-merge to low-risk PRs still had high-risk ones merged.
+    """
+
+    def test_high_risk_pr_is_blocked_when_only_low_allowed(self):
+        config = MockConfig(auto_merge=True)
+        pr = make_pr(risk="high")
+        result = check_pr_auto_merge(pr, make_checks(), make_reviews(), config)
+        assert result.passed is False
+        assert "risk level" in result.reason.lower()
+
+    def test_low_risk_pr_passes(self):
+        config = MockConfig(auto_merge=True)
+        pr = make_pr(risk="low")
+        assert check_pr_auto_merge(pr, make_checks(), make_reviews(), config).passed is True
+
+    def test_unanalysed_pr_fails_closed(self):
+        """No analysis on record must not be read as 'safe'."""
+        from app.core.redis_client import reset_client
+
+        reset_client()
+        config = MockConfig(auto_merge=True)
+        pr = make_pr(risk=None)
+        result = check_pr_auto_merge(pr, make_checks(), make_reviews(), config)
+        assert result.passed is False
+        assert "no risk analysis" in result.reason.lower()
+
+    def test_risk_is_keyed_by_head_sha(self):
+        """A force-push must invalidate the recorded verdict."""
+        from app.core.guardrails import get_pr_risk, record_pr_risk
+
+        record_pr_risk("org/repo", 7, "oldsha123456", "low")
+        pr_new_head = {
+            "number": 7,
+            "base": {"repo": {"full_name": "org/repo"}},
+            "head": {"sha": "newsha654321"},
+        }
+        assert get_pr_risk(pr_new_head) is None

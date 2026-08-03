@@ -48,7 +48,8 @@ def handle(payload: dict):
         return
 
     config = load_config(repo, token)
-    if not config.get("ci", "enabled", default=True):
+    # Helper, not a raw get(): it also honours the bot.enabled kill switch.
+    if not config.ci_enabled():
         return
 
     output = check_run.get("output", {})

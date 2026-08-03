@@ -67,6 +67,23 @@ def handle(payload: dict):
     if not config.issues_enabled():
         return
 
+    # auto_triage was documented and never read: turning it off left triage
+    # running. Labelling is governed separately by issues.auto_label.
+    if not config.get("issues", "auto_triage", default=True):
+        log.info("issues.auto_triage_disabled — skipping")
+        return
+
+    # Per-repo daily AI budget. check_repo_rate_limit()/increment_repo_usage()
+    # existed with zero callers, so REPO_DAILY_AI_LIMIT did nothing and a
+    # single busy repository could drain the whole free-tier LLM quota.
+    from app.core.guardrails import check_repo_rate_limit, increment_repo_usage
+
+    budget = check_repo_rate_limit(repo)
+    if not budget.passed:
+        log.warning(f"issues.rate_limited repo={repo}: {budget.reason}")
+        return
+    increment_repo_usage(repo)
+
     # Get repo context for better triage
     repo_lang = ""
     try:

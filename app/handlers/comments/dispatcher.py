@@ -102,6 +102,20 @@ def augment_with_memory(context: str, repo: str, query: str) -> str:
     return context
 
 
+def command_disabled_comment(cmd: str) -> str:
+    """
+    Response when an operator's `commands.enabled` allow-list excludes `cmd`.
+
+    Lives here with the other canned responses so service.py stays a thin
+    orchestration layer.
+    """
+    return (
+        f"## 🚫 Command Disabled\n\n"
+        f"`{cmd}` is not in this repository's `commands.enabled` list "
+        f"in `.ai-repo-manager.yml`."
+    )
+
+
 def providers_down_comment(retry_in: int = 60) -> str:
     """Standard degraded-mode comment when all LLM providers are unavailable."""
     return (

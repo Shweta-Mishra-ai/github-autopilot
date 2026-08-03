@@ -149,6 +149,7 @@ Type any of these in a GitHub issue or PR comment:
 | `/release` | Draft GitHub release | Maintainers |
 | `/runtests` | Trigger CI workflow | Maintainers |
 | `/notify` | Send Discord/Slack alert | Maintainers |
+| `/ignore <rule>` | Teach the bot to stop flagging a pattern in this repo | Maintainers |
 | `/autofix` | Auto-apply code improvements (human-confirmed via `/apply`) | Maintainers |
 
 ---
@@ -288,7 +289,7 @@ python server.py
 ```
 
 ```bash
-pytest tests/ -v              # 840+ tests, ~75% coverage — exact count lives in the CI badge
+pytest tests/ -v              # 1038 tests, 79% coverage — the CI badge is the live number
 ruff check app/               # lint
 ```
 

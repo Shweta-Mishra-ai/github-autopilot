@@ -191,12 +191,16 @@ def mcp_endpoint():
 @app.route("/mcp", methods=["GET"])
 def mcp_info():
     """MCP server discovery endpoint."""
+    # Derived, never hardcoded: a literal count silently lies the moment a
+    # tool is added or removed, and this endpoint is public.
+    from app.mcp.tools import MCP_TOOLS
+
     return jsonify(
         {
             "name": "github-autopilot",
             "version": VERSION,
             "protocol": "mcp/2024-11-05",
-            "tools": 8,
+            "tools": len(MCP_TOOLS),
             "description": "AI-powered GitHub repository assistant",
             "auth": "Bearer token via MCP_API_KEY env var",
             "docs": "https://github.com/Shweta-Mishra-ai/github-autopilot/blob/main/docs/mcp-setup.md",

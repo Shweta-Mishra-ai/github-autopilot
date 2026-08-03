@@ -91,7 +91,8 @@ def handle(payload: dict) -> None:
     config = load_config(repo, token)
     latest_sha = commits[-1].get("id", "") if commits else ""
 
-    if not config.get("push", "enabled", default=True):
+    # Helper, not a raw get(): it also honours the bot.enabled kill switch.
+    if not config.push_enabled():
         return
 
     # Secret scan runs on ALL branches (secrets are dangerous everywhere).

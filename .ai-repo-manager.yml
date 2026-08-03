@@ -67,35 +67,17 @@ commands:
       - merge
       - release
       - rollback
-  enabled:
-    # Code Quality
-    - fix
-    - autofix
-    - apply
-    - improve
-    - refactor
-    - perf
-    # Understanding
-    - explain
-    - summarize
-    - arch
-    - impact
-    - gaps
-    - ci
-    # Documentation & Release
-    - docs
-    - test
-    - changelog
-    - release
-    - version
-    - runtests
-    # Security & Health
-    - security
-    - secfull
-    - health
-    # Operations
-    - merge
-    - rollback
-    - report
-    - budget
-    - notify
+      # Writes to persistent repo memory, which is injected into every later
+      # AI prompt. Ungated, any commenter could poison that context.
+      - ignore
+
+  # `enabled` is an optional allow-list. Omitted here, which means every
+  # command stays available — the registry is not duplicated into config,
+  # because a copy goes stale and then silently disables working commands.
+  #
+  # To restrict, list only what you want:
+  #
+  # enabled:
+  #   - fix
+  #   - explain
+  #   - health

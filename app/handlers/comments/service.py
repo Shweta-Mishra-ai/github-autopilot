@@ -16,6 +16,7 @@ from .constants import SKIP_AUTHORS
 from .dispatcher import (
     augment_with_memory,
     check_user_rate_limit,
+    command_disabled_comment,
     extract_command,
     is_providers_down,
     make_degraded_response,
@@ -86,6 +87,16 @@ def handle_comment_event(payload: dict) -> None:
             ),
             log_ctx,
         )
+        return
+
+    # ── Operator allow-list ───────────────────────────────────────────────
+    # command_enabled() had zero callers: a maintainer who removed a command
+    # from commands.enabled still had it fully working. It also honours the
+    # bot.enabled kill switch. Checked before authorization so a disabled
+    # command never costs a GitHub permission API call.
+    if not config.command_enabled(cmd):
+        log_ctx.info("command_disabled_by_config")
+        _post_comment(repo, issue_number, token, command_disabled_comment(cmd), log_ctx)
         return
 
     # ── Authorization ─────────────────────────────────────────────────────

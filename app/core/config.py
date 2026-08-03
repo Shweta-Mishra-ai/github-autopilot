@@ -99,35 +99,19 @@ DEFAULTS: dict = {
         "auto_create": True,
     },
     "commands": {
-        "enabled": [
-            # V2.1
-            "fix",
-            "apply",
-            "explain",
-            "improve",
-            "test",
-            "docs",
-            "refactor",
-            "health",
-            "version",
-            "merge",
-            # V3
-            "summarize",
-            "ci",
-            "security",
-            "gaps",
-            "changelog",
-            # V4
-            "rollback",
-            "autofix",
-            "impact",
-            "perf",
-            "arch",
-            "release",
-            "runtests",
-            "secfull",
-            "budget",
-        ],
+        # NOTE: no "enabled" list here, deliberately.
+        #
+        # The command registry lives in exactly one place —
+        # app.handlers.comments.constants.ALL_COMMANDS. A copy here would be a
+        # second source of truth, and _deep_merge REPLACES lists rather than
+        # merging them, so that copy would silently become a ceiling: any
+        # command added to the registry but forgotten here would stop working
+        # the moment the list is enforced. That is exactly what happened —
+        # this list had gone stale by three commands (ignore, notify, report).
+        #
+        # An absent key means "no restriction configured" (see
+        # Config.command_enabled). Operators who want an allow-list set one in
+        # their own .ai-repo-manager.yml.
         "permissions": {
             "maintainer_only": ["merge", "release", "rollback"],
         },
@@ -224,20 +208,60 @@ class Config:
     # ── Convenience shortcuts ─────────────────────────────────────────────────
 
     def bot_enabled(self) -> bool:
+        """
+        Master kill switch. `bot.enabled: false` must stop EVERYTHING.
+
+        This had zero callers: it shipped in the sample config as the
+        documented way to turn the app off, and setting it to false left the
+        bot fully active. Every section helper below now defers to it, so the
+        switch cannot be bypassed by adding a new section later.
+        """
         return bool(self.get("bot", "enabled", default=True))
 
     def pr_enabled(self) -> bool:
-        return bool(self.get("pull_requests", "enabled", default=True))
+        return self.bot_enabled() and bool(self.get("pull_requests", "enabled", default=True))
 
     def issues_enabled(self) -> bool:
-        return bool(self.get("issues", "enabled", default=True))
+        return self.bot_enabled() and bool(self.get("issues", "enabled", default=True))
+
+    def push_enabled(self) -> bool:
+        return self.bot_enabled() and bool(self.get("push", "enabled", default=True))
+
+    def ci_enabled(self) -> bool:
+        return self.bot_enabled() and bool(self.get("ci", "enabled", default=True))
 
     def auto_merge_enabled(self) -> bool:
         return bool(self.get("auto_merge", "enabled", default=False))
 
     def command_enabled(self, cmd: str) -> bool:
-        enabled = self.get("commands", "enabled", default=[])
-        return cmd.lstrip("/") in enabled
+        """
+        True unless the operator has configured an explicit allow-list that
+        excludes `cmd`.
+
+        An ABSENT `commands.enabled` key means "no restriction configured",
+        not "everything off". That distinction matters because _deep_merge
+        replaces lists rather than merging them: any default copy of the
+        command registry would silently become a ceiling, and would disable
+        real commands the moment it fell out of date. The registry lives in
+        exactly one place — app.handlers.comments.constants.ALL_COMMANDS —
+        and is deliberately NOT duplicated into DEFAULTS.
+
+        An explicitly empty list (`enabled: []`) is honoured as "disable
+        everything", since that is an unambiguous statement of intent.
+        """
+        if not self.bot_enabled():
+            return False
+
+        enabled = self.get("commands", "enabled", default=None)
+        if enabled is None:
+            return True
+        if not isinstance(enabled, list):
+            log.warning(
+                f"config.commands_enabled_not_a_list type={type(enabled).__name__} "
+                "— ignoring the restriction"
+            )
+            return True
+        return cmd.lstrip("/") in {str(c).lstrip("/") for c in enabled}
 
     def is_maintainer_only(self, cmd: str) -> bool:
         mo = self.get("commands", "permissions", "maintainer_only", default=[])

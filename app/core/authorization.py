@@ -41,6 +41,12 @@ RESTRICTED_COMMANDS = {
     "/autofix",
     "/apply",  # Auto-mutates repo state
     "/secfull",  # Sensitive report — internal data
+    # Writes to persistent repo memory, which is injected into every
+    # subsequent AI prompt. Ungated, any commenter on a public repo could
+    # poison the context every later command sees — a stored prompt-injection
+    # vector that outlives the comment. Its own docstring always said
+    # "maintainer preference"; this makes that true.
+    "/ignore",
 }
 
 

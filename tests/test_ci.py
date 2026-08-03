@@ -44,6 +44,9 @@ def _payload(
 
 def _mock_config(ci_enabled=True):
     cfg = MagicMock()
+    # ci.py now calls config.ci_enabled(), which also honours the
+    # bot.enabled kill switch — a raw get() bypassed it.
+    cfg.ci_enabled.return_value = ci_enabled
     cfg.get.side_effect = lambda *a, **kw: {
         ("ci", "enabled"): ci_enabled,
     }.get(a, kw.get("default", True))

@@ -91,7 +91,8 @@ def handle(payload: dict) -> None:
     config = load_config(repo, token)
     latest_sha = commits[-1].get("id", "") if commits else ""
 
-    if not config.get("push", "enabled", default=True):
+    # Helper, not a raw get(): it also honours the bot.enabled kill switch.
+    if not config.push_enabled():
         return
 
     # Secret scan runs on ALL branches (secrets are dangerous everywhere).
@@ -230,12 +231,12 @@ def _scan_secrets(repo, commits, token, config, log) -> None:
         return
 
     try:
-        _open_secret_issue(repo, token, actionable, log)
+        _open_secret_issue(repo, token, actionable, log, config)
     except Exception as e:
         log.error(f"Failed to post secret alert: {e}")
 
 
-def _open_secret_issue(repo: str, token: str, findings: list, log) -> None:
+def _open_secret_issue(repo: str, token: str, findings: list, log, config=None) -> None:
     """
     One open secret alert per repo per 24h.
 
@@ -282,7 +283,7 @@ def _open_secret_issue(repo: str, token: str, findings: list, log) -> None:
     except Exception as e:
         log.debug(f"push.secret_alert_record_failed: {e}")
 
-    notify_secret_detected(repo, len(findings))
+    notify_secret_detected(repo, len(findings), config=config)
     log.warning(f"Secret scan: {len(findings)} actionable findings posted")
 
 

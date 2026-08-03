@@ -301,7 +301,10 @@ class TestFileSize:
     def test_service_py_is_thin(self):
         """service.py is an orchestration layer — keep it thin.
         Budget history: 260 pre-V6.2; +5 for model-disclosure reset/footer;
-        +1 for the security module import (V7 publisher split).
+        +1 for the security module import (V7 publisher split); +10 for the
+        commands.enabled gate — an orchestration-tier check that sits with the
+        rate limit and authorization guards, and whose response text lives in
+        dispatcher.py so only the guard itself is here.
         (cross-cutting, belongs in orchestration). Raise consciously, never
         casually."""
         import os
@@ -311,6 +314,6 @@ class TestFileSize:
         )
         with open(fpath, encoding='utf-8') as f:
             lines = f.readlines()
-        assert len(lines) <= 266, (
-            f"service.py has {len(lines)} lines — should stay under 266 lines as an orchestration layer."
+        assert len(lines) <= 276, (
+            f"service.py has {len(lines)} lines — should stay under 276 lines as an orchestration layer."
         )

@@ -1,7 +1,7 @@
 {
   "name": "github-autopilot",
   "description": "AI-powered GitHub repository assistant. Analyze PRs, fix issues, scan secrets, generate tests — over MCP.",
-  "version": "7.0.0",
+  "version": "7.1.0",
   "protocol": "mcp/2024-11-05",
   "homepage": "https://github.com/Shweta-Mishra-ai/github-autopilot",
   "documentation": "https://github.com/Shweta-Mishra-ai/github-autopilot/blob/main/docs/mcp-setup.md",

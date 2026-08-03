@@ -59,6 +59,33 @@ def check_pr_auto_merge(pr_data: dict, checks: list, reviews: list, config) -> G
     ):
         return GuardrailResult(False, f"Target `{base}` is protected — auto-merge disabled")
 
+    # allowed_risk_levels was documented and never consulted: a user who
+    # restricted auto-merge to low-risk PRs still had high-risk ones merged.
+    #
+    # The risk level is produced by _analyze_pr on PR open and recorded via
+    # record_pr_risk(). It is read back here rather than taken off pr_data,
+    # because /merge fetches a raw GitHub PR object that carries no analysis.
+    allowed_risks = config.get("auto_merge", "allowed_risk_levels", default=["low"])
+    if isinstance(allowed_risks, list) and allowed_risks:
+        risk = get_pr_risk(pr_data)
+        allowed = {str(r).lower() for r in allowed_risks}
+        if risk is None:
+            # Fail closed: no analysis on record means we cannot show the PR
+            # meets the operator's restriction. Say so rather than assume.
+            return GuardrailResult(
+                False,
+                "No risk analysis on record for this PR, and "
+                f"auto_merge.allowed_risk_levels restricts merging to "
+                f"{', '.join(sorted(allowed))}. Re-open the PR to trigger "
+                "analysis, or widen the setting.",
+            )
+        if risk not in allowed:
+            return GuardrailResult(
+                False,
+                f"Risk level `{risk}` is not in auto_merge.allowed_risk_levels "
+                f"({', '.join(sorted(allowed))})",
+            )
+
     if pr_data.get("draft", False):
         return GuardrailResult(False, "Draft PRs cannot be auto-merged")
 
@@ -142,3 +169,52 @@ def increment_repo_usage(repo: str):
         r.expire(key, 86400)
     except Exception as e:
         log.debug(f"guardrails.increment_repo_usage_failed repo={repo}: {e}")
+
+
+# ── PR risk record ────────────────────────────────────────────────────────────
+#
+# auto_merge.allowed_risk_levels needs the risk level that _analyze_pr computed
+# on PR open, but /merge fetches a raw GitHub PR object which carries no
+# analysis. Recording it keyed by head SHA means a force-push invalidates the
+# record automatically: the risk of the old head says nothing about the new one.
+
+_RISK_TTL = 7 * 86400
+
+
+def _risk_key(repo: str, pr_number, head_sha: str) -> str:
+    return f"pr_risk:{repo}:{pr_number}:{head_sha[:12]}"
+
+
+def record_pr_risk(repo: str, pr_number, head_sha: str, risk: str) -> None:
+    """Store the analysed risk level. Never raises — advisory data."""
+    if not (repo and head_sha and risk):
+        return
+    try:
+        from app.core.redis_client import get_redis
+
+        get_redis().set(_risk_key(repo, pr_number, head_sha), str(risk).lower(), ex=_RISK_TTL)
+    except Exception as e:
+        log.debug(f"guardrails.record_pr_risk_failed repo={repo} pr={pr_number}: {e}")
+
+
+def get_pr_risk(pr_data: dict) -> "str | None":
+    """
+    Recorded risk level for this PR's current head, or None when unknown.
+
+    None is meaningful: the caller fails closed on it rather than assuming
+    the PR is safe.
+    """
+    try:
+        repo = (pr_data.get("base", {}).get("repo", {}) or {}).get("full_name", "")
+        head_sha = (pr_data.get("head", {}) or {}).get("sha", "")
+        number = pr_data.get("number")
+        if not (repo and head_sha and number is not None):
+            return None
+
+        from app.core.redis_client import get_redis
+
+        value = get_redis().get(_risk_key(repo, number, head_sha))
+        return str(value).lower() if value else None
+    except Exception as e:
+        log.debug(f"guardrails.get_pr_risk_failed: {e}")
+        return None

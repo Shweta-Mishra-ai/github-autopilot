@@ -67,26 +67,18 @@ DEFAULTS: dict = {
         "allow_protected_branches": False,
         "allowed_risk_levels": ["low"],
     },
-    "ai": {
-        "primary_model": "llama-3.3-70b-versatile",
-        "fallback_model": "llama-3.1-8b-instant",
-        "max_tokens": 1500,
-        "temperature": 0.2,
-        "timeout_seconds": 45,
-    },
-    "confidence": {
-        "thresholds": {
-            "pr_title_rewrite": 0.80,
-            "pr_description": 0.75,
-            "issue_label": 0.70,
-            "auto_merge": 0.95,
-            "fix_command": 0.75,
-            "auto_apply": 0.92,
-            "code_review": 0.75,
-            "security_finding": 0.85,
-            "issue_triage": 0.75,
-        }
-    },
+    # NOTE: no "ai" section. Model, timeout and temperature are DEPLOYMENT
+    # concerns — the LLM router is a process-wide singleton shared by every
+    # installation, so a per-repo model override would let one tenant drain
+    # another's quota tier. They are set by the operator via LLM_PRIMARY_MODEL
+    # / LLM_FALLBACK_MODEL env vars. These keys previously sat here where
+    # nothing could read them.
+    # NOTE: no "confidence" defaults here either. The thresholds live in
+    # app/core/confidence.py (ConfidenceGate.DEFAULT_THRESHOLDS), which is what
+    # actually reads them. This copy had already drifted — it carried
+    # auto_apply and security_finding, which nothing looks up, and omitted
+    # secret_detection, which is real. A user override still merges cleanly
+    # because ConfidenceGate reads config.get("confidence", "thresholds").
     "notifications": {
         "slack": False,
         "discord": False,
@@ -310,6 +302,22 @@ def load_config(repo: str, token: str) -> Config:
     try:
         from app.github.client import gh_get
 
+        # No ?ref= — deliberately. The contents endpoint defaults to the
+        # repository's DEFAULT BRANCH, and that is a security boundary, not an
+        # oversight.
+        #
+        # Config decides who may merge (commands.permissions.maintainer_only),
+        # whether auto-merge is on, whether secrets are scanned, and whether
+        # the bot runs at all. Reading it from the pull-request head would let
+        # any outside contributor grant themselves those rights simply by
+        # editing the YAML inside their own PR:
+        #
+        #     auto_merge: {enabled: true}
+        #     commands: {permissions: {maintainer_only: []}}
+        #
+        # Config changes therefore take effect only once merged to the default
+        # branch — the same trust boundary GitHub Actions applies to workflow
+        # permissions. tests/test_prelaunch_audit.py pins this.
         data = gh_get(f"/repos/{repo}/contents/.ai-repo-manager.yml", token)
         raw = base64.b64decode(data["content"]).decode("utf-8")
 

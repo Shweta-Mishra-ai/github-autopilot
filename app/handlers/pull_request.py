@@ -61,6 +61,16 @@ def handle(payload: dict):
     if not config.pr_enabled():
         return
 
+    # Per-repo daily AI budget — see issues.py for why this exists. A PR event
+    # can trigger several LLM calls, so it is metered like any other.
+    from app.core.guardrails import check_repo_rate_limit, increment_repo_usage
+
+    budget = check_repo_rate_limit(repo)
+    if not budget.passed:
+        log.warning(f"pr.rate_limited repo={repo}: {budget.reason}")
+        return
+    increment_repo_usage(repo)
+
     try:
         files = gh_get(f"/repos/{repo}/pulls/{pr_number}/files", token)
     except Exception:
@@ -269,9 +279,20 @@ Return JSON:
             except Exception as e:
                 log.error(f"Title update failed: {e}")
 
+    # Record the risk so auto_merge.allowed_risk_levels can be enforced later:
+    # /merge fetches a raw GitHub PR object that carries no analysis. Keyed by
+    # head SHA, so a force-push invalidates it rather than carrying a stale
+    # "low" verdict onto entirely different code.
+    try:
+        from app.core.guardrails import record_pr_risk
+
+        record_pr_risk(repo, pr_number, pr.get("head", {}).get("sha", ""), r.get("risk_level", ""))
+    except Exception as e:
+        log.debug(f"record_pr_risk skipped: {e}")
+
     if r.get("risk_level") == "high":
         try:
-            notify_high_risk_pr(repo, pr_number, title)
+            notify_high_risk_pr(repo, pr_number, title, config=config)
         except Exception as e:
             log.debug(f"notify_high_risk_pr skipped: {e}")
 
@@ -422,6 +443,21 @@ Only report real gaps. If tests are adequate, set has_gaps to false.""",
         return ""
 
 
+def _review_sort_key(f: dict) -> tuple:
+    """
+    Ordering for the limited review budget: file kind first, then size of
+    change.
+
+    Kind alone is not enough — within a tier, GitHub returns files
+    alphabetically, so `app/a.py` with a two-line tweak would be reviewed
+    ahead of `app/z.py` with two hundred changed lines. Size is the best
+    available proxy for where the risk is.
+    """
+    filename = f.get("filename", "")
+    churn = f.get("additions", 0) + f.get("deletions", 0)
+    return (_file_review_priority(filename), churn)
+
+
 def _file_review_priority(filename: str) -> int:
     """
     Return priority weight for code review ordering (higher is more important).
@@ -479,9 +515,7 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
 
     max_files = config.get("pull_requests", "max_files_reviewed", default=4)
     valid_files = [f for f in files if f.get("patch") and not _is_generated(f.get("filename", ""))]
-    sorted_files = sorted(
-        valid_files, key=lambda f: _file_review_priority(f.get("filename", "")), reverse=True
-    )
+    sorted_files = sorted(valid_files, key=_review_sort_key, reverse=True)
     reviewable = sorted_files[:max_files]
 
     if not reviewable:

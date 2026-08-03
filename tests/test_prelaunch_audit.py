@@ -278,6 +278,42 @@ class TestNoDeadConfig:
                 })
             ask.assert_not_called()
 
+    def test_every_documented_config_key_is_read(self):
+        """
+        The broadest form of the recurring defect: a key in DEFAULTS that
+        nothing reads is a setting the product advertises and ignores.
+
+        Thirteen keys were dead when this was written — including
+        auto_merge.allowed_risk_levels (a safety control), ai.primary_model
+        (the user's model choice), and every notifications.on_* toggle.
+        Finding them one at a time is how they accumulated; this finds them
+        all, every run.
+        """
+        from app.core.config import DEFAULTS
+
+        def leaves(d, path=()):
+            for k, v in d.items():
+                if isinstance(v, dict):
+                    yield from leaves(v, path + (k,))
+                else:
+                    yield path + (k,)
+
+        corpus = "".join(
+            p.read_text(encoding="utf-8")
+            for p in Path("app").rglob("*.py")
+            if p.name != "config.py"
+        ) + Path("server.py").read_text(encoding="utf-8")
+
+        dead = [
+            ".".join(path)
+            for path in leaves(DEFAULTS)
+            if not re.search(rf"\b{re.escape(path[-1])}\b", corpus)
+        ]
+        assert dead == [], (
+            f"config keys nothing reads: {dead}. Each is a setting the product "
+            "documents and then ignores. Wire it up or remove it."
+        )
+
     def test_every_config_helper_is_called_somewhere(self):
         import ast
 
@@ -301,6 +337,96 @@ class TestNoDeadConfig:
             f"Config helpers with no caller in app/: {dead}. "
             "A config key nothing reads is a promise the product does not keep."
         )
+
+
+# ── Config is a trust boundary ────────────────────────────────────────────────
+
+
+class TestConfigTrustBoundary:
+    """
+    Config is fetched from the DEFAULT BRANCH, never from a PR head.
+
+    This looks like a missing `?ref=` and has been mistaken for a bug. It is a
+    security control: config decides who may merge, whether auto-merge runs,
+    whether secrets are scanned, and whether the bot runs at all. Honouring it
+    from a PR head would let any outside contributor escalate privileges by
+    editing the YAML inside their own pull request.
+    """
+
+    def test_config_fetch_is_not_ref_pinned_to_a_branch(self):
+        import inspect
+
+        from app.core import config as config_mod
+
+        src = inspect.getsource(config_mod)
+        fetch_line = next(
+            line for line in src.splitlines() if "contents/.ai-repo-manager.yml" in line
+        )
+        assert "ref=" not in fetch_line, (
+            "config must be read from the default branch. Adding ?ref= to honour "
+            "a PR head would let a contributor grant themselves merge rights by "
+            "editing config inside their own PR."
+        )
+
+    def test_the_reason_is_documented_at_the_call_site(self):
+        """A future reader must not 'fix' this into a vulnerability."""
+        import inspect
+
+        from app.core import config as config_mod
+
+        src = inspect.getsource(config_mod)
+        idx = src.index("contents/.ai-repo-manager.yml")
+        preceding = src[max(0, idx - 1200) : idx]
+        assert "default branch" in preceding.lower()
+        assert "auto_merge" in preceding or "maintainer_only" in preceding
+
+
+# ── Review targets the code, not the licence files ────────────────────────────
+
+
+class TestReviewFilePrioritisation:
+    """
+    max_files_reviewed used to take files in the order GitHub returned them,
+    which is alphabetical. On a PR touching LICENSE/CONTRIBUTING/MANIFEST the
+    budget was spent before reaching a single source file — and the bot then
+    reported a test-coverage score for code it had never read.
+    """
+
+    def test_source_files_outrank_licences_and_config(self):
+        from app.handlers.pull_request import _file_review_priority as prio
+
+        assert prio("app/core/config.py") > prio("tests/test_x.py")
+        assert prio("tests/test_x.py") > prio("pyproject.toml")
+        assert prio("pyproject.toml") > prio("LICENSE")
+        assert prio("app/main.py") > prio("MANIFEST.in")
+
+    def test_the_pr_79_file_set_now_selects_source_files(self):
+        """Regression against the exact case that exposed this."""
+        from app.handlers.pull_request import _file_review_priority as prio
+
+        files = [
+            ".claude-plugin/marketplace.json",
+            "CONTRIBUTING.md",
+            "LICENSE",
+            "LICENSE-APACHE",
+            "LICENSE-MIT",
+            "MANIFEST.in",
+            "app/ai/guarded.py",
+            "app/core/config.py",
+            "app/handlers/pull_request.py",
+            "tests/test_v7_noise.py",
+        ]
+        top = sorted(files, key=prio, reverse=True)[:4]
+        assert all(f.startswith(("app/", "tests/")) for f in top), top
+        assert "LICENSE" not in top
+
+    def test_larger_changes_win_within_the_same_tier(self):
+        """A 200-line change matters more than a 2-line one of the same kind."""
+        from app.handlers.pull_request import _review_sort_key
+
+        big = {"filename": "app/b.py", "additions": 200, "deletions": 10}
+        small = {"filename": "app/a.py", "additions": 2, "deletions": 0}
+        assert sorted([small, big], key=_review_sort_key, reverse=True)[0] is big
 
 
 # ── Published numbers are true ────────────────────────────────────────────────

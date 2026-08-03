@@ -105,7 +105,7 @@ Install the GitHub App on your repos, then:
 
 ```bash
 curl https://github-autopilot-1.onrender.com/ping
-# → {"status": "ok", "version": "7.0.0"}
+# → {"status": "ok", "version": "7.1.0"}
 ```
 
 > **Cold starts** — the demo instance runs on Render's free tier. A scheduled
@@ -270,10 +270,28 @@ commands:
     maintainer_only: [merge, rollback, release]
 
 bot:
+  enabled: true               # master kill switch — false stops everything
   footer: "*Powered by GitHub Autopilot*"
+
+commands:
+  enabled: [fix, explain, health]   # optional allow-list; omit to keep all commands
 ```
 
 All keys are validated on load — bad values log a warning and fall back to safe defaults.
+
+**Config is read from your default branch, never from a pull request.** This is
+deliberate: config decides who may merge, whether auto-merge runs, and whether
+secrets are scanned, so honouring it from a PR head would let any contributor
+grant themselves those rights by editing the file inside their own PR. Config
+changes take effect once merged — the same trust boundary GitHub Actions applies
+to workflow permissions.
+
+Two behaviours worth knowing:
+
+- Omitting `commands.enabled` means *no restriction* — every command stays
+  available. It is an allow-list, not a registry, so you never have to keep it in
+  sync with new releases. An explicit `enabled: []` disables everything.
+- `bot.enabled: false` stops all handlers: PRs, issues, pushes, CI and commands.
 
 ---
 
@@ -289,7 +307,7 @@ python server.py
 ```
 
 ```bash
-pytest tests/ -v              # 1038 tests, 79% coverage — the CI badge is the live number
+pytest tests/ -v              # 1051 tests, 79% coverage — the CI badge is the live number
 ruff check app/               # lint
 ```
 
@@ -312,6 +330,18 @@ Found a vulnerability? Please email rather than opening a public issue.
 ---
 
 ## Changelog
+
+### V7.1.0 — 2026-08-03
+
+Pre-launch audit. The theme is configuration the product documented and then ignored.
+
+- **Thirteen dead config keys wired or removed.** `bot.enabled` — the documented master kill switch — had zero callers, so setting it to `false` left the bot fully active. `commands.enabled` was never enforced. `auto_merge.allowed_risk_levels` was never consulted, so a user restricting auto-merge to low-risk PRs still had high-risk ones merged. Every `notifications.on_*` toggle was ignored. `ai.primary_model` and friends sat in repo config where nothing could read them — model choice is a deployment concern (the router is a process-wide singleton), so they are now `LLM_PRIMARY_MODEL` / `LLM_FALLBACK_MODEL` env vars.
+- **`/ignore` is now maintainer-only.** It writes to persistent repo memory, which V7 injects into every later prompt, but it was ungated: any commenter on a public repo could poison the context all subsequent commands saw — stored prompt injection that outlives the comment.
+- **Per-repo AI budget is enforced.** `check_repo_rate_limit()` and `increment_repo_usage()` existed with zero callers, so `REPO_DAILY_AI_LIMIT` did nothing and one busy repository could drain the whole free-tier quota.
+- **Review targets code, not licence files.** The review budget is spent by file kind first, then change size. Previously files were taken in GitHub's alphabetical order, so a PR touching `LICENSE`/`CONTRIBUTING`/`MANIFEST` exhausted the budget before reaching a single source file — and then reported a coverage score for code it had never read.
+- **The command registry is no longer duplicated.** It lived in four places and had already drifted; `ALL_COMMANDS` is now the only source, and an absent `commands.enabled` means "no restriction" rather than "everything off".
+- Config is documented as read from the default branch, never a PR head — a trust boundary, since config decides who may merge. Pinned by a test so it is not "fixed" into a privilege-escalation hole.
+- New `tests/test_prelaunch_audit.py` checks these as classes rather than cases: every config key must be read, every `Config` helper must have a caller, any command reaching `remember()` must be gated, every command must be documented, and versions must agree across all manifests.
 
 ### V7.0.0 — 2026-07-27
 

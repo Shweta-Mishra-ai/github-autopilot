@@ -322,20 +322,66 @@ class TestCLIWorkerConfig:
 # ══════════════════════════════════════════════════════
 # 7. .ai-repo-manager.yml footer
 # ══════════════════════════════════════════════════════
+def _footer_of(yaml_text: str) -> str:
+    """
+    The bot.footer VALUE from a config document.
+
+    Parsing rather than grepping the raw text is the point: comments,
+    thresholds and every other key are not the footer, and must not be
+    mistaken for it.
+    """
+    import yaml
+    parsed = yaml.safe_load(yaml_text) or {}
+    return ((parsed.get('bot') or {}).get('footer') or '')
+
+
 class TestYMLFooter:
 
-    def test_no_hardcoded_version(self):
-        import re
+    def _yml(self) -> str:
         with open(str(_ROOT / '.ai-repo-manager.yml'), encoding='utf-8') as f:
-            src = f.read()
-        assert not re.search(r'v\d+\.\d+', src), (
-            "Footer must not contain hardcoded version number"
+            return f.read()
+
+    def test_no_hardcoded_version(self):
+        """
+        bot.footer must not embed a version — it goes stale on every release,
+        and the live value is already available from app.__version__.
+        """
+        import re
+        footer = _footer_of(self._yml())
+        assert not re.search(r'v\d+\.\d+', footer), (
+            f"bot.footer must not contain a hardcoded version number: {footer!r}"
         )
 
+    def test_version_in_a_comment_does_not_trip_the_check(self):
+        """
+        Regression: this test used to scan the ENTIRE file, so a version
+        number written in a YAML *comment* failed it — with an assertion
+        message that pointed at the footer. That cost real debugging time
+        when a comment mentioning "v6.3.0" turned main red.
+        """
+        import re
+        doc = (
+            "bot:\n"
+            '  footer: "\\n\\n---\\n*🤖 GitHub Autopilot*"\n'
+            "\n"
+            "pull_requests:\n"
+            "  # The v6.3.0 bot reviews only the first N files.\n"
+            "  code_review: false\n"
+        )
+        assert not re.search(r'v\d+\.\d+', _footer_of(doc))
+
+    def test_a_version_in_the_footer_is_still_caught(self):
+        """The check must not have been loosened into uselessness."""
+        import re
+        doc = 'bot:\n  footer: "*🤖 GitHub Autopilot v6.3.0*"\n'
+        assert re.search(r'v\d+\.\d+', _footer_of(doc))
+
+    def test_missing_bot_section_is_safe(self):
+        assert _footer_of("pull_requests:\n  code_review: true\n") == ''
+
     def test_footer_references_product(self):
-        with open(str(_ROOT / '.ai-repo-manager.yml'), encoding='utf-8') as f:
-            src = f.read()
-        assert 'GitHub Autopilot' in src or 'AI Repo Manager' in src
+        footer = _footer_of(self._yml())
+        assert 'GitHub Autopilot' in footer or 'AI Repo Manager' in footer
 
 
 if __name__ == "__main__":

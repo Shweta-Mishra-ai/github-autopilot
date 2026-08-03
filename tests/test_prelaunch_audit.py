@@ -314,6 +314,63 @@ class TestNoDeadConfig:
             "documents and then ignores. Wire it up or remove it."
         )
 
+    def test_no_config_key_backs_an_unreachable_feature(self):
+        """
+        Stricter than "is the key read". A key can be read by a filter that
+        nothing ever reaches — notifications.on_health_degraded passed the
+        read-check while notify_health_degraded() had no caller, so the
+        notification could never fire under any circumstance.
+
+        For each notification toggle, the function it governs must be
+        reachable from somewhere other than its own definition.
+        """
+        import ast
+
+        from app.github.notifications import _CONFIG_EVENT_KEYS
+
+        called: set[str] = set()
+        for path in list(Path("app").rglob("*.py")) + [Path("server.py")]:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Call):
+                    fn = node.func
+                    if isinstance(fn, ast.Name):
+                        called.add(fn.id)
+                    elif isinstance(fn, ast.Attribute):
+                        called.add(fn.attr)
+
+        unreachable = [
+            f"notify_{event}"
+            for event in _CONFIG_EVENT_KEYS
+            if f"notify_{event}" not in called
+        ]
+        assert unreachable == [], (
+            f"these notifications are configurable but can never fire: {unreachable}. "
+            "A toggle for an unreachable feature is a promise the product cannot keep."
+        )
+
+    def test_archived_repositories_are_not_acted_on(self):
+        """
+        check_archived_repo() had zero callers, so the bot commented on,
+        labelled and reviewed archived repositories — which are read-only by
+        intent.
+        """
+        import ast
+
+        called: set[str] = set()
+        for path in Path("app/handlers").rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Call):
+                    fn = node.func
+                    if isinstance(fn, ast.Name):
+                        called.add(fn.id)
+                    elif isinstance(fn, ast.Attribute):
+                        called.add(fn.attr)
+        assert "check_archived_repo" in called, (
+            "no handler checks whether the repository is archived"
+        )
+
     def test_every_config_helper_is_called_somewhere(self):
         import ast
 

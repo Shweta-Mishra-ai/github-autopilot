@@ -28,9 +28,6 @@ NOTIFY_FILTER: dict[str, bool] = {
     "high_risk_pr": True,
     "pr_opened": True,
     "new_issue": True,
-    "health_degraded": True,
-    "ci_failure": True,
-    "stale_closed": True,
     "all_providers_down": True,
     "vulnerability_low": False,
     "commit_lint": False,
@@ -59,7 +56,6 @@ _EMOJIS: dict[str, str] = {
 _CONFIG_EVENT_KEYS = {
     "secret_detected": "on_secret_detected",
     "high_risk_pr": "on_high_risk_pr",
-    "health_degraded": "on_health_degraded",
     "all_providers_down": "on_all_providers_down",
 }
 
@@ -237,32 +233,6 @@ def notify_high_risk_pr(repo: str, pr_number: int, title: str, config=None):
     )
 
 
-def notify_health_degraded(repo: str, grade: str, score: int, config=None):
-    notify(
-        title="Repo Health Degraded",
-        message=f"Repository health is now **{grade}** ({score}/100).",
-        severity="warning",
-        repo=repo,
-        event_type="health_degraded",
-        config=config,
-        fields=[
-            {"name": "Grade", "value": grade, "inline": True},
-            {"name": "Score", "value": f"{score}/100", "inline": True},
-        ],
-    )
-
-
-def notify_ci_failure(repo: str, branch: str, error: str):
-    notify(
-        title="CI Failure",
-        message=error[:500],
-        severity="warning",
-        repo=repo,
-        event_type="ci_failure",
-        fields=[{"name": "Branch", "value": f"`{branch}`", "inline": True}],
-    )
-
-
 def notify_new_issue(repo: str, issue_number: int, title: str, labels: list):
     # FIXED (E741): Renamed `l` → `lbl`
     label_str = ", ".join(f"`{lbl}`" for lbl in labels[:5]) or "none"
@@ -293,22 +263,6 @@ def notify_pr_opened(repo: str, pr_number: int, title: str, risk: str = "unknown
             {"name": "Risk", "value": f"{risk_emoji} {risk.capitalize()}", "inline": True},
         ],
         url=f"https://github.com/{repo}/pull/{pr_number}",
-    )
-
-
-def notify_stale_closed(repo: str, issue_number: int, title: str, days_inactive: int):
-    notify(
-        title="Stale Issue Auto-Closed",
-        message=f"Issue #{issue_number} closed after {days_inactive} days of inactivity.",
-        severity="info",
-        repo=repo,
-        event_type="stale_closed",
-        fields=[
-            {"name": "Issue", "value": f"#{issue_number}", "inline": True},
-            {"name": "Inactive", "value": f"{days_inactive} days", "inline": True},
-            {"name": "Title", "value": title[:200]},
-        ],
-        url=f"https://github.com/{repo}/issues/{issue_number}",
     )
 
 

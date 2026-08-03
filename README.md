@@ -307,7 +307,7 @@ python server.py
 ```
 
 ```bash
-pytest tests/ -v              # 1051 tests, 79% coverage — the CI badge is the live number
+pytest tests/ -v              # 1053 tests, 79% coverage — the CI badge is the live number
 ruff check app/               # lint
 ```
 

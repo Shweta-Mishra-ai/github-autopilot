@@ -84,7 +84,6 @@ DEFAULTS: dict = {
         "discord": False,
         "on_secret_detected": True,
         "on_high_risk_pr": True,
-        "on_health_degraded": True,
         "on_all_providers_down": True,
     },
     "labels": {

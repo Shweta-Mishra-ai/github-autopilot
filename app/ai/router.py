@@ -92,8 +92,15 @@ def _quality_floor_active() -> bool:
 
 class LLMRouter:
     def __init__(self):
-        self._groq_70b = GroqProvider("llama-3.3-70b-versatile")
-        self._groq_8b = GroqProvider("llama-3.1-8b-instant")
+        # Model choice is a DEPLOYMENT concern, not a per-repo one: this
+        # router is a process-wide singleton serving every installation, so a
+        # repo-level override would let one tenant pick a model that drains
+        # another's quota tier. It was previously declared in repo config
+        # (ai.primary_model) where nothing could read it.
+        self._groq_70b = GroqProvider(
+            os.environ.get("LLM_PRIMARY_MODEL", "llama-3.3-70b-versatile")
+        )
+        self._groq_8b = GroqProvider(os.environ.get("LLM_FALLBACK_MODEL", "llama-3.1-8b-instant"))
         self._gemini = None
         self._openrouter = None
         self._ollama = None

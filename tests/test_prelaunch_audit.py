@@ -531,6 +531,20 @@ class TestPublishedNumbersAreTrue:
         assert len(documented) >= len(ALL_COMMANDS)
         assert "/rollback" in documented, "argument placeholders must still count"
 
+    def test_headline_command_count_is_correct(self):
+        """
+        The "N slash commands" claim at the top of the README is the first
+        number a reader checks. It said 26 while the registry held 27.
+        """
+        from app.handlers.comments.constants import ALL_COMMANDS
+
+        claims = re.findall(r"\*\*(\d+) slash commands\*\*", self._readme())
+        assert claims, "the headline command-count claim has moved or been removed"
+        for claimed in claims:
+            assert int(claimed) == len(ALL_COMMANDS), (
+                f"README claims {claimed} slash commands, registry has {len(ALL_COMMANDS)}"
+            )
+
     def test_version_is_consistent_everywhere(self):
         """A stale version string in any manifest is a launch-day embarrassment."""
         import json

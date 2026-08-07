@@ -423,27 +423,11 @@ Pre-launch audit. The theme is configuration the product documented and then ign
 
 ## Contributing
 
-Contributions are welcome — bug reports, security findings, docs, and code alike.
-Start with [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, test
-commands, and coding conventions.
+Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the
+development setup, test commands, and coding conventions.
 
-**Good places to start**
-
-| If you want to… | Look at |
-|---|---|
-| Fix a bug | Issues labelled [`good first issue 👋`](https://github.com/Shweta-Mishra-ai/github-autopilot/labels/good%20first%20issue%20%F0%9F%91%8B) |
-| Report a security issue | [SECURITY.md](docs/security/) — please report privately first |
-| Improve AI output quality | `evals/` — add a case, then run `python -m evals.run` |
-| Add a provider | `app/ai/providers/` — subclass `LLMProvider`, register in `router.py` |
-
-**Ground rules that make review fast**
-
-- One concern per PR. A focused 40-line diff lands; a 300-line rewrite of a core
-  module stalls.
-- Tests assert on **rendered output**, not on internal return values. This project
-  shipped four user-visible bugs past a 908-test suite because the tests checked
-  what functions returned rather than what users saw.
-- `python -m pytest -q` and `ruff check app/` must pass. CI runs Python 3.10–3.12.
+Before opening a PR: `python -m pytest -q` and `ruff check app/` must pass.
+CI runs Python 3.10, 3.11 and 3.12.
 
 ---
 

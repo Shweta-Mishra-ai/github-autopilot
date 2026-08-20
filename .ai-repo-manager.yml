@@ -24,6 +24,10 @@ issues:
 push:
   enabled: true
   enforce_conventional_commits: true
+  # Bot comments a rewritten Conventional Commits message on badly-named
+  # commits, derived from the files they changed. Set false to keep the
+  # lint report without comments on your commit history.
+  suggest_commit_messages: true
   create_issue_threshold: 3
   scan_secrets: true
   scan_dependencies: true

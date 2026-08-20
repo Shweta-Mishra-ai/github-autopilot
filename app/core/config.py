@@ -53,6 +53,10 @@ DEFAULTS: dict = {
     "push": {
         "enabled": True,
         "enforce_conventional_commits": True,
+        # Comment a rewritten Conventional Commits message on each poorly-named
+        # commit. Separate from enforce_conventional_commits so an operator can
+        # keep the report without a bot commenting on their commit history.
+        "suggest_commit_messages": True,
         "create_issue_threshold": 3,
         "scan_secrets": True,
         "scan_dependencies": True,

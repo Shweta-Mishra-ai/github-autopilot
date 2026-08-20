@@ -212,6 +212,10 @@ def health():
                 # working") otherwise looks nothing like its cause.
                 "permission_check_failures": metrics.get("auth.permission_check_failed", 0),
             },
+            # Notifications are delivered on daemon threads, so a rejected
+            # webhook only ever produced a log line nobody reads. "Slack went
+            # quiet" is now answerable without grepping logs.
+            "notifications": _notification_status(),
         }
     ), 200 if overall == "ok" else 207
 
@@ -402,6 +406,31 @@ def _queue_stats() -> dict:
     from app.core.event_queue import queue_stats
 
     return queue_stats()
+
+
+def _notification_status() -> dict:
+    """
+    Whether each channel is configured, and how its deliveries have gone.
+
+    `configured: false` means no webhook URL is set for that channel — the most
+    common reason notifications "stop working", and previously invisible.
+    """
+    from app.github.notifications import discord_enabled, slack_enabled
+
+    out = {}
+    for channel, configured in (
+        ("slack", slack_enabled()),
+        ("discord", discord_enabled()),
+    ):
+        sent = metrics.get(f"notifications.{channel}.sent", 0)
+        failed = metrics.get(f"notifications.{channel}.failed", 0)
+        out[channel] = {
+            "configured": configured,
+            "sent": sent,
+            "failed": failed,
+            "status": "ok" if configured and not failed else ("failing" if failed else "off"),
+        }
+    return out
 
 
 def _boot():

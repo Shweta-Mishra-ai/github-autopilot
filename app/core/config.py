@@ -87,8 +87,17 @@ DEFAULTS: dict = {
     # secret_detection, which is real. A user override still merges cleanly
     # because ConfidenceGate reads config.get("confidence", "thresholds").
     "notifications": {
-        "slack": False,
-        "discord": False,
+        # These are per-repo OVERRIDES, not the master switch. The deployment
+        # decides whether a channel exists at all, by setting SLACK_WEBHOOK_URL
+        # / DISCORD_WEBHOOK_URL; a repo sets these to false to opt out of a
+        # channel that is otherwise configured.
+        #
+        # They defaulted to False, which silently disabled every notification
+        # that passes a repo config — the operator set a webhook URL, the URL
+        # was valid, and nothing ever arrived. Defaulting to True means
+        # "inherit the deployment", which is what an unset key should mean.
+        "slack": True,
+        "discord": True,
         "on_secret_detected": True,
         "on_high_risk_pr": True,
         "on_all_providers_down": True,

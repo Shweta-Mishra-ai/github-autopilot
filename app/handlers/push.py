@@ -114,6 +114,15 @@ def handle(payload: dict) -> None:
         if config.get("push", "enforce_conventional_commits", default=True):
             _lint_commits(repo, commits, token, config, log)
 
+        # Writes the replacement message rather than only naming the problem.
+        # Runs on the same branches as the lint it complements, and is its own
+        # config switch: an operator who wants the report without a bot
+        # commenting on their commits can have exactly that.
+        if config.get("push", "suggest_commit_messages", default=True):
+            from app.handlers.commit_message import suggest_commit_messages
+
+            suggest_commit_messages(repo, commits, token, config, log)
+
     _index_changed_files(repo, commits, token, latest_sha, log)
 
 

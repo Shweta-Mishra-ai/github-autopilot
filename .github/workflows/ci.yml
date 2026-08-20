@@ -12,6 +12,13 @@ on:
 permissions:
   contents: read
 
+# A new push to the same branch supersedes the run already in flight. Without
+# this, a branch pushed three times queues three full matrices and the useful
+# result waits behind two obsolete ones.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
 
   # ── Lint ─────────────────────────────────────────────────────────────────────
@@ -123,14 +130,12 @@ jobs:
           LOG_FORMAT: "text"
         run: |
           pytest tests/ \
-            -v \
             --tb=short \
             --cov=app \
             --cov-report=xml \
             --cov-report=term-missing \
-            --cov-fail-under=60 \
-            -m "not e2e and not integration" \
-            -x
+            --cov-fail-under=80 \
+            -m "not e2e and not integration"
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
@@ -160,6 +165,39 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip-audit --requirement requirements.txt --ignore-vuln PYSEC-2023-62
+
+  # ── Static analysis of our own code ──────────────────────────────────────────
+  # pip-audit only covers third-party CVEs. This scans app/ itself for the
+  # injection / unsafe-call / weak-crypto classes that a dependency audit
+  # cannot see. Separate job so a SAST finding does not mask a dependency CVE.
+  sast:
+    name: SAST (bandit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install bandit
+        run: pip install "bandit[toml]==1.8.0"
+
+      - name: Scan application code
+        # Skips live in pyproject.toml [tool.bandit], so a local
+        # `bandit -c pyproject.toml -r app/ --severity-level medium`
+        # reproduces CI exactly.
+        #
+        # MEDIUM floor: the remaining LOW findings are all `except: pass` on
+        # deliberately-optional paths (analytics, audit writes) that were
+        # audited individually. Failing on them would train everyone to ignore
+        # this job, which is worse than not running it.
+        run: |
+          bandit -c pyproject.toml -r app/ server.py worker.py \
+            --severity-level medium \
+            --confidence-level medium
 
   # ── Test-count badge (main only) ─────────────────────────────────────────────
   # Publishes the real pytest pass count from THIS run to the `badges` branch.
@@ -220,7 +258,7 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    needs: [test, lint, security]
+    needs: [test, lint, security, sast]
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write

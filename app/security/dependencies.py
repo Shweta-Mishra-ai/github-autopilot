@@ -101,20 +101,28 @@ class DepFinding:
         return self.severity in ISSUE_SEVERITIES and self.cve_id not in ACCEPTED_CVES
 
 
+# Matches `package==version`, tolerating extras (`celery[redis]==5.3.6`) and a
+# trailing comment. Anything else — ranges, markers, -r includes, VCS URLs — is
+# skipped, because a pin is the only form this scanner can match against a CVE.
+_PIN_RE = re.compile(r"^([a-zA-Z0-9_\-\[\]]+)==([^\s#]+)")
+
+
 def parse_requirements(content: str) -> list[dict]:
     """Parse requirements.txt content into a list of package dictionaries."""
     packages = []
-    lines = content.strip().splitlines()
-    for line in lines:
+    for line in (content or "").strip().splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
-        match = re.match(r"^([a-zA-Z0-9_\-\[\]]+)==([^\s#]+)", line)
+        match = _PIN_RE.match(line)
         if not match:
             continue
-        pkg = match.group(1).lower().split("[")[0]
-        version = match.group(2)
-        packages.append({"name": pkg, "version": version})
+        packages.append(
+            {
+                "name": match.group(1).lower().split("[")[0],  # strip extras
+                "version": match.group(2),
+            }
+        )
     return packages
 
 
@@ -123,34 +131,23 @@ def scan_requirements_txt(content: str) -> list[DepFinding]:
     Scan requirements.txt content for known vulnerabilities.
     Returns ALL findings (caller decides what to act on).
     """
+    # Parsing is delegated rather than repeated: this function used to carry a
+    # byte-identical copy of the loop in parse_requirements(), so a fix to one
+    # (e.g. tolerating a new pin syntax) silently missed the other.
     findings = []
-    lines = content.strip().splitlines()
-
-    for line in lines:
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-
-        # Parse package==version
-        match = re.match(r"^([a-zA-Z0-9_\-\[\]]+)==([^\s#]+)", line)
-        if not match:
-            continue
-
-        pkg = match.group(1).lower().split("[")[0]  # strip extras like [redis]
-        version = match.group(2)
-
+    for pkg in parse_requirements(content):
+        name, version = pkg["name"], pkg["version"]
         for vuln_pkg, ver_pattern, severity, cve_id, desc in KNOWN_VULNS:
-            if pkg == vuln_pkg and re.match(ver_pattern, version):
+            if name == vuln_pkg and re.match(ver_pattern, version):
                 findings.append(
                     DepFinding(
-                        package=pkg,
+                        package=name,
                         version=version,
                         severity=severity,
                         cve_id=cve_id,
                         description=desc,
                     )
                 )
-
     return findings
 
 

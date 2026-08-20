@@ -89,7 +89,10 @@ class OllamaProvider(LLMProvider):
 
         try:
             # Local inference on CPU can be slow — give it more headroom.
-            r = http_requests.post(f"{host}/api/chat", json=body, timeout=max(timeout, 120))
+            # nosec B113 — a timeout IS set; bandit cannot evaluate max(...).
+            r = http_requests.post(  # nosec B113
+                f"{host}/api/chat", json=body, timeout=max(timeout, 120)
+            )
 
             try:
                 status = int(r.status_code)

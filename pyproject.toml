@@ -100,6 +100,18 @@ omit = [
     "tests/*",
 ]
 
+# ── Bandit (SAST) ────────────────────────────────────────────────────────────
+# Complements pip-audit: that covers third-party CVEs, this covers our own code.
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "build", "dist"]
+# Report MEDIUM and HIGH only. LOW is dominated by findings that are noise in
+# this codebase (asserts in helpers, binding to 0.0.0.0 in a container) and a
+# scanner nobody can keep green is a scanner everyone learns to ignore.
+skips = [
+    "B101",  # assert_used — asserts are not used for runtime enforcement here
+    "B104",  # hardcoded_bind_all_interfaces — required inside a container
+]
+
 [tool.coverage.report]
 exclude_lines = [
     "pragma: no cover",

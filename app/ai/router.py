@@ -7,6 +7,12 @@ Provider chain (free tier):
   2. Groq 8B    — fast
   3. Gemini Flash — long context
   4. OpenRouter  — emergency fallback
+
+Routing *policy* — task tiers, quotas, cost, and the operator privacy/quality
+switches — lives in app/ai/routing_policy.py. This module owns the stateful
+half: lazily-built provider clients behind locks, selection, retry, fallback
+and telemetry. Every policy name is re-exported below, so existing imports
+(`from app.ai.router import TASK_MAP`) are unaffected.
 """
 
 import datetime
@@ -17,77 +23,42 @@ import threading
 from app.ai.circuit_breaker import AllProvidersDown, get_breaker
 from app.ai.providers.base import LLMProvider, LLMResponse
 from app.ai.providers.groq import GroqProvider
+from app.ai.routing_policy import (
+    COST_PER_1K,
+    DAILY_LIMITS,
+    MAX_SYSTEM_CHARS,
+    MAX_USER_CHARS,
+    PROVIDER_TIER,
+    QUALITY_SENSITIVE_TASK_TYPES,
+    TASK_MAP,
+    blocked_by_quality_floor,
+    local_only,
+    prefer_local,
+    quality_floor_active,
+)
 
 log = logging.getLogger(__name__)
 
-TASK_MAP: dict[str, str] = {
-    "issue_label": "fast",
-    "commit_lint": "fast",
-    "pr_summary": "fast",
-    "is_duplicate": "fast",
-    "budget": "fast",
-    "pr_title_rewrite": "standard",
-    "code_review": "standard",
-    "fix_command": "standard",
-    "test_generation": "standard",
-    "explain": "standard",
-    "improve": "standard",
-    "refactor": "standard",
-    "ci_analysis": "standard",
-    "gaps": "standard",
-    "perf": "standard",
-    "arch": "standard",
-    "changelog": "standard",
-    "docs": "standard",
-    "pr_analysis": "deep",
-    "security_report": "deep",
-    "issue_triage": "deep",
-    "health_report": "deep",
-    "full_file_analysis": "long",
-    "large_pr_review": "long",
-}
-
-DAILY_LIMITS = {
-    "groq_70b": {"tokens": 80_000, "requests": 5_000},
-    "groq_8b": {"tokens": 400_000, "requests": 12_000},
-    "gemini": {"tokens": 800_000, "requests": 1_200},
-    "openrouter": {"tokens": 50_000, "requests": 200},
-}
-
-MAX_SYSTEM_CHARS = 3_000
-MAX_USER_CHARS = 8_000
-
-COST_PER_1K = {
-    "groq_70b": 0.0009,
-    "groq_8b": 0.00006,
-    "gemini": 0.0,
-    "openrouter": 0.0,
-    "ollama": 0.0,  # local — free and private
-}
-
-# Quality tiers for the LLM_QUALITY_FLOOR guard. "basic" providers are fine
-# for fast tasks (labels, lint) but produce visibly weaker code reviews/fixes.
-# Ollama counts as "high": running local is an explicit operator choice.
-PROVIDER_TIER = {
-    "groq_70b": "high",
-    "gemini": "high",
-    "ollama": "high",
-    "groq_8b": "basic",
-    "openrouter": "basic",
-}
-
-# Task types where output quality is the product (reviews, fixes, analyses).
-QUALITY_SENSITIVE_TASK_TYPES = {"standard", "deep", "long"}
+__all__ = [
+    "LLMRouter",
+    "router",
+    "COST_PER_1K",
+    "DAILY_LIMITS",
+    "MAX_SYSTEM_CHARS",
+    "MAX_USER_CHARS",
+    "PROVIDER_TIER",
+    "QUALITY_SENSITIVE_TASK_TYPES",
+    "TASK_MAP",
+    "blocked_by_quality_floor",
+    "last_model_disclosure",
+    "reset_last_call",
+]
 
 
+# Backwards-compatible alias — this was a module-level private in router.py and
+# is referenced by name in tests.
 def _quality_floor_active() -> bool:
-    """
-    LLM_QUALITY_FLOOR=high → quality-sensitive tasks refuse to run on a
-    basic-tier provider instead of silently degrading. Users see an honest
-    "providers down, retry later" rather than an 8B model reviewing their
-    code with no disclosure. Fast tasks (labels, commit lint) are unaffected.
-    """
-    return os.environ.get("LLM_QUALITY_FLOOR", "").strip().lower() == "high"
+    return quality_floor_active()
 
 
 class LLMRouter:
@@ -108,19 +79,15 @@ class LLMRouter:
         self._openrouter_lock = threading.Lock()
         self._ollama_lock = threading.Lock()
 
+    # Thin delegations to routing_policy so the env-var contract lives in one
+    # place; kept as methods because call sites and tests reference them here.
     @staticmethod
     def _local_only() -> bool:
-        """
-        LLM_LOCAL_ONLY=1 → NO cloud provider is ever contacted. Source code
-        stays on your infrastructure. If Ollama is down, calls fail closed
-        (AllProvidersDown) rather than silently leaking to a cloud provider.
-        """
-        return os.environ.get("LLM_LOCAL_ONLY", "").strip().lower() in ("1", "true", "yes")
+        return local_only()
 
     @staticmethod
     def _prefer_local() -> bool:
-        """LLM_PREFER_LOCAL=1 → try Ollama first, fall back to cloud if it fails."""
-        return os.environ.get("LLM_PREFER_LOCAL", "").strip().lower() in ("1", "true", "yes")
+        return prefer_local()
 
     def _get_ollama(self) -> "LLMProvider | None":
         from app.ai.providers.ollama import is_configured
@@ -379,13 +346,13 @@ class LLMRouter:
         candidates = [self._groq_70b, self._groq_8b, self._get_gemini(), self._get_openrouter()]
         if self._prefer_local():
             candidates.insert(0, self._get_ollama())
-        task_type = TASK_MAP.get(task, "standard")
-        if _quality_floor_active() and task_type in QUALITY_SENSITIVE_TASK_TYPES:
-            candidates = [
-                p
-                for p in candidates
-                if p is not None and PROVIDER_TIER.get(p.provider_key, "basic") == "high"
-            ]
+        # One predicate rather than re-deriving "floor on AND task sensitive AND
+        # provider basic" at each site — the two copies could drift apart.
+        candidates = [
+            p
+            for p in candidates
+            if p is not None and not blocked_by_quality_floor(p.provider_key, task)
+        ]
         return candidates
 
     def _try_fallback(

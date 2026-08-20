@@ -555,7 +555,7 @@
       "id": "app.core.snapshot",
       "path": "app/core/snapshot.py",
       "layer": "core",
-      "loc": 260,
+      "loc": 290,
       "functions": 9,
       "classes": 0,
       "is_package": false,
@@ -872,7 +872,7 @@
       "id": "app.handlers.comments.publisher",
       "path": "app/handlers/comments/publisher.py",
       "layer": "handlers",
-      "loc": 556,
+      "loc": 587,
       "functions": 10,
       "classes": 1,
       "is_package": false,
@@ -2625,7 +2625,7 @@
   "stats": {
     "modules": 85,
     "edges": 245,
-    "total_loc": 17125,
+    "total_loc": 17186,
     "layers": [
       "ai",
       "core",
@@ -2695,16 +2695,16 @@
         "fan_out": 1
       },
       {
+        "id": "app.handlers.comments.publisher",
+        "loc": 587,
+        "fan_in": 2,
+        "fan_out": 11
+      },
+      {
         "id": "app.ai.circuit_breaker",
         "loc": 132,
         "fan_in": 12,
         "fan_out": 0
-      },
-      {
-        "id": "app.intelligence.memory",
-        "loc": 286,
-        "fan_in": 5,
-        "fan_out": 2
       }
     ],
     "orphans": [

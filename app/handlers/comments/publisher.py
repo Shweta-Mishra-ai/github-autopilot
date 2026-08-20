@@ -275,17 +275,37 @@ def cmd_rollback(
     if not confirm:
         return f"## ⚠️ Confirm Rollback\n\n**Snapshot #{n}** — `{snap_ts}` trigger: `{snap.get('trigger', 'unknown')}`\n\n**Actions to undo:**\n{action_lines}\n\n{'*(and more...)*' if len(bot_actions) > 5 else ''}\n\n**Proceed:** `/rollback {n} confirm`\n**Cancel:** ignore this message"
 
-    # Take safety snapshot first — abort if it fails
+    # Take a safety snapshot first — abort if it fails.
+    #
+    # take_snapshot() catches its own exceptions and returns None, so the
+    # try/except that used to guard this could never fire: a failed safety
+    # snapshot was swallowed and the rollback proceeded anyway, with nothing
+    # to undo it. The return value is what has to be checked.
     try:
-        take_snapshot(repo, token, trigger=f"pre_rollback_by_{author}")
-    except Exception as exc:
-        log.error(f"cmd_rollback safety snapshot failed: {exc}")
-        return f"## ⚠️ Rollback Aborted\n\nCould not create a safety snapshot before rolling back.\n\nError: `{str(exc)[:200]}`\n\nRollback was **not** performed."
+        safety_id = take_snapshot(repo, token, trigger=f"pre_rollback_by_{author}")
+    except Exception as exc:  # defensive — take_snapshot should not raise
+        log.error(f"cmd_rollback safety snapshot raised: {exc}")
+        safety_id = None
+
+    if not safety_id:
+        log.error(f"cmd_rollback.aborted repo={repo} — safety snapshot failed")
+        return (
+            "## ⚠️ Rollback Aborted\n\n"
+            "Could not create a safety snapshot before rolling back, so there "
+            "would be no way to undo this. Rollback was **not** performed.\n\n"
+            "This usually means Redis or the GitHub API is unavailable. "
+            "Check `/health` and try again."
+        )
 
     restored: list[str] = []
     failed: list[str] = []
 
-    for action in reversed(bot_actions):
+    # Newest action first. bot_actions arrives newest-first already, so the
+    # previous `reversed()` undid oldest-first — and undoing is LIFO. With two
+    # recorded title edits on one PR (X->Y then Y->Z), oldest-first restores X
+    # and then Y, leaving the intermediate title; newest-first restores Y then
+    # X, which is the original.
+    for action in bot_actions:
         action_type = action.get("type", "")
         num = action.get("number")
         try:
@@ -315,8 +335,19 @@ def cmd_rollback(
                     failed.append(f"remove labels from #{num}: {'; '.join(label_errors)}")
                 else:
                     restored.append(f"Removed labels from #{num}")
+            elif action_type and not num:
+                # A known type with no target is unusable, and silently
+                # skipping it reported "Rollback Complete" for work not done.
+                failed.append(f"{action_type}: no issue/PR number recorded")
             else:
+                # Reported, not just logged. This branch means the snapshot
+                # holds an action this version cannot undo — the user needs to
+                # know it survived the rollback rather than reading "Complete".
                 log.warning(f"cmd_rollback: unknown action type {action_type!r}, skipping")
+                failed.append(
+                    f"`{action_type or 'unrecognised'}` on #{num or '?'}: "
+                    f"no undo is implemented for this action type"
+                )
 
         except GitHubError as exc:
             failed.append(f"{action_type} #{num or '?'}: {str(exc)[:80]}")

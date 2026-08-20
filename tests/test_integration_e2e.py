@@ -239,7 +239,10 @@ class TestAuthGatedEndpointsEndToEnd:
             headers={"Authorization": "Bearer right-key"},
         )
         assert resp.status_code == 200
-        assert len(resp.get_json()["tools"]) == 8
+        # Derived, not a literal — see test_mcp.py for the reasoning.
+        from app.mcp.tools import MCP_TOOLS
+
+        assert len(resp.get_json()["tools"]) == len(MCP_TOOLS)
 
     def test_dashboard_serves_without_leaking_configured_token(self, client, monkeypatch, srv):
         monkeypatch.setattr(srv, "METRICS_TOKEN", "super-secret-do-not-leak")

@@ -77,11 +77,29 @@ class TestMCPProtocol:
         assert resp["protocolVersion"] == "2024-11-05"
         assert resp["serverInfo"]["name"] == "github-autopilot"
 
-    def test_tools_list_returns_8_tools(self):
+    def test_tools_list_returns_the_whole_catalog(self):
+        """Derived from MCP_TOOLS, not a literal: a hardcoded count fails on
+        every tool added and tests nothing about the response beyond arithmetic.
+        What matters is that tools/list advertises exactly the catalog."""
         mod = _import_mcp()
         resp, status = mod.handle_mcp_request("tools/list", {}, _TEST_KEY)
         assert status == 200
-        assert len(resp["tools"]) == 8
+        assert len(resp["tools"]) == len(mod.MCP_TOOLS)
+        assert {t["name"] for t in resp["tools"]} == {t["name"] for t in mod.MCP_TOOLS}
+
+    def test_every_advertised_tool_has_a_handler(self):
+        """A tool in the catalog with no handler is advertised but unusable."""
+        mod = _import_mcp()
+        for tool in mod.MCP_TOOLS:
+            assert tool["name"] in mod.TOOL_HANDLERS, (
+                f"{tool['name']} is advertised by tools/list but has no handler"
+            )
+
+    def test_every_handler_is_advertised(self):
+        mod = _import_mcp()
+        advertised = {t["name"] for t in mod.MCP_TOOLS}
+        for name in mod.TOOL_HANDLERS:
+            assert name in advertised, f"{name} has a handler but is not advertised"
 
     def test_each_tool_has_required_fields(self):
         mod = _import_mcp()

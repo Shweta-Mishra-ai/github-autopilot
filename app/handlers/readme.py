@@ -33,9 +33,37 @@ import base64
 import logging
 import re
 
-from app.github.client import gh_get, gh_post, gh_put, GitHubError
-
 log = logging.getLogger(__name__)
+
+
+# The GitHub client is reached through these wrappers rather than imported at
+# module level, because it pulls in `requests` (and transitively `cryptography`)
+# and nothing on the --check path needs an HTTP client to render a markdown
+# table. The CI job that runs `--check` installs no dependencies -- the AST
+# extractor is pure stdlib -- so a module-level import here made that job fail
+# with ModuleNotFoundError.
+#
+# Same delegating-wrapper shape as app/handlers/comments/security.py, which
+# also keeps `patch.object(readme, "gh_get")` working in tests.
+
+
+def gh_get(*a, **kw):
+    from app.github.client import gh_get as _impl
+
+    return _impl(*a, **kw)
+
+
+def gh_post(*a, **kw):
+    from app.github.client import gh_post as _impl
+
+    return _impl(*a, **kw)
+
+
+def gh_put(*a, **kw):
+    from app.github.client import gh_put as _impl
+
+    return _impl(*a, **kw)
+
 
 MARKER_RE_TEMPLATE = (
     r"(?P<start><!--\s*autopilot:{name}:start\s*-->)"
@@ -57,7 +85,7 @@ _DEDUP_TTL_SECONDS = 24 * 3600
 
 def render_stats() -> str:
     """Counts that are true by construction rather than by memory."""
-    from app.handlers.comments.constants import ALL_COMMANDS
+    from app.core.commands import ALL_COMMANDS
     from app.intelligence.codegraph import build_graph
     from app.mcp.tools import MCP_TOOLS
 
@@ -79,8 +107,7 @@ def render_stats() -> str:
 
 def render_commands() -> str:
     """The command list, from the registry the dispatcher actually reads."""
-    from app.core.authorization import RESTRICTED_COMMANDS
-    from app.handlers.comments.constants import ALL_COMMANDS
+    from app.core.commands import ALL_COMMANDS, RESTRICTED_COMMANDS
 
     rows = [
         "| Command | Access |",
@@ -211,6 +238,12 @@ def maybe_update_readme(repo, commits, token, config, log_ctx) -> bool:
     README_SELF_UPDATE_REPO for exactly that reason.
     """
     import os
+
+    # Imported here, not at module scope: an `except GitHubError` clause is
+    # evaluated at exception time, so the name must be bound before the try —
+    # but binding it at import time would drag `requests` into the dependency
+    # free --check path.
+    from app.github.client import GitHubError
 
     try:
         allowed = os.environ.get("README_SELF_UPDATE_REPO", "").strip()

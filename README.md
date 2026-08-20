@@ -123,11 +123,11 @@ Comment `/health` on any issue. The bot replies with a repo health grade. Done. 
 <!-- autopilot:stats:start -->
 | | |
 |---|---|
-| Modules | 84 |
-| Lines of code | 16,595 |
+| Modules | 85 |
+| Lines of code | 16,668 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 244 |
+| Internal imports | 245 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>
@@ -202,7 +202,7 @@ code. Explore it interactively at [`/graph`](#codebase-map), or regenerate with
 ```mermaid
 graph LR
     ai["ai<br/>14 modules"]
-    core["core<br/>20 modules"]
+    core["core<br/>21 modules"]
     github["github<br/>8 modules"]
     handlers["handlers<br/>21 modules"]
     intelligence["intelligence<br/>6 modules"]

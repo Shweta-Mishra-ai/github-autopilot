@@ -20,6 +20,7 @@ ALLOWED for maintainer-only commands: admin, maintain, write
 
 import logging
 import threading
+from app.core.commands import RESTRICTED_COMMANDS as _RESTRICTED_COMMANDS
 from app.github.client import gh_get, GitHubError
 
 log = logging.getLogger(__name__)
@@ -40,21 +41,10 @@ MAINTAINER_PERMISSIONS = {"admin", "maintain", "write"}
 # owner reading "your access level: none" has no way to find the real problem.
 PERMISSION_UNKNOWN = "unknown"
 
-# Commands that require at least write/maintain/admin access
-RESTRICTED_COMMANDS = {
-    "/merge",
-    "/rollback",
-    "/release",
-    "/autofix",
-    "/apply",  # Auto-mutates repo state
-    "/secfull",  # Sensitive report — internal data
-    # Writes to persistent repo memory, which is injected into every
-    # subsequent AI prompt. Ungated, any commenter on a public repo could
-    # poison the context every later command sees — a stored prompt-injection
-    # vector that outlives the comment. Its own docstring always said
-    # "maintainer preference"; this makes that true.
-    "/ignore",
-}
+# Re-exported from app.core.commands — see there for why each command is
+# on the list. Kept importable from this module: it is where callers and
+# tests already look for it.
+RESTRICTED_COMMANDS = _RESTRICTED_COMMANDS
 
 
 def get_user_permission(repo: str, username: str, token: str) -> str:

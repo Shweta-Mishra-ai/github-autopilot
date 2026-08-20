@@ -271,12 +271,12 @@
       "id": "app.core.authorization",
       "path": "app/core/authorization.py",
       "layer": "core",
-      "loc": 205,
+      "loc": 195,
       "functions": 4,
       "classes": 0,
       "is_package": false,
-      "fan_in": 2,
-      "fan_out": 2,
+      "fan_in": 1,
+      "fan_out": 3,
       "external_deps": [
         "app",
         "logging",
@@ -300,6 +300,20 @@
         "hashlib",
         "json",
         "logging"
+      ]
+    },
+    {
+      "id": "app.core.commands",
+      "path": "app/core/commands.py",
+      "layer": "core",
+      "loc": 75,
+      "functions": 0,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 3,
+      "fan_out": 0,
+      "external_deps": [
+        "__future__"
       ]
     },
     {
@@ -808,13 +822,15 @@
       "id": "app.handlers.comments.constants",
       "path": "app/handlers/comments/constants.py",
       "layer": "handlers",
-      "loc": 52,
+      "loc": 27,
       "functions": 0,
       "classes": 0,
       "is_package": false,
-      "fan_in": 3,
-      "fan_out": 0,
-      "external_deps": []
+      "fan_in": 2,
+      "fan_out": 1,
+      "external_deps": [
+        "app"
+      ]
     },
     {
       "id": "app.handlers.comments.dispatcher",
@@ -1064,12 +1080,12 @@
       "id": "app.handlers.readme",
       "path": "app/handlers/readme.py",
       "layer": "handlers",
-      "loc": 356,
-      "functions": 10,
+      "loc": 389,
+      "functions": 13,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 7,
+      "fan_out": 6,
       "external_deps": [
         "__future__",
         "app",
@@ -1541,6 +1557,11 @@
     },
     {
       "source": "app.core.authorization",
+      "target": "app.core.commands",
+      "kind": "import"
+    },
+    {
+      "source": "app.core.authorization",
       "target": "app.core.metrics",
       "kind": "runtime"
     },
@@ -1777,6 +1798,11 @@
     {
       "source": "app.handlers.comments",
       "target": "app.handlers.comments.service",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.constants",
+      "target": "app.core.commands",
       "kind": "import"
     },
     {
@@ -2351,7 +2377,7 @@
     },
     {
       "source": "app.handlers.readme",
-      "target": "app.core.authorization",
+      "target": "app.core.commands",
       "kind": "runtime"
     },
     {
@@ -2367,11 +2393,6 @@
     {
       "source": "app.handlers.readme",
       "target": "app.github.client",
-      "kind": "import"
-    },
-    {
-      "source": "app.handlers.readme",
-      "target": "app.handlers.comments.constants",
       "kind": "runtime"
     },
     {
@@ -2601,9 +2622,9 @@
     }
   ],
   "stats": {
-    "modules": 84,
-    "edges": 244,
-    "total_loc": 16595,
+    "modules": 85,
+    "edges": 245,
+    "total_loc": 16668,
     "layers": [
       "ai",
       "core",

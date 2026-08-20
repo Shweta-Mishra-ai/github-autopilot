@@ -199,6 +199,72 @@ jobs:
             --severity-level medium \
             --confidence-level medium
 
+  # ── Codebase map ─────────────────────────────────────────────────────────────
+  # Regenerates docs/diagrams/codegraph.json from the AST. This is the whole
+  # point of generating the map instead of drawing it: a committed diagram goes
+  # quietly wrong three refactors later, and nothing tells you.
+  #
+  # On a PR it only verifies the file is current, so a reviewer sees structural
+  # drift in the diff. On main it commits the refresh.
+  codegraph:
+    name: Codebase map
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Regenerate the graph
+        # Pure stdlib ast — no dependencies to install, and it never imports
+        # the code it reads.
+        run: |
+          python -m app.intelligence.codegraph app server.py worker.py \
+            --entrypoint app \
+            --entrypoint server \
+            --entrypoint worker \
+            --entrypoint app.dashboard \
+            --entrypoint app.graphview \
+            --out docs/diagrams/codegraph.json
+
+      - name: Report structure
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          s = json.load(open("docs/diagrams/codegraph.json"))["stats"]
+          print("## Codebase map\n")
+          print(f"- **{s['modules']}** modules, **{s['edges']}** imports, "
+                f"**{s['total_loc']:,}** lines")
+          if s.get("cycles"):
+              print(f"- ⚠️ **{len(s['cycles'])}** import cycle(s):")
+              for c in s["cycles"]:
+                  print(f"  - `{' → '.join(c)}`")
+          else:
+              print("- ✅ no import cycles")
+          if s.get("orphans"):
+              print(f"- **{len(s['orphans'])}** module(s) nothing imports:")
+              for o in s["orphans"]:
+                  print(f"  - `{o}`")
+          print("\n### Hotspots\n")
+          print("| Module | Lines | Imported by |")
+          print("|---|---:|---:|")
+          for h in s["hotspots"][:8]:
+              print(f"| `{h['id']}` | {h['loc']} | {h['fan_in']} |")
+          PY
+
+      - name: Fail if the committed map is stale (PRs only)
+        if: github.event_name == 'pull_request'
+        run: |
+          if ! git diff --quiet -- docs/diagrams/codegraph.json; then
+            echo "::error::docs/diagrams/codegraph.json is out of date. Run:"
+            echo "::error::python -m app.intelligence.codegraph app server.py worker.py --out docs/diagrams/codegraph.json"
+            git diff --stat -- docs/diagrams/codegraph.json
+            exit 1
+          fi
+
   # ── Test-count badge (main only) ─────────────────────────────────────────────
   # Publishes the real pytest pass count from THIS run to the `badges` branch.
   # README's "tests: N passing" badge reads that JSON via shields.io/endpoint,

@@ -117,6 +117,53 @@ def dashboard():
     return dashboard_html(), 200, {"Content-Type": "text/html; charset=utf-8"}
 
 
+@app.route("/graph", methods=["GET"])
+def graph():
+    """
+    Interactive codebase map (HTML). Like /dashboard, the shell holds no secret
+    — it fetches /graph.json with a token the operator pastes in.
+    """
+    from app.graphview import graph_html
+
+    return graph_html(), 200, {"Content-Type": "text/html; charset=utf-8"}
+
+
+@app.route("/graph.json", methods=["GET"])
+def graph_json():
+    """
+    The generated dependency graph.
+
+    Auth-gated with the same token as /health: a dependency graph is a map of
+    the codebase — module names, sizes, and what depends on what — and should
+    not be public on a private deployment.
+
+    Served from the file CI commits, not built per-request: walking and parsing
+    every module on a web request would be slow and would report the *deployed*
+    tree, which for an installed package is not the repository anyone is
+    looking at.
+    """
+    if not _authorized(request):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    path = os.environ.get("CODEGRAPH_PATH", "docs/diagrams/codegraph.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return app.response_class(fh.read(), mimetype="application/json")
+    except FileNotFoundError:
+        return jsonify(
+            {
+                "error": "No graph generated yet",
+                "hint": (
+                    "python -m app.intelligence.codegraph app server.py worker.py "
+                    "--out docs/diagrams/codegraph.json"
+                ),
+            }
+        ), 404
+    except OSError as e:
+        log.error(f"graph_json.read_failed path={path}: {e}")
+        return jsonify({"error": "Could not read graph"}), 500
+
+
 @app.route("/health", methods=["GET"])
 def health():
     """

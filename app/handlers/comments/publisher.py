@@ -7,7 +7,6 @@ Commands that write to GitHub: /merge, /apply, /rollback, /release,
 from __future__ import annotations
 
 import logging
-import os
 import re
 
 import contextlib
@@ -450,137 +449,7 @@ Return JSON:
         return f"## ⚠️ Release failed: `{str(exc)[:200]}`"
 
 
-def cmd_runtests(repo: str, token_or_issue_number: str | int, token: str | None = None) -> str:
-    """Trigger CI workflow via workflow_dispatch."""
-    actual_token = token if token is not None else str(token_or_issue_number)
-    try:
-        repo_data = gh_get(f"/repos/{repo}", actual_token)
-        default_branch = repo_data.get("default_branch", "main")
-        workflows_data = gh_get(f"/repos/{repo}/actions/workflows", actual_token)
-        all_workflows = (
-            workflows_data.get("workflows", []) if isinstance(workflows_data, dict) else []
-        )
-
-        TEST_NAMES = ("test", "ci", "pytest", "check", "lint", "build")
-        test_workflow = next(
-            (
-                wf
-                for wf in all_workflows
-                if any(
-                    n in wf.get("path", "").lower() or n in wf.get("name", "").lower()
-                    for n in TEST_NAMES
-                )
-            ),
-            None,
-        )
-
-        if not test_workflow:
-            wf_names = [w.get("name", w.get("path", "?")) for w in all_workflows[:5]]
-            existing = (
-                f"\nExisting workflows: {', '.join(f'`{n}`' for n in wf_names)}" if wf_names else ""
-            )
-            return (
-                f"## ⚠️ No Test Workflow Found{existing}\n\n"
-                "Create a workflow (e.g. test.yml or ci.yml) with `workflow_dispatch` trigger to enable `/runtests`."
-            )
-
-        wf_id = test_workflow["id"]
-        wf_name = test_workflow.get("name", "Test workflow")
-        wf_file = test_workflow.get("path", "").split("/")[-1]
-        wf_url = f"https://github.com/{repo}/actions/workflows/{wf_file}"
-
-        try:
-            gh_post(
-                f"/repos/{repo}/actions/workflows/{wf_id}/dispatches",
-                actual_token,
-                {"ref": default_branch},
-            )
-        except GitHubError as exc:
-            if exc.status_code == 422:
-                return (
-                    f"## ⚠️ Workflow Cannot Be Dispatched\n\n"
-                    f"Add `workflow_dispatch:` trigger to `{wf_file}`."
-                )
-            if exc.status_code == 403:
-                return "## ⚠️ Permission Denied\n\nGitHub App needs `actions: write` permission."
-            raise
-
-        return (
-            f"## 🧪 Tests Triggered\n\n"
-            f"**Workflow:** `{wf_name}`\n"
-            f"**Branch:** `{default_branch}`\n\n"
-            f"[View runs]({wf_url})"
-        )
-
-    except GitHubError as exc:
-        return f"## ⚠️ Could not trigger tests: `{str(exc)[:200]}`"
-    except Exception as exc:
-        log.error(f"cmd_runtests error: {exc}")
-        return f"## ⚠️ Could not trigger tests: `{str(exc)[:200]}`"
-
-
-def cmd_notify(
-    repo: str,
-    issue_number: int,
-    issue: dict,
-    token: str,
-    cmd_args: str,
-) -> str:
-    """Send Discord/Slack notification about this issue or PR."""
-    discord_url = os.environ.get("DISCORD_WEBHOOK_URL", "")
-    slack_url = os.environ.get("SLACK_WEBHOOK_URL", "")
-
-    if not discord_url and not slack_url:
-        return (
-            "## ⚠️ Notifications Not Configured\n\n"
-            "Add `DISCORD_WEBHOOK_URL` or `SLACK_WEBHOOK_URL` to your Render env vars."
-        )
-
-    try:
-        from app.github.notifications import send_rich_discord
-
-        title = issue.get("title", f"Issue #{issue_number}")
-        is_pr = "pull_request" in issue
-        labels = [lb.get("name", "") for lb in issue.get("labels", [])]
-        kind = "PR" if is_pr else "Issue"
-        url = issue.get("html_url", f"https://github.com/{repo}/issues/{issue_number}")
-        custom_msg = (cmd_args or "").strip()
-
-        color = 0x5865F2  # Discord blurple
-        for lb in labels:
-            lb_l = lb.lower()
-            if any(w in lb_l for w in ("bug", "security", "critical")):
-                color = 0xE74C3C
-                break
-            if any(w in lb_l for w in ("feature", "enhancement")):
-                color = 0x2ECC71
-                break
-
-        desc_parts = [f"**Repo:** `{repo}`", f"**Labels:** {', '.join(labels) or 'none'}"]
-        if custom_msg:
-            desc_parts.append(f"**Note:** {custom_msg[:200]}")
-
-        success, msg = send_rich_discord(
-            title=f"🔔 {kind} #{issue_number} — {title[:80]}",
-            description="\n".join(desc_parts),
-            color=color,
-            fields=[
-                {"name": "Type", "value": kind, "inline": True},
-                {"name": "Number", "value": f"#{issue_number}", "inline": True},
-                {"name": "Repo", "value": repo, "inline": False},
-            ],
-            url=url,
-        )
-
-        channels = [c for c, u in [("Discord", discord_url), ("Slack", slack_url)] if u]
-        if success:
-            return (
-                f"## 🔔 Notification Sent\n\n"
-                f"Alert posted to: **{', '.join(channels)}**\n\n"
-                f"**{kind} #{issue_number}:** {title[:80]}"
-            )
-        return f"## ⚠️ Notification Failed\n\nWebhook error: `{msg[:200]}`"
-
-    except Exception as exc:
-        log.error(f"cmd_notify error: {exc}")
-        return f"## ⚠️ Notify error: `{str(exc)[:200]}`"
+# Moved to integrations.py when this module crossed the package's line ceiling.
+# Re-exported because `from .publisher import cmd_runtests` is how the package
+# __init__ and the test suite reach them.
+from .integrations import cmd_notify, cmd_runtests  # noqa: E402,F401

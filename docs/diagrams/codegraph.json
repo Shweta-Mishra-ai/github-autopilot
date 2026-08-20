@@ -335,7 +335,7 @@
       "id": "app.core.config",
       "path": "app/core/config.py",
       "layer": "core",
-      "loc": 366,
+      "loc": 375,
       "functions": 4,
       "classes": 1,
       "is_package": false,
@@ -490,7 +490,7 @@
       "functions": 1,
       "classes": 1,
       "is_package": false,
-      "fan_in": 8,
+      "fan_in": 9,
       "fan_out": 0,
       "external_deps": [
         "collections",
@@ -659,7 +659,7 @@
       "functions": 9,
       "classes": 2,
       "is_package": false,
-      "fan_in": 21,
+      "fan_in": 22,
       "fan_out": 1,
       "external_deps": [
         "app",
@@ -686,12 +686,12 @@
       "id": "app.github.notifications",
       "path": "app/github/notifications.py",
       "layer": "github",
-      "loc": 411,
-      "functions": 14,
+      "loc": 517,
+      "functions": 20,
       "classes": 0,
       "is_package": false,
-      "fan_in": 6,
-      "fan_out": 2,
+      "fan_in": 7,
+      "fan_out": 3,
       "external_deps": [
         "app",
         "datetime",
@@ -813,7 +813,7 @@
       "functions": 0,
       "classes": 0,
       "is_package": false,
-      "fan_in": 10,
+      "fan_in": 11,
       "fan_out": 10,
       "external_deps": [
         "app"
@@ -869,11 +869,28 @@
       ]
     },
     {
+      "id": "app.handlers.comments.integrations",
+      "path": "app/handlers/comments/integrations.py",
+      "layer": "handlers",
+      "loc": 201,
+      "functions": 4,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 3,
+      "external_deps": [
+        "__future__",
+        "app",
+        "logging",
+        "os"
+      ]
+    },
+    {
       "id": "app.handlers.comments.publisher",
       "path": "app/handlers/comments/publisher.py",
       "layer": "handlers",
-      "loc": 587,
-      "functions": 10,
+      "loc": 456,
+      "functions": 8,
       "classes": 1,
       "is_package": false,
       "fan_in": 2,
@@ -884,7 +901,6 @@
         "contextlib",
         "json",
         "logging",
-        "os",
         "re",
         "time"
       ]
@@ -1357,12 +1373,12 @@
       "id": "server",
       "path": "server.py",
       "layer": "other",
-      "loc": 424,
-      "functions": 20,
+      "loc": 453,
+      "functions": 21,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 21,
+      "fan_out": 22,
       "external_deps": [
         "app",
         "flask",
@@ -1692,6 +1708,11 @@
       "kind": "runtime"
     },
     {
+      "source": "app.github.notifications",
+      "target": "app.core.metrics",
+      "kind": "runtime"
+    },
+    {
       "source": "app.github.rate_limit",
       "target": "app.core.redis_client",
       "kind": "runtime"
@@ -1862,6 +1883,21 @@
       "kind": "runtime"
     },
     {
+      "source": "app.handlers.comments.integrations",
+      "target": "app.github.client",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.integrations",
+      "target": "app.github.notifications",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.integrations",
+      "target": "app.handlers.comments",
+      "kind": "import"
+    },
+    {
       "source": "app.handlers.comments.publisher",
       "target": "app.core.guardrails",
       "kind": "runtime"
@@ -1893,11 +1929,6 @@
     },
     {
       "source": "app.handlers.comments.publisher",
-      "target": "app.github.notifications",
-      "kind": "runtime"
-    },
-    {
-      "source": "app.handlers.comments.publisher",
       "target": "app.handlers.comments",
       "kind": "import"
     },
@@ -1905,6 +1936,11 @@
       "source": "app.handlers.comments.publisher",
       "target": "app.handlers.comments",
       "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.publisher",
+      "target": "app.handlers.comments.integrations",
+      "kind": "import"
     },
     {
       "source": "app.handlers.comments.publisher",
@@ -2563,6 +2599,11 @@
     },
     {
       "source": "server",
+      "target": "app.github.notifications",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
       "target": "app.github.rate_limit",
       "kind": "runtime"
     },
@@ -2623,9 +2664,9 @@
     }
   ],
   "stats": {
-    "modules": 85,
-    "edges": 245,
-    "total_loc": 17186,
+    "modules": 86,
+    "edges": 250,
+    "total_loc": 17400,
     "layers": [
       "ai",
       "core",
@@ -2639,6 +2680,7 @@
     "cycles": [
       [
         "app.handlers.comments",
+        "app.handlers.comments.integrations",
         "app.handlers.comments.publisher",
         "app.handlers.comments.reviewer",
         "app.handlers.comments.security",
@@ -2661,14 +2703,14 @@
       {
         "id": "app.github.client",
         "loc": 215,
-        "fan_in": 21,
+        "fan_in": 22,
         "fan_out": 1
       },
       {
         "id": "app.github.notifications",
-        "loc": 411,
-        "fan_in": 6,
-        "fan_out": 2
+        "loc": 517,
+        "fan_in": 7,
+        "fan_out": 3
       },
       {
         "id": "app.security.enhanced_secrets",
@@ -2678,7 +2720,7 @@
       },
       {
         "id": "app.core.config",
-        "loc": 366,
+        "loc": 375,
         "fan_in": 6,
         "fan_out": 1
       },
@@ -2695,16 +2737,16 @@
         "fan_out": 1
       },
       {
-        "id": "app.handlers.comments.publisher",
-        "loc": 587,
-        "fan_in": 2,
-        "fan_out": 11
-      },
-      {
         "id": "app.ai.circuit_breaker",
         "loc": 132,
         "fan_in": 12,
         "fan_out": 0
+      },
+      {
+        "id": "app.intelligence.memory",
+        "loc": 286,
+        "fan_in": 5,
+        "fan_out": 2
       }
     ],
     "orphans": [

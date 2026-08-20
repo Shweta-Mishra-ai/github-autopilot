@@ -123,11 +123,11 @@ Comment `/health` on any issue. The bot replies with a repo health grade. Done. 
 <!-- autopilot:stats:start -->
 | | |
 |---|---|
-| Modules | 85 |
-| Lines of code | 17,186 |
+| Modules | 86 |
+| Lines of code | 17,400 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 245 |
+| Internal imports | 250 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>
@@ -204,7 +204,7 @@ graph LR
     ai["ai<br/>14 modules"]
     core["core<br/>21 modules"]
     github["github<br/>8 modules"]
-    handlers["handlers<br/>21 modules"]
+    handlers["handlers<br/>22 modules"]
     intelligence["intelligence<br/>6 modules"]
     mcp["mcp<br/>4 modules"]
     other["other<br/>5 modules"]

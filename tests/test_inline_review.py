@@ -179,7 +179,7 @@ def _run_review(review, post_mock, sticky_mock=None):
     # The real validator now runs per-entry — patching it out would hide the
     # summary/verdict contract this suite is meant to protect.
     with patch("app.handlers.pull_request.router.ask", return_value=(review, meta)), \
-         patch("app.handlers.pull_request.gh_post", post_mock), \
+         patch("app.handlers.pull_request.review.gh_post", post_mock), \
          patch("app.handlers.pull_request.upsert_sticky", sticky_mock or MagicMock()):
         from app.handlers.pull_request import _post_inline_review, _review_code
 

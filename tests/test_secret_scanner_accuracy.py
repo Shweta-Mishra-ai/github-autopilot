@@ -137,12 +137,24 @@ def _real_secret_cases():
 
 @pytest.mark.parametrize("name", sorted(_real_secret_cases()))
 def test_real_secret_is_always_reported(name):
-    diff = _real_secret_cases()[name]
-    findings = scan_diff(diff, file_path=SCANNED_FILE)
-    assert findings, (
-        f"MISSED a real {name}. Check whether its entropy gate is reachable: "
-        f"entropy is capped at log2(min(alphabet, length)) bits per character, "
-        f"so a hex value can never exceed 4.0."
+    """
+    Repeated across independent random samples on purpose.
+
+    A single draw only shows that detection is *possible*. Short secrets
+    under-sample their own alphabet by chance, so a threshold tuned against one
+    lucky sample makes detection probabilistic — a scanner that finds a
+    credential nine times out of ten is not a scanner anyone can rely on.
+    """
+    misses = []
+    for _ in range(40):
+        diff = _real_secret_cases()[name]
+        if not scan_diff(diff, file_path=SCANNED_FILE):
+            misses.append(diff)
+    assert not misses, (
+        f"MISSED a real {name} on {len(misses)}/40 random samples — detection "
+        f"is probabilistic. Entropy is capped at log2(min(alphabet, length)) "
+        f"bits per character, and short strings fall well below that ceiling "
+        f"by chance."
     )
 
 
@@ -164,13 +176,28 @@ class TestEntropyCeiling:
         best = max(_entropy(_rand(HEX, 37)) for _ in range(500))
         assert best < 4.5, "hex should be bounded below the old 4.5-bit gate"
 
-    def test_hex_is_still_recognised_as_random(self):
-        """...and the ratio measure sees it correctly anyway."""
-        assert _looks_random(_rand(HEX, 37)) is True
+    @pytest.mark.parametrize("length", [32, 37, 40, 64])
+    def test_hex_is_reliably_recognised_as_random(self, length):
+        """...and the ratio measure sees it correctly, every time. A 32-char
+        hex string can land on as few as 9 distinct characters by chance, so
+        the floor has to sit below that."""
+        failures = [
+            s for s in (_rand(HEX, length) for _ in range(200)) if not _looks_random(s)
+        ]
+        assert not failures, (
+            f"{len(failures)}/200 random {length}-char hex values were not "
+            f"recognised as random; worst sample had "
+            f"{min(len(set(f)) for f in failures)} distinct characters"
+        )
 
-    def test_ratio_is_scale_free_across_alphabets(self):
-        for alphabet, length in [(HEX, 40), (LOWER_ALNUM, 32), (ALNUM, 48)]:
-            assert _entropy_ratio(_rand(alphabet, length)) > 0.9
+    @pytest.mark.parametrize(
+        "alphabet,length", [(HEX, 40), (LOWER_ALNUM, 32), (ALNUM, 48)]
+    )
+    def test_ratio_is_scale_free_across_alphabets(self, alphabet, length):
+        """The point of the ratio: hex and base64 secrets score alike, where
+        raw bits-per-character put them two full bits apart."""
+        worst = min(_entropy_ratio(_rand(alphabet, length)) for _ in range(200))
+        assert worst > 0.80
 
     def test_repetitive_string_is_rejected_despite_perfect_ratio(self):
         """"abcabc..." uses its alphabet perfectly uniformly — ratio alone would
@@ -190,9 +217,13 @@ class TestEntropyCeiling:
         assert _entropy_ratio(bad) == 0.0
 
     def test_distinct_floor_is_what_excludes_hex_from_the_unanchored_path(self):
-        """Hex has 16 symbols; the unanchored detector requires 20."""
+        """Hex has 16 symbols; the unanchored detector requires 20, so no
+        digest can ever reach it however random it looks."""
         assert len(set(HEX)) < 20
-        assert MIN_DISTINCT_CHARS <= 16, "anchored gate must still accept hex"
+        assert MIN_DISTINCT_CHARS <= 9, (
+            "anchored gate must accept hex, which can land on 9 distinct "
+            "characters in a 32-char sample"
+        )
 
 
 class TestStructuralRecognition:

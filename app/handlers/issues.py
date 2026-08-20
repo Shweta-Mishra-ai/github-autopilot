@@ -87,10 +87,16 @@ def handle(payload: dict):
     # Archived repositories are read-only by intent. check_archived_repo()
     # existed with zero callers, so the bot commented, labelled and reviewed
     # on them regardless.
+    #
+    # One fetch, two uses. This endpoint was requested twice per issue event —
+    # once for `archived`, once for `language` — for a response that cannot
+    # change between the two lines. Reusing the value is strictly better than
+    # caching it: no TTL to reason about, no staleness, no Redis dependency.
+    repo_meta: dict = {}
     try:
         from app.core.guardrails import check_archived_repo
 
-        repo_meta = gh_get(f"/repos/{repo}", token)
+        repo_meta = gh_get(f"/repos/{repo}", token) or {}
         archived = check_archived_repo(repo_meta)
         if not archived.passed:
             log.info(f"skip_archived repo={repo}: {archived.reason}")
@@ -98,13 +104,8 @@ def handle(payload: dict):
     except Exception as e:
         log.debug(f"archived_check_skipped repo={repo}: {e}")
 
-    # Get repo context for better triage
-    repo_lang = ""
-    try:
-        repo_data = gh_get(f"/repos/{repo}", token)
-        repo_lang = repo_data.get("language", "") or ""
-    except Exception as e:
-        log.info(f"issues.repo_language_fetch_failed: {e}")
+    # Repo context for better triage, from the response already in hand.
+    repo_lang = repo_meta.get("language", "") or ""
 
     if config.get("labels", "auto_create", default=True):
         with contextlib.suppress(Exception):

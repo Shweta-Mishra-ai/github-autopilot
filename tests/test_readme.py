@@ -300,3 +300,136 @@ class TestThisRepositorysReadme:
             f"README regions are stale: {changed}. Regenerate with "
             f"python -m app.handlers.readme"
         )
+
+
+class TestRunsWithoutThirdPartyDependencies:
+    """
+    The `Codebase map` CI job deliberately installs no dependencies — the AST
+    extractor is pure stdlib — and runs both `codegraph` and
+    `python -m app.handlers.readme --check` there.
+
+    A module-level `from app.github.client import ...` in readme.py broke that
+    job with ModuleNotFoundError: no module named 'requests'. It passed locally
+    because a dev venv has everything installed, so only CI could catch it.
+    These tests catch it instead.
+    """
+
+    BLOCKED = frozenset({"requests", "flask", "redis", "groq", "jwt", "cryptography"})
+
+    @staticmethod
+    def _import_with_blocked_deps(module_name, blocked):
+        """Import `module_name` in a subprocess with `blocked` unimportable."""
+        import subprocess
+        import sys
+        import textwrap
+
+        script = textwrap.dedent(f"""
+            import builtins, sys
+            BLOCKED = {set(blocked)!r}
+            _real = builtins.__import__
+            def guard(name, *a, **kw):
+                root = name.split(".")[0]
+                if root in BLOCKED:
+                    raise ModuleNotFoundError("No module named " + repr(root))
+                return _real(name, *a, **kw)
+            builtins.__import__ = guard
+            import {module_name}  # noqa: F401
+            print("IMPORT_OK")
+        """)
+        return subprocess.run(
+            [sys.executable, "-c", script], capture_output=True, text=True, timeout=120
+        )
+
+    def test_codegraph_imports_without_third_party_deps(self):
+        r = self._import_with_blocked_deps("app.intelligence.codegraph", self.BLOCKED)
+        assert "IMPORT_OK" in r.stdout, r.stderr[-1500:]
+
+    def test_readme_module_imports_without_third_party_deps(self):
+        r = self._import_with_blocked_deps("app.handlers.readme", self.BLOCKED)
+        assert "IMPORT_OK" in r.stdout, (
+            "app/handlers/readme.py imports a third-party package at module "
+            "scope. The CI job that runs `--check` installs no dependencies.\n"
+            + r.stderr[-1500:]
+        )
+
+    def test_command_registry_imports_without_third_party_deps(self):
+        """The registry moved to app/core/commands.py for exactly this reason:
+        importing app.handlers.comments.constants executes that package's
+        __init__, which pulls in the GitHub + JWT stack."""
+        r = self._import_with_blocked_deps("app.core.commands", self.BLOCKED)
+        assert "IMPORT_OK" in r.stdout, r.stderr[-1500:]
+
+    def test_every_renderer_runs_without_third_party_deps(self):
+        import subprocess
+        import sys
+        import textwrap
+
+        script = textwrap.dedent(f"""
+            import builtins
+            BLOCKED = {set(self.BLOCKED)!r}
+            _real = builtins.__import__
+            def guard(name, *a, **kw):
+                root = name.split(".")[0]
+                if root in BLOCKED:
+                    raise ModuleNotFoundError("No module named " + repr(root))
+                return _real(name, *a, **kw)
+            builtins.__import__ = guard
+            from app.handlers.readme import REGION_RENDERERS
+            for name, fn in REGION_RENDERERS.items():
+                assert fn().strip(), name
+            print("RENDER_OK")
+        """)
+        r = subprocess.run(
+            [sys.executable, "-c", script], capture_output=True, text=True, timeout=120
+        )
+        assert "RENDER_OK" in r.stdout, r.stderr[-1500:]
+
+    def test_check_cli_runs_without_third_party_deps(self):
+        """End-to-end: exactly what the CI step invokes."""
+        import subprocess
+        import sys
+        import textwrap
+
+        script = textwrap.dedent(f"""
+            import builtins
+            BLOCKED = {set(self.BLOCKED)!r}
+            _real = builtins.__import__
+            def guard(name, *a, **kw):
+                root = name.split(".")[0]
+                if root in BLOCKED:
+                    raise ModuleNotFoundError("No module named " + repr(root))
+                return _real(name, *a, **kw)
+            builtins.__import__ = guard
+            from app.handlers.readme import main
+            code = main(["README.md", "--check"])
+            print("CHECK_EXIT", code)
+        """)
+        r = subprocess.run(
+            [sys.executable, "-c", script], capture_output=True, text=True, timeout=120
+        )
+        assert "CHECK_EXIT 0" in r.stdout, (
+            "python -m app.handlers.readme --check did not succeed with no "
+            "third-party deps installed — this is what CI runs.\n"
+            f"stdout: {r.stdout}\nstderr: {r.stderr[-1500:]}"
+        )
+
+
+class TestRegistryIsSingleSourced:
+    def test_constants_reexports_the_same_object(self):
+        from app.core.commands import ALL_COMMANDS as canonical
+        from app.handlers.comments.constants import ALL_COMMANDS as reexport
+
+        assert reexport is canonical, "a copy would drift; it must be the same object"
+
+    def test_authorization_reexports_the_same_object(self):
+        from app.core.authorization import RESTRICTED_COMMANDS as reexport
+        from app.core.commands import RESTRICTED_COMMANDS as canonical
+
+        assert reexport is canonical
+
+    def test_every_restricted_command_is_a_real_command(self):
+        """A restricted command absent from the registry is unreachable, so its
+        restriction is silently meaningless."""
+        from app.core.commands import ALL_COMMANDS, RESTRICTED_COMMANDS
+
+        assert RESTRICTED_COMMANDS <= set(ALL_COMMANDS)

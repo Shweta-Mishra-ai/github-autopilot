@@ -124,7 +124,7 @@ Comment `/health` on any issue. The bot replies with a repo health grade. Done. 
 | | |
 |---|---|
 | Modules | 85 |
-| Lines of code | 16,668 |
+| Lines of code | 16,962 |
 | Slash commands | 27 |
 | MCP tools | 9 |
 | Internal imports | 245 |

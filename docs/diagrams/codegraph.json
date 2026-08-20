@@ -1275,8 +1275,8 @@
       "id": "app.security.dependencies",
       "path": "app/security/dependencies.py",
       "layer": "security",
-      "loc": 202,
-      "functions": 4,
+      "loc": 375,
+      "functions": 8,
       "classes": 1,
       "is_package": false,
       "fan_in": 3,
@@ -1291,8 +1291,8 @@
       "id": "app.security.enhanced_secrets",
       "path": "app/security/enhanced_secrets.py",
       "layer": "security",
-      "loc": 390,
-      "functions": 7,
+      "loc": 511,
+      "functions": 10,
       "classes": 1,
       "is_package": false,
       "fan_in": 4,
@@ -2624,7 +2624,7 @@
   "stats": {
     "modules": 85,
     "edges": 245,
-    "total_loc": 16668,
+    "total_loc": 16962,
     "layers": [
       "ai",
       "core",
@@ -2677,7 +2677,7 @@
       },
       {
         "id": "app.security.enhanced_secrets",
-        "loc": 390,
+        "loc": 511,
         "fan_in": 4,
         "fan_out": 0
       },

@@ -148,13 +148,25 @@ class TestCache:
             result = _get("test_key")
         assert result == {"key": "value"}
 
-    def test_cache_miss_returns_none(self):
-        from app.core.cache import _get
+    def test_cache_miss_returns_the_miss_sentinel(self):
+        """_get returns a sentinel, not None. Using None for both "not cached"
+        and "cached a null" meant a legitimately-null API response was
+        re-fetched on every single call, forever."""
+        from app.core.cache import _MISS, _get
         mock_r = MagicMock()
         mock_r.get.return_value = None
         with patch("app.core.redis_client.get_redis", return_value=mock_r):
             result = _get("missing_key")
+        assert result is _MISS
+
+    def test_cached_null_is_distinguishable_from_a_miss(self):
+        from app.core.cache import _MISS, _get
+        mock_r = MagicMock()
+        mock_r.get.return_value = b"null"
+        with patch("app.core.redis_client.get_redis", return_value=mock_r):
+            result = _get("key_holding_null")
         assert result is None
+        assert result is not _MISS
 
     def test_make_key_is_deterministic(self):
         from app.core.cache import _make_key
@@ -168,14 +180,19 @@ class TestCache:
         k2 = _make_key("/repos/c/d", "token")
         assert k1 != k2
 
-    def test_get_ttl_pulls(self):
-        from app.core.cache import _get_ttl
-        assert _get_ttl("/repos/x/pulls/1/files") == 300
+    def test_pr_and_commit_paths_are_no_longer_given_their_own_ttl(self):
+        """TTL entries for /pulls/ and /commits/ were removed deliberately.
+        PR files change on every push and a review must see the push that
+        triggered it, so a cached copy would review the wrong diff. They fall
+        back to the repo-metadata TTL only because they sit under /repos/."""
+        from app.core.cache import TTL_MAP
+        assert "/pulls/" not in TTL_MAP
+        assert "/commits/" not in TTL_MAP
+        assert "/contents/" not in TTL_MAP
 
-    def test_get_ttl_commits(self):
-        from app.core.cache import _get_ttl
-        # /repos/ pattern matches first in TTL_MAP for this path
-        assert _get_ttl("/repos/x/commits/abc") == 1800
+    def test_repo_paths_get_the_metadata_ttl(self):
+        from app.core.cache import REPO_METADATA_TTL, _get_ttl
+        assert _get_ttl("/repos/x/y") == REPO_METADATA_TTL
 
     def test_get_ttl_default(self):
         from app.core.cache import _get_ttl

@@ -244,8 +244,24 @@ def _entropy(s: str) -> float:
 # random as a string of its length and alphabet could be", which is the
 # question actually being asked, and it behaves the same for hex, base64 and
 # alphanumeric secrets.
-MIN_DISTINCT_CHARS = 10
-ENTROPY_RATIO_THRESHOLD = 0.92
+# Thresholds set from measurement, not taste. Over 5000 random samples of each
+# real credential shape this codebase has a pattern for, the worst case was:
+#
+#   ratio     0.857  (37-char hex — short strings under-sample their alphabet)
+#   distinct  9      (32-char hex)
+#
+# Both bounds sit below those worst cases with margin, because this gate is
+# only ever reached after a keyword anchor has already matched ("aws...secret",
+# "datadog...", "password="). The anchor supplies the specificity; the gate
+# only has to separate a credential from a placeholder sitting in the same
+# position, and placeholders are caught by _is_false_positive() and by the
+# distinct-character floor ("changeme", "xxxxxxxx", "0000...").
+#
+# The unanchored entropy-only detector at the bottom of scan_diff() has no such
+# anchor and is held to a much stricter bar. That is where false positives come
+# from, and that is where the strictness belongs.
+MIN_DISTINCT_CHARS = 8
+ENTROPY_RATIO_THRESHOLD = 0.80
 
 
 def _entropy_ratio(s: str) -> float:

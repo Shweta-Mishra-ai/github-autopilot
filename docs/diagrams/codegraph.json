@@ -288,8 +288,8 @@
       "id": "app.core.cache",
       "path": "app/core/cache.py",
       "layer": "core",
-      "loc": 106,
-      "functions": 9,
+      "loc": 209,
+      "functions": 12,
       "classes": 0,
       "is_package": false,
       "fan_in": 0,
@@ -518,7 +518,7 @@
       "id": "app.core.redis_client",
       "path": "app/core/redis_client.py",
       "layer": "core",
-      "loc": 454,
+      "loc": 497,
       "functions": 5,
       "classes": 1,
       "is_package": false,
@@ -526,6 +526,7 @@
       "fan_out": 0,
       "external_deps": [
         "__future__",
+        "fnmatch",
         "logging",
         "os",
         "redis",
@@ -958,7 +959,7 @@
       "id": "app.handlers.issues",
       "path": "app/handlers/issues.py",
       "layer": "handlers",
-      "loc": 284,
+      "loc": 285,
       "functions": 2,
       "classes": 0,
       "is_package": false,
@@ -1291,7 +1292,7 @@
       "id": "app.security.enhanced_secrets",
       "path": "app/security/enhanced_secrets.py",
       "layer": "security",
-      "loc": 511,
+      "loc": 527,
       "functions": 10,
       "classes": 1,
       "is_package": false,
@@ -2624,7 +2625,7 @@
   "stats": {
     "modules": 85,
     "edges": 245,
-    "total_loc": 16962,
+    "total_loc": 17125,
     "layers": [
       "ai",
       "core",
@@ -2647,7 +2648,7 @@
     "hotspots": [
       {
         "id": "app.core.redis_client",
-        "loc": 454,
+        "loc": 497,
         "fan_in": 26,
         "fan_out": 0
       },
@@ -2670,16 +2671,16 @@
         "fan_out": 2
       },
       {
+        "id": "app.security.enhanced_secrets",
+        "loc": 527,
+        "fan_in": 4,
+        "fan_out": 0
+      },
+      {
         "id": "app.core.config",
         "loc": 366,
         "fan_in": 6,
         "fan_out": 1
-      },
-      {
-        "id": "app.security.enhanced_secrets",
-        "loc": 511,
-        "fan_in": 4,
-        "fan_out": 0
       },
       {
         "id": "app.ai.validator",

@@ -135,8 +135,23 @@ class TestRateLimitAndAuthorization:
         dispatch.assert_not_called()
         common_mocks["post"].assert_called_once()
         _, _, body = common_mocks["post"].call_args[0]
-        assert "Permission Denied" in body["body"]
+        assert "Not Run" in body["body"]
         assert "needs write access" in body["body"]
+
+    def test_denial_header_does_not_assert_a_cause(self, common_mocks):
+        """The header must not claim "requires maintainer access" — when the
+        permission API itself failed, that framing points the maintainer at
+        their own account instead of the App installation."""
+        common_mocks["perm"].return_value = (
+            False,
+            "The permission check could not be completed",
+        )
+        with patch("app.handlers.comments.service._dispatch"):
+            handle_comment_event(_payload(body="/merge"))
+
+        _, _, body = common_mocks["post"].call_args[0]
+        assert "requires maintainer access" not in body["body"]
+        assert "could not be completed" in body["body"]
 
 
 class TestCommandArgs:

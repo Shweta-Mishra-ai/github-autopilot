@@ -43,14 +43,20 @@ def summarize_pr(
     try:
         title = pr.get("title", "")
         body = (pr.get("body") or "")[:800]
-        author = pr.get("user", {}).get("login", "")
-        base = pr.get("base", {}).get("ref", "main")
-        head = pr.get("head", {}).get("ref", "")
+        # `or {}` rather than a .get() default: GitHub sends an explicit null
+        # for a deleted user and for some fork refs, and .get("user", {}) returns
+        # that None, so the chained .get() raised AttributeError. The broad
+        # except below then swallowed it and the PR silently got no summary.
+        author = (pr.get("user") or {}).get("login", "")
+        base = (pr.get("base") or {}).get("ref", "main")
+        head = (pr.get("head") or {}).get("ref", "")
 
         total_add = sum(f.get("additions", 0) for f in files)
         total_del = sum(f.get("deletions", 0) for f in files)
+        # .get("filename") — subscripting raised KeyError on any file entry
+        # without the key, losing the whole summary rather than one line of it.
         file_list = "\n".join(
-            f"  {f['filename']} (+{f.get('additions', 0)} -{f.get('deletions', 0)})"
+            f"  {f.get('filename', '?')} (+{f.get('additions', 0)} -{f.get('deletions', 0)})"
             for f in files[:10]
         )
 

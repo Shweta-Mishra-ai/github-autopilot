@@ -100,17 +100,17 @@ def handle_comment_event(payload: dict) -> None:
         return
 
     # ── Authorization ─────────────────────────────────────────────────────
+    # `reason` already states the full explanation, including the case where the
+    # check itself failed. The header must not assert "requires maintainer
+    # access" on its own — for a failed check that framing is wrong and sends
+    # the maintainer looking at their own account instead of the App install.
     allowed, reason = check_command_permission(cmd, repo, author, token, config)
     if not allowed:
         _post_comment(
             repo,
             issue_number,
             token,
-            (
-                f"## 🚫 Permission Denied\n\n"
-                f"@{author} — `{cmd}` requires maintainer access.\n\n"
-                f"**Reason:** {reason}"
-            ),
+            f"## 🚫 `{cmd}` Not Run\n\n@{author} — {reason}",
             log_ctx,
         )
         return

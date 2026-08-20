@@ -265,6 +265,12 @@ jobs:
             exit 1
           fi
 
+      - name: Fail if the README's generated sections are stale
+        # These blocks restate what the code knows (module counts, the command
+        # registry, the layer graph). Unchecked, they rot: this README claimed
+        # the MCP endpoint had "8 tools" for as long as it took to add a ninth.
+        run: python -m app.handlers.readme --check
+
   # ── Test-count badge (main only) ─────────────────────────────────────────────
   # Publishes the real pytest pass count from THIS run to the `badges` branch.
   # README's "tests: N passing" badge reads that JSON via shields.io/endpoint,

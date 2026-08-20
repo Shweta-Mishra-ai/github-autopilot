@@ -67,7 +67,11 @@ def get_stats() -> dict:
 
 def _make_key(path: str, token: str) -> str:
     th = hashlib.sha256(token.encode()).hexdigest()[:8]
-    ph = hashlib.md5(path.encode()).hexdigest()[:12]
+    # usedforsecurity=False is required, not cosmetic: this is a cache-key
+    # digest with no security property, and on a FIPS-mode interpreter a plain
+    # hashlib.md5() raises ValueError rather than hashing — every cached GitHub
+    # read would fail. The flag also tells SAST this is not a weak-crypto use.
+    ph = hashlib.md5(path.encode(), usedforsecurity=False).hexdigest()[:12]
     return f"ghcache:data:{th}:{ph}"
 
 

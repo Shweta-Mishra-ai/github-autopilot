@@ -21,6 +21,20 @@ def gh_get(*a, **kw):
     return hc.gh_get(*a, **kw)
 
 
+def _pr_head_sha(repo: str, pr_number: int, token: str) -> str:
+    """
+    Head commit SHA of a PR, or "" if it cannot be resolved.
+
+    Returning "" degrades to a default-branch read rather than failing the
+    whole scan — the secrets half of the report is still worth posting.
+    """
+    try:
+        return (gh_get(f"/repos/{repo}/pulls/{pr_number}", token).get("head") or {}).get("sha", "")
+    except Exception as exc:
+        log.warning(f"security.head_sha_failed repo={repo} pr={pr_number}: {exc}")
+        return ""
+
+
 def cmd_security(repo: str, issue_number: int, issue: dict, token: str) -> str:
     """Scan PR files for secrets and vulnerable dependencies."""
     if "pull_request" not in issue:
@@ -33,18 +47,29 @@ def cmd_security(repo: str, issue_number: int, issue: dict, token: str) -> str:
         pr_files = gh_get(f"/repos/{repo}/pulls/{issue_number}/files", token)
         all_findings = []
         for f in pr_files[:10]:
-            patch = f.get("patch", "")
+            # `or ""` — GitHub sends an explicit null patch for binary files
+            # and oversized diffs, which is not the same as an absent key.
+            patch = f.get("patch") or ""
             if patch:
                 all_findings.extend(scan_diff(patch, file_path=f.get("filename", "")))
 
         dep_findings = []
+        # The contents API defaults to the repository's default branch. Reading
+        # requirements.txt without a ref therefore scanned the *base* file and
+        # reported "no vulnerable dependencies" for a PR whose whole change was
+        # adding one. Pin the read to the PR head instead.
+        head_sha = _pr_head_sha(repo, issue_number, token)
         for f in pr_files:
-            if f["filename"] == "requirements.txt":
-                import base64
+            if f.get("filename") != "requirements.txt":
+                continue
+            import base64
 
-                raw = gh_get(f"/repos/{repo}/contents/{f['filename']}", token)
-                content = base64.b64decode(raw["content"]).decode()
-                dep_findings.extend(scan_requirements_txt(content))
+            path = "/repos/{}/contents/requirements.txt".format(repo)
+            if head_sha:
+                path += f"?ref={head_sha}"
+            raw = gh_get(path, token)
+            content = base64.b64decode(raw["content"]).decode()
+            dep_findings.extend(scan_requirements_txt(content))
 
         lines = ["## 🔒 Security Scan Results\n"]
         lines.append(

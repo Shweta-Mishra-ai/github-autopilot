@@ -97,10 +97,7 @@ filterwarnings = [
 [tool.coverage.run]
 source = ["app"]
 omit = [
-    "app/auth.py",           # deprecated legacy file
-    "archive/*",
     "tests/*",
-    "app/intelligence/*",    # optional layer, no hard deps
 ]
 
 [tool.coverage.report]

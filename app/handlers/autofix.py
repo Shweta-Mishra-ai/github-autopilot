@@ -275,9 +275,13 @@ def _make_diff_preview(original: str, fixed: str, filepath: str) -> str:
 
 
 def _generate_fix_plan(title: str, body: str, target_file: str) -> Optional[dict]:
-    try:
-        from app.ai.circuit_breaker import AllProvidersDown
+    # Imported before the try block: an `except AllProvidersDown` clause is
+    # evaluated at exception time, so importing the name *inside* the try meant
+    # that if the import itself ever failed, the handler raised NameError while
+    # handling the original error and masked it entirely.
+    from app.ai.circuit_breaker import AllProvidersDown
 
+    try:
         hint = f"Focus on file: {target_file}" if target_file else ""
         r, meta = router.ask(
             "Principal engineer. Generate precise minimal code fixes. JSON only.",
@@ -436,8 +440,24 @@ def _is_allowed(filepath: str) -> bool:
     return ext in ALLOWED_EXTENSIONS
 
 
-def _block_reason(filepath: str) -> str:
-    """Human-readable reason why a file is blocked."""
+def _block_reason(filepath: str) -> Optional[str]:
+    """
+    Human-readable reason why a file is blocked, or None if it is not blocked.
+
+    The string is interpolated straight into the comment the user sees, so
+    every path for which _is_allowed() returns False must produce a sentence —
+    otherwise the reader gets the literal text "Cannot auto-modify `x` — None."
+    Two rejections previously had no matching branch here and did exactly that:
+    an empty target file, and a path rejected for traversal.
+
+    Invariant (asserted in tests): _is_allowed(p) is False => _block_reason(p)
+    is a non-empty str. Reaching the final `return None` means the file is
+    allowed, so no caller should be asking.
+    """
+    if not filepath:
+        return "no target file could be determined"
+    if ".." in filepath or filepath.startswith("/"):
+        return "the path is not repository-relative"
     if filepath in BLOCKED_PATHS:
         return "this is a security-sensitive file"
     for prefix in BLOCKED_PREFIXES:
@@ -447,5 +467,6 @@ def _block_reason(filepath: str) -> str:
     if ext in (".yml", ".yaml"):
         return "YAML files are restricted to known-safe config files (e.g. mkdocs.yml)"
     if ext not in ALLOWED_EXTENSIONS:
-        return f"extension `{ext}` is not in the allowed list"
+        allowed = ", ".join(f"`{e}`" for e in sorted(ALLOWED_EXTENSIONS))
+        return f"extension `{ext}` is not editable by autofix (allowed: {allowed})"
     return None

@@ -159,6 +159,11 @@ def health():
                 "errors_total": metrics.get("events.error", 0),
                 "events_dropped": metrics.get("events.dropped", 0),
                 "secondary_rate_limited": metrics.get("events.secondary_rate_limited", 0),
+                # Non-zero means the collaborator-permission API is failing, so
+                # every maintainer-only command is being denied regardless of who
+                # runs it. Surfaced here because the symptom (commands "not
+                # working") otherwise looks nothing like its cause.
+                "permission_check_failures": metrics.get("auth.permission_check_failed", 0),
             },
         }
     ), 200 if overall == "ok" else 207

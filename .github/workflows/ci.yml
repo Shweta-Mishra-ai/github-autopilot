@@ -107,7 +107,7 @@ jobs:
           import app.handlers.comments
           import app.handlers.autofix
           import app.intelligence.embeddings
-          from app.github.client import GitHubError, GitHubError
+          from app.github.client import GitHubError, GitHubSecondaryRateLimitError
           print('All imports OK')
           "
 

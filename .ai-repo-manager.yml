@@ -28,6 +28,9 @@ push:
   # commits, derived from the files they changed. Set false to keep the
   # lint report without comments on your commit history.
   suggest_commit_messages: true
+  # Refresh generated README blocks (see "Managed README sections" in the
+  # README) and open a PR when they drift out of date.
+  update_readme: true
   create_issue_threshold: 3
   scan_secrets: true
   scan_dependencies: true

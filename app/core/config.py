@@ -57,6 +57,9 @@ DEFAULTS: dict = {
         # commit. Separate from enforce_conventional_commits so an operator can
         # keep the report without a bot commenting on their commit history.
         "suggest_commit_messages": True,
+        # Refresh the README's <!-- autopilot:*:start --> blocks and open a PR
+        # when they drift. Requires README_SELF_UPDATE_REPO to name this repo.
+        "update_readme": True,
         "create_issue_threshold": 3,
         "scan_secrets": True,
         "scan_dependencies": True,

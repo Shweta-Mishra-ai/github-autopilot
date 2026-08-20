@@ -118,6 +118,22 @@ Comment `/health` on any issue. The bot replies with a repo health grade. Done. 
 
 ---
 
+## At a glance
+
+<!-- autopilot:stats:start -->
+| | |
+|---|---|
+| Modules | 84 |
+| Lines of code | 16,595 |
+| Slash commands | 27 |
+| MCP tools | 9 |
+| Internal imports | 244 |
+<!-- autopilot:stats:end -->
+
+<sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>
+
+---
+
 ## Commands
 
 Type any of these in a GitHub issue or PR comment:
@@ -168,9 +184,66 @@ flowchart TB
     H --> R["ai/router<br/>Groq 70B → 8B → Gemini → OpenRouter"]
     R --> CB["circuit breakers<br/>per provider"]
     H --> GHA["GitHub API client<br/>retry · rate-limit aware"]
-    IDE["Claude Code / Cursor / Codex"] -->|"MCP · Bearer auth"| MCP["/mcp endpoint<br/>8 tools · fail-closed"]
+    IDE["Claude Code / Cursor / Codex"] -->|"MCP · Bearer auth"| MCP["/mcp endpoint<br/>fail-closed"]
     MCP --> H
 ```
+
+<details>
+<summary><b>Module dependency graph</b> — generated from the AST, never hand-drawn</summary>
+
+<br/>
+
+The diagram above is the request flow, written by hand. The one below is
+derived from the import graph on every CI run, so it cannot drift from the
+code. Explore it interactively at [`/graph`](#codebase-map), or regenerate with
+`python -m app.intelligence.codegraph app server.py worker.py`.
+
+<!-- autopilot:architecture:start -->
+```mermaid
+graph LR
+    ai["ai<br/>14 modules"]
+    core["core<br/>20 modules"]
+    github["github<br/>8 modules"]
+    handlers["handlers<br/>21 modules"]
+    intelligence["intelligence<br/>6 modules"]
+    mcp["mcp<br/>4 modules"]
+    other["other<br/>5 modules"]
+    security["security<br/>6 modules"]
+    ai --> core
+    ai --> github
+    core --> ai
+    core --> github
+    core --> intelligence
+    core --> security
+    github --> ai
+    github --> core
+    github --> other
+    handlers --> ai
+    handlers --> core
+    handlers --> github
+    handlers --> intelligence
+    handlers --> mcp
+    handlers --> security
+    intelligence --> ai
+    intelligence --> core
+    mcp --> ai
+    mcp --> core
+    mcp --> github
+    mcp --> handlers
+    mcp --> intelligence
+    mcp --> other
+    mcp --> security
+    other --> ai
+    other --> core
+    other --> github
+    other --> handlers
+    other --> mcp
+    security --> core
+    security --> github
+```
+<!-- autopilot:architecture:end -->
+
+</details>
 
 **The queue is the backbone.** Every webhook is parked in Redis *before* the
 `202` ACK, then consumed by an in-process worker group:
@@ -292,6 +365,61 @@ Two behaviours worth knowing:
   available. It is an allow-list, not a registry, so you never have to keep it in
   sync with new releases. An explicit `enabled: []` disables everything.
 - `bot.enabled: false` stops all handlers: PRs, issues, pushes, CI and commands.
+
+---
+
+## Codebase map
+
+An interactive, force-directed view of every module and what imports what,
+served at `/graph`:
+
+- **Click a node** to see exactly what imports it and what it imports
+- **Import cycles** are detected and flagged — they are what makes a module
+  impossible to test on its own
+- **Unreferenced modules** are listed: nothing in `app/`, `server.py` or
+  `worker.py` imports them, which usually means dead code
+- **Hotspots** rank modules by size × how many things depend on them — the
+  files that are expensive to change
+
+The data comes from `python -m app.intelligence.codegraph`, which reads the AST
+and **never imports the code it analyses**, so it is safe to point at any
+repository. CI regenerates it and fails a PR whose committed copy is stale.
+
+```bash
+python -m app.intelligence.codegraph app server.py worker.py \
+  --out docs/diagrams/codegraph.json
+```
+
+`/graph.json` is auth-gated with `METRICS_AUTH_TOKEN`, the same as `/health` —
+a dependency graph is a map of the whole system. The same data is available to
+your IDE through the `codebase_map` MCP tool.
+
+---
+
+## Managed README sections
+
+Some facts in this README restate what the code already knows: module counts,
+the command registry, the dependency graph. Those rot silently — this file
+claimed the MCP endpoint had "8 tools" for exactly as long as it took someone
+to add a ninth.
+
+Blocks between `autopilot` markers are regenerated from the code. Paste an
+empty pair where you want the content — writing `NAME` as one of the region
+names below:
+
+```markdown
+<!-- autopilot:NAME:start -->
+<!-- autopilot:NAME:end -->
+```
+
+Available regions: `stats`, `architecture`, `commands`. Everything outside a
+marker pair is hand-written and never touched by the bot, and a repository with
+no markers gets no edits at all — you opt in one region at a time by pasting a
+marker pair where you want the content.
+
+Refreshes arrive as a pull request, never as a direct commit to the default
+branch. Set `README_SELF_UPDATE_REPO=owner/repo` to enable it for the
+deployment's own repository.
 
 ---
 

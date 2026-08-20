@@ -123,6 +123,16 @@ def handle(payload: dict) -> None:
 
             suggest_commit_messages(repo, commits, token, config, log)
 
+        # Refresh the README blocks that restate what the code already knows
+        # (module counts, the command registry, the import graph) and open a PR
+        # if any drifted. No-ops unless README_SELF_UPDATE_REPO names this repo
+        # — the renderers read the local source tree, so pointing them at an
+        # arbitrary repository would describe the bot rather than that repo.
+        if config.get("push", "update_readme", default=True):
+            from app.handlers.readme import maybe_update_readme
+
+            maybe_update_readme(repo, commits, token, config, log)
+
     _index_changed_files(repo, commits, token, latest_sha, log)
 
 

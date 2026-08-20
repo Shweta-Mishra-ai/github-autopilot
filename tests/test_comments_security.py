@@ -107,7 +107,7 @@ class TestDependencyScanUsesPrHead:
             "dependency scan read the default branch, not the PR head — a PR "
             "adding a vulnerable pin would be reported clean"
         )
-        assert "Dependency Vulnerabilities" in out
+        assert "Dependency Findings" in out
 
     def test_unresolvable_head_falls_back_to_default_branch(self, gh):
         """Losing the ref is better than losing the whole report."""

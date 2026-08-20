@@ -69,8 +69,23 @@ PATTERNS: list[tuple[str, str, str, bool]] = [
     ("Stripe Restricted Key", r"\brk_live_[0-9a-zA-Z]{24,}\b", "critical", False),
     ("Stripe Publishable Key", r"\bpk_live_[0-9a-zA-Z]{24,}\b", "medium", False),
     # Slack
-    ("Slack Bot Token", r"\bxoxb-[0-9]{11}-[0-9]{11}-[0-9a-zA-Z]{24}\b", "critical", False),
-    ("Slack App Token", r"\bxapp-[0-9]-[A-Z0-9]{10}-[0-9]{13}-[a-z0-9]{64}\b", "critical", False),
+    # Slack workspace and bot IDs are not a fixed width — the hardcoded {11}
+    # missed real tokens whose team ID is 10 or 13 digits. The `xoxb-` prefix
+    # carries the specificity here, so widening the numeric segments costs no
+    # precision: nothing but a Slack token looks like this.
+    ("Slack Bot Token", r"\bxoxb-[0-9]{9,16}-[0-9]{9,16}-[0-9a-zA-Z]{24,}\b", "critical", False),
+    (
+        "Slack User Token",
+        r"\bxoxp-[0-9]{9,16}-[0-9]{9,16}-[0-9]{9,16}-[0-9a-f]{32}\b",
+        "critical",
+        False,
+    ),
+    (
+        "Slack App Token",
+        r"\bxapp-[0-9]-[A-Z0-9]{8,12}-[0-9]{11,15}-[a-z0-9]{64}\b",
+        "critical",
+        False,
+    ),
     (
         "Slack Webhook",
         r"https://hooks\.slack\.com/services/T[A-Z0-9]{8}/B[A-Z0-9]{8}/[a-zA-Z0-9]{24}",
@@ -204,13 +219,61 @@ class SecretFinding:
 
 
 def _entropy(s: str) -> float:
-    """Shannon entropy of a string."""
+    """Shannon entropy of a string, in bits per character."""
     if not s:
         return 0.0
     freq: dict = {}
     for c in s:
         freq[c] = freq.get(c, 0) + 1
     return -sum((f / len(s)) * math.log2(f / len(s)) for f in freq.values())
+
+
+# A string of length n drawn from an alphabet of k symbols cannot exceed
+# log2(min(k, n)) bits per character — you cannot observe more than n distinct
+# symbols in n characters, however large the alphabet.
+#
+# That ceiling is why a flat 4.5-bit threshold silently disabled patterns:
+#
+#   Cloudflare API Key  [0-9a-f]{37}  ceiling log2(16) = 4.00  -> unreachable
+#   Datadog API Key     [a-f0-9]{32}  ceiling log2(16) = 4.00  -> unreachable
+#   Generic Password    24 chars      ceiling log2(24) = 4.58  -> marginal, flaky
+#
+# Those are not tuning choices, they are arithmetic: a real hex API key can
+# never clear 4.5, so the gate rejected every one of them. Measuring entropy as
+# a FRACTION of the achievable ceiling makes the test mean "is this string as
+# random as a string of its length and alphabet could be", which is the
+# question actually being asked, and it behaves the same for hex, base64 and
+# alphanumeric secrets.
+MIN_DISTINCT_CHARS = 10
+ENTROPY_RATIO_THRESHOLD = 0.92
+
+
+def _entropy_ratio(s: str) -> float:
+    """
+    Entropy as a fraction (0..1) of the maximum achievable for this string.
+
+    Returns 0.0 when the string is too short or too repetitive to judge.
+    """
+    if len(s) < 2:
+        return 0.0
+    distinct = len(set(s))
+    if distinct < 2:
+        return 0.0
+    ceiling = math.log2(min(distinct, len(s)))
+    if ceiling <= 0:
+        return 0.0
+    return _entropy(s) / ceiling
+
+
+def _looks_random(s: str) -> bool:
+    """
+    True when `s` is as close to random as its length and alphabet allow.
+
+    The distinct-character floor is load-bearing: "abcabcabcabc" has a perfect
+    entropy ratio (it uses its 3-symbol alphabet uniformly) but is obviously
+    not a credential. Requiring breadth as well as uniformity rejects it.
+    """
+    return len(set(s)) >= MIN_DISTINCT_CHARS and _entropy_ratio(s) >= ENTROPY_RATIO_THRESHOLD
 
 
 def _redact(matched: str) -> str:
@@ -220,8 +283,55 @@ def _redact(matched: str) -> str:
     return matched[:4] + ("*" * min(len(matched) - 8, 20)) + matched[-4:]
 
 
+# Structurally-recognisable non-secrets. These are high-entropy by design and
+# appear in ordinary diffs constantly, so the entropy heuristic alone flags them
+# every time. Each is a *shape* a credential does not have:
+#
+#   - a hex digest of a standard length (git SHA, md5/sha1/sha256/sha512)
+#   - a subresource/lockfile integrity value ("sha512-…", "sha256:…")
+#   - a UUID
+#   - a data: URI or an obvious base64 image blob
+#
+# Recognising the shape is safer than a denylist of values: it generalises to
+# digests nobody has seen yet, and none of these shapes can encode a real
+# credential without also matching one of the named PATTERNS above (which are
+# checked first and are not affected by this).
+_STRUCTURAL_NON_SECRETS = (
+    # Bare hex digests at exactly the lengths real hash functions produce.
+    re.compile(r"^[0-9a-f]{32}$", re.IGNORECASE),  # md5
+    re.compile(r"^[0-9a-f]{40}$", re.IGNORECASE),  # sha1 / git object id
+    re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE),  # sha256
+    re.compile(r"^[0-9a-f]{128}$", re.IGNORECASE),  # sha512
+    # Prefixed integrity values: npm lockfiles, SRI attributes, OCI digests.
+    re.compile(r"^sha(1|256|384|512)[-:]", re.IGNORECASE),
+    re.compile(r"^md5[-:]", re.IGNORECASE),
+    # UUID / GUID.
+    re.compile(
+        r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        re.IGNORECASE,
+    ),
+    # Encoded asset blobs.
+    re.compile(r"^data:[a-z]+/[a-z0-9.+-]+;base64,", re.IGNORECASE),
+    re.compile(r"^iVBORw0KGgo"),  # PNG magic bytes, base64-encoded
+    re.compile(r"^/9j/"),  # JPEG magic bytes, base64-encoded
+)
+
+
+def _is_structural_non_secret(value: str) -> bool:
+    """
+    True for values whose *shape* rules them out as a credential.
+
+    Split from _is_false_positive so the reason a finding was suppressed stays
+    legible: this is "that is a hash", not "that contains the word example".
+    """
+    v = value.strip()
+    return any(p.search(v) for p in _STRUCTURAL_NON_SECRETS)
+
+
 def _is_false_positive(value: str) -> bool:
     """Returns True if match is likely a false positive."""
+    if _is_structural_non_secret(value):
+        return True
     v_lower = value.lower()
     for fp in FALSE_POSITIVE_VALUES:
         if fp.lower() in v_lower or v_lower in fp.lower():
@@ -286,13 +396,15 @@ def scan_diff(diff: str, file_path: str = "") -> list[SecretFinding]:
             if _is_false_positive(matched):
                 continue
 
-            # Entropy gate for patterns that require it
+            # Entropy gate for patterns that require it. These patterns are all
+            # keyword-anchored ("aws...secret", "datadog...", "password="), so
+            # the gate only has to separate a real credential from a placeholder
+            # sitting in the same position — not to find secrets on its own.
             if entropy_required:
                 value_match = re.search(r"['\"]([^'\"]{16,})['\"]", matched)
                 check_str = value_match.group(1) if value_match else matched
-                ent = _entropy(check_str)
-                if ent < HIGH_ENTROPY_THRESHOLD:
-                    continue  # Low entropy → likely a placeholder
+                if not _looks_random(check_str):
+                    continue  # Not random enough → placeholder or example
 
             seen_matches.add(matched)
             findings.append(
@@ -320,8 +432,17 @@ def scan_diff(diff: str, file_path: str = "") -> list[SecretFinding]:
                     continue
                 if _is_false_positive(token):
                     continue
-                ent = _entropy(token)
-                if ent > HIGH_ENTROPY_THRESHOLD + 0.5:
+                # Deliberately stricter than the keyword-anchored gate above:
+                # this branch has no context to lean on, so it is the one that
+                # can invent a finding out of an ordinary random-looking string.
+                #
+                # The distinct-character floor of 20 is what keeps digests out.
+                # Hex tops out at 16 distinct symbols, so a git SHA, an md5, a
+                # sha256 or a lockfile integrity value can never clear it — and
+                # a real credential with no recognisable prefix and only 16
+                # distinct characters is not something this heuristic should be
+                # guessing at anyway.
+                if len(set(token)) >= 20 and _entropy_ratio(token) >= 0.95:
                     seen_matches.add(token)
                     findings.append(
                         SecretFinding(
@@ -330,7 +451,7 @@ def scan_diff(diff: str, file_path: str = "") -> list[SecretFinding]:
                             severity="medium",
                             redacted_match=_redact(token),
                             file_path=file_path,
-                            entropy=round(ent, 2),
+                            entropy=round(_entropy(token), 2),
                             confidence="medium",
                         )
                     )

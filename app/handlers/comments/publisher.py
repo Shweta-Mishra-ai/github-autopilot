@@ -33,7 +33,16 @@ def cmd_merge(
     try:
         pr = gh_get(f"/repos/{repo}/pulls/{issue_number}", token)
         reviews = gh_get(f"/repos/{repo}/pulls/{issue_number}/reviews", token)
-        commit_sha = pr["head"]["sha"]
+        # A PR whose source fork was deleted carries a null `head`. This
+        # raised inside cmd_merge's try/except, so the user was told "Merge
+        # failed" with a TypeError rather than the real reason.
+        head = pr.get("head") or {}
+        commit_sha = head.get("sha", "")
+        if not commit_sha:
+            return (
+                "## 🚫 Cannot Merge\n\n**Reason:** this PR has no head commit — "
+                "its source branch or fork was deleted."
+            )
         check_runs = gh_get(f"/repos/{repo}/commits/{commit_sha}/check-runs", token)
 
         from app.core.guardrails import check_pr_auto_merge
@@ -42,8 +51,8 @@ def cmd_merge(
         if not guard.passed:
             return f"## 🚫 Cannot Merge\n\n**Reason:** {guard.reason}"
 
-        head_branch = pr["head"]["ref"]
-        base_branch = pr["base"]["ref"]
+        head_branch = head.get("ref", "")
+        base_branch = (pr.get("base") or {}).get("ref", "")
         result = gh_put(
             f"/repos/{repo}/pulls/{issue_number}/merge",
             token,

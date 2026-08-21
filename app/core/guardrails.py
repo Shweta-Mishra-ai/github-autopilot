@@ -39,7 +39,13 @@ def check_pr_auto_merge(pr_data: dict, checks: list, reviews: list, config) -> G
     if config.get("auto_merge", "require_no_blocking_reviews", default=True):
         blocking = [r for r in reviews if r.get("state") == "CHANGES_REQUESTED"]
         if blocking:
-            blockers = ", ".join(f"@{r['user']['login']}" for r in blocking[:3])
+            # A change request from a since-deleted account has `user: null`.
+            # Raising here turns "blocked by a review" into a generic failure,
+            # which is the one message that does not tell the maintainer the
+            # merge was correctly refused.
+            blockers = ", ".join(
+                f"@{(r.get('user') or {}).get('login', 'a deleted account')}" for r in blocking[:3]
+            )
             return GuardrailResult(False, f"Blocked by change requests from: {blockers}")
 
     if config.get("auto_merge", "require_passing_checks", default=True):
@@ -49,7 +55,7 @@ def check_pr_auto_merge(pr_data: dict, checks: list, reviews: list, config) -> G
             if c.get("conclusion") in ("failure", "cancelled", "timed_out", "action_required")
         ]
         if failed:
-            names = ", ".join(c["name"] for c in failed[:3])
+            names = ", ".join(c.get("name", "unnamed check") for c in failed[:3])
             return GuardrailResult(False, f"Failing checks: {names}")
 
     base = pr_data.get("base", {}).get("ref", "")

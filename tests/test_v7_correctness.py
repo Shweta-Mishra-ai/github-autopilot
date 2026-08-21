@@ -137,10 +137,19 @@ def _review_cfg():
 
 
 class TestReviewRendering:
-    def test_validator_exposes_summary_and_verdict(self):
-        out = validate_code_review({"score": 8, "issues": [], "summary": "Looks solid."})
-        assert out["summary"] == "Looks solid."
-        assert out["verdict"] == "Looks solid."
+    def test_verdict_is_accepted_as_input_and_normalised_to_summary(self):
+        """The original bug was a name mismatch: the model answered under
+        `verdict`, the renderer read `summary`, and every review shipped blank.
+        The fix was to accept both as INPUT — not to emit both. The duplicate
+        output field carried a comment claiming app/mcp/handlers.py and evals/
+        read it; neither ever did, so it was removed in v7.2.0 and this pins
+        the half that actually mattered."""
+        from_summary = validate_code_review({"score": 8, "issues": [], "summary": "Looks solid."})
+        from_verdict = validate_code_review({"score": 8, "issues": [], "verdict": "Looks solid."})
+
+        assert from_summary["summary"] == "Looks solid."
+        assert from_verdict["summary"] == "Looks solid."
+        assert "verdict" not in from_verdict
 
     def test_rendered_review_contains_model_summary(self):
         """Regression: renderer read 'summary', validator only returned 'verdict'."""

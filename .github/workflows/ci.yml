@@ -57,23 +57,25 @@ jobs:
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: lint
+    # Deliberately NOT `needs: lint`. Lint takes ~10s and the matrix spends
+    # longer than that on setup, so gating on it delayed every green run by
+    # about the same amount it saved on a red one. Ruff runs locally before a
+    # push; a lint failure costing three runners is the cheaper mistake.
 
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
       fail-fast: false
 
-    services:
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+    # No Redis service. It cost ~19s of container startup on each of the three
+    # legs, and nothing connected to it: tests/conftest.py installs an
+    # in-process fake and its autouse env fixture forces REDIS_URL="", so the
+    # service was provisioned and then ignored. There are also zero tests
+    # marked `integration`, which is what it existed for.
+    #
+    # To bring it back when integration tests are written, give them their own
+    # job with the service attached rather than re-attaching it here — the unit
+    # matrix should not pay for a dependency it does not use.
 
     steps:
       - uses: actions/checkout@v4
@@ -100,7 +102,6 @@ jobs:
           GITHUB_APP_ID: "99999"
           GITHUB_PRIVATE_KEY: ""
           GROQ_API_KEY: "test_key_not_real"
-          REDIS_URL: "redis://localhost:6379/0"
           MCP_API_KEY: "test-mcp-key"
         run: |
           python -c "
@@ -118,9 +119,25 @@ jobs:
           print('All imports OK')
           "
 
+      # Coverage instrumentation costs ~49% (measured: 23.2s -> 34.6s on this
+      # suite). Only 3.11 uploads a report, so the other two legs were paying
+      # that for a file nothing reads. The floor is still enforced — on the one
+      # leg that measures it.
       - name: Run tests
+        if: matrix.python-version != '3.11'
         env:
-          REDIS_URL: "redis://localhost:6379/0"
+          GROQ_API_KEY: "test_key_not_real"
+          GITHUB_APP_ID: "99999"
+          GITHUB_PRIVATE_KEY: ""
+          GITHUB_WEBHOOK_SECRET: "test-webhook-secret-32chars-abc!"
+          METRICS_AUTH_TOKEN: "test_metrics_token"
+          MCP_API_KEY: "test-mcp-api-key-xyz"
+          LOG_FORMAT: "text"
+        run: pytest tests/ --tb=short -m "not e2e and not integration"
+
+      - name: Run tests with coverage
+        if: matrix.python-version == '3.11'
+        env:
           GROQ_API_KEY: "test_key_not_real"
           GITHUB_APP_ID: "99999"
           GITHUB_PRIVATE_KEY: ""

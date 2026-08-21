@@ -160,3 +160,120 @@ class TestGraphHtmlContent:
         from app.graphview import graph_html
 
         assert "function esc(" in graph_html()
+
+
+# ── The contract between the generator and the renderer ───────────────────────
+
+
+class TestPayloadContract:
+    """
+    codegraph.py writes the JSON; graphview.py's JavaScript reads it. Nothing
+    checks that they agree on field names, and nothing can: a rename on the
+    Python side produces an empty canvas, not an exception. No test in this
+    file would have failed, and no log line would say why.
+
+    This is the same "produced but never consumed" bug class the validator
+    tests guard, except across a language boundary — which is exactly where it
+    is least likely to be noticed.
+    """
+
+    import json as _json
+    import pathlib as _pathlib
+
+    GRAPH = _json.loads(
+        _pathlib.Path("docs/diagrams/codegraph.json").read_text(encoding="utf-8")
+    )
+
+    # Field names the renderer dereferences off graph/node/edge objects.
+    RENDERER_READS_TOP = {"nodes", "edges", "stats"}
+    RENDERER_READS_NODE = {"id", "layer", "loc"}
+    RENDERER_READS_EDGE = {"source", "target", "kind"}
+    RENDERER_READS_STATS = {"hotspots", "orphans"}
+
+    def test_the_generator_emits_every_top_level_key_the_page_reads(self):
+        assert set(self.GRAPH) >= self.RENDERER_READS_TOP
+
+    def test_every_node_carries_the_fields_the_page_draws_with(self):
+        assert self.GRAPH["nodes"], "no nodes to check"
+        for node in self.GRAPH["nodes"]:
+            missing = self.RENDERER_READS_NODE - set(node)
+            assert not missing, f"node {node.get('id')} missing {missing}"
+
+    def test_every_edge_carries_the_fields_the_page_draws_with(self):
+        assert self.GRAPH["edges"], "no edges to check"
+        for edge in self.GRAPH["edges"]:
+            assert set(edge) >= self.RENDERER_READS_EDGE, edge
+
+    def test_the_side_panels_have_data_to_render(self):
+        assert set(self.GRAPH["stats"]) >= self.RENDERER_READS_STATS
+
+    def test_every_edge_endpoint_resolves_to_a_node(self):
+        """A dangling endpoint draws a line to coordinates that do not exist.
+        In canvas that is not an error — it is a line to (undefined, undefined),
+        which silently vanishes, so the picture is quietly wrong."""
+        ids = {n["id"] for n in self.GRAPH["nodes"]}
+        dangling = [
+            f"{e['source']}->{e['target']}"
+            for e in self.GRAPH["edges"]
+            if e["source"] not in ids or e["target"] not in ids
+        ]
+        assert dangling == [], f"edges referencing unknown nodes: {dangling[:5]}"
+
+    def test_hotspots_reference_real_modules(self):
+        ids = {n["id"] for n in self.GRAPH["nodes"]}
+        for h in self.GRAPH["stats"]["hotspots"]:
+            assert h["id"] in ids
+
+    def test_the_javascript_reads_no_field_the_generator_does_not_emit(self):
+        """Derived from the shipped page rather than from this test's own list,
+        so adding a `d.foo` in the JS without adding `foo` in Python fails
+        here instead of rendering blank."""
+        import re
+
+        from app.graphview import graph_html
+
+        emitted = (
+            set(self.GRAPH)
+            | set(self.GRAPH["nodes"][0])
+            | set(self.GRAPH["edges"][0])
+            | set(self.GRAPH["stats"])
+        )
+        # Locals the layout uses that are not payload fields.
+        allowed = emitted | {
+            "x", "y", "vx", "vy", "r", "s", "t", "add", "json", "length", "push",
+            "forEach", "map", "filter", "textContent", "style", "value", "width",
+            "height", "getContext", "toFixed", "sort", "slice", "join", "has",
+            "get", "set", "size", "keys", "values", "includes", "toLowerCase",
+        }
+        reads = set(
+            re.findall(r"\b(?:d|n|e|node|edge|link|g|data|graph|stats)\.([a-zA-Z_]\w*)\b", graph_html())
+        )
+        unknown = reads - allowed
+        assert unknown == set(), (
+            f"the page reads fields the generator never emits: {sorted(unknown)}. "
+            "A rename on the Python side renders an empty canvas, not an error."
+        )
+
+
+class TestPayloadStaysBrowserSized:
+    """The whole graph is sent to the browser in one response and laid out with
+    a per-frame O(n²) force simulation. Growth here is felt as a page that
+    stops being interactive, not as a failure."""
+
+    def test_the_served_payload_is_small_enough_to_ship(self):
+        import pathlib
+
+        size = pathlib.Path("docs/diagrams/codegraph.json").stat().st_size
+        assert size < 2_000_000, f"codegraph.json is {size:,} bytes"
+
+    def test_node_count_is_within_what_the_layout_can_animate(self):
+        import json
+        import pathlib
+
+        graph = json.loads(pathlib.Path("docs/diagrams/codegraph.json").read_text(encoding="utf-8"))
+        # n² at 60fps stops being smooth well before this; the guard exists so
+        # the number is a decision rather than a surprise.
+        assert len(graph["nodes"]) < 500, (
+            f"{len(graph['nodes'])} nodes — the O(n²) layout needs revisiting "
+            "(spatial hashing or edge bundling) before this grows further"
+        )

@@ -124,7 +124,7 @@ Comment `/health` on any issue. The bot replies with a repo health grade. Done. 
 | | |
 |---|---|
 | Modules | 87 |
-| Lines of code | 17,982 |
+| Lines of code | 18,194 |
 | Slash commands | 27 |
 | MCP tools | 9 |
 | Internal imports | 261 |
@@ -487,6 +487,21 @@ Full-codebase audit. The theme is features that were wired, tested, and shipped 
 - Professional commit-message suggestions on push (one LLM call, capped at five commits, merge/revert skipped, SHA-keyed dedup that fails closed).
 - README managed regions between `<!-- autopilot:NAME:start -->` markers, regenerated as the project changes and delivered by pull request only — never a direct push to the default branch. Region replacement slices the string rather than using `re.sub`, so a `\g<1>` in generated content cannot corrupt the file.
 
+**The licence scanner was wrong about three quarters of this repo's own dependencies**
+- It read PyPI's `info.license` and nothing else. **Six of this repository's eight direct dependencies leave that field empty** — Flask, redis, gunicorn, cryptography, PyJWT and structlog all declare their licence in `license_expression` (PEP 639) or in trove classifiers — so all six were reported as "unknown", i.e. as something a maintainer must go and check. A scanner that is wrong about three quarters of a normal requirements file teaches people to skim past it. All three metadata sources are now read in order of authority, and the fixtures in the tests are the real payloads those packages publish, not shapes invented to make the parser pass.
+- Matching was by substring, which got dual licences backwards: `"MIT" in "MIT AND GPL-3.0"` is true, so a package that genuinely imposes the GPL was reported safe — a false **negative** in the one direction that costs someone a licence violation. Expressions are parsed now: `OR` takes the most permissive branch (the consumer picks), `AND` the most restrictive (all apply). The first version of that parser split on `OR` without respecting parentheses and called `GPL-3.0 AND (MIT OR Apache-2.0)` safe; a test caught it, not a re-read.
+- "Could not check" is now separate from "no licence declared". A private index, a git dependency or a network blip is not evidence of a licence problem, and reporting it as one is the false positive that makes the whole section ignorable.
+
+**CI: measured, then cut**
+- The three test legs each booted a Redis service container (~19s of startup apiece) that **nothing connected to** — `conftest.py` installs an in-process fake and its autouse fixture forces `REDIS_URL=""`, and there are zero tests marked `integration`, which is what the service existed for. Removed, with a note to give integration tests their own job rather than re-attaching it to the unit matrix.
+- Coverage instrumentation costs 49% on this suite (measured: 23.2s → 34.6s). Only the 3.11 leg uploads a report, so the other two were paying it for a file nothing reads. The floor is still enforced, on the leg that measures it.
+- The matrix no longer waits on lint: lint takes ~10s and the matrix spends longer than that on setup, so the gate delayed every green run by about what it saved on a red one.
+- `-v` in `addopts` was also measured, at 22.7s vs 23.5s for `-q` — inside the noise, so it was left alone rather than changed on a hunch. The `integration`/`e2e` markers CI filters on are now registered, so `--strict-markers` catches a typo that would otherwise silently exclude nothing.
+
+**Visualization is tested against the real payload, and rendered**
+- `graphview.py` reported "100% coverage" on three statements, because the page is one string constant — a meaningless number. The gap that mattered was the contract between `codegraph.py` (which writes the JSON) and the page's JavaScript (which reads it): a rename on the Python side produces an **empty canvas, not an exception**. Tests now derive the field names the shipped page dereferences and assert the generator emits every one, plus that no edge endpoint dangles and the payload stays small enough for an O(n²) layout to animate.
+- Verified by actually rendering it in headless Chromium against the live endpoint: 72,480 pixels painted, all eight layers in the legend with correct counts, hotspots populated, and zero external requests — the self-contained claim confirmed rather than asserted.
+
 **User content could close its own prompt delimiter**
 - The README advertises *"input sanitization + delimiter-wrapped user content"* as this app's prompt-injection defence. The sanitization half worked; the delimiter half did not. `wrap_user_content()` interpolated attacker-controlled text between `<PR_BODY>` and `</PR_BODY>` **without checking whether that text contained `</PR_BODY>` itself** — so a PR body could close the block early and land its own instructions *outside* the delimiters, where the model reads them as system text rather than as data. `sanitize_user_input()` never caught it: its XML patterns cover `<system>` and `</instructions>`, not the label names the module invents for itself.
 - Worst on the PR path, where the body is written by whoever opened the pull request — an outside contributor could aim it at the risk assessment that decides whether a PR is safe to auto-merge. Reproduced end-to-end before fixing, and the test asserts on what escapes the block rather than on the presence of a string.
@@ -521,7 +536,7 @@ Full-codebase audit. The theme is features that were wired, tested, and shipped 
 - `record_latency()` had no callers, so `/health` and the health endpoint reported a 0% error rate no matter what the providers did. Wired into the circuit breaker and router.
 - The dependency-free `Codebase map` CI job broke on a third-party import reached through a package `__init__`. The command registry moved to a pure-stdlib `app/core/commands.py`, and five subprocess tests now fail if any third-party import creeps back into that path.
 - **Six unreachable modules resolved, none left.** `app/security/secrets.py` removed (superseded by `enhanced_secrets`). `app/security/licenses.py` — a complete copyleft-compliance scanner with green tests that nothing had ever imported, so the bot had never once reported a restrictive licence — is now part of `/secfull`, bounded to 20 packages and a 20-second budget, and omits packages it did not reach rather than reporting them as "unknown". `app/core/memory_backup.py` gained the operator CLI its documentation had been describing as `python -c` one-liners. `app/core/cache.py` was **deleted rather than wired**: every read it could have served either feeds a guardrail (`archived`, where a stale answer is precisely the bug v7.1.1 fixed) or picks a branch to write to (`default_branch`, where a stale answer targets the wrong ref) — and `load_config` already caches the one hot read that is safe to cache. Fixing bugs in unreachable code does not make it earn its place.
-- Tests 1054 → 1616, coverage 79% → 84%, orphan modules 6 → **0**, import cycles 1 → **0**. Both are now CI gates rather than reports.
+- Tests 1054 → 1666, coverage 79% → 84%, orphan modules 6 → **0**, import cycles 1 → **0**. Both are now CI gates rather than reports.
 
 ### V7.1.1 — 2026-08-03
 

@@ -230,7 +230,7 @@
       "id": "app.ai.validator",
       "path": "app/ai/validator.py",
       "layer": "ai",
-      "loc": 253,
+      "loc": 230,
       "functions": 7,
       "classes": 0,
       "is_package": false,
@@ -360,7 +360,7 @@
       "id": "app.core.guardrails",
       "path": "app/core/guardrails.py",
       "layer": "core",
-      "loc": 221,
+      "loc": 227,
       "functions": 10,
       "classes": 1,
       "is_package": false,
@@ -926,7 +926,7 @@
       "id": "app.handlers.comments.publisher",
       "path": "app/handlers/comments/publisher.py",
       "layer": "handlers",
-      "loc": 433,
+      "loc": 442,
       "functions": 4,
       "classes": 0,
       "is_package": false,
@@ -1012,7 +1012,7 @@
       "id": "app.handlers.issues",
       "path": "app/handlers/issues.py",
       "layer": "handlers",
-      "loc": 285,
+      "loc": 288,
       "functions": 2,
       "classes": 0,
       "is_package": false,
@@ -1028,7 +1028,7 @@
       "id": "app.handlers.pull_request",
       "path": "app/handlers/pull_request/__init__.py",
       "layer": "handlers",
-      "loc": 206,
+      "loc": 212,
       "functions": 1,
       "classes": 0,
       "is_package": true,
@@ -2742,7 +2742,7 @@
   "stats": {
     "modules": 87,
     "edges": 261,
-    "total_loc": 17903,
+    "total_loc": 17904,
     "layers": [
       "ai",
       "core",
@@ -2798,14 +2798,8 @@
         "fan_out": 1
       },
       {
-        "id": "app.ai.validator",
-        "loc": 253,
-        "fan_in": 6,
-        "fan_out": 0
-      },
-      {
         "id": "app.core.guardrails",
-        "loc": 221,
+        "loc": 227,
         "fan_in": 7,
         "fan_out": 1
       },
@@ -2814,6 +2808,12 @@
         "loc": 286,
         "fan_in": 5,
         "fan_out": 2
+      },
+      {
+        "id": "app.handlers.comments.reviewer",
+        "loc": 411,
+        "fan_in": 3,
+        "fan_out": 8
       }
     ],
     "orphans": []

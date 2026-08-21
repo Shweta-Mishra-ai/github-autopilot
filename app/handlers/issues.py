@@ -45,7 +45,10 @@ def handle(payload: dict):
 
     repo = payload["repository"]["full_name"]
     issue_number = issue["number"]
-    author = issue["user"]["login"]
+    # Null on an issue opened by a since-deleted account — see the note in
+    # handlers/pull_request/__init__.py. An empty author is not a reason to
+    # drop the issue; it still deserves triage.
+    author = (issue.get("user") or {}).get("login", "")
     installation_id = payload["installation"]["id"]
     title = issue.get("title", "")
     body = (issue.get("body") or "")[:2000]

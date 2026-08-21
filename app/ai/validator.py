@@ -55,33 +55,23 @@ def validate_pr_analysis(raw: dict) -> dict:
     """
     Validate and sanitize PR analysis response.
 
-    ✅ FIXED (LOOPHOLE 18): Returns "suggested_title" (was "improved_title").
-    pull_request.py reads r.get("suggested_title") — field name now matches.
+    Every field returned here is read by app/handlers/pull_request/analysis.py.
+    That is a rule, not an observation: `pr_type` and `labels` used to be
+    validated here and consumed nowhere, and `improved_title` was returned
+    under a name the reader did not use, which is how every PR shipped with a
+    blank title suggestion. tests/test_validator.py::TestNoDeadValidatorFields
+    fails the build if a field is added here without a reader.
     """
     VALID_RISK = {"low", "medium", "high"}
-    VALID_TYPES = {
-        "feat",
-        "fix",
-        "docs",
-        "refactor",
-        "test",
-        "chore",
-        "perf",
-        "ci",
-        "style",
-        "build",
-    }
 
     if is_unusable(raw):
         log.warning(f"validate_pr_analysis: unusable payload — {str(raw)[:120]}")
         return {
-            "suggested_title": "",  # ✅ FIXED field name
+            "suggested_title": "",
             "description": "",
-            "labels": [],
             "risk_level": "medium",
             "risk_reason": "Could not analyze — using safe defaults",
             "review_focus": [],
-            "pr_type": "chore",
             "confidence": 0.0,
             "_degraded": True,
         }
@@ -89,12 +79,6 @@ def validate_pr_analysis(raw: dict) -> dict:
     risk = _get(raw, "risk_level", "medium").lower()
     if risk not in VALID_RISK:
         risk = "medium"
-
-    pr_type = _get(raw, "pr_type", "chore").lower()
-    if pr_type not in VALID_TYPES:
-        pr_type = "chore"
-
-    labels = _list_of_str(raw.get("labels"), max_items=10, max_item_len=50)
 
     review_focus = raw.get("review_focus", [])
     if not isinstance(review_focus, list):
@@ -111,11 +95,9 @@ def validate_pr_analysis(raw: dict) -> dict:
     return {
         "suggested_title": _str(raw.get("suggested_title") or raw.get("improved_title", ""), 200),
         "description": _str(raw.get("description", ""), 5000),
-        "labels": labels,
         "risk_level": risk,
         "risk_reason": _str(raw.get("risk_reason", ""), 300),
         "review_focus": review_focus,
-        "pr_type": pr_type,
         "confidence": confidence,
     }
 
@@ -191,11 +173,8 @@ def validate_code_review(raw: dict) -> dict:
         return {
             "score": None,
             "summary": "",
-            "verdict": "",
             "issues": [],
-            "positives": [],
             "confidence": 0.0,
-            "refactor_opportunity": "",
             "_degraded": True,
         }
 
@@ -236,17 +215,15 @@ def validate_code_review(raw: dict) -> dict:
     except (TypeError, ValueError):
         pass
 
-    # The model's overall assessment. Exposed under BOTH names: renderers read
-    # "summary", while app/mcp/handlers.py and evals/ read "verdict". Returning
-    # only one of them is how every code review shipped with a blank summary.
+    # The model's overall assessment. "verdict" is still accepted as an INPUT
+    # alias because older prompts emitted that name, but it is not returned:
+    # the duplicate output field was justified by a comment claiming
+    # app/mcp/handlers.py and evals/ read it, and neither ever did.
     assessment = _str(raw.get("summary") or raw.get("verdict", ""), 200)
 
     return {
         "score": score,
-        "summary": assessment,  # canonical — what renderers read
-        "verdict": assessment,  # retained for app/mcp/handlers.py + evals/
+        "summary": assessment,
         "issues": clean_issues,
-        "positives": _list_of_str(raw.get("positives"), max_items=5, max_item_len=200),
         "confidence": confidence,
-        "refactor_opportunity": _str(raw.get("refactor_opportunity", ""), 300),
     }

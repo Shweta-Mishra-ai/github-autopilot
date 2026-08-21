@@ -124,7 +124,7 @@ Comment `/health` on any issue. The bot replies with a repo health grade. Done. 
 | | |
 |---|---|
 | Modules | 87 |
-| Lines of code | 17,903 |
+| Lines of code | 17,904 |
 | Slash commands | 27 |
 | MCP tools | 9 |
 | Internal imports | 261 |
@@ -487,6 +487,14 @@ Full-codebase audit. The theme is features that were wired, tested, and shipped 
 - Professional commit-message suggestions on push (one LLM call, capped at five commits, merge/revert skipped, SHA-keyed dedup that fails closed).
 - README managed regions between `<!-- autopilot:NAME:start -->` markers, regenerated as the project changes and delivered by pull request only — never a direct push to the default branch. Region replacement slices the string rather than using `re.sub`, so a `\g<1>` in generated content cannot corrupt the file.
 
+**Five more LLM fields requested, validated, and thrown away**
+- A systematic sweep of `validator.py` against every reader in the codebase found that `pr_type` and `labels` (PR analysis) and `verdict`, `positives` and `refactor_opportunity` (code review) were sanitised and consumed by nothing. PRs are never labelled at all — only issues are — so `labels` had no destination even in principle. `verdict` duplicated `summary` under a comment claiming `app/mcp/handlers.py` and `evals/` read it; **neither ever did**. All five removed; `verdict` is still accepted as an *input* alias, which is the half that fixed the original blank-summary bug.
+- This is the same defect the repo has shipped four times (`improved_title`, `verdict`/`summary`, `time_estimate`, `description`), and it was invisible every time because the validator's own tests pass — they assert the sanitising is correct, which says nothing about whether anyone consumes the result. `TestNoDeadValidatorFields` now checks the other half, so a field added without a reader fails the build.
+
+**Six unguarded payload reads on the paths that matter most**
+- `pr["user"]["login"]` in the PR handler and `issue["user"]["login"]` in the issue handler both run *before the EventLogger exists*. An issue or PR from a deleted account raised a `TypeError` that `server._run_handler`'s blanket handler swallowed, so the event vanished with a log line naming no cause. Also fixed: `/merge` read `pr["head"]["sha"]` and told the user "Merge failed" when a PR's source fork had been deleted, and the auto-merge guardrail raised on a change request from a deleted reviewer — turning "correctly blocked by a review" into a generic error.
+- Guarded structurally rather than site-by-site: a test walks the AST for bare subscripts of `user`/`head`/`base`/`patch`, verified against the pre-fix tree to confirm it catches all six rather than passing vacuously.
+
 **Durability and the quality gate — the two things nothing was watching**
 - Memory backup now runs itself, every 15 days. The encrypted export existed and was correct; nothing invoked it, so a free-tier Redis wipe still lost every learned fact. **Export is scheduled, restore is not**: exporting writes ciphertext elsewhere, restoring *overwrites live memory*, so restore runs at boot and only when memory is empty — non-destructive by construction rather than by being careful about when it is called. If it cannot prove memory is empty, it does not restore. A test asserts the maintenance module cannot so much as name `restore_from_github`.
 - **The schedule is a due time in Redis, not a `sleep()`.** This runs on a free tier that restarts on deploy and on idle, and every restart puts a `sleep(15 days)` back to zero — the timer would never have fired once. The due time survives restarts, is advanced *before* the work starts (so a pass that dies halfway costs one cycle instead of retrying every hour forever), and is claimed with `SET NX` so one of N gunicorn workers runs it rather than all of them.
@@ -504,7 +512,7 @@ Full-codebase audit. The theme is features that were wired, tested, and shipped 
 - `record_latency()` had no callers, so `/health` and the health endpoint reported a 0% error rate no matter what the providers did. Wired into the circuit breaker and router.
 - The dependency-free `Codebase map` CI job broke on a third-party import reached through a package `__init__`. The command registry moved to a pure-stdlib `app/core/commands.py`, and five subprocess tests now fail if any third-party import creeps back into that path.
 - **Six unreachable modules resolved, none left.** `app/security/secrets.py` removed (superseded by `enhanced_secrets`). `app/security/licenses.py` — a complete copyleft-compliance scanner with green tests that nothing had ever imported, so the bot had never once reported a restrictive licence — is now part of `/secfull`, bounded to 20 packages and a 20-second budget, and omits packages it did not reach rather than reporting them as "unknown". `app/core/memory_backup.py` gained the operator CLI its documentation had been describing as `python -c` one-liners. `app/core/cache.py` was **deleted rather than wired**: every read it could have served either feeds a guardrail (`archived`, where a stale answer is precisely the bug v7.1.1 fixed) or picks a branch to write to (`default_branch`, where a stale answer targets the wrong ref) — and `load_config` already caches the one hot read that is safe to cache. Fixing bugs in unreachable code does not make it earn its place.
-- Tests 1054 → 1584, coverage 79% → 84%, orphan modules 6 → **0**, import cycles 1 → **0**. Both are now CI gates rather than reports.
+- Tests 1054 → 1593, coverage 79% → 84%, orphan modules 6 → **0**, import cycles 1 → **0**. Both are now CI gates rather than reports.
 
 ### V7.1.1 — 2026-08-03
 

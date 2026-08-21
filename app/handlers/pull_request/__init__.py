@@ -100,7 +100,13 @@ def handle(payload: dict):
     pr = payload["pull_request"]
     repo = payload["repository"]["full_name"]
     installation_id = payload["installation"]["id"]
-    author = pr["user"]["login"]
+    # `user` is an explicit null when the account was deleted. This line runs
+    # BEFORE the EventLogger exists, so the TypeError was caught by the blanket
+    # handler in server._run_handler and the event vanished with a log line
+    # that named no cause. `repository` and `installation` are left as bare
+    # subscripts on purpose: GitHub guarantees them for this event type, and a
+    # payload missing one is malformed rather than merely unusual.
+    author = (pr.get("user") or {}).get("login", "")
     pr_number = pr["number"]
 
     log = EventLogger("pull_request", repo=repo, pr=pr_number)

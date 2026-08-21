@@ -124,10 +124,10 @@ Comment `/health` on any issue. The bot replies with a repo health grade. Done. 
 | | |
 |---|---|
 | Modules | 87 |
-| Lines of code | 18,194 |
+| Lines of code | 18,358 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 261 |
+| Internal imports | 263 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>
@@ -487,6 +487,16 @@ Full-codebase audit. The theme is features that were wired, tested, and shipped 
 - Professional commit-message suggestions on push (one LLM call, capped at five commits, merge/revert skipped, SHA-keyed dedup that fails closed).
 - README managed regions between `<!-- autopilot:NAME:start -->` markers, regenerated as the project changes and delivered by pull request only — never a direct push to the default branch. Region replacement slices the string rather than using `re.sub`, so a `\g<1>` in generated content cannot corrupt the file.
 
+**Performance: profiled, not guessed**
+- The webhook path is 0.57 ms/request, so local CPU was never the bottleneck — but the profile found that **two `logging.warning` calls fired on every single event** when Redis was unavailable, and that was ~40% of the handler's own time. "Redis is unavailable" does not become more true the four-thousandth time it is logged; it becomes less readable, and it buries the warnings that are about one specific event. Both are logged on the *transition* now, in each direction, so an operator still learns when it starts and when it recovers.
+- `_is_duplicate_local` filtered all 2000 dedup entries on every event to expire the handful that had aged out. It is an `OrderedDict` written in time order, so the oldest key is always first — popping from the front until the head is live is **2.2× faster** (measured: 418 µs → 186 µs) and drops the O(n)-per-event term entirely.
+- The in-memory IP rate limiter **never freed an address**. The old code tried to delete empty windows but appended the current timestamp *before* testing for emptiness, so the window was never empty and the delete branch was unreachable — a comment describing a fix that could not fire, and one dict entry per source address forever on a public endpoint. It also appended while *over* the limit, so a flooding IP grew its own window for a full minute: the limiter paying for the flood it was refusing.
+- `_perm_cache` and `_config_cache` checked their TTL **on read only**, so an entry for a user who never came back was invalid but never freed — one entry per `(repo, user)` pair, forever, in a process meant to run for weeks on 512 MB. Checking a TTL is not the same as honouring it. Both prune on write now, amortised so the sweep is not paid per request.
+- That leak existed because `invalidate_permission_cache()` and `invalidate_config_cache()` had **zero callers**. They now have a real one: a push that edits `.ai-repo-manager.yml` drops both caches for that repo — the config one because it is stale, and the permission one because `commands.permissions.maintainer_only` lives in that same file. A maintainer fixing their config previously waited up to five minutes to learn whether the fix worked, which is long enough to conclude it had not and change something else.
+
+**Licence declarations disagreed with each other**
+- `plugin.json` and `marketplace.json` both said `MIT` while `pyproject.toml`, the README and the `LICENSE` files said `MIT OR Apache-2.0`; `mcp-manifest.json` declared nothing at all. Understating the grant is the harmless direction, but a licence that disagrees with itself is worse than none — someone reads the manifest, adopts under the narrower terms, and never learns the broader grant exists. All four now agree, pinned by a test that also checks both licence files actually ship.
+
 **The licence scanner was wrong about three quarters of this repo's own dependencies**
 - It read PyPI's `info.license` and nothing else. **Six of this repository's eight direct dependencies leave that field empty** — Flask, redis, gunicorn, cryptography, PyJWT and structlog all declare their licence in `license_expression` (PEP 639) or in trove classifiers — so all six were reported as "unknown", i.e. as something a maintainer must go and check. A scanner that is wrong about three quarters of a normal requirements file teaches people to skim past it. All three metadata sources are now read in order of authority, and the fixtures in the tests are the real payloads those packages publish, not shapes invented to make the parser pass.
 - Matching was by substring, which got dual licences backwards: `"MIT" in "MIT AND GPL-3.0"` is true, so a package that genuinely imposes the GPL was reported safe — a false **negative** in the one direction that costs someone a licence violation. Expressions are parsed now: `OR` takes the most permissive branch (the consumer picks), `AND` the most restrictive (all apply). The first version of that parser split on `OR` without respecting parentheses and called `GPL-3.0 AND (MIT OR Apache-2.0)` safe; a test caught it, not a re-read.
@@ -536,7 +546,7 @@ Full-codebase audit. The theme is features that were wired, tested, and shipped 
 - `record_latency()` had no callers, so `/health` and the health endpoint reported a 0% error rate no matter what the providers did. Wired into the circuit breaker and router.
 - The dependency-free `Codebase map` CI job broke on a third-party import reached through a package `__init__`. The command registry moved to a pure-stdlib `app/core/commands.py`, and five subprocess tests now fail if any third-party import creeps back into that path.
 - **Six unreachable modules resolved, none left.** `app/security/secrets.py` removed (superseded by `enhanced_secrets`). `app/security/licenses.py` — a complete copyleft-compliance scanner with green tests that nothing had ever imported, so the bot had never once reported a restrictive licence — is now part of `/secfull`, bounded to 20 packages and a 20-second budget, and omits packages it did not reach rather than reporting them as "unknown". `app/core/memory_backup.py` gained the operator CLI its documentation had been describing as `python -c` one-liners. `app/core/cache.py` was **deleted rather than wired**: every read it could have served either feeds a guardrail (`archived`, where a stale answer is precisely the bug v7.1.1 fixed) or picks a branch to write to (`default_branch`, where a stale answer targets the wrong ref) — and `load_config` already caches the one hot read that is safe to cache. Fixing bugs in unreachable code does not make it earn its place.
-- Tests 1054 → 1666, coverage 79% → 84%, orphan modules 6 → **0**, import cycles 1 → **0**. Both are now CI gates rather than reports.
+- Tests 1054 → 1687, coverage 79% → 84%, orphan modules 6 → **0**, import cycles 1 → **0**. Both are now CI gates rather than reports.
 
 ### V7.1.1 — 2026-08-03
 

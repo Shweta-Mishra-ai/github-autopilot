@@ -600,6 +600,46 @@ class TestPublishedNumbersAreTrue:
                 f"README claims {claimed} slash commands, registry has {len(ALL_COMMANDS)}"
             )
 
+    def test_license_is_consistent_everywhere(self):
+        """
+        A licence declaration that disagrees with itself is worse than none:
+        someone reads the manifest, adopts under the narrower terms, and never
+        learns the broader grant exists.
+
+        plugin.json and marketplace.json both said "MIT" while pyproject.toml,
+        the README and the LICENSE files said "MIT OR Apache-2.0", and
+        mcp-manifest.json declared nothing at all. Understating the grant is
+        the harmless direction, but it is still wrong, and the next drift may
+        not be.
+        """
+        import json
+
+        expected = "MIT OR Apache-2.0"
+
+        for manifest in (
+            "mcp-manifest.json",
+            "plugin/.claude-plugin/plugin.json",
+        ):
+            data = json.loads((_ROOT / manifest).read_text(encoding="utf-8"))
+            assert data.get("license") == expected, f"{manifest}: {data.get('license')!r}"
+
+        marketplace = json.loads(
+            (_ROOT / ".claude-plugin/marketplace.json").read_text(encoding="utf-8")
+        )
+        licences = {p.get("license") for p in marketplace.get("plugins", [])}
+        assert licences == {expected}, licences
+
+        pyproject = (_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        assert f'license = {{ text = "{expected}" }}' in pyproject
+
+        # Both halves of the dual licence must actually be present as files —
+        # an SPDX expression naming a licence the repository does not ship is
+        # a promise with nothing behind it.
+        for path in ("LICENSE", "LICENSE-MIT", "LICENSE-APACHE"):
+            assert (_ROOT / path).is_file(), f"missing {path}"
+        assert "Apache License" in (_ROOT / "LICENSE-APACHE").read_text(encoding="utf-8")
+        assert "MIT License" in (_ROOT / "LICENSE-MIT").read_text(encoding="utf-8")
+
     def test_version_is_consistent_everywhere(self):
         """A stale version string in any manifest is a launch-day embarrassment."""
         import json

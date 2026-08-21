@@ -352,9 +352,26 @@ def load_config(repo: str, token: str) -> Config:
 
     with _config_lock:
         _config_fetching.discard(repo)
+        _prune_config_cache(now)
         _config_cache[repo] = (config, now)
 
     return config
+
+
+_last_config_prune = 0.0
+_CONFIG_PRUNE_INTERVAL = 300.0
+
+
+def _prune_config_cache(now: float) -> None:
+    """Drop expired entries. Caller holds _config_lock. See the note in
+    app/core/authorization.py::_prune_perm_cache — the TTL was read-only."""
+    global _last_config_prune
+    if now - _last_config_prune < _CONFIG_PRUNE_INTERVAL:
+        return
+    _last_config_prune = now
+    stale = [k for k, (_, ts) in _config_cache.items() if now - ts >= _CONFIG_TTL]
+    for k in stale:
+        del _config_cache[k]
 
 
 def invalidate_config_cache(repo: str = None):

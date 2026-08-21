@@ -185,6 +185,18 @@ def _get_client_ip(request) -> str:
 _ip_counts: dict[str, list] = {}
 _ip_lock = threading.Lock()
 
+# Whether the limiter is running without Redis. Logging that on every request
+# does not make it more true, only less readable — and this is the webhook
+# path, so "every request" is the busiest thing in the process.
+_rl_in_fallback = False
+
+# Amortised sweep of IPs nobody has seen in a while. Without it the dict grows
+# once per distinct source address, forever: the old code tried to delete empty
+# windows, but appended the current timestamp *before* testing for emptiness,
+# so the window was never empty and the delete branch could not run.
+_last_sweep = 0.0
+_SWEEP_INTERVAL = 60.0
+
 
 def check_ip_rate_limit(ip: str) -> bool:
     """
@@ -204,27 +216,62 @@ def check_ip_rate_limit(ip: str) -> bool:
                 log.warning(f"webhook_security.rate_limit_redis ip={ip} count={count}")
             return ok
     except Exception as e:
-        log.warning(
-            f"webhook_security.rate_limit_redis_unavailable ip={ip}: {e} — falling back to in-memory"
-        )
+        _rate_limit_fallback_once(e)
 
     # In-memory sliding window fallback
     now = time.time()
     with _ip_lock:
-        window = _ip_counts.get(ip, [])
-        window = [t for t in window if now - t < 60]
-        window.append(now)
+        _sweep_stale_ips(now)
 
-        # FIXED: remove the key when the window is empty to prevent unbounded growth
+        window = [t for t in _ip_counts.get(ip, []) if now - t < 60]
+        ok = len(window) < IP_RATE_LIMIT
+
+        # Only record requests that are actually allowed. Appending while over
+        # the limit let a flooding IP grow its own window without bound for a
+        # full minute — the limiter paying for the flood it is refusing.
+        if ok:
+            window.append(now)
+
         if window:
             _ip_counts[ip] = window
         else:
             _ip_counts.pop(ip, None)
 
-        ok = len(window) <= IP_RATE_LIMIT
         if not ok:
             log.warning(f"webhook_security.rate_limit_memory ip={ip} count={len(window)}")
         return ok
+
+
+def _rate_limit_fallback_once(exc: Exception) -> None:
+    """Log the drop to in-memory limiting once per episode, not per request."""
+    global _rl_in_fallback
+    if not _rl_in_fallback:
+        _rl_in_fallback = True
+        log.warning(
+            f"webhook_security.rate_limit_memory_fallback ({exc}) — the limit is "
+            "per-process until Redis returns, so N workers allow N times the "
+            "configured rate. Logged once, not per request."
+        )
+
+
+def _sweep_stale_ips(now: float) -> None:
+    """
+    Drop IPs with no request in the last window. Caller holds _ip_lock.
+
+    Amortised: at most once per _SWEEP_INTERVAL, so the O(addresses) pass is
+    not paid on every webhook. Without any sweep the dict gains an entry per
+    distinct source address and never loses one — a public endpoint is scanned
+    by a lot of addresses that never come back.
+    """
+    global _last_sweep
+    if now - _last_sweep < _SWEEP_INTERVAL:
+        return
+    _last_sweep = now
+    stale = [addr for addr, win in _ip_counts.items() if not win or now - win[-1] >= 60]
+    for addr in stale:
+        del _ip_counts[addr]
+    if stale:
+        log.debug(f"webhook_security.rate_limit_swept addresses={len(stale)}")
 
 
 # ── Bot loop prevention ────────────────────────────────────────────────────────

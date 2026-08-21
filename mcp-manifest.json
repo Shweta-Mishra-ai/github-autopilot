@@ -2,6 +2,7 @@
   "name": "github-autopilot",
   "description": "AI-powered GitHub repository assistant. Analyze PRs, fix issues, scan secrets, generate tests — over MCP.",
   "version": "7.2.0",
+  "license": "MIT OR Apache-2.0",
   "protocol": "mcp/2024-11-05",
   "homepage": "https://github.com/Shweta-Mishra-ai/github-autopilot",
   "documentation": "https://github.com/Shweta-Mishra-ai/github-autopilot/blob/main/docs/mcp-setup.md",
@@ -10,7 +11,11 @@
     "base_url": "https://github-autopilot-1.onrender.com",
     "endpoint": "/mcp",
     "url": "https://github-autopilot-1.onrender.com/mcp",
-    "methods": ["initialize", "tools/list", "tools/call"]
+    "methods": [
+      "initialize",
+      "tools/list",
+      "tools/call"
+    ]
   },
   "authentication": {
     "type": "bearer",
@@ -20,13 +25,37 @@
     "note": "Server returns 503 if MCP_API_KEY is unset. Optional MCP_ALLOWED_INSTALLATIONS restricts install-id-scoped tools."
   },
   "tools": [
-    { "name": "analyze_pr",       "description": "Grade a PR (A-F): quality, security, test gaps, blast radius" },
-    { "name": "fix_issue",        "description": "Root cause + production-ready fix + verification test for an issue" },
-    { "name": "scan_secrets",     "description": "Scan a code snippet for exposed credentials (regex + entropy)" },
-    { "name": "explain_code",     "description": "Plain-English explanation at brief/standard/deep depth" },
-    { "name": "generate_tests",   "description": "pytest/unittest suite for a function or class" },
-    { "name": "security_review",  "description": "CVE + vulnerability review of code or requirements.txt" },
-    { "name": "get_repo_health",  "description": "Repo health grade with dimensions and quick wins" },
-    { "name": "run_command",      "description": "Run read-only slash commands remotely (/fix /explain /security ...)" }
+    {
+      "name": "analyze_pr",
+      "description": "Grade a PR (A-F): quality, security, test gaps, blast radius"
+    },
+    {
+      "name": "fix_issue",
+      "description": "Root cause + production-ready fix + verification test for an issue"
+    },
+    {
+      "name": "scan_secrets",
+      "description": "Scan a code snippet for exposed credentials (regex + entropy)"
+    },
+    {
+      "name": "explain_code",
+      "description": "Plain-English explanation at brief/standard/deep depth"
+    },
+    {
+      "name": "generate_tests",
+      "description": "pytest/unittest suite for a function or class"
+    },
+    {
+      "name": "security_review",
+      "description": "CVE + vulnerability review of code or requirements.txt"
+    },
+    {
+      "name": "get_repo_health",
+      "description": "Repo health grade with dimensions and quick wins"
+    },
+    {
+      "name": "run_command",
+      "description": "Run read-only slash commands remotely (/fix /explain /security ...)"
+    }
   ]
 }

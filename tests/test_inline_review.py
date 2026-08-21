@@ -187,9 +187,15 @@ def _run_review(review, post_mock, sticky_mock=None):
             pr, "org/repo", 1, _files(), "tok", cfg, MagicMock(), "", MagicMock()
         )
         if inline:
-            _post_inline_review(
-                pr, "org/repo", 1, "tok", cfg, md, inline, MagicMock()
+            # Fold the recovery back in, exactly as handle() does. The harness
+            # used to drop this return value — the same mistake production was
+            # making — which is why the rejection test below passed while a 422
+            # silently lost every anchored finding.
+            unposted = _post_inline_review(
+                pr, "org/repo", 1, "tok", cfg, inline, MagicMock()
             )
+            if unposted:
+                md = f"{md}\n\n{unposted}".strip()
         return md
 
 
@@ -221,8 +227,17 @@ class TestReviewCodeInline:
 
     def test_reviews_api_rejection_does_not_lose_findings(self):
         """
-        A 422 from the Reviews API is survivable: the finding is already in the
-        markdown that handle() puts in the sticky comment, so nothing is lost.
+        A 422 from the Reviews API must not lose the finding.
+
+        The old docstring here said the finding "is already in the markdown",
+        and that was wrong: a finding that anchors to a diff line is
+        deliberately LEFT OUT of the per-file markdown, which renders
+        "All findings posted as inline comments" in its place. So on a 422 the
+        finding existed nowhere, and the sticky report asserted it had been
+        posted as an inline comment that did not exist.
+
+        _post_inline_review returns the recovery markdown for exactly this
+        case. handle() dropped it; so did this test's harness.
         """
         from app.github.client import GitHubError
 
@@ -231,6 +246,26 @@ class TestReviewCodeInline:
 
         assert post.call_count == 1
         assert "Needs a guard" in md
+        assert "would not accept" in md, "the reader is not told why it is here"
+
+    def test_a_successful_post_adds_no_fallback_noise(self):
+        """The recovery block must appear only when something was rejected."""
+        post = MagicMock()
+        md = _run_review(_review_with_issue(), post)
+
+        post.assert_called_once()
+        assert "would not accept" not in md
+
+    def test_the_caller_folds_the_recovery_into_the_report(self):
+        """Pins the wiring, not just the return value — the function returned
+        this markdown correctly the whole time and nobody read it."""
+        import inspect
+
+        from app.handlers import pull_request as pr_mod
+
+        src = inspect.getsource(pr_mod.handle)
+        assert "_post_inline_review(" in src
+        assert "unposted_md" in src, "the return value is being discarded again"
 
     def test_committable_suggestion_for_single_line_fix_on_added_line(self):
         post = MagicMock()

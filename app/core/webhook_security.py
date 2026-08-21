@@ -9,14 +9,17 @@ FIXES vs V4:
   2. Content-Length bypass: verify_webhook() now checks len(request.data)
      instead of the Content-Length header. A missing or spoofed header can no
      longer let an oversized body bypass the size check.
-  3. X-Forwarded-For IP spoofing: The IP used for rate limiting is no longer
-     taken blindly from X-Forwarded-For. We read the *last* trusted hop from
-     the header chain (Render always appends the real client IP) and fall back
-     to request.remote_addr. Attackers can no longer spoof IPs by injecting a
-     forged X-Forwarded-For header value.
-  4. In-memory IP dict memory leak: old IP keys were never removed after their
-     sliding window emptied. Under a flood, every unique IP stayed in
-     _ip_counts forever. Fixed: delete key when window becomes empty.
+  3. X-Forwarded-For IP spoofing: the rate-limit address is taken from the
+     trusted end of the chain rather than the client-supplied end. How much of
+     the chain is trustworthy is a property of the DEPLOYMENT, not of this
+     code, so it is configured via TRUSTED_PROXY_HOPS (default 1, matching
+     Render). At 0 the header is ignored entirely — which is the correct and
+     necessary setting for a deployment with no proxy, where the whole header
+     is attacker-controlled.
+  4. In-memory IP dict memory leak: addresses are swept once their window goes
+     idle. The earlier attempt appended the current timestamp before testing
+     the window for emptiness, so the window was never empty and the delete
+     branch was unreachable.
   5. startup_check() now also validates GITHUB_APP_ID (numeric) and
      GITHUB_PRIVATE_KEY (non-empty). Auth failures at request time are now
      caught at boot instead.
@@ -161,23 +164,60 @@ def verify_timestamp(headers: dict) -> bool:
 # ── IP extraction — spoofing-resistant ────────────────────────────────────────
 
 
+# How many reverse proxies sit in front of this app. Render is one, which is
+# why that is the default and why nothing changes for the standard deployment.
+#
+# It has to be configurable, and it has to be able to be zero. Taking the last
+# X-Forwarded-For entry is spoofing-resistant ONLY when a trusted proxy wrote
+# that entry. With no proxy in front, remote_addr is already the real client
+# and the entire header is attacker-controlled — so trusting it unconditionally
+# means an attacker picks their own rate-limit bucket by sending a header, and
+# picks a *different* one on every request. This module's docstring claimed
+# spoofing was fixed; it was fixed for Render and nowhere else.
+#
+#   TRUSTED_PROXY_HOPS=0  no proxy — use remote_addr, ignore XFF entirely
+#   TRUSTED_PROXY_HOPS=1  one proxy (Render, Fly, most PaaS) — default
+#   TRUSTED_PROXY_HOPS=2  e.g. Cloudflare in front of a PaaS router
+TRUSTED_PROXY_HOPS_ENV = "TRUSTED_PROXY_HOPS"
+DEFAULT_TRUSTED_PROXY_HOPS = 1
+
+
+def _trusted_proxy_hops() -> int:
+    """Read per call so it can be changed without a redeploy, like the secret."""
+    try:
+        return max(0, int(os.environ.get(TRUSTED_PROXY_HOPS_ENV, DEFAULT_TRUSTED_PROXY_HOPS)))
+    except (TypeError, ValueError):
+        return DEFAULT_TRUSTED_PROXY_HOPS
+
+
 def _get_client_ip(request) -> str:
     """
-    Extract real client IP in a spoofing-resistant way.
+    The client address to rate-limit on, resisting X-Forwarded-For spoofing.
 
-    FIXED: V4 took the *first* value from X-Forwarded-For, which an attacker
-    can inject freely (X-Forwarded-For: spoofed, real). The platform (Render)
-    always appends the actual client IP as the *last* entry in the chain.
-    Taking the last value makes forged prefixes irrelevant.
+    A proxy APPENDS the address it saw, so the chain reads
+    [client-supplied…, seen-by-outer-proxy, …, seen-by-inner-proxy]. With N
+    trusted proxies the honest value is the Nth entry from the right; anything
+    to its left was written by someone we do not trust and is ignored.
 
-    Falls back to request.remote_addr if the header is missing (direct
-    connections / local dev).
+    Falls back to remote_addr whenever the header is absent, empty, or shorter
+    than the configured chain — a chain that is too short means the request did
+    not come through the proxies we expect, which is not a reason to trust it
+    more.
     """
+    hops = _trusted_proxy_hops()
+    remote = request.remote_addr or "unknown"
+    if hops == 0:
+        return remote
+
     xff = request.headers.get("X-Forwarded-For", "")
-    if xff:
-        # Last entry = the IP the platform saw; earlier entries are client-supplied
-        return xff.split(",")[-1].strip()
-    return request.remote_addr or "unknown"
+    if not xff:
+        return remote
+
+    parts = [p.strip() for p in xff.split(",") if p.strip()]
+    if len(parts) < hops:
+        log.debug(f"webhook_security.short_forwarded_chain entries={len(parts)} expected>={hops}")
+        return remote
+    return parts[-hops]
 
 
 # ── IP Rate Limiting (sliding window) ─────────────────────────────────────────

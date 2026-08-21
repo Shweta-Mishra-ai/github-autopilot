@@ -23,12 +23,27 @@ MAX_DIFF_CHARS = 3000
 LOW_CONFIDENCE_THRESHOLD = 0.70
 
 
-def _post_inline_review(pr, repo, pr_number, token, config, review_body, inline_comments, log):
+def _post_inline_review(pr, repo, pr_number, token, config, inline_comments, log):
     """
     Post line-anchored findings as a real PR Review.
 
-    Falls back to nothing on rejection — the findings are already rendered in
-    the sticky report, so a 422 here loses no information.
+    Returns markdown for any finding that could NOT be posted — the caller must
+    fold it into the sticky report. Returning "" means everything landed.
+
+    This return value is not optional. A finding that anchors to a diff line is
+    deliberately left OUT of the per-file markdown, which renders "All findings
+    posted as inline comments" in its place. So when GitHub rejects the review
+    — a 422 on a line it considers non-commentable, an outdated diff, a
+    force-pushed head — the finding exists in neither place, and the report
+    states it was posted as an inline comment that does not exist.
+
+    An earlier docstring here claimed a 422 "loses no information". It was
+    wrong, which is why this fallback was built; the caller then dropped the
+    return value, so it never helped anyone.
+
+    The `review_body` parameter this used to take was never read — the review
+    body is a fixed heading, because the full markdown already goes in the
+    sticky report and posting it twice is the noise V7 set out to remove.
     """
     fallback_md = [c.pop("_fallback_md", "") for c in inline_comments]
     try:
@@ -45,8 +60,11 @@ def _post_inline_review(pr, repo, pr_number, token, config, review_body, inline_
         log.done(f"code_review_posted_inline: {len(inline_comments)} line comments")
     except GitHubError as e:
         # Most likely a 422 from a line the API considers non-commentable.
-        log.warning(f"inline_review_rejected — findings remain in the sticky report: {e}")
-        return "\n".join(m for m in fallback_md if m)
+        log.warning(f"inline_review_rejected — folding findings into the report: {e}")
+        recovered = [m for m in fallback_md if m]
+        if not recovered:
+            return ""
+        return "\n".join(["#### Findings GitHub would not accept as inline comments\n", *recovered])
     return ""
 
 

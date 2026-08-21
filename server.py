@@ -19,7 +19,7 @@ from app import __version__
 from app.core.metrics import metrics
 from app.core.redis_client import is_redis_available
 from app.core.thread_pool import is_saturated, pool_stats, shutdown
-from app.core.webhook_security import startup_check
+from app.core.webhook_security import MAX_PAYLOAD_BYTES, startup_check
 import app.core.idempotency as idempotency
 import app.core.thread_pool as thread_pool
 import app.core.webhook_security as webhook_security
@@ -49,9 +49,31 @@ log = logging.getLogger("server")
 
 app = Flask(__name__)
 
+# Refuse an oversized body while it is being READ, not after.
+#
+# verify_webhook() checks len(request.data), which cannot run until the entire
+# body has been materialised — measured at 62 MB of peak allocation to reject a
+# 30 MB request, and the size check is step one, so no signature is required to
+# trigger it. A handful of concurrent requests exhausts a 512 MB instance.
+#
+# Werkzeug enforces this limit against the stream and raises
+# RequestEntityTooLarge before the body reaches the application. The explicit
+# length check in verify_webhook stays as defence in depth for a chunked
+# request that declares no Content-Length.
+app.config["MAX_CONTENT_LENGTH"] = MAX_PAYLOAD_BYTES
+
 METRICS_TOKEN = os.environ.get("METRICS_AUTH_TOKEN", "")
 START_TIME = time.time()
 VERSION = __version__
+
+
+@app.errorhandler(413)
+def _payload_too_large(_e):
+    """Werkzeug aborts oversized bodies before any route runs; answer in the
+    same JSON shape every other rejection uses so a client does not have to
+    parse an HTML error page."""
+    metrics.increment("webhook.rejected_too_large")
+    return jsonify({"error": "Payload too large"}), 413
 
 
 def _authorized(req) -> bool:
@@ -288,6 +310,13 @@ def webhook():
         payload = request.get_json(force=True)
     except Exception:
         return jsonify({"error": "Invalid JSON"}), 400
+
+    # `[]`, `"str"` and `123` are all valid JSON and none of them has .get().
+    # Every line below assumes a mapping, so the AttributeError surfaced as a
+    # 500 — an internal error for what is really a malformed request.
+    if not isinstance(payload, dict):
+        log.warning(f"webhook.non_object_payload type={type(payload).__name__}")
+        return jsonify({"error": "Payload must be a JSON object"}), 400
 
     webhook_event = request.headers.get("X-GitHub-Event", "")
     delivery_id = request.headers.get("X-GitHub-Delivery", "")

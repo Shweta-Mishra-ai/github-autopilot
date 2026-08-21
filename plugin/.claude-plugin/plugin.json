@@ -8,6 +8,6 @@
   },
   "homepage": "https://github.com/Shweta-Mishra-ai/github-autopilot",
   "repository": "https://github.com/Shweta-Mishra-ai/github-autopilot",
-  "license": "MIT",
+  "license": "MIT OR Apache-2.0",
   "keywords": ["github", "mcp", "ai", "code-review", "security", "automation"]
 }

@@ -272,11 +272,11 @@
       "id": "app.core.authorization",
       "path": "app/core/authorization.py",
       "layer": "core",
-      "loc": 195,
-      "functions": 4,
+      "loc": 221,
+      "functions": 5,
       "classes": 0,
       "is_package": false,
-      "fan_in": 1,
+      "fan_in": 2,
       "fan_out": 3,
       "external_deps": [
         "app",
@@ -318,11 +318,11 @@
       "id": "app.core.config",
       "path": "app/core/config.py",
       "layer": "core",
-      "loc": 375,
-      "functions": 4,
+      "loc": 392,
+      "functions": 5,
       "classes": 1,
       "is_package": false,
-      "fan_in": 6,
+      "fan_in": 7,
       "fan_out": 1,
       "external_deps": [
         "app",
@@ -397,8 +397,8 @@
       "id": "app.core.idempotency",
       "path": "app/core/idempotency.py",
       "layer": "core",
-      "loc": 100,
-      "functions": 3,
+      "loc": 134,
+      "functions": 5,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
@@ -615,8 +615,8 @@
       "id": "app.core.webhook_security",
       "path": "app/core/webhook_security.py",
       "layer": "core",
-      "loc": 287,
-      "functions": 8,
+      "loc": 334,
+      "functions": 10,
       "classes": 0,
       "is_package": false,
       "fan_in": 3,
@@ -1117,12 +1117,12 @@
       "id": "app.handlers.push",
       "path": "app/handlers/push.py",
       "layer": "handlers",
-      "loc": 484,
-      "functions": 10,
+      "loc": 524,
+      "functions": 11,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 12,
+      "fan_out": 14,
       "external_deps": [
         "app",
         "base64",
@@ -2416,8 +2416,18 @@
     },
     {
       "source": "app.handlers.push",
+      "target": "app.core.authorization",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.push",
       "target": "app.core.config",
       "kind": "import"
+    },
+    {
+      "source": "app.handlers.push",
+      "target": "app.core.config",
+      "kind": "runtime"
     },
     {
       "source": "app.handlers.push",
@@ -2742,8 +2752,8 @@
   ],
   "stats": {
     "modules": 87,
-    "edges": 261,
-    "total_loc": 18194,
+    "edges": 263,
+    "total_loc": 18358,
     "layers": [
       "ai",
       "core",
@@ -2781,16 +2791,16 @@
         "fan_out": 3
       },
       {
+        "id": "app.core.config",
+        "loc": 392,
+        "fan_in": 7,
+        "fan_out": 1
+      },
+      {
         "id": "app.security.enhanced_secrets",
         "loc": 527,
         "fan_in": 4,
         "fan_out": 0
-      },
-      {
-        "id": "app.core.config",
-        "loc": 375,
-        "fan_in": 6,
-        "fan_out": 1
       },
       {
         "id": "app.intelligence.memory",

@@ -109,6 +109,7 @@ def get_user_permission(repo: str, username: str, token: str) -> str:
 
     if cacheable:
         with _perm_lock:
+            _prune_perm_cache(now)
             _perm_cache[cache_key] = (perm, now)
 
     return perm
@@ -179,6 +180,31 @@ def check_command_permission(
         f"Your current access level: `{perm or 'none'}`\n\n"
         f"Contact a repository maintainer if you need this action performed."
     )
+
+
+# Amortised so the O(entries) pass is not paid on every permission check.
+_last_perm_prune = 0.0
+_PERM_PRUNE_INTERVAL = 300.0
+
+
+def _prune_perm_cache(now: float) -> None:
+    """
+    Drop expired entries. Caller holds _perm_lock.
+
+    The TTL was checked on READ only, so an entry for a user who never came
+    back was invalid but never freed: the cache grew by one entry per
+    (repo, user) pair, forever, in a process meant to run for weeks on 512MB.
+    Checking a TTL is not the same as honouring it.
+    """
+    global _last_perm_prune
+    if now - _last_perm_prune < _PERM_PRUNE_INTERVAL:
+        return
+    _last_perm_prune = now
+    stale = [k for k, (_, ts) in _perm_cache.items() if now - ts >= _PERM_TTL]
+    for k in stale:
+        del _perm_cache[k]
+    if stale:
+        log.debug(f"auth.perm_cache_pruned entries={len(stale)}")
 
 
 def invalidate_permission_cache(repo: str = None, user: str = None):

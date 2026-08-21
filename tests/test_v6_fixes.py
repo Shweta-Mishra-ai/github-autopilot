@@ -473,11 +473,17 @@ class TestIntelligenceGraceful(unittest.TestCase):
 class TestIdempotencyFallbackWarning(unittest.TestCase):
     def test_memory_fallback_logs_warning(self):
         """When Redis is unavailable, idempotency must log WARNING not DEBUG."""
-        from app.core.idempotency import is_duplicate
+        import app.core.idempotency as idem
+
+        # The warning fires on the TRANSITION into fallback, so the test has to
+        # start outside it. Previously it fired on every call, which is what
+        # made this assertion pass regardless of ordering — and what buried
+        # every other warning in the log on a busy repo with Redis down.
+        idem._in_fallback = False
 
         with patch("app.core.idempotency.is_redis_available", return_value=False):
             with self.assertLogs("app.core.idempotency", level="WARNING") as cm:
-                is_duplicate("test_fingerprint_12345678901234")
+                idem.is_duplicate("test_fingerprint_12345678901234")
 
             warning_msgs = [m for m in cm.output if "WARNING" in m]
             self.assertTrue(len(warning_msgs) > 0,

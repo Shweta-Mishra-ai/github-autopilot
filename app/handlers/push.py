@@ -66,6 +66,27 @@ SKIP_AUTHORS = {
 _SECRET_DEDUP_TTL = 3600
 
 
+# The repo config file, by the name load_config() actually reads.
+CONFIG_FILENAME = ".ai-repo-manager.yml"
+
+
+def _config_file_touched(commits: list) -> bool:
+    """
+    True when any commit in this push added, modified or removed the config.
+
+    `removed` counts: deleting the file means the repo falls back to defaults,
+    which changes behaviour exactly as much as editing it does.
+    """
+    for commit in commits or []:
+        if not isinstance(commit, dict):
+            continue
+        for field in ("added", "modified", "removed"):
+            paths = commit.get(field) or []
+            if any(str(path).endswith(CONFIG_FILENAME) for path in paths):
+                return True
+    return False
+
+
 def handle(payload: dict) -> None:
     repo = payload["repository"]["full_name"]
     installation_id = payload["installation"]["id"]
@@ -87,6 +108,25 @@ def handle(payload: dict) -> None:
     except Exception as e:
         log.error(f"Auth failed: {e}")
         return
+
+    # A push that edits the config file must not be read through a cache that
+    # predates it. Both caches are dropped for this repo, not just the config
+    # one: `commands.permissions.maintainer_only` lives in that file, so a
+    # permission decision made from the old config is stale for the same
+    # reason. Without this, a maintainer fixing their config waited up to five
+    # minutes to find out whether the fix worked — long enough to conclude it
+    # had not and change something else.
+    #
+    # This is also what the two invalidate_* helpers were written for. They had
+    # no callers, which is why the TTL was the only thing ever expiring an
+    # entry, and why neither cache reclaimed memory.
+    if _config_file_touched(commits):
+        from app.core.authorization import invalidate_permission_cache
+        from app.core.config import invalidate_config_cache
+
+        invalidate_config_cache(repo)
+        invalidate_permission_cache(repo)
+        log.info("push.config_changed — config and permission caches dropped")
 
     config = load_config(repo, token)
     latest_sha = commits[-1].get("id", "") if commits else ""

@@ -32,7 +32,7 @@
       "functions": 4,
       "classes": 3,
       "is_package": false,
-      "fan_in": 12,
+      "fan_in": 13,
       "fan_out": 1,
       "external_deps": [
         "app",
@@ -41,6 +41,24 @@
         "logging",
         "threading",
         "time"
+      ]
+    },
+    {
+      "id": "app.ai.gatekeeper",
+      "path": "app/ai/gatekeeper.py",
+      "layer": "ai",
+      "loc": 156,
+      "functions": 4,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 3,
+      "external_deps": [
+        "__future__",
+        "app",
+        "logging",
+        "os",
+        "re"
       ]
     },
     {
@@ -166,7 +184,7 @@
       "functions": 1,
       "classes": 1,
       "is_package": false,
-      "fan_in": 1,
+      "fan_in": 2,
       "fan_out": 2,
       "external_deps": [
         "app",
@@ -565,7 +583,7 @@
       "functions": 3,
       "classes": 1,
       "is_package": false,
-      "fan_in": 8,
+      "fan_in": 9,
       "fan_out": 0,
       "external_deps": [
         "contextlib",
@@ -1028,12 +1046,12 @@
       "id": "app.handlers.pull_request",
       "path": "app/handlers/pull_request/__init__.py",
       "layer": "handlers",
-      "loc": 218,
+      "loc": 233,
       "functions": 1,
       "classes": 0,
       "is_package": true,
       "fan_in": 2,
-      "fan_out": 18,
+      "fan_out": 19,
       "external_deps": [
         "__future__",
         "app"
@@ -1345,8 +1363,8 @@
       "id": "app.security.enhanced_secrets",
       "path": "app/security/enhanced_secrets.py",
       "layer": "security",
-      "loc": 527,
-      "functions": 10,
+      "loc": 654,
+      "functions": 13,
       "classes": 1,
       "is_package": false,
       "fan_in": 4,
@@ -1437,6 +1455,21 @@
     {
       "source": "app.ai.circuit_breaker",
       "target": "app.core.health_check",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.gatekeeper",
+      "target": "app.ai.circuit_breaker",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.gatekeeper",
+      "target": "app.ai.providers.ollama",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.gatekeeper",
+      "target": "app.core.sanitizer",
       "kind": "runtime"
     },
     {
@@ -2246,6 +2279,11 @@
     },
     {
       "source": "app.handlers.pull_request",
+      "target": "app.ai.gatekeeper",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request",
       "target": "app.ai.router",
       "kind": "import"
     },
@@ -2751,9 +2789,9 @@
     }
   ],
   "stats": {
-    "modules": 87,
-    "edges": 263,
-    "total_loc": 18451,
+    "modules": 88,
+    "edges": 267,
+    "total_loc": 18749,
     "layers": [
       "ai",
       "core",
@@ -2791,28 +2829,28 @@
         "fan_out": 3
       },
       {
+        "id": "app.security.enhanced_secrets",
+        "loc": 654,
+        "fan_in": 4,
+        "fan_out": 0
+      },
+      {
         "id": "app.core.config",
         "loc": 392,
         "fan_in": 7,
         "fan_out": 1
       },
       {
-        "id": "app.security.enhanced_secrets",
-        "loc": 527,
-        "fan_in": 4,
-        "fan_out": 0
+        "id": "app.ai.circuit_breaker",
+        "loc": 144,
+        "fan_in": 13,
+        "fan_out": 1
       },
       {
         "id": "app.intelligence.memory",
         "loc": 328,
         "fan_in": 5,
         "fan_out": 2
-      },
-      {
-        "id": "app.ai.circuit_breaker",
-        "loc": 144,
-        "fan_in": 12,
-        "fan_out": 1
       },
       {
         "id": "app.core.guardrails",

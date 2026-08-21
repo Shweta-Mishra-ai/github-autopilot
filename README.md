@@ -123,11 +123,11 @@ Comment `/health` on any issue. The bot replies with a repo health grade. Done. 
 <!-- autopilot:stats:start -->
 | | |
 |---|---|
-| Modules | 87 |
-| Lines of code | 18,451 |
+| Modules | 88 |
+| Lines of code | 18,749 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 263 |
+| Internal imports | 267 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>
@@ -201,7 +201,7 @@ code. Explore it interactively at [`/graph`](#codebase-map), or regenerate with
 <!-- autopilot:architecture:start -->
 ```mermaid
 graph LR
-    ai["ai<br/>14 modules"]
+    ai["ai<br/>15 modules"]
     core["core<br/>22 modules"]
     github["github<br/>8 modules"]
     handlers["handlers<br/>23 modules"]
@@ -489,6 +489,16 @@ Full-codebase audit. The theme is features that were wired, tested, and shipped 
 - Professional commit-message suggestions on push (one LLM call, capped at five commits, merge/revert skipped, SHA-keyed dedup that fails closed).
 - README managed regions between `<!-- autopilot:NAME:start -->` markers, regenerated as the project changes and delivered by pull request only — never a direct push to the default branch. Region replacement slices the string rather than using `re.sub`, so a `\g<1>` in generated content cannot corrupt the file.
 
+**The secret scanner reported placeholders as leaks**
+- Run against **this repository's own source** it produced eight findings, every one a placeholder — including four `CRITICAL` "private key" hits on `app/security/enhanced_secrets.py`, where the matched text was the regex that *detects* private keys. A scanner that reports its own ruleset as a leak is not one anyone reads twice. It is now **zero**, with every real credential shape still firing.
+- Three separate causes. `FALSE_POSITIVE_FILE_PATTERNS` contained `/tests/` **with a leading slash**, and GitHub reports repo-relative paths — so `tests/conftest.py` never matched and the exclusion had never worked for the commonest layout there is. The placeholder word list was five words and missed `replace`, `dummy`, `sample`, `not_real`, `${…}` and `{{ … }}`. And a PEM *header* matched on its own, when what makes a private key a leak is the key **material**.
+- The material check looks at the following lines as well as the rest of the current one, because a real key is base64 across many lines — requiring the body on the same line would have missed every genuine multi-line leak, which is far worse than the noise it removes.
+
+**Ollama earns its place: a local triage gate**
+- The provider was reachable only through `LLM_LOCAL_ONLY` and `LLM_PREFER_LOCAL` — two all-or-nothing switches that route *everything* local. Neither is set in a normal deployment, so the integration existed and did nothing. As a **gatekeeper** it fits: a local call costs nothing, so it is affordable to ask about every diff, and *"is there anything here worth reviewing"* is a far easier question than reviewing. Version bumps, lockfile churn, formatting and comment edits now skip the cloud entirely.
+- **It fails open, always.** Unreachable, slow, circuit open, empty answer, rambling answer, both words at once — every one of those means "review it", identical to having no gate. A gate that failed closed would silently stop reviewing pull requests while every test still passed, which is the exact failure this codebase has spent its history removing. There is deliberately no setting that makes it strict, and a test asserts only one code path in the whole function can skip a review.
+- Inert unless `OLLAMA_HOST` is set, so nothing changes for anyone who does not want it.
+
 **Webhook hardening — the only endpoint the internet is meant to reach**
 - **An unauthenticated 30 MB request allocated 62 MB before being rejected.** `verify_webhook` checks `len(request.data)`, which cannot run until the whole body has been materialised — and the size check is *step one*, so no signature was needed to trigger it. A handful of concurrent requests exhausts a 512 MB instance. Werkzeug now refuses the body against the stream: the same request peaks at **0.2 MB**. The explicit length check stays as defence in depth for a chunked request that declares no `Content-Length`.
 - **X-Forwarded-For was trusted whenever present.** With a proxy in front that is correct; with no proxy the entire header is attacker-supplied, so a flood could pick a fresh rate-limit bucket on every single request. How much of the chain is trustworthy is a property of the *deployment*, so it is now `TRUSTED_PROXY_HOPS` — default `1`, which is exactly Render's shape and changes nothing for the standard install. The module's own docstring had claimed spoofing was fixed; it was fixed for Render and nowhere else.
@@ -558,7 +568,7 @@ Full-codebase audit. The theme is features that were wired, tested, and shipped 
 - `record_latency()` had no callers, so `/health` and the health endpoint reported a 0% error rate no matter what the providers did. Wired into the circuit breaker and router.
 - The dependency-free `Codebase map` CI job broke on a third-party import reached through a package `__init__`. The command registry moved to a pure-stdlib `app/core/commands.py`, and five subprocess tests now fail if any third-party import creeps back into that path.
 - **Six unreachable modules resolved, none left.** `app/security/secrets.py` removed (superseded by `enhanced_secrets`). `app/security/licenses.py` — a complete copyleft-compliance scanner with green tests that nothing had ever imported, so the bot had never once reported a restrictive licence — is now part of `/secfull`, bounded to 20 packages and a 20-second budget, and omits packages it did not reach rather than reporting them as "unknown". `app/core/memory_backup.py` gained the operator CLI its documentation had been describing as `python -c` one-liners. `app/core/cache.py` was **deleted rather than wired**: every read it could have served either feeds a guardrail (`archived`, where a stale answer is precisely the bug v7.1.1 fixed) or picks a branch to write to (`default_branch`, where a stale answer targets the wrong ref) — and `load_config` already caches the one hot read that is safe to cache. Fixing bugs in unreachable code does not make it earn its place.
-- Tests 1054 → 1716, coverage 79% → 84%, orphan modules 6 → **0**, import cycles 1 → **0**. Both are now CI gates rather than reports.
+- Tests 1054 → 1786, coverage 79% → 84%, orphan modules 6 → **0**, import cycles 1 → **0**. Both are now CI gates rather than reports.
 
 ### V7.1.1 — 2026-08-03
 

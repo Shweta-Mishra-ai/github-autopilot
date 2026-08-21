@@ -130,7 +130,14 @@ def _real_secret_cases():
         "slack bot token (11-digit team)": (
             f'+S = "xoxb-29148374651-29183746512-{_rand(ALNUM, 24)}"'
         ),
-        "rsa private key header": "+-----BEGIN RSA PRIVATE KEY-----",
+        # The header alone is a format string, not a key — it appears verbatim
+        # in this scanner's own ruleset. What is asserted here is a key with
+        # actual material, which is what a leak looks like.
+        "rsa private key with material": (
+            "+-----BEGIN RSA PRIVATE KEY-----\n"
+            "+MIIEpAIBAAKCAQEA7Xk9pQm2vRtYhL3nWcF4dJ8sKzB1gTaV6uNxE0oPqHrCmZyD\n"
+            "+-----END RSA PRIVATE KEY-----"
+        ),
         "postgres connection string": '+DB = "postgresql://admin:hunter2swordfish@db:5432/prod"',
     }
 

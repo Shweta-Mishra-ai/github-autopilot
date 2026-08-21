@@ -187,20 +187,30 @@ FALSE_POSITIVE_VALUES = {
 }
 
 # File patterns to skip (test files, docs, examples)
+# Paths whose CONVENTION rules out a real credential.
+#
+# Anchored with `(^|/)` on purpose. GitHub reports repo-relative paths, so
+# `tests/conftest.py` has no leading slash and the old `/tests/` entry could
+# never match a top-level tests directory — the exclusion existed and did
+# nothing for the most common layout there is.
 FALSE_POSITIVE_FILE_PATTERNS = [
     r"\.md$",
     r"\.txt$",
     r"\.example$",
     r"\.sample$",
-    r"test_",
+    r"\.template$",
+    r"(^|/)test_",
     r"_test\.",
-    r"/tests/",
-    r"docs/",
+    r"(^|/)tests?/",
+    r"(^|/)conftest\.py$",
+    r"(^|/)fixtures?/",
+    r"(^|/)docs?/",
     r"README",
     r"CHANGELOG",
     r"CONTRIBUTING",
     r"\.env\.example",
     r"\.env\.sample",
+    r"\.env\.template",
 ]
 
 HIGH_ENTROPY_THRESHOLD = 4.5
@@ -344,6 +354,87 @@ def _is_structural_non_secret(value: str) -> bool:
     return any(p.search(v) for p in _STRUCTURAL_NON_SECRETS)
 
 
+# Words that only ever appear in a value somebody typed as a stand-in. A real
+# credential is issued by a provider and does not contain English instructions.
+#
+# Matched anywhere in the value, case-insensitively. That is safe because these
+# are dictionary words: the chance a randomly issued key contains "replace_with"
+# or "not_real" is negligible, and being wrong in this direction only means one
+# missed placeholder, while being wrong in the other means an issue filed
+# against a maintainer for a key that says REPLACE_ME.
+_PLACEHOLDER_TOKENS = (
+    "placeholder",
+    "example",
+    "changeme",
+    "change_me",
+    "change-me",
+    "replace",
+    "insert",
+    "your_",
+    "your-",
+    "yourkey",
+    "yourtoken",
+    "dummy",
+    "sample",
+    "not_real",
+    "notreal",
+    "fake",
+    "redacted",
+    "todo",
+    "_here",
+    "-here",
+    "abc123",
+    "foobar",
+)
+
+_PLACEHOLDER_SHAPES = (
+    re.compile(r"x{6,}", re.IGNORECASE),  # xxxxxxxx
+    re.compile(r"^<[^>]{2,}>$"),  # <your-token>
+    re.compile(r"\$\{[^}]+\}"),  # ${GITHUB_TOKEN}
+    re.compile(r"\{\{[^}]+\}\}"),  # {{ secrets.X }}
+    re.compile(r"^\*{4,}$"),  # ****
+    re.compile(r"^(.)\1{7,}$"),  # the same character, repeated
+)
+
+
+# Prefix-anchored, not substring. "test" appearing somewhere inside a random
+# key is plausible; a credential that BEGINS with "test-" was typed by a person.
+# Anchoring is what makes this safe to apply to the value itself.
+_PLACEHOLDER_PREFIXES = ("test-", "test_", "testing", "demo-", "demo_", "my-", "my_")
+
+
+def _candidate_values(matched: str) -> list[str]:
+    """
+    The match, plus the quoted value inside it if there is one.
+
+    Patterns are keyword-anchored, so `matched` is `API_KEY: "…"` rather than
+    the credential. A prefix rule has to see the value, not the keyword in
+    front of it.
+    """
+    values = [matched.strip()]
+    quoted = re.findall(r"['\"]([^'\"]+)['\"]", matched)
+    values.extend(q.strip() for q in quoted)
+    # `KEY=value` with no quotes, as .env files are written.
+    if "=" in matched:
+        values.append(matched.split("=", 1)[1].strip())
+    if ":" in matched:
+        values.append(matched.split(":", 1)[1].strip().strip("\"'"))
+    return [v for v in values if v]
+
+
+def _is_placeholder(value: str) -> bool:
+    """True for a value a human typed as a stand-in for a real credential."""
+    for candidate in _candidate_values(value):
+        low = candidate.lower()
+        if any(tok in low for tok in _PLACEHOLDER_TOKENS):
+            return True
+        if low.startswith(_PLACEHOLDER_PREFIXES):
+            return True
+        if any(p.search(candidate) for p in _PLACEHOLDER_SHAPES):
+            return True
+    return False
+
+
 def _is_false_positive(value: str) -> bool:
     """Returns True if match is likely a false positive."""
     if _is_structural_non_secret(value):
@@ -352,8 +443,7 @@ def _is_false_positive(value: str) -> bool:
     for fp in FALSE_POSITIVE_VALUES:
         if fp.lower() in v_lower or v_lower in fp.lower():
             return True
-    # Common placeholder patterns
-    return bool(re.search(r"(x{6,}|placeholder|example|changeme|your[_-]|insert)", v_lower))
+    return _is_placeholder(value)
 
 
 def _is_test_line(line: str) -> bool:
@@ -367,6 +457,36 @@ def _is_test_line(line: str) -> bool:
     # Word-boundary markers (standalone words only)
     word_markers = [r"\bmock\b", r"\bfake\b", r"\bdummy\b"]
     return any(re.search(m, line_lower) for m in word_markers)
+
+
+# A PEM header on its own proves nothing. It appears verbatim in three places
+# that are not leaks: a scanner's own ruleset (this file matched itself, at
+# CRITICAL severity), a test fixture whose "key" is the word `test`, and any
+# documentation showing the format. What makes it a leak is the key MATERIAL.
+_PEM_HEADER_RE = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----")
+_PEM_BODY_RE = re.compile(r"[A-Za-z0-9+/]{40,}={0,2}")
+
+
+def _pem_has_key_material(lines: list[str], index: int, matched: str) -> bool:
+    """
+    True when a PEM header is followed by something that looks like a key.
+
+    A real private key is base64 over many lines, so the body is usually on the
+    lines AFTER the header — requiring it on the same line would miss every
+    genuine multi-line leak, which is far worse than the noise it removes.
+    Both placements are checked: the remainder of this line (a key embedded in
+    source with escaped newlines) and the next few added lines.
+    """
+    remainder = lines[index][1:].split(matched, 1)[-1]
+    if _PEM_BODY_RE.search(remainder):
+        return True
+
+    for follow in lines[index + 1 : index + 6]:
+        if not follow.startswith("+"):
+            continue
+        if _PEM_BODY_RE.search(follow[1:]):
+            return True
+    return False
 
 
 def scan_diff(diff: str, file_path: str = "") -> list[SecretFinding]:
@@ -410,6 +530,13 @@ def scan_diff(diff: str, file_path: str = "") -> list[SecretFinding]:
 
             # Skip false positives
             if _is_false_positive(matched):
+                continue
+
+            # A PEM header with no key material after it is a format string,
+            # not a credential.
+            if _PEM_HEADER_RE.fullmatch(matched) and not _pem_has_key_material(
+                lines, lineno - 1, matched
+            ):
                 continue
 
             # Entropy gate for patterns that require it. These patterns are all

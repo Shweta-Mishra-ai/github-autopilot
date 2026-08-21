@@ -12,31 +12,8 @@ import re
 import contextlib
 from app.github.client import GitHubError
 from app.github.helpers import fmt_error
-import app.handlers.comments as hc
+from ._client import gh_get, gh_post, gh_put, gh_delete, router  # noqa: F401  (re-exported: tests patch these names)
 
-
-def gh_get(*a, **kw):
-    return hc.gh_get(*a, **kw)
-
-
-def gh_post(*a, **kw):
-    return hc.gh_post(*a, **kw)
-
-
-def gh_put(*a, **kw):
-    return hc.gh_put(*a, **kw)
-
-
-def gh_delete(*a, **kw):
-    return hc.gh_delete(*a, **kw)
-
-
-class RouterProxy:
-    def __getattr__(self, name):
-        return getattr(hc.router, name)
-
-
-router = RouterProxy()
 
 log = logging.getLogger(__name__)
 

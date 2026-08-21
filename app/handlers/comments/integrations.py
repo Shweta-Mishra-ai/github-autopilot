@@ -19,16 +19,7 @@ import logging
 import os
 
 from app.github.client import GitHubError
-
-import app.handlers.comments as hc
-
-
-def gh_get(*a, **kw):
-    return hc.gh_get(*a, **kw)
-
-
-def gh_post(*a, **kw):
-    return hc.gh_post(*a, **kw)
+from ._client import gh_get, gh_post  # noqa: F401  (re-exported: tests patch these names)
 
 
 log = logging.getLogger(__name__)

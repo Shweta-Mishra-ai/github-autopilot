@@ -417,6 +417,18 @@ class LLMRouter:
         except Exception:
             pass  # tracking must never affect request
 
+        # Feed the degraded-mode tracker. app/core/health_check.py implements
+        # per-provider latency stats and a "provider is slow" message, but
+        # record_latency() had no callers, so get_system_health() was computed
+        # from an empty dataset and always reported healthy. The feature was
+        # built and then never connected to anything that knows a latency.
+        try:
+            from app.core.health_check import record_latency
+
+            record_latency(meta.provider, int(meta.latency_ms or 0))
+        except Exception:
+            pass  # health tracking must never affect request
+
     def _check_budget_alert(self, r, provider_key: str, today: str):
         try:
             limits = DAILY_LIMITS.get(provider_key, {})

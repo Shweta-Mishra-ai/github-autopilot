@@ -20,7 +20,7 @@ These pin the safety properties that were not actually holding:
      swallows the resulting KeyError as "no snapshot".
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 

@@ -154,7 +154,7 @@ Five handlers, each responsible for exactly one GitHub event type. Independent â
 
 ### Authorization Layer
 
-Runs inside the handler after config is loaded, before any destructive command executes. Calls `GET /repos/{repo}/collaborators/{user}/permission`. Requires `write`, `maintain`, or `admin`. Results cached 5 minutes per `(repo, user)` pair in a module-level dict protected by `threading.RLock`. Fails closed â€” any API error returns `"none"` permission, which denies access.
+Runs inside the handler after config is loaded, before any destructive command executes. Calls `GET /repos/{repo}/collaborators/{user}/permission`. Requires `write`, `maintain`, or `admin`. Results cached 5 minutes per `(repo, user)` pair in a module-level dict protected by `threading.RLock`. Fails closed, but distinguishes two cases: a `404` means GitHub answered and the user is genuinely not a collaborator (`"none"`, cached), while a `403`/`5xx`/network failure means the question was never answered (`PERMISSION_UNKNOWN`, **not** cached, so a transient failure or a just-granted permission recovers on the next command). Both deny access; only the first is a statement about the user. Failures increment `auth.permission_check_failed`, surfaced on `/health`.
 
 ### AI Router Layer
 

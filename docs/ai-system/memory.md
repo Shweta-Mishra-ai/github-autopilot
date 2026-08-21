@@ -79,13 +79,24 @@ object storage — only ever holds **ciphertext**. The key never leaves your env
 
 ```bash
 # 1. Generate a key once
-python -c "from app.core.memory_backup import generate_key; print(generate_key())"
+python -m app.core.memory_backup genkey
 
 # 2. Set it
 MEMORY_BACKUP_KEY=<that value>
+
+# 3. Back up / restore
+python -m app.core.memory_backup export --out memory.bin
+python -m app.core.memory_backup restore --in memory.bin
 ```
 
-Then, e.g. from a scheduled job:
+`export` writes ciphertext only; `restore` replaces existing memory unless you
+pass `--merge`. Both exit non-zero on failure, so they can be driven from a
+scheduled job without the caller having to parse output.
+
+There is **no automatic trigger, by design** — a restore overwrites live
+memory, and nothing reachable from a webhook should be able to cause that. If
+you want durability across restarts, run `export` from cron and `restore` from
+your boot script. The GitHub transport is available for the same purpose:
 
 ```python
 from app.core.memory_backup import backup_to_github, restore_from_github

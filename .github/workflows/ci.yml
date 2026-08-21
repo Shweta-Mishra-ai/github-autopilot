@@ -228,6 +228,7 @@ jobs:
             --entrypoint worker \
             --entrypoint app.dashboard \
             --entrypoint app.graphview \
+            --entrypoint app.core.memory_backup \
             --out docs/diagrams/codegraph.json
 
       - name: Report structure
@@ -255,12 +256,36 @@ jobs:
               print(f"| `{h['id']}` | {h['loc']} | {h['fan_in']} |")
           PY
 
+      - name: Fail on import cycles or unreachable modules
+        # Reporting these in the job summary was not enough — a summary nobody
+        # opens is the same as no check. A cycle is a design defect and an
+        # unreachable module is either dead code to delete or an entrypoint to
+        # declare; either way it is a decision, so it blocks the build until
+        # someone makes one.
+        run: |
+          python - <<'PY'
+          import json, sys
+          s = json.load(open("docs/diagrams/codegraph.json"))["stats"]
+          bad = False
+          for c in s.get("cycles") or []:
+              print(f"::error::import cycle: {' -> '.join(c)}")
+              bad = True
+          for o in s.get("orphans") or []:
+              print(f"::error::nothing imports {o} — delete it, or declare it with --entrypoint")
+              bad = True
+          sys.exit(1 if bad else 0)
+          PY
+
       - name: Fail if the committed map is stale (PRs only)
         if: github.event_name == 'pull_request'
         run: |
           if ! git diff --quiet -- docs/diagrams/codegraph.json; then
             echo "::error::docs/diagrams/codegraph.json is out of date. Run:"
-            echo "::error::python -m app.intelligence.codegraph app server.py worker.py --out docs/diagrams/codegraph.json"
+            echo "::error::  python -m app.intelligence.codegraph app server.py worker.py \\"
+            echo "::error::    --entrypoint app --entrypoint server --entrypoint worker \\"
+            echo "::error::    --entrypoint app.dashboard --entrypoint app.graphview \\"
+            echo "::error::    --entrypoint app.core.memory_backup \\"
+            echo "::error::    --out docs/diagrams/codegraph.json"
             git diff --stat -- docs/diagrams/codegraph.json
             exit 1
           fi

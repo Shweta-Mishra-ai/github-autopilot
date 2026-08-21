@@ -9,7 +9,7 @@ from app.core.config import load_config
 from app.core.logger import EventLogger
 from app.github.auth import get_installation_token
 from app.github.client import GitHubError
-from app.handlers.comments import gh_post
+from ._client import gh_post
 from app.github.helpers import fmt_error
 
 from .constants import SKIP_AUTHORS

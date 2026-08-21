@@ -176,3 +176,76 @@ def restore_from_github(target_repo: str, path: str, token: str) -> int:
     except Exception as e:
         log.error(f"memory_backup.github_restore_failed: {e}")
         return 0
+
+
+# ── Operator CLI ──────────────────────────────────────────────────────────────
+#
+# Disaster recovery is not something an operator should have to reconstruct
+# from a docstring at the moment they need it. docs/ai-system/memory.md used to
+# document this module as a set of `python -c` one-liners; these are the same
+# calls with argument validation and exit codes, so a restore can be scripted.
+#
+# There is deliberately no automatic trigger. A restore overwrites live memory,
+# and nothing in the request path should be able to cause that.
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+    import sys
+
+    ap = argparse.ArgumentParser(
+        prog="python -m app.core.memory_backup",
+        description="Encrypted export/restore of per-repo memory.",
+    )
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    sub.add_parser("genkey", help="print a new MEMORY_BACKUP_KEY and exit")
+
+    p_exp = sub.add_parser("export", help="write an encrypted backup to a file")
+    p_exp.add_argument("--out", required=True, help="destination file (ciphertext)")
+    p_exp.add_argument("--repo", action="append", default=None, help="repeatable; default: all")
+
+    p_imp = sub.add_parser("restore", help="restore memory from an encrypted file")
+    p_imp.add_argument("--in", dest="src", required=True, help="ciphertext file to restore")
+    p_imp.add_argument(
+        "--merge",
+        action="store_true",
+        help="keep existing entries instead of replacing them",
+    )
+
+    args = ap.parse_args(argv)
+
+    if args.cmd == "genkey":
+        print(generate_key())
+        return 0
+
+    if not is_configured():
+        print("MEMORY_BACKUP_KEY is not set — backup is disabled.", file=sys.stderr)
+        return 2
+
+    if args.cmd == "export":
+        blob = export_encrypted(args.repo)
+        if blob is None:
+            print("Export failed; see logs.", file=sys.stderr)
+            return 1
+        with open(args.out, "wb") as fh:
+            fh.write(blob)
+        print(f"Wrote {len(blob)} bytes of ciphertext to {args.out}")
+        return 0
+
+    # restore
+    with open(args.src, "rb") as fh:
+        blob = fh.read()
+    try:
+        count = import_encrypted(blob, overwrite=not args.merge)
+    except Exception as e:
+        # InvalidToken means wrong key or tampered file — say which, because
+        # "decryption failed" sends the operator looking in the wrong place.
+        print(f"Restore failed ({type(e).__name__}): wrong key or corrupt file.", file=sys.stderr)
+        return 1
+    print(f"Restored memory for {count} repo(s).")
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover - CLI entrypoint
+    raise SystemExit(main())

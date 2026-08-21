@@ -12,13 +12,10 @@ from __future__ import annotations
 import logging
 
 from app.github.helpers import fmt_error
-import app.handlers.comments as hc
+from ._client import gh_get  # noqa: F401  (re-exported: tests patch these names)
+
 
 log = logging.getLogger(__name__)
-
-
-def gh_get(*a, **kw):
-    return hc.gh_get(*a, **kw)
 
 
 def _pr_head_sha(repo: str, pr_number: int, token: str) -> str:
@@ -88,12 +85,46 @@ def cmd_security(repo: str, issue_number: int, issue: dict, token: str) -> str:
         return fmt_error("Security scan failed", exc)
 
 
+def _license_section(repo: str, token: str) -> str:
+    """
+    License-compliance section of the full scan, or "" if it cannot be run.
+
+    app/security/licenses.py was written, tested and then never imported, so
+    the bot has never once reported a copyleft dependency. `/secfull` is the
+    natural home: it is the only command that scans the whole repository
+    rather than a diff.
+
+    Returns "" — not an error block — when there is no requirements.txt or the
+    check fails. A licence report is advisory; it must never be the reason a
+    security scan comes back empty.
+    """
+    try:
+        import base64
+
+        from app.security.licenses import format_findings, scan_requirements
+
+        raw = gh_get(f"/repos/{repo}/contents/requirements.txt", token)
+        if not isinstance(raw, dict) or not raw.get("content"):
+            return ""
+        content = base64.b64decode(raw["content"]).decode("utf-8", errors="replace")
+        return format_findings(scan_requirements(content))
+    except Exception as exc:
+        log.info(f"security.license_scan_skipped repo={repo}: {exc}")
+        return ""
+
+
 def cmd_secfull(repo: str, token: str) -> str:
     """Full repository security scan."""
     try:
         from app.security.scanner import run_security_scan
 
         report = run_security_scan(repo, token)
-        return report.to_markdown(include_low=True)
+        sections = [report.to_markdown(include_low=True)]
+
+        licenses = _license_section(repo, token)
+        if licenses:
+            sections.append(licenses)
+
+        return "\n\n---\n\n".join(sections)
     except Exception as exc:
         return fmt_error("Security scan failed", exc)

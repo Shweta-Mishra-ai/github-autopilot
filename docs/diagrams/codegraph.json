@@ -1362,14 +1362,15 @@
       "id": "app.security.licenses",
       "path": "app/security/licenses.py",
       "layer": "security",
-      "loc": 133,
-      "functions": 3,
+      "loc": 345,
+      "functions": 10,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
       "fan_out": 2,
       "external_deps": [
         "app",
+        "re",
         "requests",
         "time"
       ]
@@ -2742,7 +2743,7 @@
   "stats": {
     "modules": 87,
     "edges": 261,
-    "total_loc": 17982,
+    "total_loc": 18194,
     "layers": [
       "ai",
       "core",

@@ -52,7 +52,15 @@ MAX_CONTEXT_CHARS = 3000
 VALID_KINDS = {"fix", "decision", "pattern", "preference", "fact"}
 
 _TOKEN_RE = re.compile(r"[a-z0-9_]+")
-_INDEX_KEY = "mem:__index__"  # list of repos that have memory (for backup enumeration)
+# Repos that have memory, for backup and the scheduled sweep to enumerate.
+#
+# A SET, not a list. It was a list with dedup done by reading the whole thing
+# back on every write: O(n) in the number of repos on the hottest path in this
+# module — the same complexity this file's docstring says was removed from
+# remember() — and not atomic, so two concurrent writers for a new repo both
+# saw "absent" and both pushed it. Redis has a type for this.
+_REPO_SET_KEY = "mem:repos"
+_LEGACY_INDEX_KEY = "mem:__index__"  # pre-7.2.0 list; migrated on first read
 # Dedup hashes outlive nothing in particular — 90 days is long enough that the
 # same fact isn't re-stored, short enough that the keys expire on a free tier.
 _HASH_TTL = 90 * 86400
@@ -68,22 +76,51 @@ def _hash_key(repo: str) -> str:
 
 
 def _index_repo(r, repo: str) -> None:
-    """Record `repo` in the index list (dedup) so known_repos() can enumerate."""
+    """Record `repo` in the index so known_repos() can enumerate. O(1)."""
     try:
-        if repo.encode() not in (
-            v.encode() if isinstance(v, str) else v for v in (r.lrange(_INDEX_KEY, 0, -1) or [])
-        ):
-            r.lpush(_INDEX_KEY, repo)
+        r.sadd(_REPO_SET_KEY, repo)
     except Exception as e:
         log.debug(f"memory.index_repo_failed repo={repo}: {e}")
 
 
+def _decode(value) -> str:
+    return value.decode() if isinstance(value, bytes) else str(value)
+
+
+def _migrate_legacy_index(r) -> None:
+    """
+    Fold the pre-7.2.0 list into the set, once.
+
+    Renaming rather than reusing the key is deliberate: reading a set with
+    LRANGE raises WRONGTYPE, so a deploy that changed the type in place would
+    have broken every running worker until it restarted.
+    """
+    try:
+        legacy = r.lrange(_LEGACY_INDEX_KEY, 0, -1) or []
+        if not legacy:
+            return
+        for value in legacy:
+            r.sadd(_REPO_SET_KEY, _decode(value))
+        r.delete(_LEGACY_INDEX_KEY)
+        log.info(f"memory.index_migrated repos={len(set(map(_decode, legacy)))}")
+    except Exception as e:
+        log.debug(f"memory.index_migration_skipped: {e}")
+
+
 def known_repos() -> list[str]:
-    """Repos that have stored memory — used by backup to enumerate."""
+    """
+    Repos with stored memory — read by the backup and the scheduled sweep.
+
+    Sorted so callers are deterministic: the maintenance pass takes a bounded
+    slice of this, and an arbitrary Redis set order would silently scan a
+    different subset every cycle.
+    """
     try:
         from app.core.redis_client import get_redis
 
-        return list(get_redis().lrange(_INDEX_KEY, 0, -1) or [])
+        r = get_redis()
+        _migrate_legacy_index(r)
+        return sorted(_decode(v) for v in (r.smembers(_REPO_SET_KEY) or set()))
     except Exception:
         return []
 
@@ -272,14 +309,19 @@ def count(repo: str) -> int:
 
 def clear(repo: str) -> None:
     """
-    Drop this repo's memory AND its write-dedup index.
+    Drop this repo's memory, its write-dedup index, and its index entry.
 
     Clearing only the list would leave the hash set behind, so re-storing a
-    previously-known fact after a clear would silently no-op.
+    previously-known fact after a clear would silently no-op. Leaving the
+    repo-set entry behind is the same mistake one level up: known_repos() would
+    keep reporting a repo with nothing in it, and the backup would carry an
+    empty record for it forever.
     """
     try:
         from app.core.redis_client import get_redis
 
-        get_redis().delete(_key(repo), _hash_key(repo))
+        r = get_redis()
+        r.delete(_key(repo), _hash_key(repo))
+        r.srem(_REPO_SET_KEY, repo)
     except Exception as e:
         log.warning(f"memory.clear_failed repo={repo}: {e} — repo memory may not have been deleted")

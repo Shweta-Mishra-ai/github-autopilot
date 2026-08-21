@@ -55,11 +55,19 @@ consumer group (2 threads) → bounded `ThreadPoolExecutor` (6) as fallback.
 
 Everything is **bounded** — no unbounded growth is possible:
 
+The payload limit is enforced by Werkzeug against the request stream, not by
+the application after the fact. Checking `len(request.data)` cannot run until
+the whole body has been materialised: rejecting a 30 MB request that way was
+measured at 62 MB of peak allocation, and since the size check is the first
+step of verification, **no signature was required to trigger it**. It is now
+0.2 MB. The explicit length check remains as defence in depth for a chunked
+request that declares no `Content-Length`.
+
 | Limit | Value | Purpose |
 |-------|-------|---------|
 | Event queue length | 200 | over → 503 → GitHub redelivers |
 | Envelope size | 512 KB | oversized → direct dispatch, not Redis |
-| Webhook payload | 25 MB | reject oversized bodies |
+| Webhook payload | 25 MB | rejected **during the read** (`MAX_CONTENT_LENGTH`) |
 | Per-IP rate limit | 100 / min | flood protection |
 | Per-user cmd limit | 10 / hr | abuse protection |
 | Memory per repo | 500 items | bounds free-tier Redis |

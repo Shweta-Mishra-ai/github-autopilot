@@ -201,7 +201,13 @@ def handle(payload: dict):
     # the diff itself, which is the one place bot output is unambiguously
     # useful. Only the conversation-tab noise is being consolidated.
     if inline_comments:
-        _post_inline_review(pr, repo, pr_number, token, config, review_md, inline_comments, log)
+        # The return value is the recovery path, not a status code. Findings
+        # that anchor to a diff line are left out of review_md on the
+        # assumption they will appear on the diff; if GitHub refuses the
+        # review, this is the only remaining copy of them.
+        unposted_md = _post_inline_review(pr, repo, pr_number, token, config, inline_comments, log)
+        if unposted_md:
+            review_md = f"{review_md}\n\n{unposted_md}".strip()
 
     body = _build_pr_report(analysis_md, summary_md, review_md, gaps_md, pr, files)
     try:

@@ -76,7 +76,7 @@ Eight non-negotiable properties. Every tradeoff in this document traces back to 
 ╔═════════════════════════════════════════════════════════════════════════════╗
 ║                          SECURITY LAYER                                     ║
 ║                                                                             ║
-║  [1] Size limit  →  [2] IP rate limit  →  [3] HMAC-SHA256 verify           ║
+║  [1] Size limit (during read)  →  [2] IP rate limit  →  [3] HMAC verify    ║
 ║  [4] JSON parse  →  [5] Bot detection  →  [6] Replay protection            ║
 ║  [7] ThreadPool dispatch  →  ACK 202 (< 50ms)                              ║
 ║                                                                             ║

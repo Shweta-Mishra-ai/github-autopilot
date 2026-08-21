@@ -124,7 +124,7 @@ Comment `/health` on any issue. The bot replies with a repo health grade. Done. 
 | | |
 |---|---|
 | Modules | 87 |
-| Lines of code | 18,358 |
+| Lines of code | 18,451 |
 | Slash commands | 27 |
 | MCP tools | 9 |
 | Internal imports | 263 |
@@ -449,6 +449,8 @@ ruff check app/               # lint
 - Optional `MCP_ALLOWED_INSTALLATIONS` allowlist for tenant isolation
 - Bot-loop prevention on all event handlers
 - Prompt-injection mitigation: input sanitization + delimiter-wrapped user content, with delimiter-shaped sequences inside that content escaped so it cannot close its own block
+- Oversized bodies are refused **while being read** (`MAX_CONTENT_LENGTH`), not after — checking `len(request.data)` cannot run until the body is fully materialised, and that check runs before any signature is verified
+- The per-IP rate limit reads X-Forwarded-For from the trusted end of the chain, with how much of the chain is trustworthy declared by `TRUSTED_PROXY_HOPS` — set it to `0` if you expose the app without a proxy
 - **No code-execution path**: the bot never runs untrusted repo code (no `eval`/`exec`/`subprocess`/`pickle`) — a malicious repo cannot execute code on the host
 
 Full analysis: [reliability & isolation audit](docs/architecture/reliability-audit.md) · where we're headed: [roadmap](docs/architecture/roadmap.md).
@@ -486,6 +488,16 @@ Full-codebase audit. The theme is features that were wired, tested, and shipped 
 **New: the bot writes on push**
 - Professional commit-message suggestions on push (one LLM call, capped at five commits, merge/revert skipped, SHA-keyed dedup that fails closed).
 - README managed regions between `<!-- autopilot:NAME:start -->` markers, regenerated as the project changes and delivered by pull request only — never a direct push to the default branch. Region replacement slices the string rather than using `re.sub`, so a `\g<1>` in generated content cannot corrupt the file.
+
+**Webhook hardening — the only endpoint the internet is meant to reach**
+- **An unauthenticated 30 MB request allocated 62 MB before being rejected.** `verify_webhook` checks `len(request.data)`, which cannot run until the whole body has been materialised — and the size check is *step one*, so no signature was needed to trigger it. A handful of concurrent requests exhausts a 512 MB instance. Werkzeug now refuses the body against the stream: the same request peaks at **0.2 MB**. The explicit length check stays as defence in depth for a chunked request that declares no `Content-Length`.
+- **X-Forwarded-For was trusted whenever present.** With a proxy in front that is correct; with no proxy the entire header is attacker-supplied, so a flood could pick a fresh rate-limit bucket on every single request. How much of the chain is trustworthy is a property of the *deployment*, so it is now `TRUSTED_PROXY_HOPS` — default `1`, which is exactly Render's shape and changes nothing for the standard install. The module's own docstring had claimed spoofing was fixed; it was fixed for Render and nowhere else.
+- `[]`, `"str"` and `123` are all valid JSON and none of them has `.get()`. A non-object payload raised `AttributeError` and surfaced as a 500 — an internal error for what is really a malformed request.
+
+**The code review silently dropped findings when GitHub rejected them**
+- A finding that anchors to a diff line is deliberately left **out** of the per-file markdown, which renders *"All findings posted as inline comments"* in its place. When the Reviews API returns 422 — a line it considers non-commentable, an outdated diff, a force-pushed head — `_post_inline_review` builds recovery markdown and returns it. **The caller discarded the return value**, so the finding existed in neither place and the sticky report asserted it had been posted as an inline comment that did not exist.
+- There was already a test called `test_reviews_api_rejection_does_not_lose_findings`. It passed, because its harness dropped the return value the same way production did — it tested the function, not the wiring. Both are fixed, and a third test now asserts the caller reads the value.
+- Found by `vulture`, which flagged the ignored `review_body` parameter next door. Of its six findings, five were false positives (signal-handler arguments, and a name used only inside a string annotation) — worth stating, because the tool's value here was one true positive that led to a different bug entirely.
 
 **Performance: profiled, not guessed**
 - The webhook path is 0.57 ms/request, so local CPU was never the bottleneck — but the profile found that **two `logging.warning` calls fired on every single event** when Redis was unavailable, and that was ~40% of the handler's own time. "Redis is unavailable" does not become more true the four-thousandth time it is logged; it becomes less readable, and it buries the warnings that are about one specific event. Both are logged on the *transition* now, in each direction, so an operator still learns when it starts and when it recovers.
@@ -546,7 +558,7 @@ Full-codebase audit. The theme is features that were wired, tested, and shipped 
 - `record_latency()` had no callers, so `/health` and the health endpoint reported a 0% error rate no matter what the providers did. Wired into the circuit breaker and router.
 - The dependency-free `Codebase map` CI job broke on a third-party import reached through a package `__init__`. The command registry moved to a pure-stdlib `app/core/commands.py`, and five subprocess tests now fail if any third-party import creeps back into that path.
 - **Six unreachable modules resolved, none left.** `app/security/secrets.py` removed (superseded by `enhanced_secrets`). `app/security/licenses.py` — a complete copyleft-compliance scanner with green tests that nothing had ever imported, so the bot had never once reported a restrictive licence — is now part of `/secfull`, bounded to 20 packages and a 20-second budget, and omits packages it did not reach rather than reporting them as "unknown". `app/core/memory_backup.py` gained the operator CLI its documentation had been describing as `python -c` one-liners. `app/core/cache.py` was **deleted rather than wired**: every read it could have served either feeds a guardrail (`archived`, where a stale answer is precisely the bug v7.1.1 fixed) or picks a branch to write to (`default_branch`, where a stale answer targets the wrong ref) — and `load_config` already caches the one hot read that is safe to cache. Fixing bugs in unreachable code does not make it earn its place.
-- Tests 1054 → 1687, coverage 79% → 84%, orphan modules 6 → **0**, import cycles 1 → **0**. Both are now CI gates rather than reports.
+- Tests 1054 → 1716, coverage 79% → 84%, orphan modules 6 → **0**, import cycles 1 → **0**. Both are now CI gates rather than reports.
 
 ### V7.1.1 — 2026-08-03
 

@@ -561,8 +561,8 @@
       "id": "app.core.sanitizer",
       "path": "app/core/sanitizer.py",
       "layer": "core",
-      "loc": 127,
-      "functions": 2,
+      "loc": 163,
+      "functions": 3,
       "classes": 1,
       "is_package": false,
       "fan_in": 8,
@@ -1205,8 +1205,8 @@
       "id": "app.intelligence.memory",
       "path": "app/intelligence/memory.py",
       "layer": "intelligence",
-      "loc": 286,
-      "functions": 13,
+      "loc": 328,
+      "functions": 15,
       "classes": 1,
       "is_package": false,
       "fan_in": 5,
@@ -2742,7 +2742,7 @@
   "stats": {
     "modules": 87,
     "edges": 261,
-    "total_loc": 17904,
+    "total_loc": 17982,
     "layers": [
       "ai",
       "core",
@@ -2792,6 +2792,12 @@
         "fan_out": 1
       },
       {
+        "id": "app.intelligence.memory",
+        "loc": 328,
+        "fan_in": 5,
+        "fan_out": 2
+      },
+      {
         "id": "app.ai.circuit_breaker",
         "loc": 144,
         "fan_in": 12,
@@ -2802,12 +2808,6 @@
         "loc": 227,
         "fan_in": 7,
         "fan_out": 1
-      },
-      {
-        "id": "app.intelligence.memory",
-        "loc": 286,
-        "fan_in": 5,
-        "fan_out": 2
       },
       {
         "id": "app.handlers.comments.reviewer",

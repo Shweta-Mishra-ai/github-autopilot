@@ -124,7 +124,7 @@ Comment `/health` on any issue. The bot replies with a repo health grade. Done. 
 | | |
 |---|---|
 | Modules | 87 |
-| Lines of code | 17,904 |
+| Lines of code | 17,982 |
 | Slash commands | 27 |
 | MCP tools | 9 |
 | Internal imports | 261 |
@@ -448,7 +448,7 @@ ruff check app/               # lint
 - Autofix cannot touch CI workflows, Dockerfiles, env files, or security modules (path allowlist + prefix blocklist + traversal guard); changes require human `/apply`
 - Optional `MCP_ALLOWED_INSTALLATIONS` allowlist for tenant isolation
 - Bot-loop prevention on all event handlers
-- Prompt-injection mitigation: input sanitization + delimiter-wrapped user content
+- Prompt-injection mitigation: input sanitization + delimiter-wrapped user content, with delimiter-shaped sequences inside that content escaped so it cannot close its own block
 - **No code-execution path**: the bot never runs untrusted repo code (no `eval`/`exec`/`subprocess`/`pickle`) — a malicious repo cannot execute code on the host
 
 Full analysis: [reliability & isolation audit](docs/architecture/reliability-audit.md) · where we're headed: [roadmap](docs/architecture/roadmap.md).
@@ -487,6 +487,15 @@ Full-codebase audit. The theme is features that were wired, tested, and shipped 
 - Professional commit-message suggestions on push (one LLM call, capped at five commits, merge/revert skipped, SHA-keyed dedup that fails closed).
 - README managed regions between `<!-- autopilot:NAME:start -->` markers, regenerated as the project changes and delivered by pull request only — never a direct push to the default branch. Region replacement slices the string rather than using `re.sub`, so a `\g<1>` in generated content cannot corrupt the file.
 
+**User content could close its own prompt delimiter**
+- The README advertises *"input sanitization + delimiter-wrapped user content"* as this app's prompt-injection defence. The sanitization half worked; the delimiter half did not. `wrap_user_content()` interpolated attacker-controlled text between `<PR_BODY>` and `</PR_BODY>` **without checking whether that text contained `</PR_BODY>` itself** — so a PR body could close the block early and land its own instructions *outside* the delimiters, where the model reads them as system text rather than as data. `sanitize_user_input()` never caught it: its XML patterns cover `<system>` and `</instructions>`, not the label names the module invents for itself.
+- Worst on the PR path, where the body is written by whoever opened the pull request — an outside contributor could aim it at the risk assessment that decides whether a PR is safe to auto-merge. Reproduced end-to-end before fixing, and the test asserts on what escapes the block rather than on the presence of a string.
+- Delimiter-shaped sequences are now escaped rather than deleted, so a legitimate `<TODO>` in a diff survives as `&lt;TODO&gt;` instead of vanishing — a scanner that silently eats content is its own bug. The escaping lives in `wrap_user_content`, **not** in `sanitize_user_input`: the router sanitizes the fully assembled prompt, which by then legitimately contains these delimiters, so defanging at that layer would destroy the markers it exists to protect.
+
+**The memory index was a list used as a set**
+- `_index_repo()` deduplicated by reading the entire index back on **every memory write** — O(n) in the number of repos, on the hottest path in the module whose own docstring says that complexity was removed from `remember()`. It was also not atomic: two concurrent writers for a new repo both saw "absent" and both pushed it. Now a Redis set: O(1), atomic, no duplicates, with the pre-7.2.0 list migrated on first read under a new key (reading a set with `LRANGE` raises `WRONGTYPE`, so changing the type in place would have broken every running worker until it restarted).
+- `clear(repo)` dropped the memory list and the dedup hash but left the repo in the index, so `known_repos()` kept reporting a repo with nothing in it and the backup carried an empty record for it forever.
+
 **Five more LLM fields requested, validated, and thrown away**
 - A systematic sweep of `validator.py` against every reader in the codebase found that `pr_type` and `labels` (PR analysis) and `verdict`, `positives` and `refactor_opportunity` (code review) were sanitised and consumed by nothing. PRs are never labelled at all — only issues are — so `labels` had no destination even in principle. `verdict` duplicated `summary` under a comment claiming `app/mcp/handlers.py` and `evals/` read it; **neither ever did**. All five removed; `verdict` is still accepted as an *input* alias, which is the half that fixed the original blank-summary bug.
 - This is the same defect the repo has shipped four times (`improved_title`, `verdict`/`summary`, `time_estimate`, `description`), and it was invisible every time because the validator's own tests pass — they assert the sanitising is correct, which says nothing about whether anyone consumes the result. `TestNoDeadValidatorFields` now checks the other half, so a field added without a reader fails the build.
@@ -512,7 +521,7 @@ Full-codebase audit. The theme is features that were wired, tested, and shipped 
 - `record_latency()` had no callers, so `/health` and the health endpoint reported a 0% error rate no matter what the providers did. Wired into the circuit breaker and router.
 - The dependency-free `Codebase map` CI job broke on a third-party import reached through a package `__init__`. The command registry moved to a pure-stdlib `app/core/commands.py`, and five subprocess tests now fail if any third-party import creeps back into that path.
 - **Six unreachable modules resolved, none left.** `app/security/secrets.py` removed (superseded by `enhanced_secrets`). `app/security/licenses.py` — a complete copyleft-compliance scanner with green tests that nothing had ever imported, so the bot had never once reported a restrictive licence — is now part of `/secfull`, bounded to 20 packages and a 20-second budget, and omits packages it did not reach rather than reporting them as "unknown". `app/core/memory_backup.py` gained the operator CLI its documentation had been describing as `python -c` one-liners. `app/core/cache.py` was **deleted rather than wired**: every read it could have served either feeds a guardrail (`archived`, where a stale answer is precisely the bug v7.1.1 fixed) or picks a branch to write to (`default_branch`, where a stale answer targets the wrong ref) — and `load_config` already caches the one hot read that is safe to cache. Fixing bugs in unreachable code does not make it earn its place.
-- Tests 1054 → 1593, coverage 79% → 84%, orphan modules 6 → **0**, import cycles 1 → **0**. Both are now CI gates rather than reports.
+- Tests 1054 → 1616, coverage 79% → 84%, orphan modules 6 → **0**, import cycles 1 → **0**. Both are now CI gates rather than reports.
 
 ### V7.1.1 — 2026-08-03
 

@@ -338,3 +338,70 @@ class TestInstallationRegistry:
             assert INST.installation_for("o/r") is None
             assert INST.known_installations() == {}
             assert INST.remember_installation("o/r", 1) is False
+
+
+# ── The repo index the backup and the sweep both read ─────────────────────────
+
+
+class TestRepoIndexIsASet:
+    """
+    It was a list with dedup done by reading the whole thing back on every
+    write: O(n) in the number of repos on the hottest path in memory.py — the
+    same complexity that module's docstring says was removed from remember() —
+    and not atomic, so two concurrent writers for a new repo both saw "absent"
+    and both pushed it.
+    """
+
+    def test_repeated_writes_do_not_duplicate(self, redis):
+        from app.intelligence import memory as M
+
+        for _ in range(5):
+            M._index_repo(redis, "o/r")
+        assert M.known_repos() == ["o/r"]
+
+    def test_indexing_does_not_read_the_whole_index(self, redis):
+        """The O(n) part. sadd is one call; the old path did an lrange of every
+        known repo before every single memory write."""
+        from app.intelligence import memory as M
+
+        r = MagicMock()
+        M._index_repo(r, "o/r")
+        r.sadd.assert_called_once()
+        r.lrange.assert_not_called()
+
+    def test_known_repos_is_sorted(self, redis):
+        """The maintenance pass takes a bounded slice of this. An arbitrary set
+        order would silently scan a different subset every cycle."""
+        from app.intelligence import memory as M
+
+        for name in ("o/c", "o/a", "o/b"):
+            M._index_repo(redis, name)
+        assert M.known_repos() == ["o/a", "o/b", "o/c"]
+
+    def test_the_pre_720_list_is_migrated_once(self, redis):
+        """Reading a set with LRANGE raises WRONGTYPE, so changing the type in
+        place would have broken every running worker until it restarted. The
+        set uses a new key and absorbs the old list on first read."""
+        from app.intelligence import memory as M
+
+        redis.lpush(M._LEGACY_INDEX_KEY, "o/old1", "o/old2")
+        M._index_repo(redis, "o/new")
+
+        assert M.known_repos() == ["o/new", "o/old1", "o/old2"]
+        # Consumed, not left to be migrated again on every read.
+        assert redis.lrange(M._LEGACY_INDEX_KEY, 0, -1) in ([], None)
+
+    def test_clearing_a_repo_removes_it_from_the_index(self, redis):
+        """Leaving the entry behind means known_repos() keeps reporting a repo
+        with nothing in it, and the backup carries an empty record forever."""
+        from app.intelligence import memory as M
+
+        M._index_repo(redis, "o/r")
+        M.clear("o/r")
+        assert M.known_repos() == []
+
+    def test_a_redis_outage_yields_an_empty_list_not_an_exception(self):
+        from app.intelligence import memory as M
+
+        with patch("app.core.redis_client.get_redis", side_effect=Exception("down")):
+            assert M.known_repos() == []

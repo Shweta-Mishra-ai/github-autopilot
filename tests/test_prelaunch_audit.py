@@ -349,6 +349,61 @@ class TestNoDeadConfig:
             "A toggle for an unreachable feature is a promise the product cannot keep."
         )
 
+    def test_every_config_reading_guardrail_has_a_caller(self):
+        """
+        The generalisation of the check above, and the one that was missing.
+
+        check_pr_description_update() read `pull_requests.auto_fill_description`
+        — a key that is documented ("Fills empty PR descriptions"), defaults to
+        true, and ships in .ai-repo-manager.yml. The read-check passed it
+        because the key *was* read. It was read inside a function nothing
+        called, so the PR body was never filled: the model was asked for one,
+        the validator sanitised it, and the value was dropped.
+
+        A guardrail exists to gate an action. One with no caller gates nothing,
+        so every config-reading guardrail must be reached from outside its own
+        module.
+        """
+        import ast
+
+        guardrails = Path("app/core/guardrails.py")
+        tree = ast.parse(guardrails.read_text(encoding="utf-8"))
+
+        # Module-level functions whose body reads a config key.
+        config_readers = set()
+        for node in tree.body:
+            if not isinstance(node, ast.FunctionDef) or node.name.startswith("_"):
+                continue
+            for sub in ast.walk(node):
+                if (
+                    isinstance(sub, ast.Call)
+                    and isinstance(sub.func, ast.Attribute)
+                    and isinstance(sub.func.value, ast.Name)
+                    and sub.func.value.id == "config"
+                ):
+                    config_readers.add(node.name)
+                    break
+
+        assert config_readers, "no config-reading guardrails found — has the file moved?"
+
+        called: set[str] = set()
+        for path in list(Path("app").rglob("*.py")) + [Path("server.py"), Path("worker.py")]:
+            if path == guardrails:
+                continue  # a guardrail calling itself proves nothing
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if isinstance(node, ast.Call):
+                    fn = node.func
+                    if isinstance(fn, ast.Name):
+                        called.add(fn.id)
+                    elif isinstance(fn, ast.Attribute):
+                        called.add(fn.attr)
+
+        dead = sorted(config_readers - called)
+        assert dead == [], (
+            f"guardrails that read config but nothing calls: {dead}. "
+            "Each gates a documented setting that therefore has no effect."
+        )
+
     def test_archived_repositories_are_not_acted_on(self):
         """
         check_archived_repo() had zero callers, so the bot commented on,

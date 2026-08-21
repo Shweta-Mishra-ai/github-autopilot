@@ -99,10 +99,33 @@ class TestPatternDetection:
         assert any("Slack" in f.pattern_name for f in findings)
 
     def test_private_key_detected(self):
+        """A private key is detected by its MATERIAL, not by its header.
+
+        Asserting on a bare header is what made this scanner report its own
+        ruleset — app/security/enhanced_secrets.py contains that exact string
+        four times, as the regexes that detect private keys, and every scan of
+        this repository produced four CRITICAL findings for them.
+
+        The body may sit on the following lines (a normal multi-line leak) or
+        after an escaped newline on the same line (a key embedded in source);
+        both are checked, because requiring it on the same line would miss the
+        commonest real shape."""
         from app.security.enhanced_secrets import scan_diff
-        findings = scan_diff(_diff("-----BEGIN RSA PRIVATE KEY-----"))
+
+        findings = scan_diff(
+            "+-----BEGIN RSA PRIVATE KEY-----\n"
+            "+MIIEpAIBAAKCAQEA7Xk9pQm2vRtYhL3nWcF4dJ8sKzB1gTaV6uNxE0oPqHrCmZyD\n"
+            "+-----END RSA PRIVATE KEY-----"
+        )
         assert any("Private Key" in f.pattern_name for f in findings)
         assert findings[0].severity == "critical"
+
+    def test_a_bare_private_key_header_is_not_a_finding(self):
+        """No material, no credential. This is the format string that appears
+        in rulesets, documentation and test fixtures."""
+        from app.security.enhanced_secrets import scan_diff
+
+        assert scan_diff(_diff("-----BEGIN RSA PRIVATE KEY-----")) == []
 
     def test_sendgrid_key_detected(self):
         from app.security.enhanced_secrets import scan_diff

@@ -165,6 +165,21 @@ def handle(payload: dict):
     except Exception as e:
         log.debug(f"Context retrieval skipped: {e}")
 
+    # Local triage gate. Inert unless OLLAMA_HOST is configured, and it can
+    # only ever SKIP work: every error path answers "review it", which is what
+    # happens with no gate at all. Placed after the files fetch (it needs the
+    # diff) and before any cloud call, which is the whole point — the calls it
+    # prevents are the expensive ones.
+    try:
+        from app.ai.gatekeeper import is_substantive
+
+        substantive, reason = is_substantive(files, pr.get("title", ""))
+        if not substantive:
+            log.info(f"pr.skipped_by_local_triage reason={reason}")
+            return
+    except Exception as e:
+        log.debug(f"gatekeeper_skipped: {e}")
+
     analysis_md = summary_md = review_md = gaps_md = ""
     inline_comments: list = []
 

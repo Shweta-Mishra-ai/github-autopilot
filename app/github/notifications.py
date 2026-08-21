@@ -53,6 +53,12 @@ NOTIFY_FILTER: dict[str, bool] = {
     "pr_opened": True,
     "new_issue": True,
     "all_providers_down": True,
+    # The scheduled sweep runs every 15 days by default, so this fires at most
+    # a handful of times a month and only for CRITICAL findings — it is a page,
+    # not a digest. Deliberately not in _CONFIG_EVENT_KEYS: it is an operator
+    # concern about the deployment, not a per-repository preference, and a repo
+    # cannot opt out of being told its own secrets leaked.
+    "scheduled_scan_critical": True,
     "vulnerability_low": False,
     "commit_lint": False,
     "pr_reviewed": False,

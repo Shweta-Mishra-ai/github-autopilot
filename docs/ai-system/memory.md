@@ -93,10 +93,38 @@ python -m app.core.memory_backup restore --in memory.bin
 pass `--merge`. Both exit non-zero on failure, so they can be driven from a
 scheduled job without the caller having to parse output.
 
-There is **no automatic trigger, by design** — a restore overwrites live
-memory, and nothing reachable from a webhook should be able to cause that. If
-you want durability across restarts, run `export` from cron and `restore` from
-your boot script. The GitHub transport is available for the same purpose:
+### Automatic backup
+
+Set these and the app backs itself up on a schedule, no cron needed:
+
+```bash
+MEMORY_BACKUP_KEY=<from genkey>
+MEMORY_BACKUP_REPO=you/private-backup    # use a PRIVATE repo
+MEMORY_BACKUP_TOKEN=<PAT with contents:write on that repo>
+MEMORY_BACKUP_PATH=memory.bin            # optional
+MAINTENANCE_INTERVAL_DAYS=15             # optional, default 15
+```
+
+All of `KEY`, `REPO` and `TOKEN` are required together — a key with no
+destination encrypts something and drops it, so a partial configuration counts
+as unconfigured rather than half-working.
+
+**Export is scheduled; restore is not.** Exporting reads memory and writes
+ciphertext elsewhere — worst case it wastes a request. Restoring *overwrites*
+live memory, so it runs at boot and **only when memory is empty**, which is
+exactly the situation a restore is for. That makes it non-destructive by
+construction: a restart during normal operation, a second worker booting, or a
+partially-warm instance are all no-ops. If the app cannot *prove* memory is
+empty (a Redis error), it does not restore.
+
+The schedule lives in Redis as a due time, not as a `sleep()`. On a free tier
+that restarts on deploy and on idle, a thread sleeping for 15 days would never
+fire once; storing the deadline means a restart cannot reset the clock. Check
+it on `/health` under `maintenance` — `next_run_at` and `overdue` tell you
+whether the schedule is actually alive.
+
+Manual export and restore remain available for a deliberate migration, and the
+GitHub transport can be called directly:
 
 ```python
 from app.core.memory_backup import backup_to_github, restore_from_github

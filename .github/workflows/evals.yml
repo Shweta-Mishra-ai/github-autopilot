@@ -61,6 +61,7 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Check provider key is configured
+        id: preflight
         # Without this the run exits 2 ("unrunnable") and reads as a pass to a
         # skim of the Actions tab. Fail loudly instead — a silently-unrun
         # quality gate is worse than none.
@@ -68,9 +69,12 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
           if [ -z "$GROQ_API_KEY" ]; then
+            echo "unconfigured=true" >> "$GITHUB_OUTPUT"
             echo "::error::GROQ_API_KEY secret is not set — evals cannot run."
+            echo "::error::Set it at Settings > Secrets and variables > Actions."
             exit 1
           fi
+          echo "unconfigured=false" >> "$GITHUB_OUTPUT"
 
       - name: Run evals
         id: run
@@ -122,17 +126,38 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          TITLE="Nightly AI evals are failing"
+          # Two very different failures reach this step, and saying the wrong
+          # one costs real time: "quality regressed" sends a maintainer to read
+          # prompts and diff model versions, when the actual fix is one
+          # repository secret. Report what actually happened.
+          if [ "${{ steps.preflight.outputs.unconfigured }}" = "true" ]; then
+            TITLE="Nightly AI evals cannot run — GROQ_API_KEY is not set"
+            BODY=$(printf '%s\n' \
+              "The nightly eval suite did not run. It is not a quality regression:" \
+              "the \`GROQ_API_KEY\` repository secret is missing, so the suite had no" \
+              "provider to call." \
+              "" \
+              "Run: $RUN_URL" \
+              "" \
+              "Fix: Settings > Secrets and variables > Actions > New repository secret," \
+              "named \`GROQ_API_KEY\`." \
+              "" \
+              "Until then this is the only quality gate in CI that is not running —" \
+              "everything else checks that the code is correct, and only this checks" \
+              "that the bot is still good at reviewing code." )
+          else
+            TITLE="Nightly AI evals are failing"
+            BODY=$(printf '%s\n' \
+              "The nightly AI-output eval suite fell below its pass-rate threshold." \
+              "" \
+              "Run: $RUN_URL" \
+              "" \
+              "This measures whether the bot still finds the planted bugs in" \
+              "\`evals/cases/\` — a drop usually means a prompt, model, or provider" \
+              "change degraded review quality." )
+          fi
           EXISTING=$(gh issue list --state open --label evals --json number \
             --jq '.[0].number' 2>/dev/null || echo "")
-          BODY=$(printf '%s\n' \
-            "The nightly AI-output eval suite fell below its pass-rate threshold." \
-            "" \
-            "Run: $RUN_URL" \
-            "" \
-            "This measures whether the bot still finds the planted bugs in" \
-            "\`evals/cases/\` — a drop usually means a prompt, model, or provider" \
-            "change degraded review quality." )
           if [ -n "$EXISTING" ]; then
             gh issue comment "$EXISTING" --body "$BODY"
           else

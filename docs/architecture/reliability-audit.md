@@ -80,12 +80,20 @@ raising it requires moving those caches to Redis first — documented in
 - **Idempotency** keys live 24 h — matches GitHub's retry window; Redis runs
   `noeviction` so they're never silently dropped.
 - **Memory** ("the brain") has an encrypted client-side backup
-  (`memory_backup.py`, Fernet, key never leaves the process), driven by an
-  operator CLI: `python -m app.core.memory_backup export|restore`. There is
-  deliberately **no automatic trigger** — a restore overwrites live memory, so
-  nothing reachable from a webhook may cause one. Until an operator schedules
-  `export`, a free-tier Redis wipe still loses learned context; that is a
-  deployment decision, not a missing feature.
+  (`memory_backup.py`, Fernet, key never leaves the process), exported on a
+  15-day schedule by `app/core/maintenance.py` and restored at boot **only when
+  memory is empty**. The asymmetry is deliberate: export is safe to automate,
+  restore overwrites live data, so restore is gated on a condition that makes
+  it non-destructive by construction rather than by being careful about when it
+  is called. Nothing on a timer can reach the restore path — a test asserts the
+  maintenance module does not so much as name it. A `python -m
+  app.core.memory_backup export|restore` CLI covers deliberate migrations.
+- The 15-day cadence is stored in Redis as a **due time**, not a `sleep()`. On
+  a free tier that restarts on deploy and on idle, a thread sleeping for 15
+  days would never fire; the due time survives restarts, is advanced *before*
+  the work starts so a crashed pass costs one cycle rather than retrying
+  hourly, and is claimed with `SET NX` so only one of N gunicorn workers runs
+  it. Visible on `/health` as `maintenance.next_run_at` / `maintenance.overdue`.
 
 ## 5. Stability
 

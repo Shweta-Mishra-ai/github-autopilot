@@ -412,6 +412,23 @@
       ]
     },
     {
+      "id": "app.core.installations",
+      "path": "app/core/installations.py",
+      "layer": "core",
+      "loc": 148,
+      "functions": 7,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 2,
+      "fan_out": 1,
+      "external_deps": [
+        "__future__",
+        "app",
+        "logging",
+        "time"
+      ]
+    },
+    {
       "id": "app.core.learning",
       "path": "app/core/learning.py",
       "layer": "core",
@@ -445,14 +462,35 @@
       ]
     },
     {
+      "id": "app.core.maintenance",
+      "path": "app/core/maintenance.py",
+      "layer": "core",
+      "loc": 311,
+      "functions": 12,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 6,
+      "external_deps": [
+        "__future__",
+        "app",
+        "contextlib",
+        "json",
+        "logging",
+        "os",
+        "threading",
+        "time"
+      ]
+    },
+    {
       "id": "app.core.memory_backup",
       "path": "app/core/memory_backup.py",
       "layer": "core",
-      "loc": 252,
-      "functions": 9,
+      "loc": 353,
+      "functions": 13,
       "classes": 0,
       "is_package": false,
-      "fan_in": 0,
+      "fan_in": 2,
       "fan_out": 3,
       "external_deps": [
         "__future__",
@@ -507,7 +545,7 @@
       "functions": 5,
       "classes": 1,
       "is_package": false,
-      "fan_in": 25,
+      "fan_in": 27,
       "fan_out": 0,
       "external_deps": [
         "__future__",
@@ -625,7 +663,7 @@
       "functions": 3,
       "classes": 0,
       "is_package": false,
-      "fan_in": 7,
+      "fan_in": 8,
       "fan_out": 0,
       "external_deps": [
         "jwt",
@@ -671,11 +709,11 @@
       "id": "app.github.notifications",
       "path": "app/github/notifications.py",
       "layer": "github",
-      "loc": 517,
+      "loc": 523,
       "functions": 20,
       "classes": 0,
       "is_package": false,
-      "fan_in": 7,
+      "fan_in": 8,
       "fan_out": 3,
       "external_deps": [
         "app",
@@ -1344,7 +1382,7 @@
       "functions": 5,
       "classes": 2,
       "is_package": false,
-      "fan_in": 1,
+      "fan_in": 2,
       "fan_out": 1,
       "external_deps": [
         "app",
@@ -1356,12 +1394,12 @@
       "id": "server",
       "path": "server.py",
       "layer": "other",
-      "loc": 473,
-      "functions": 22,
+      "loc": 544,
+      "functions": 24,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 23,
+      "fan_out": 26,
       "external_deps": [
         "app",
         "flask",
@@ -1377,7 +1415,7 @@
       "id": "worker",
       "path": "worker.py",
       "layer": "other",
-      "loc": 56,
+      "loc": 60,
       "functions": 1,
       "classes": 0,
       "is_package": false,
@@ -1626,9 +1664,44 @@
       "kind": "import"
     },
     {
+      "source": "app.core.installations",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
       "source": "app.core.learning",
       "target": "app.core.redis_client",
       "kind": "import"
+    },
+    {
+      "source": "app.core.maintenance",
+      "target": "app.core.installations",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.maintenance",
+      "target": "app.core.memory_backup",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.maintenance",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.maintenance",
+      "target": "app.github.auth",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.maintenance",
+      "target": "app.github.notifications",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.maintenance",
+      "target": "app.security.scanner",
+      "kind": "runtime"
     },
     {
       "source": "app.core.memory_backup",
@@ -2547,6 +2620,21 @@
     },
     {
       "source": "server",
+      "target": "app.core.installations",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
+      "target": "app.core.maintenance",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
+      "target": "app.core.memory_backup",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
       "target": "app.core.metrics",
       "kind": "import"
     },
@@ -2652,9 +2740,9 @@
     }
   ],
   "stats": {
-    "modules": 85,
-    "edges": 251,
-    "total_loc": 17262,
+    "modules": 87,
+    "edges": 261,
+    "total_loc": 17903,
     "layers": [
       "ai",
       "core",
@@ -2670,7 +2758,7 @@
       {
         "id": "app.core.redis_client",
         "loc": 497,
-        "fan_in": 25,
+        "fan_in": 27,
         "fan_out": 0
       },
       {
@@ -2687,8 +2775,8 @@
       },
       {
         "id": "app.github.notifications",
-        "loc": 517,
-        "fan_in": 7,
+        "loc": 523,
+        "fan_in": 8,
         "fan_out": 3
       },
       {

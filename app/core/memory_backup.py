@@ -178,6 +178,107 @@ def restore_from_github(target_repo: str, path: str, token: str) -> int:
         return 0
 
 
+# ── Scheduled backup (primitives; the cadence lives in app/core/maintenance) ──
+#
+# Export is safe to automate; restore is not. Exporting reads memory and writes
+# ciphertext elsewhere — worst case it wastes a request. Restoring *overwrites*
+# live memory, so it runs on boot only when there is nothing to overwrite (see
+# maybe_restore_on_boot), which makes it non-destructive by construction rather
+# than by carefulness.
+
+BACKUP_REPO_ENV = "MEMORY_BACKUP_REPO"
+BACKUP_PATH_ENV = "MEMORY_BACKUP_PATH"
+BACKUP_TOKEN_ENV = "MEMORY_BACKUP_TOKEN"
+
+DEFAULT_BACKUP_PATH = "memory.bin"
+
+_RESTORE_LOCK_KEY = "memory_backup:restore_lock"
+
+
+def backup_destination() -> tuple[str, str, str] | None:
+    """
+    (repo, path, token) for the GitHub transport, or None if not configured.
+
+    All three are required together with the key — a key with no destination is
+    a backup that encrypts something and then drops it.
+    """
+    repo = os.environ.get(BACKUP_REPO_ENV, "").strip()
+    token = os.environ.get(BACKUP_TOKEN_ENV, "").strip()
+    if not (repo and token and is_configured()):
+        return None
+    path = os.environ.get(BACKUP_PATH_ENV, "").strip() or DEFAULT_BACKUP_PATH
+    return repo, path, token
+
+
+def run_backup_once() -> bool:
+    """
+    One export+push. Returns False when unconfigured or the push failed.
+
+    Scheduling and cross-process locking are the caller's job — this function
+    does exactly what it is asked, every time it is asked.
+    """
+    dest = backup_destination()
+    if dest is None:
+        return False
+    repo, path, token = dest
+    return backup_to_github(repo, path, token)
+
+
+def maybe_restore_on_boot() -> int:
+    """
+    Restore memory at startup, but only when there is none.
+
+    This is the whole safety argument: `known_repos()` is empty exactly when
+    Redis has been wiped, which is the only situation a restore is for. If any
+    memory exists the process leaves it alone, so a restart during normal
+    operation, a second worker booting, or a partially-warm instance can never
+    lose data to this path.
+
+    Returns repos restored — 0 for "nothing to do" and for every failure, since
+    a boot must not depend on a backup being reachable.
+    """
+    dest = backup_destination()
+    if dest is None:
+        return 0
+    try:
+        from app.intelligence.memory import known_repos
+
+        if known_repos():
+            log.debug("memory_backup.restore_skipped — memory is not empty")
+            return 0
+    except Exception as e:
+        # Cannot prove memory is empty → do not overwrite it.
+        log.warning(f"memory_backup.restore_skipped — could not read memory: {e}")
+        return 0
+
+    # Fails closed: a Redis problem means another worker may already be
+    # restoring, and two concurrent restores can interleave writes.
+    try:
+        from app.core.redis_client import get_redis
+
+        if not get_redis().set(_RESTORE_LOCK_KEY, str(int(time.time())), ex=300, nx=True):
+            return 0
+    except Exception as e:
+        log.debug(f"memory_backup.restore_lock_failed: {e}")
+        return 0
+
+    repo, path, token = dest
+    restored = restore_from_github(repo, path, token)
+    if restored:
+        log.warning(f"memory_backup.restored_on_boot repos={restored} from={repo}/{path}")
+    return restored
+
+
+def backup_status() -> dict:
+    """Operator-facing configuration state for /health. Never raises."""
+    dest = backup_destination()
+    return {
+        "key_set": is_configured(),
+        "configured": dest is not None,
+        "destination": f"{dest[0]}/{dest[1]}" if dest else "",
+    }
+
+
 # ── Operator CLI ──────────────────────────────────────────────────────────────
 #
 # Disaster recovery is not something an operator should have to reconstruct

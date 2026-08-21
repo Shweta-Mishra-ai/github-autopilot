@@ -228,7 +228,6 @@ jobs:
             --entrypoint worker \
             --entrypoint app.dashboard \
             --entrypoint app.graphview \
-            --entrypoint app.core.memory_backup \
             --out docs/diagrams/codegraph.json
 
       - name: Report structure
@@ -284,7 +283,6 @@ jobs:
             echo "::error::  python -m app.intelligence.codegraph app server.py worker.py \\"
             echo "::error::    --entrypoint app --entrypoint server --entrypoint worker \\"
             echo "::error::    --entrypoint app.dashboard --entrypoint app.graphview \\"
-            echo "::error::    --entrypoint app.core.memory_backup \\"
             echo "::error::    --out docs/diagrams/codegraph.json"
             git diff --stat -- docs/diagrams/codegraph.json
             exit 1
@@ -295,6 +293,57 @@ jobs:
         # registry, the layer graph). Unchecked, they rot: this README claimed
         # the MCP endpoint had "8 tools" for as long as it took to add a ninth.
         run: python -m app.handlers.readme --check
+
+  # ── Is the quality gate still running? (main only) ───────────────────────────
+  # The eval suite is the only check that can see the bot getting *worse* at
+  # reviewing code; every other job checks that the code is correct. It runs on
+  # a nightly cron, and a cron has two silent failure modes the suite itself
+  # cannot report:
+  #
+  #   1. GitHub disables scheduled workflows after 60 days of repository
+  #      inactivity. No run means no failure means no issue filed.
+  #   2. The workflow can be disabled by hand and look identical from the
+  #      Actions tab unless you go looking.
+  #
+  # This job runs on push, so activity is what triggers it — exactly the
+  # condition under which the cron might have been switched off. It reports
+  # rather than fails: a genuinely quiet fortnight is not a broken build.
+  eval-freshness:
+    name: Eval gate freshness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      actions: read
+    steps:
+      - name: Check when the evals last ran
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          LAST=$(gh api "repos/$REPO/actions/workflows/evals.yml/runs?per_page=1" \
+            --jq '.workflow_runs[0].created_at // ""' 2>/dev/null || echo "")
+
+          if [ -z "$LAST" ]; then
+            echo "::warning::The eval workflow has never run. The one gate that "\
+              "measures review quality is not active."
+            echo "- ⚠️ evals have never run" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          AGE_DAYS=$(( ( $(date -u +%s) - $(date -u -d "$LAST" +%s) ) / 86400 ))
+          echo "Last eval run: $LAST (${AGE_DAYS}d ago)" >> "$GITHUB_STEP_SUMMARY"
+
+          # Nightly cron, so anything past three days means it is not firing.
+          if [ "$AGE_DAYS" -gt 3 ]; then
+            echo "::warning::Evals last ran ${AGE_DAYS} days ago on a nightly "\
+              "schedule. GitHub disables scheduled workflows after 60 days of "\
+              "repository inactivity — re-enable it under Actions."
+            echo "- ⚠️ stale: nightly evals last ran ${AGE_DAYS}d ago" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- ✅ eval gate is running" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   # ── Test-count badge (main only) ─────────────────────────────────────────────
   # Publishes the real pytest pass count from THIS run to the `badges` branch.

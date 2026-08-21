@@ -220,6 +220,12 @@ def health():
             # from a dataset nothing wrote to, so they always read zero; the
             # router and the circuit breaker now feed it.
             "providers": _provider_health(),
+            # The 15-day sweep and the encrypted memory backup. A schedule that
+            # silently stopped running looks exactly like one that is running
+            # fine, so next_run_at and the last result are reported rather than
+            # a bare on/off — an operator can see it is due, overdue, or never
+            # configured.
+            "maintenance": _maintenance_status(),
         }
     ), 200 if overall == "ok" else 207
 
@@ -351,6 +357,20 @@ def _run_handler(webhook_event: str, payload: dict, repo: str):
     try:
         log.info(f"dispatch.start event={webhook_event} repo={repo}")
 
+        # Record which installation can act on this repo. The id arrives only
+        # on the webhook, and nothing persisted it — so anything that runs on a
+        # schedule rather than in response to an event (the 15-day security
+        # sweep) had no credential for any repository at all.
+        try:
+            from app.core.installations import remember_installation, touch
+
+            inst = (payload.get("installation") or {}).get("id", 0)
+            if repo and inst:
+                remember_installation(repo, inst)
+                touch(repo)
+        except Exception as e:
+            log.debug(f"installations.record_skipped repo={repo}: {e}")
+
         if webhook_event == "pull_request":
             from app.handlers.pull_request import handle
 
@@ -428,6 +448,31 @@ def _provider_health() -> dict:
         return {}
 
 
+def _maintenance_status() -> dict:
+    """
+    Scheduled-sweep and backup state. Never raises — /health must answer even
+    when the thing it is reporting on is broken.
+
+    `overdue` is the value worth reading: the scheduler is a daemon thread on a
+    free tier that restarts often, and the due time lives in Redis precisely so
+    a restart cannot silently reset the clock. If this is ever true, the pass
+    is not running and nobody would otherwise find out for 15 days.
+    """
+    import time as _time
+
+    try:
+        from app.core.maintenance import status as maintenance_state
+        from app.core.memory_backup import backup_status
+
+        state = maintenance_state()
+        due = state.get("next_run_at") or 0
+        state["overdue"] = bool(due and _time.time() > due + 3600)
+        state["memory_backup"] = backup_status()
+        return state
+    except Exception as e:
+        return {"error": str(e)[:120]}
+
+
 def _notification_status() -> dict:
     """
     Whether each channel is configured, and how its deliveries have gone.
@@ -459,6 +504,32 @@ def _boot():
     from app.core.event_queue import start_consumers
 
     start_consumers(_run_handler)
+    _boot_maintenance()
+
+
+def _boot_maintenance():
+    """
+    Restore memory if it is empty, then start the periodic maintenance pass.
+
+    Both are best-effort: a backup that cannot be reached must not stop the app
+    from serving webhooks, which is its actual job. Ordering matters — restore
+    runs before the scheduler so a wiped instance is warm before anything reads
+    memory, and it is safe to run in every worker because it no-ops unless
+    memory is genuinely empty.
+    """
+    try:
+        from app.core.memory_backup import maybe_restore_on_boot
+
+        maybe_restore_on_boot()
+    except Exception as e:
+        log.warning(f"boot.memory_restore_skipped: {e}")
+
+    try:
+        from app.core.maintenance import start_scheduler
+
+        start_scheduler()
+    except Exception as e:
+        log.warning(f"boot.maintenance_not_started: {e}")
 
 
 # ── Boot ───────────────────────────────────────────────────────────────────

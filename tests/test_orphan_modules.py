@@ -191,34 +191,62 @@ class TestMemoryBackupHasAnOperatorEntrypoint:
         monkeypatch.setenv("MEMORY_BACKUP_KEY", Fernet.generate_key().decode())
         assert MB.main(["restore", "--in", str(dest)]) == 1
 
-    def test_restore_does_not_run_without_an_explicit_invocation(self):
-        """There is deliberately no automatic trigger: a restore overwrites
-        live memory, so nothing in the request path may cause one."""
+    def test_the_restore_path_has_no_automatic_caller(self):
+        """
+        Export is scheduled (app/core/maintenance.py); restore is not.
+
+        The invariant is not "nothing imports this module" — that was true only
+        while the feature did nothing. It is that no automatic path can reach
+        the half that OVERWRITES memory. maybe_restore_on_boot() is allowed one
+        caller, the boot path, because it no-ops unless memory is empty;
+        restore_from_github() and import_encrypted() overwrite unconditionally
+        and may only be reached from the CLI.
+        """
         import ast
         import pathlib
 
         import app.core.memory_backup as MB
 
-        # AST, not a substring search: memory.py names the module in a
-        # docstring explaining where its durability comes from, and that is
-        # documentation, not a call path.
-        importers = []
-        for path in pathlib.Path("app").rglob("*.py"):
+        unconditional = {"restore_from_github", "import_encrypted"}
+        callers = []
+        for path in list(pathlib.Path("app").rglob("*.py")) + [
+            pathlib.Path("server.py"),
+            pathlib.Path("worker.py"),
+        ]:
             if path.name == "memory_backup.py":
                 continue
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Import):
-                    names = [a.name for a in node.names]
-                elif isinstance(node, ast.ImportFrom):
-                    names = [node.module or ""]
-                else:
-                    continue
-                if any("memory_backup" in n for n in names):
-                    importers.append(str(path))
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if isinstance(node, ast.Call):
+                    fn = node.func
+                    name = fn.id if isinstance(fn, ast.Name) else getattr(fn, "attr", "")
+                    if name in unconditional:
+                        callers.append(f"{path}::{name}")
 
-        assert importers == [], f"memory_backup is imported by: {importers}"
+        assert callers == [], f"restore is reachable automatically from: {callers}"
         assert hasattr(MB, "main")
+
+    def test_the_boot_path_is_the_only_caller_of_the_guarded_restore(self):
+        """maybe_restore_on_boot() is safe to call anywhere — it checks that
+        memory is empty first — but a second caller would mean a second place
+        that reasoning has to hold."""
+        import ast
+        import pathlib
+
+        callers = []
+        for path in list(pathlib.Path("app").rglob("*.py")) + [
+            pathlib.Path("server.py"),
+            pathlib.Path("worker.py"),
+        ]:
+            if path.name == "memory_backup.py":
+                continue
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if isinstance(node, ast.Call):
+                    fn = node.func
+                    name = fn.id if isinstance(fn, ast.Name) else getattr(fn, "attr", "")
+                    if name == "maybe_restore_on_boot":
+                        callers.append(str(path))
+
+        assert callers == ["server.py"], f"unexpected restore callers: {callers}"
 
 
 class TestTheCacheModuleIsGone:

@@ -123,11 +123,11 @@ Comment `/health` on any issue. The bot replies with a repo health grade. Done. 
 <!-- autopilot:stats:start -->
 | | |
 |---|---|
-| Modules | 85 |
-| Lines of code | 17,262 |
+| Modules | 87 |
+| Lines of code | 17,903 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 251 |
+| Internal imports | 261 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>
@@ -202,7 +202,7 @@ code. Explore it interactively at [`/graph`](#codebase-map), or regenerate with
 ```mermaid
 graph LR
     ai["ai<br/>14 modules"]
-    core["core<br/>20 modules"]
+    core["core<br/>22 modules"]
     github["github<br/>8 modules"]
     handlers["handlers<br/>23 modules"]
     intelligence["intelligence<br/>6 modules"]
@@ -487,6 +487,12 @@ Full-codebase audit. The theme is features that were wired, tested, and shipped 
 - Professional commit-message suggestions on push (one LLM call, capped at five commits, merge/revert skipped, SHA-keyed dedup that fails closed).
 - README managed regions between `<!-- autopilot:NAME:start -->` markers, regenerated as the project changes and delivered by pull request only — never a direct push to the default branch. Region replacement slices the string rather than using `re.sub`, so a `\g<1>` in generated content cannot corrupt the file.
 
+**Durability and the quality gate — the two things nothing was watching**
+- Memory backup now runs itself, every 15 days. The encrypted export existed and was correct; nothing invoked it, so a free-tier Redis wipe still lost every learned fact. **Export is scheduled, restore is not**: exporting writes ciphertext elsewhere, restoring *overwrites live memory*, so restore runs at boot and only when memory is empty — non-destructive by construction rather than by being careful about when it is called. If it cannot prove memory is empty, it does not restore. A test asserts the maintenance module cannot so much as name `restore_from_github`.
+- **The schedule is a due time in Redis, not a `sleep()`.** This runs on a free tier that restarts on deploy and on idle, and every restart puts a `sleep(15 days)` back to zero — the timer would never have fired once. The due time survives restarts, is advanced *before* the work starts (so a pass that dies halfway costs one cycle instead of retrying every hour forever), and is claimed with `SET NX` so one of N gunicorn workers runs it rather than all of them.
+- The same pass runs a **full security scan of every repository the app has seen**. That needed something new: an installation id arrives only on a webhook and nothing persisted it, so anything running on a schedule had no credential for any repository at all. `app/core/installations.py` is a small repo → installation-id registry, refreshed per event and expiring on its own; only the id is stored, never a token.
+- The eval suite — the only check that can see the bot getting *worse* at reviewing code — failed loudly on a missing `GROQ_API_KEY`, but then filed an issue saying quality had regressed. That sends a maintainer to diff prompts and model versions when the fix is one repository secret; the two failures are now reported as the different things they are. A `push`-triggered CI job also reports when the nightly evals last ran, because GitHub disables scheduled workflows after 60 days of repository inactivity and a cron that stopped firing produces no failure and no issue.
+
 **The PR description the bot generated but never wrote**
 - The PR analysis prompt asks for a structured `## Summary / ## Changes / ## Testing` body, `validate_pr_analysis()` sanitises it to 5000 characters, `pull_requests.auto_fill_description` is documented as "Fills empty PR descriptions" and defaults to true, and `check_pr_description_update()` decides whether it is allowed — and **no code path ever wrote it**. Every PR analysis since the feature was written has been paying for a field it discarded. Same bug class as v7.0.0's `time_estimate`. Title and body now go in one PATCH, because GitHub emits a `pull_request.edited` webhook per write and this bot listens to those.
 - The prelaunch "every config key is read" audit passed this, because the key *was* read — inside a function nothing called. That check is now generalised: every config-reading guardrail must be reachable from outside its own module. Verified by reverting the fix and watching it fail.
@@ -498,7 +504,7 @@ Full-codebase audit. The theme is features that were wired, tested, and shipped 
 - `record_latency()` had no callers, so `/health` and the health endpoint reported a 0% error rate no matter what the providers did. Wired into the circuit breaker and router.
 - The dependency-free `Codebase map` CI job broke on a third-party import reached through a package `__init__`. The command registry moved to a pure-stdlib `app/core/commands.py`, and five subprocess tests now fail if any third-party import creeps back into that path.
 - **Six unreachable modules resolved, none left.** `app/security/secrets.py` removed (superseded by `enhanced_secrets`). `app/security/licenses.py` — a complete copyleft-compliance scanner with green tests that nothing had ever imported, so the bot had never once reported a restrictive licence — is now part of `/secfull`, bounded to 20 packages and a 20-second budget, and omits packages it did not reach rather than reporting them as "unknown". `app/core/memory_backup.py` gained the operator CLI its documentation had been describing as `python -c` one-liners. `app/core/cache.py` was **deleted rather than wired**: every read it could have served either feeds a guardrail (`archived`, where a stale answer is precisely the bug v7.1.1 fixed) or picks a branch to write to (`default_branch`, where a stale answer targets the wrong ref) — and `load_config` already caches the one hot read that is safe to cache. Fixing bugs in unreachable code does not make it earn its place.
-- Tests 1054 → 1550, coverage 79% → 84%, orphan modules 6 → **0**, import cycles 1 → **0**. Both are now CI gates rather than reports.
+- Tests 1054 → 1584, coverage 79% → 84%, orphan modules 6 → **0**, import cycles 1 → **0**. Both are now CI gates rather than reports.
 
 ### V7.1.1 — 2026-08-03
 

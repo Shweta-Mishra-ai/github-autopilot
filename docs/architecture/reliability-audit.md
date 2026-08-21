@@ -29,7 +29,7 @@ Render service private.
 
 ## 2. Silent failures — is anything failing invisibly?
 
-Audited every `except Exception: pass` (30 sites). They split cleanly:
+Audited every `except Exception: pass`. They split cleanly:
 
 - **Critical paths fail closed and log** — webhook verification, dispatch
   (`server._run_handler` catches, logs, and increments error metrics), auth,
@@ -79,8 +79,13 @@ raising it requires moving those caches to Redis first — documented in
   events dead-letter after 2 attempts.
 - **Idempotency** keys live 24 h — matches GitHub's retry window; Redis runs
   `noeviction` so they're never silently dropped.
-- **Memory** ("the brain") has encrypted client-side backup (`memory_backup.py`)
-  so a free-tier Redis wipe doesn't lose learned context.
+- **Memory** ("the brain") has an encrypted client-side backup
+  (`memory_backup.py`, Fernet, key never leaves the process), driven by an
+  operator CLI: `python -m app.core.memory_backup export|restore`. There is
+  deliberately **no automatic trigger** — a restore overwrites live memory, so
+  nothing reachable from a webhook may cause one. Until an operator schedules
+  `export`, a free-tier Redis wipe still loses learned context; that is a
+  deployment decision, not a missing feature.
 
 ## 5. Stability
 

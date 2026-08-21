@@ -105,7 +105,7 @@ Install the GitHub App on your repos, then:
 
 ```bash
 curl https://github-autopilot-1.onrender.com/ping
-# → {"status": "ok", "version": "7.1.1"}
+# → {"status": "ok", "version": "7.2.0"}
 ```
 
 > **Cold starts** — the demo instance runs on Render's free tier. A scheduled
@@ -123,11 +123,11 @@ Comment `/health` on any issue. The bot replies with a repo health grade. Done. 
 <!-- autopilot:stats:start -->
 | | |
 |---|---|
-| Modules | 86 |
-| Lines of code | 17,400 |
+| Modules | 85 |
+| Lines of code | 17,238 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 250 |
+| Internal imports | 251 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>
@@ -151,7 +151,7 @@ Type any of these in a GitHub issue or PR comment:
 | `/arch` | Architecture review | Anyone |
 | `/ci` | Analyze CI failure | Anyone |
 | `/security` | Secret + dependency scan on PR | Anyone |
-| `/secfull` | Full repo security scan | Maintainers |
+| `/secfull` | Full repo security scan + licence compliance | Maintainers |
 | `/health` | Repo health grade | Anyone |
 | `/version` | Tags, releases, recent commits | Anyone |
 | `/summarize` | Summarize issue thread | Anyone |
@@ -202,13 +202,13 @@ code. Explore it interactively at [`/graph`](#codebase-map), or regenerate with
 ```mermaid
 graph LR
     ai["ai<br/>14 modules"]
-    core["core<br/>21 modules"]
+    core["core<br/>20 modules"]
     github["github<br/>8 modules"]
-    handlers["handlers<br/>22 modules"]
+    handlers["handlers<br/>23 modules"]
     intelligence["intelligence<br/>6 modules"]
     mcp["mcp<br/>4 modules"]
     other["other<br/>5 modules"]
-    security["security<br/>6 modules"]
+    security["security<br/>5 modules"]
     ai --> core
     ai --> github
     core --> ai
@@ -435,7 +435,7 @@ python server.py
 ```
 
 ```bash
-pytest tests/ -v              # 1054 tests, 80% coverage — the CI badge is the live number
+pytest tests/ -v              # full suite; the tests badge above is the live count
 ruff check app/               # lint
 ```
 
@@ -458,6 +458,42 @@ Found a vulnerability? Please email rather than opening a public issue.
 ---
 
 ## Changelog
+
+### V7.2.0 — 2026-08-20
+
+Full-codebase audit. The theme is features that were wired, tested, and shipped — and then silently did nothing in production.
+
+**Seven commands were dead in the field**
+- `check_command_permission()` treated *every* non-200 from GitHub's collaborator API as "this user has no permission". A 403 (the App lacks the `members` scope), a 5xx, or a dropped connection all cached `"none"` for an hour, so `/autofix`, `/apply`, `/merge`, `/rollback`, `/release`, `/ignore` and `/secfull` refused to run for the repository owner and blamed the *user's* access in the reply. Transport and authorization failures now return an `unknown` sentinel that is **never cached** and produces a reply naming the App installation as the suspect. A denial also costs one API call now instead of two.
+- Notifications were off by default. `notifications.slack` and `notifications.discord` defaulted to `False`, so a correctly configured `SLACK_WEBHOOK_URL` delivered nothing. The tests passed because they patched the `SLACK_ENABLED` / `DISCORD_ENABLED` module constants — which is precisely why nobody noticed. Those constants were read once at import, so setting the env var after import had no effect either; they are call-time functions now, and Slack gained the rich-block sender Discord already had.
+- `/notify` reported success for channels it had never contacted. It now sends per channel and reports delivered-vs-configured truthfully, including "configured but unreachable".
+
+**`/rollback` could not roll back**
+- The pre-rollback safety snapshot's return value was discarded, so a failed snapshot still let the rollback proceed with no way back. It now aborts.
+- Undo ran **oldest-first**. Reverting action 1 before action 5 is not an undo; the order is now newest-first (LIFO), and an action type the handler does not recognise is reported as failed instead of counted as reverted.
+- Four handlers crashed on real payload shapes: a null `user` on a ghosted comment, a null `patch` on a binary file, a null `body`, and a missing `filename`. All GitHub reads in `snapshot.py` are now shape-guarded.
+
+**Scanner accuracy — no false positives, no silent misses**
+- The dependency scanner matched versions by regex prefix, so `flask 3.10.0` matched the `3.1.x` advisory and `requests 2.30.0` matched `2.3.x`. Replaced with real version-range comparison. Findings report the *affected range*, not a "fixed in" version — the range ends are series boundaries, and printing `flask>=4.0.0` would be advertising a release that does not exist.
+- Several secret patterns were mathematically unable to fire: a flat Shannon-entropy floor rejects short high-quality tokens because entropy is bounded by `log2(length)`. The gate is now a normalized ratio against that ceiling plus a distinct-character floor, and the Slack patterns were widened to the lengths Slack actually issues. Structural non-secrets (UUIDs, hashes, base64 blobs in lockfiles) are excluded explicitly rather than by luck.
+- Detection turned out to be *probabilistic* — a randomly generated key passes or fails depending on the characters it happens to draw. The accuracy tests are statistical now, with thresholds set from a measured 5000-sample distribution instead of a lucky seed.
+- `/security` scanned the base branch instead of the PR head, so it reported on code the PR had already changed.
+
+**New: see the codebase, not a diagram**
+- `app/intelligence/codegraph.py` extracts a real import graph with the `ast` module — top-level vs. runtime edges, iterative Tarjan cycle detection, orphan and hotspot detection — and `/graph` renders it as a force-directed graph in canvas, no CDN and no external asset.
+- The graph found its own first bug: a five-module import cycle in `app/handlers/comments/`. Broken via a deferred-delegation shim; the repo now reports **zero cycles**, and CI fails if a new one appears.
+
+**New: the bot writes on push**
+- Professional commit-message suggestions on push (one LLM call, capped at five commits, merge/revert skipped, SHA-keyed dedup that fails closed).
+- README managed regions between `<!-- autopilot:NAME:start -->` markers, regenerated as the project changes and delivered by pull request only — never a direct push to the default branch. Region replacement slices the string rather than using `re.sub`, so a `\g<1>` in generated content cannot corrupt the file.
+
+**Hygiene, testing and CI**
+- `app/handlers/pull_request.py` split into a package (classify / analysis / review / gaps / report); routing policy extracted from the LLM router; `/runtests` and `/notify` moved out of `publisher.py`, which had grown past the repo's own 600-line guard.
+- Two existing tests were asserting on patch targets the code never resolved — they had been passing without testing anything. Two hardcoded MCP tool counts now derive from the registry, with handler↔catalog symmetry assertions.
+- `record_latency()` had no callers, so `/health` and the health endpoint reported a 0% error rate no matter what the providers did. Wired into the circuit breaker and router.
+- The dependency-free `Codebase map` CI job broke on a third-party import reached through a package `__init__`. The command registry moved to a pure-stdlib `app/core/commands.py`, and five subprocess tests now fail if any third-party import creeps back into that path.
+- **Six unreachable modules resolved, none left.** `app/security/secrets.py` removed (superseded by `enhanced_secrets`). `app/security/licenses.py` — a complete copyleft-compliance scanner with green tests that nothing had ever imported, so the bot had never once reported a restrictive licence — is now part of `/secfull`, bounded to 20 packages and a 20-second budget, and omits packages it did not reach rather than reporting them as "unknown". `app/core/memory_backup.py` gained the operator CLI its documentation had been describing as `python -c` one-liners. `app/core/cache.py` was **deleted rather than wired**: every read it could have served either feeds a guardrail (`archived`, where a stale answer is precisely the bug v7.1.1 fixed) or picks a branch to write to (`default_branch`, where a stale answer targets the wrong ref) — and `load_config` already caches the one hot read that is safe to cache. Fixing bugs in unreachable code does not make it earn its place.
+- Tests 1054 → 1537, coverage 79% → 84%, orphan modules 6 → **0**, import cycles 1 → **0**. Both are now CI gates rather than reports.
 
 ### V7.1.1 — 2026-08-03
 

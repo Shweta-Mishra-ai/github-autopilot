@@ -28,13 +28,14 @@
       "id": "app.ai.circuit_breaker",
       "path": "app/ai/circuit_breaker.py",
       "layer": "ai",
-      "loc": 132,
+      "loc": 144,
       "functions": 4,
       "classes": 3,
       "is_package": false,
       "fan_in": 12,
-      "fan_out": 0,
+      "fan_out": 1,
       "external_deps": [
+        "app",
         "dataclasses",
         "enum",
         "logging",
@@ -196,12 +197,12 @@
       "id": "app.ai.router",
       "path": "app/ai/router.py",
       "layer": "ai",
-      "loc": 523,
+      "loc": 535,
       "functions": 3,
       "classes": 1,
       "is_package": false,
       "fan_in": 11,
-      "fan_out": 11,
+      "fan_out": 12,
       "external_deps": [
         "app",
         "datetime",
@@ -248,7 +249,7 @@
       "functions": 0,
       "classes": 0,
       "is_package": true,
-      "fan_in": 2,
+      "fan_in": 1,
       "fan_out": 0,
       "external_deps": []
     },
@@ -282,24 +283,6 @@
         "logging",
         "threading",
         "time"
-      ]
-    },
-    {
-      "id": "app.core.cache",
-      "path": "app/core/cache.py",
-      "layer": "core",
-      "loc": 209,
-      "functions": 12,
-      "classes": 0,
-      "is_package": false,
-      "fan_in": 0,
-      "fan_out": 3,
-      "external_deps": [
-        "app",
-        "contextlib",
-        "hashlib",
-        "json",
-        "logging"
       ]
     },
     {
@@ -400,7 +383,7 @@
       "functions": 5,
       "classes": 1,
       "is_package": false,
-      "fan_in": 0,
+      "fan_in": 3,
       "fan_out": 3,
       "external_deps": [
         "app",
@@ -453,7 +436,7 @@
       "functions": 2,
       "classes": 2,
       "is_package": false,
-      "fan_in": 8,
+      "fan_in": 7,
       "fan_out": 0,
       "external_deps": [
         "json",
@@ -465,8 +448,8 @@
       "id": "app.core.memory_backup",
       "path": "app/core/memory_backup.py",
       "layer": "core",
-      "loc": 179,
-      "functions": 8,
+      "loc": 252,
+      "functions": 9,
       "classes": 0,
       "is_package": false,
       "fan_in": 0,
@@ -474,11 +457,13 @@
       "external_deps": [
         "__future__",
         "app",
+        "argparse",
         "base64",
         "cryptography",
         "json",
         "logging",
         "os",
+        "sys",
         "time"
       ]
     },
@@ -522,7 +507,7 @@
       "functions": 5,
       "classes": 1,
       "is_package": false,
-      "fan_in": 26,
+      "fan_in": 25,
       "fan_out": 0,
       "external_deps": [
         "__future__",
@@ -659,7 +644,7 @@
       "functions": 9,
       "classes": 2,
       "is_package": false,
-      "fan_in": 22,
+      "fan_in": 21,
       "fan_out": 1,
       "external_deps": [
         "app",
@@ -813,10 +798,24 @@
       "functions": 0,
       "classes": 0,
       "is_package": false,
-      "fan_in": 11,
+      "fan_in": 6,
       "fan_out": 10,
       "external_deps": [
         "app"
+      ]
+    },
+    {
+      "id": "app.handlers.comments._client",
+      "path": "app/handlers/comments/_client.py",
+      "layer": "handlers",
+      "loc": 64,
+      "functions": 4,
+      "classes": 1,
+      "is_package": false,
+      "fan_in": 5,
+      "fan_out": 1,
+      "external_deps": [
+        "__future__"
       ]
     },
     {
@@ -872,8 +871,8 @@
       "id": "app.handlers.comments.integrations",
       "path": "app/handlers/comments/integrations.py",
       "layer": "handlers",
-      "loc": 201,
-      "functions": 4,
+      "loc": 192,
+      "functions": 2,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
@@ -889,9 +888,9 @@
       "id": "app.handlers.comments.publisher",
       "path": "app/handlers/comments/publisher.py",
       "layer": "handlers",
-      "loc": 456,
-      "functions": 8,
-      "classes": 1,
+      "loc": 433,
+      "functions": 4,
+      "classes": 0,
       "is_package": false,
       "fan_in": 2,
       "fan_out": 11,
@@ -909,9 +908,9 @@
       "id": "app.handlers.comments.reviewer",
       "path": "app/handlers/comments/reviewer.py",
       "layer": "handlers",
-      "loc": 407,
-      "functions": 11,
-      "classes": 1,
+      "loc": 411,
+      "functions": 10,
+      "classes": 0,
       "is_package": false,
       "fan_in": 3,
       "fan_out": 8,
@@ -926,12 +925,12 @@
       "id": "app.handlers.comments.security",
       "path": "app/handlers/comments/security.py",
       "layer": "handlers",
-      "loc": 100,
+      "loc": 131,
       "functions": 4,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 5,
+      "fan_out": 6,
       "external_deps": [
         "__future__",
         "app",
@@ -1209,7 +1208,7 @@
       "functions": 2,
       "classes": 0,
       "is_package": false,
-      "fan_in": 0,
+      "fan_in": 1,
       "fan_out": 1,
       "external_deps": [
         "app",
@@ -1325,15 +1324,16 @@
       "id": "app.security.licenses",
       "path": "app/security/licenses.py",
       "layer": "security",
-      "loc": 112,
+      "loc": 133,
       "functions": 3,
       "classes": 0,
       "is_package": false,
-      "fan_in": 0,
+      "fan_in": 1,
       "fan_out": 2,
       "external_deps": [
         "app",
-        "requests"
+        "requests",
+        "time"
       ]
     },
     {
@@ -1353,32 +1353,15 @@
       ]
     },
     {
-      "id": "app.security.secrets",
-      "path": "app/security/secrets.py",
-      "layer": "security",
-      "loc": 158,
-      "functions": 4,
-      "classes": 1,
-      "is_package": false,
-      "fan_in": 0,
-      "fan_out": 1,
-      "external_deps": [
-        "app",
-        "dataclasses",
-        "math",
-        "re"
-      ]
-    },
-    {
       "id": "server",
       "path": "server.py",
       "layer": "other",
-      "loc": 453,
-      "functions": 21,
+      "loc": 473,
+      "functions": 22,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 22,
+      "fan_out": 23,
       "external_deps": [
         "app",
         "flask",
@@ -1412,6 +1395,11 @@
     }
   ],
   "edges": [
+    {
+      "source": "app.ai.circuit_breaker",
+      "target": "app.core.health_check",
+      "kind": "runtime"
+    },
     {
       "source": "app.ai.guarded",
       "target": "app.ai.circuit_breaker",
@@ -1554,6 +1542,11 @@
     },
     {
       "source": "app.ai.router",
+      "target": "app.core.health_check",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.router",
       "target": "app.core.redis_client",
       "kind": "runtime"
     },
@@ -1586,21 +1579,6 @@
       "source": "app.core.authorization",
       "target": "app.github.client",
       "kind": "import"
-    },
-    {
-      "source": "app.core.cache",
-      "target": "app.core",
-      "kind": "import"
-    },
-    {
-      "source": "app.core.cache",
-      "target": "app.core.redis_client",
-      "kind": "import"
-    },
-    {
-      "source": "app.core.cache",
-      "target": "app.github.client",
-      "kind": "runtime"
     },
     {
       "source": "app.core.confidence",
@@ -1823,6 +1801,11 @@
       "kind": "import"
     },
     {
+      "source": "app.handlers.comments._client",
+      "target": "app.handlers.comments",
+      "kind": "runtime"
+    },
+    {
       "source": "app.handlers.comments.constants",
       "target": "app.core.commands",
       "kind": "import"
@@ -1894,7 +1877,7 @@
     },
     {
       "source": "app.handlers.comments.integrations",
-      "target": "app.handlers.comments",
+      "target": "app.handlers.comments._client",
       "kind": "import"
     },
     {
@@ -1930,12 +1913,12 @@
     {
       "source": "app.handlers.comments.publisher",
       "target": "app.handlers.comments",
-      "kind": "import"
+      "kind": "runtime"
     },
     {
       "source": "app.handlers.comments.publisher",
-      "target": "app.handlers.comments",
-      "kind": "runtime"
+      "target": "app.handlers.comments._client",
+      "kind": "import"
     },
     {
       "source": "app.handlers.comments.publisher",
@@ -1979,17 +1962,17 @@
     },
     {
       "source": "app.handlers.comments.reviewer",
-      "target": "app.handlers.comments",
+      "target": "app.handlers.comments._client",
       "kind": "import"
     },
     {
       "source": "app.handlers.comments.reviewer",
-      "target": "app.handlers.comments",
+      "target": "app.handlers.pull_request",
       "kind": "runtime"
     },
     {
       "source": "app.handlers.comments.reviewer",
-      "target": "app.handlers.pull_request",
+      "target": "app.intelligence.summarizer",
       "kind": "runtime"
     },
     {
@@ -1999,7 +1982,7 @@
     },
     {
       "source": "app.handlers.comments.security",
-      "target": "app.handlers.comments",
+      "target": "app.handlers.comments._client",
       "kind": "import"
     },
     {
@@ -2010,6 +1993,11 @@
     {
       "source": "app.handlers.comments.security",
       "target": "app.security.enhanced_secrets",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.security",
+      "target": "app.security.licenses",
       "kind": "runtime"
     },
     {
@@ -2060,12 +2048,12 @@
     {
       "source": "app.handlers.comments.service",
       "target": "app.handlers.comments",
-      "kind": "import"
+      "kind": "runtime"
     },
     {
       "source": "app.handlers.comments.service",
-      "target": "app.handlers.comments",
-      "kind": "runtime"
+      "target": "app.handlers.comments._client",
+      "kind": "import"
     },
     {
       "source": "app.handlers.comments.service",
@@ -2533,11 +2521,6 @@
       "kind": "runtime"
     },
     {
-      "source": "app.security.secrets",
-      "target": "app.core.logger",
-      "kind": "import"
-    },
-    {
       "source": "server",
       "target": "app",
       "kind": "import"
@@ -2550,6 +2533,11 @@
     {
       "source": "server",
       "target": "app.core.event_queue",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
+      "target": "app.core.health_check",
       "kind": "runtime"
     },
     {
@@ -2664,9 +2652,9 @@
     }
   ],
   "stats": {
-    "modules": 86,
-    "edges": 250,
-    "total_loc": 17400,
+    "modules": 85,
+    "edges": 251,
+    "total_loc": 17238,
     "layers": [
       "ai",
       "core",
@@ -2677,33 +2665,24 @@
       "other",
       "security"
     ],
-    "cycles": [
-      [
-        "app.handlers.comments",
-        "app.handlers.comments.integrations",
-        "app.handlers.comments.publisher",
-        "app.handlers.comments.reviewer",
-        "app.handlers.comments.security",
-        "app.handlers.comments.service"
-      ]
-    ],
+    "cycles": [],
     "hotspots": [
       {
         "id": "app.core.redis_client",
         "loc": 497,
-        "fan_in": 26,
+        "fan_in": 25,
         "fan_out": 0
       },
       {
         "id": "app.ai.router",
-        "loc": 523,
+        "loc": 535,
         "fan_in": 11,
-        "fan_out": 11
+        "fan_out": 12
       },
       {
         "id": "app.github.client",
         "loc": 215,
-        "fan_in": 22,
+        "fan_in": 21,
         "fan_out": 1
       },
       {
@@ -2725,6 +2704,12 @@
         "fan_out": 1
       },
       {
+        "id": "app.ai.circuit_breaker",
+        "loc": 144,
+        "fan_in": 12,
+        "fan_out": 1
+      },
+      {
         "id": "app.ai.validator",
         "loc": 253,
         "fan_in": 6,
@@ -2737,25 +2722,12 @@
         "fan_out": 1
       },
       {
-        "id": "app.ai.circuit_breaker",
-        "loc": 132,
-        "fan_in": 12,
-        "fan_out": 0
-      },
-      {
         "id": "app.intelligence.memory",
         "loc": 286,
         "fan_in": 5,
         "fan_out": 2
       }
     ],
-    "orphans": [
-      "app.core.cache",
-      "app.core.health_check",
-      "app.core.memory_backup",
-      "app.intelligence.summarizer",
-      "app.security.licenses",
-      "app.security.secrets"
-    ]
+    "orphans": []
   }
 }

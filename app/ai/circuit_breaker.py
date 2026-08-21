@@ -64,6 +64,18 @@ class CircuitBreaker:
                     f"circuit_breaker.opened provider={self.provider} "
                     f"failures={self._failures} reason={reason}"
                 )
+        # Outside the lock: health_check does its own Redis I/O, and holding
+        # this RLock across it would serialise every provider's error path.
+        #
+        # Hooked here rather than in each provider because all four already
+        # funnel failures through this method — health_check's error rate was
+        # otherwise fed by nothing and always read 0%.
+        try:
+            from app.core.health_check import record_latency
+
+            record_latency(self.provider, 0, is_error=True)
+        except Exception:
+            pass  # health tracking must never affect the breaker
 
     def seconds_until_retry(self) -> int:
         with self._lock:

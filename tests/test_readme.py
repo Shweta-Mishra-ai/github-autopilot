@@ -432,4 +432,4 @@ class TestRegistryIsSingleSourced:
         restriction is silently meaningless."""
         from app.core.commands import ALL_COMMANDS, RESTRICTED_COMMANDS
 
-        assert RESTRICTED_COMMANDS <= set(ALL_COMMANDS)
+        assert set(ALL_COMMANDS) >= RESTRICTED_COMMANDS

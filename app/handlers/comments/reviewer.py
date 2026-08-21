@@ -12,19 +12,8 @@ import re
 
 from app.github.client import GitHubError
 from app.github.helpers import fmt_error
-import app.handlers.comments as hc
+from ._client import gh_get, router  # noqa: F401  (re-exported: tests patch these names)
 
-
-def gh_get(*a, **kw):
-    return hc.gh_get(*a, **kw)
-
-
-class RouterProxy:
-    def __getattr__(self, name):
-        return getattr(hc.router, name)
-
-
-router = RouterProxy()
 
 log = logging.getLogger(__name__)
 
@@ -170,17 +159,33 @@ def cmd_version(repo: str, token: str) -> str:
 
 
 def cmd_summarize(repo: str, issue_number: int, token: str) -> str:
-    """Summarize a discussion thread."""
+    """
+    Summarize a discussion thread.
+
+    Delegates to intelligence.summarizer, which was a second implementation of
+    this exact function that nothing called. That one is the better of the two:
+    this one built the thread with `c['user']['login']` and `c['body'][:300]`,
+    so a comment from a deleted account (GitHub sends `"user": null`) or with a
+    null body raised inside the try and answered "Summarize failed". It also
+    asks for a structured answer — what the issue is about, key points, current
+    status, action items — instead of an unguided "summarize this".
+    """
     try:
-        from app.handlers.comments import router
+        from app.intelligence.summarizer import summarize_issue_thread
 
         comments = gh_get(f"/repos/{repo}/issues/{issue_number}/comments?per_page=50", token)
-        thread = "\n\n".join(f"@{c['user']['login']}: {c['body'][:300]}" for c in comments[:20])
-        summary, _ = router.ask_text(
-            "Senior engineer. Summarize GitHub discussions concisely.",
-            f"Summarize this discussion thread:\n\n{thread[:3000]}",
-            task="explain",
-        )
+        if not isinstance(comments, list):
+            comments = []
+
+        issue = {}
+        try:
+            issue = gh_get(f"/repos/{repo}/issues/{issue_number}", token) or {}
+        except Exception as exc:
+            log.debug(f"cmd_summarize.title_unavailable: {exc}")
+
+        summary = summarize_issue_thread(comments, issue)
+        if not summary.strip():
+            return "## 📝 Thread Summary\n\nCould not summarize this thread right now."
         return f"## 📝 Thread Summary\n\n{summary}"
     except Exception as exc:
         return fmt_error("Summarize failed", exc)
@@ -355,7 +360,6 @@ Return JSON:
 
 def cmd_changelog(repo: str, token: str) -> str:
     """Generate a Keep-a-Changelog entry from recent commits."""
-    from app.handlers.comments import router
 
     try:
         commits, latest_tag = _fetch_commits_since_tag(repo, token)

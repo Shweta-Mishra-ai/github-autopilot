@@ -78,13 +78,34 @@ def check_package_license(package: str) -> dict:
         return {"package": package, "license": "Error", "risk": "unknown"}
 
 
+# One PyPI lookup per package, serially, with a 5s socket timeout. Twenty of
+# them is a 100-second worst case inside a webhook handler, so the loop is
+# bounded by wall-clock as well as by count: whichever limit is reached first
+# stops the scan, and the partial result is still worth reporting.
+MAX_PACKAGES = 20
+SCAN_DEADLINE_SECONDS = 20.0
+
+
 def scan_requirements(content: str) -> list[dict]:
-    """Scan requirements.txt and check all package licenses."""
+    """
+    Scan requirements.txt and report packages that are copyleft or unknown.
+
+    Best-effort by design: a package that could not be checked before the
+    deadline is simply absent from the report rather than reported as risky.
+    Guessing "unknown" for a package we never asked about would be a false
+    positive, and this scanner exists to be trusted.
+    """
+    import time
+
     from app.security.dependencies import parse_requirements
 
     packages = parse_requirements(content)
     results = []
-    for pkg in packages[:20]:  # Limit to 20 to avoid rate limits
+    deadline = time.monotonic() + SCAN_DEADLINE_SECONDS
+    for pkg in packages[:MAX_PACKAGES]:
+        if time.monotonic() >= deadline:
+            log.info("licenses.scan_truncated", checked=len(results))
+            break
         result = check_package_license(pkg["name"])
         if result["risk"] in ("copyleft", "unknown"):
             results.append(result)

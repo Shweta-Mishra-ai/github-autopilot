@@ -358,7 +358,7 @@ class TestDetectTestGaps:
 class TestFileReviewPriority:
 
     def test_priority_ordering(self):
-        from app.handlers.pull_request import _file_review_priority, _review_code
+        from app.handlers.pull_request import _file_review_priority
 
         assert _file_review_priority("app/main.py") == 3
         assert _file_review_priority("tests/test_main.py") == 2

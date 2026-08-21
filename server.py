@@ -216,6 +216,10 @@ def health():
             # webhook only ever produced a log line nobody reads. "Slack went
             # quiet" is now answerable without grepping logs.
             "notifications": _notification_status(),
+            # Per-provider latency and error rate. health_check computed these
+            # from a dataset nothing wrote to, so they always read zero; the
+            # router and the circuit breaker now feed it.
+            "providers": _provider_health(),
         }
     ), 200 if overall == "ok" else 207
 
@@ -406,6 +410,22 @@ def _queue_stats() -> dict:
     from app.core.event_queue import queue_stats
 
     return queue_stats()
+
+
+def _provider_health() -> dict:
+    """
+    Per-provider latency and error rate from app/core/health_check.py.
+
+    Degrades to an empty dict rather than failing /health — a telemetry gap
+    must not take the health endpoint down with it.
+    """
+    try:
+        from app.core.health_check import get_system_health
+
+        return get_system_health().get("providers", {})
+    except Exception as e:
+        log.debug(f"health.provider_stats_unavailable: {e}")
+        return {}
 
 
 def _notification_status() -> dict:

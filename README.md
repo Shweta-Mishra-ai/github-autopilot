@@ -54,50 +54,75 @@ All of it, plus the V7.1 and V7.2 notes: **[docs/MIGRATING.md](docs/MIGRATING.md
 
 ## Quickstart — deploy in 10 minutes
 
-### 1. Create a GitHub App
-
-1. **github.com/settings/apps** → New GitHub App
-2. Webhook URL: `https://github-autopilot-1.onrender.com/webhook`
-3. Webhook secret: `python3 -c "import secrets; print(secrets.token_hex(32))"`
-4. Permissions: Issues ✏️ · Pull requests ✏️ · Contents ✏️ · Actions ✏️
-5. Subscribe to: Push · Pull request · Issue comment · Issues
-6. Download the private key (`.pem`)
-
-### 2. Deploy
+### 1. Deploy
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
 
-Or manually: fork this repo → Render → **New Blueprint** → connect fork ([render.yaml](render.yaml) does the rest).
+Or: fork this repo → Render → **New Blueprint** → connect the fork.
+[`render.yaml`](render.yaml) wires the web service and Redis.
 
-### 3. Environment variables
+### 2. Create the GitHub App — one click
 
-| Variable | Where to get it | Required |
-|----------|----------------|----------|
-| `GITHUB_APP_ID` | App settings page (numeric ID) | ✅ |
-| `GITHUB_PRIVATE_KEY` | Contents of the `.pem` file | ✅ |
-| `GITHUB_WEBHOOK_SECRET` | The secret from step 1 | ✅ |
-| `GROQ_API_KEY` | [console.groq.com](https://console.groq.com) — free | ✅ |
-| `REDIS_URL` | Auto-wired by render.yaml | ✅ |
-| `MCP_API_KEY` | `python3 -c "import secrets; print(secrets.token_hex(32))"` | for MCP |
-| `METRICS_AUTH_TOKEN` | Any strong random string | recommended |
-| `GEMINI_API_KEY` / `OPENROUTER_API_KEY` | Optional extra AI fallbacks | optional |
+Open **`https://<your-deployment>/setup`** and press the button.
 
-### 4. Install & verify
+GitHub creates the App from a manifest with the webhook URL, the four events
+and every permission already set, then hands back your credentials. There is
+nothing to tick, which matters: a missed permission is the one mistake that
+makes commands refuse to run and struggle to say why.
 
-Install the GitHub App on your repos, then:
+The credentials appear once. Paste them into your host's environment:
+
+| Variable | From |
+|----------|------|
+| `GITHUB_APP_ID` | the setup page |
+| `GITHUB_PRIVATE_KEY` | the setup page |
+| `GITHUB_WEBHOOK_SECRET` | the setup page |
+| `GROQ_API_KEY` | [console.groq.com](https://console.groq.com) — free |
+| `REDIS_URL` | auto-wired by `render.yaml` |
+| `METRICS_AUTH_TOKEN` | any strong random string — recommended |
+| `MCP_API_KEY` | `python3 -c "import secrets; print(secrets.token_hex(32))"` — for IDE use |
+
+<details>
+<summary>Prefer to create the App by hand?</summary>
+
+<br/>
+
+**github.com/settings/apps** → New GitHub App
+
+- Webhook URL: `https://<your-deployment>/webhook`
+- Webhook secret: `python3 -c "import secrets; print(secrets.token_hex(32))"`
+- Repository permissions: Issues ✏️ · Pull requests ✏️ · Contents ✏️ ·
+  Actions ✏️ · Metadata 👁 · Checks 👁 · Code scanning alerts 👁
+- Subscribe to: Push · Pull request · Issues · Issue comment
+- Generate and download the private key (`.pem`)
+
+The `/setup` flow exists because this list is easy to get subtly wrong. If you
+do it by hand, run the doctor below afterwards.
+
+</details>
+
+### 3. Install & verify
+
+Install the App on your repositories, then ask the deployment to check itself:
 
 ```bash
-curl https://github-autopilot-1.onrender.com/ping
-# → {"status": "ok", "version": "7.2.0"}
+curl -H "Authorization: Bearer $METRICS_AUTH_TOKEN" \
+  "https://<your-deployment>/setup/doctor?repo=owner/name&installation_id=<id>"
 ```
+
+It probes each capability with a real read and reports **which commands will
+not work and why** — including the App-permission failure that used to be
+invisible. `installation_id` is in the URL of the App's installation settings
+page.
+
+Then comment `/health` on any issue. The bot replies with a repo health grade.
+Done. ✈️
 
 > **Cold starts** — the demo instance runs on Render's free tier. A scheduled
 > [keep-alive workflow](.github/workflows/keepalive.yml) pings it every 10 minutes
 > to keep it warm (the badge above goes red if production is actually down), but if
 > a ping window is missed the first request can take **~50 s** while the instance
 > wakes. If a request stalls, retry once.
-
-Comment `/health` on any issue. The bot replies with a repo health grade. Done. ✈️
 
 ---
 
@@ -106,11 +131,11 @@ Comment `/health` on any issue. The bot replies with a repo health grade. Done. 
 <!-- autopilot:stats:start -->
 | | |
 |---|---|
-| Modules | 88 |
-| Lines of code | 18,797 |
+| Modules | 90 |
+| Lines of code | 19,352 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 267 |
+| Internal imports | 271 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>
@@ -185,12 +210,12 @@ code. Explore it interactively at [`/graph`](#codebase-map), or regenerate with
 ```mermaid
 graph LR
     ai["ai<br/>15 modules"]
-    core["core<br/>22 modules"]
+    core["core<br/>23 modules"]
     github["github<br/>8 modules"]
     handlers["handlers<br/>23 modules"]
     intelligence["intelligence<br/>6 modules"]
     mcp["mcp<br/>4 modules"]
-    other["other<br/>5 modules"]
+    other["other<br/>6 modules"]
     security["security<br/>5 modules"]
     ai --> core
     ai --> github

@@ -540,6 +540,23 @@
       ]
     },
     {
+      "id": "app.core.preflight",
+      "path": "app/core/preflight.py",
+      "layer": "core",
+      "loc": 191,
+      "functions": 3,
+      "classes": 3,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 2,
+      "external_deps": [
+        "__future__",
+        "app",
+        "dataclasses",
+        "logging"
+      ]
+    },
+    {
       "id": "app.core.redaction",
       "path": "app/core/redaction.py",
       "layer": "core",
@@ -677,11 +694,11 @@
       "id": "app.github.auth",
       "path": "app/github/auth.py",
       "layer": "github",
-      "loc": 94,
-      "functions": 3,
+      "loc": 118,
+      "functions": 4,
       "classes": 0,
       "is_package": false,
-      "fan_in": 8,
+      "fan_in": 9,
       "fan_out": 0,
       "external_deps": [
         "jwt",
@@ -700,7 +717,7 @@
       "functions": 9,
       "classes": 2,
       "is_package": false,
-      "fan_in": 21,
+      "fan_in": 22,
       "fan_out": 1,
       "external_deps": [
         "app",
@@ -1411,15 +1428,35 @@
       ]
     },
     {
-      "id": "server",
-      "path": "server.py",
+      "id": "app.setup_flow",
+      "path": "app/setup_flow.py",
       "layer": "other",
-      "loc": 573,
-      "functions": 25,
+      "loc": 221,
+      "functions": 7,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 26,
+      "fan_out": 0,
+      "external_deps": [
+        "__future__",
+        "html",
+        "json",
+        "logging",
+        "os",
+        "requests",
+        "secrets"
+      ]
+    },
+    {
+      "id": "server",
+      "path": "server.py",
+      "layer": "other",
+      "loc": 692,
+      "functions": 29,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 28,
       "external_deps": [
         "app",
         "flask",
@@ -1751,6 +1788,16 @@
     {
       "source": "app.core.memory_backup",
       "target": "app.intelligence.memory",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.preflight",
+      "target": "app.github.auth",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.preflight",
+      "target": "app.github.client",
       "kind": "runtime"
     },
     {
@@ -2690,6 +2737,11 @@
     },
     {
       "source": "server",
+      "target": "app.core.preflight",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
       "target": "app.core.redis_client",
       "kind": "import"
     },
@@ -2774,6 +2826,11 @@
       "kind": "runtime"
     },
     {
+      "source": "server",
+      "target": "app.setup_flow",
+      "kind": "runtime"
+    },
+    {
       "source": "worker",
       "target": "app.core.event_queue",
       "kind": "runtime"
@@ -2790,9 +2847,9 @@
     }
   ],
   "stats": {
-    "modules": 88,
-    "edges": 267,
-    "total_loc": 18797,
+    "modules": 90,
+    "edges": 271,
+    "total_loc": 19352,
     "layers": [
       "ai",
       "core",
@@ -2820,7 +2877,7 @@
       {
         "id": "app.github.client",
         "loc": 215,
-        "fan_in": 21,
+        "fan_in": 22,
         "fan_out": 1
       },
       {

@@ -186,6 +186,125 @@ def graph_json():
         return jsonify({"error": "Could not read graph"}), 500
 
 
+def _base_url() -> str:
+    """Where GitHub should call back. PUBLIC_URL wins; else the request's host."""
+    from app.setup_flow import _public_url
+
+    return _public_url() or request.url_root.rstrip("/")
+
+
+@app.route("/setup", methods=["GET"])
+def setup():
+    """
+    One-click GitHub App creation.
+
+    Deliberately NOT auth-gated: it is the page you reach before you have any
+    credentials to authenticate with. It exposes nothing — the manifest is the
+    same permission list published in the README, and the only secret in this
+    flow appears on the callback, which requires a code GitHub issues.
+    """
+    from app.setup_flow import setup_page
+
+    return setup_page(_base_url()), 200, {"Content-Type": "text/html; charset=utf-8"}
+
+
+@app.route("/setup/callback", methods=["GET"])
+def setup_callback():
+    """Exchange GitHub's one-time code for the App credentials, and show them once."""
+    from app.setup_flow import consume_state, credentials_page, exchange_code
+
+    code = (request.args.get("code") or "").strip()
+    state = (request.args.get("state") or "").strip()
+
+    if not code:
+        return (
+            "<h1>Missing code</h1><p>Start again at <a href='/setup'>/setup</a>.</p>",
+            400,
+            {"Content-Type": "text/html; charset=utf-8"},
+        )
+    if not consume_state(state):
+        # A callback this server did not initiate, or one already used.
+        log.warning("setup.callback_state_rejected")
+        return (
+            "<h1>This link is no longer valid</h1><p>Setup links are single-use. "
+            "Start again at <a href='/setup'>/setup</a>.</p>",
+            400,
+            {"Content-Type": "text/html; charset=utf-8"},
+        )
+
+    data, error = exchange_code(code)
+    if error:
+        return (
+            f"<h1>Setup could not complete</h1><p>{error}</p>"
+            "<p><a href='/setup'>Start again</a></p>",
+            502,
+            {"Content-Type": "text/html; charset=utf-8"},
+        )
+
+    # Deliberately no logging of `data` — it carries the private key.
+    log.info("setup.app_created app_id=%s", data.get("id"))
+    return (
+        credentials_page(data, _base_url()),
+        200,
+        {"Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store"},
+    )
+
+
+@app.route("/setup/doctor", methods=["GET"])
+def setup_doctor():
+    """
+    Why a command is not working on a given repository, with evidence.
+
+    Auth-gated like /health: it names repositories and reports what the App is
+    permitted to do, which is not public information.
+
+        /setup/doctor?repo=owner/name&installation_id=123
+
+    Probes are all GETs, so calling this can change nothing.
+    """
+    if not _authorized(request):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    repo = (request.args.get("repo") or "").strip()
+    raw_id = (request.args.get("installation_id") or "").strip()
+    if not repo or "/" not in repo or not raw_id.isdigit():
+        return jsonify(
+            {
+                "error": "repo and installation_id are required",
+                "usage": "/setup/doctor?repo=owner/name&installation_id=123",
+                "hint": (
+                    "The installation id is in the URL of the App's installation "
+                    "settings page, and in the `installation.id` field of any "
+                    "webhook delivery."
+                ),
+            }
+        ), 400
+
+    from app.core.preflight import diagnose, format_report
+
+    result = diagnose(repo, int(raw_id), actor=(request.args.get("actor") or "").strip())
+    payload = {
+        "repo": result.repo,
+        "installation_id": result.installation_id,
+        "healthy": result.healthy,
+        "error": result.error,
+        "granted_permissions": result.granted,
+        "probes": [
+            {
+                "capability": p.capability,
+                "ok": p.ok,
+                "status": p.status,
+                "detail": p.detail,
+                "enables": list(p.enables),
+                "required": p.required,
+            }
+            for p in result.probes
+        ],
+        "report_markdown": format_report(result),
+    }
+    return jsonify(payload), 200 if result.healthy else 207
+
+
 @app.route("/health", methods=["GET"])
 def health():
     """

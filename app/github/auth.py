@@ -73,9 +73,33 @@ def get_installation_token(installation_id: int) -> str:
         _token_cache[installation_id] = {
             "token": token,
             "expires": time.time() + 3000,  # 50 * 60 = 3000 seconds
+            # GitHub reports what the installation was actually GRANTED, and
+            # this response was throwing it away. It is the only authoritative
+            # answer to "why did that command say it could not check my
+            # permission" — the alternative is guessing at which checkbox the
+            # operator missed. See app/core/preflight.py.
+            "permissions": data.get("permissions") or {},
         }
         log.info(f"auth.token_fetched installation_id={installation_id}")
         return token
+
+
+def get_installation_permissions(installation_id: int) -> dict:
+    """
+    What GitHub says this installation was granted, e.g. {"issues": "write"}.
+
+    Populated by the token exchange, so it costs nothing extra on a warm cache
+    and one ordinary token fetch on a cold one. Returns {} if the exchange
+    fails — callers treat that as "unknown", never as "nothing granted".
+    """
+    try:
+        get_installation_token(installation_id)
+    except Exception as e:
+        log.warning(f"auth.permissions_unavailable installation_id={installation_id}: {e}")
+        return {}
+    with _cache_lock:
+        entry = _token_cache.get(installation_id) or {}
+    return dict(entry.get("permissions") or {})
 
 
 def clear_token_cache(installation_id: int = None):

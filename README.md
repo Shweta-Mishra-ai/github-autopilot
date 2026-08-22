@@ -105,7 +105,7 @@ Install the GitHub App on your repos, then:
 
 ```bash
 curl https://github-autopilot-1.onrender.com/ping
-# → {"status": "ok", "version": "7.1.1"}
+# → {"status": "ok", "version": "7.2.0"}
 ```
 
 > **Cold starts** — the demo instance runs on Render's free tier. A scheduled
@@ -115,6 +115,22 @@ curl https://github-autopilot-1.onrender.com/ping
 > wakes. If a request stalls, retry once.
 
 Comment `/health` on any issue. The bot replies with a repo health grade. Done. ✈️
+
+---
+
+## At a glance
+
+<!-- autopilot:stats:start -->
+| | |
+|---|---|
+| Modules | 88 |
+| Lines of code | 18,797 |
+| Slash commands | 27 |
+| MCP tools | 9 |
+| Internal imports | 267 |
+<!-- autopilot:stats:end -->
+
+<sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>
 
 ---
 
@@ -135,7 +151,7 @@ Type any of these in a GitHub issue or PR comment:
 | `/arch` | Architecture review | Anyone |
 | `/ci` | Analyze CI failure | Anyone |
 | `/security` | Secret + dependency scan on PR | Anyone |
-| `/secfull` | Full repo security scan | Maintainers |
+| `/secfull` | Full repo security scan + licence compliance | Maintainers |
 | `/health` | Repo health grade | Anyone |
 | `/version` | Tags, releases, recent commits | Anyone |
 | `/summarize` | Summarize issue thread | Anyone |
@@ -168,9 +184,66 @@ flowchart TB
     H --> R["ai/router<br/>Groq 70B → 8B → Gemini → OpenRouter"]
     R --> CB["circuit breakers<br/>per provider"]
     H --> GHA["GitHub API client<br/>retry · rate-limit aware"]
-    IDE["Claude Code / Cursor / Codex"] -->|"MCP · Bearer auth"| MCP["/mcp endpoint<br/>8 tools · fail-closed"]
+    IDE["Claude Code / Cursor / Codex"] -->|"MCP · Bearer auth"| MCP["/mcp endpoint<br/>fail-closed"]
     MCP --> H
 ```
+
+<details>
+<summary><b>Module dependency graph</b> — generated from the AST, never hand-drawn</summary>
+
+<br/>
+
+The diagram above is the request flow, written by hand. The one below is
+derived from the import graph on every CI run, so it cannot drift from the
+code. Explore it interactively at [`/graph`](#codebase-map), or regenerate with
+`python -m app.intelligence.codegraph app server.py worker.py`.
+
+<!-- autopilot:architecture:start -->
+```mermaid
+graph LR
+    ai["ai<br/>15 modules"]
+    core["core<br/>22 modules"]
+    github["github<br/>8 modules"]
+    handlers["handlers<br/>23 modules"]
+    intelligence["intelligence<br/>6 modules"]
+    mcp["mcp<br/>4 modules"]
+    other["other<br/>5 modules"]
+    security["security<br/>5 modules"]
+    ai --> core
+    ai --> github
+    core --> ai
+    core --> github
+    core --> intelligence
+    core --> security
+    github --> ai
+    github --> core
+    github --> other
+    handlers --> ai
+    handlers --> core
+    handlers --> github
+    handlers --> intelligence
+    handlers --> mcp
+    handlers --> security
+    intelligence --> ai
+    intelligence --> core
+    mcp --> ai
+    mcp --> core
+    mcp --> github
+    mcp --> handlers
+    mcp --> intelligence
+    mcp --> other
+    mcp --> security
+    other --> ai
+    other --> core
+    other --> github
+    other --> handlers
+    other --> mcp
+    security --> core
+    security --> github
+```
+<!-- autopilot:architecture:end -->
+
+</details>
 
 **The queue is the backbone.** Every webhook is parked in Redis *before* the
 `202` ACK, then consumed by an in-process worker group:
@@ -295,6 +368,61 @@ Two behaviours worth knowing:
 
 ---
 
+## Codebase map
+
+An interactive, force-directed view of every module and what imports what,
+served at `/graph`:
+
+- **Click a node** to see exactly what imports it and what it imports
+- **Import cycles** are detected and flagged — they are what makes a module
+  impossible to test on its own
+- **Unreferenced modules** are listed: nothing in `app/`, `server.py` or
+  `worker.py` imports them, which usually means dead code
+- **Hotspots** rank modules by size × how many things depend on them — the
+  files that are expensive to change
+
+The data comes from `python -m app.intelligence.codegraph`, which reads the AST
+and **never imports the code it analyses**, so it is safe to point at any
+repository. CI regenerates it and fails a PR whose committed copy is stale.
+
+```bash
+python -m app.intelligence.codegraph app server.py worker.py \
+  --out docs/diagrams/codegraph.json
+```
+
+`/graph.json` is auth-gated with `METRICS_AUTH_TOKEN`, the same as `/health` —
+a dependency graph is a map of the whole system. The same data is available to
+your IDE through the `codebase_map` MCP tool.
+
+---
+
+## Managed README sections
+
+Some facts in this README restate what the code already knows: module counts,
+the command registry, the dependency graph. Those rot silently — this file
+claimed the MCP endpoint had "8 tools" for exactly as long as it took someone
+to add a ninth.
+
+Blocks between `autopilot` markers are regenerated from the code. Paste an
+empty pair where you want the content — writing `NAME` as one of the region
+names below:
+
+```markdown
+<!-- autopilot:NAME:start -->
+<!-- autopilot:NAME:end -->
+```
+
+Available regions: `stats`, `architecture`, `commands`. Everything outside a
+marker pair is hand-written and never touched by the bot, and a repository with
+no markers gets no edits at all — you opt in one region at a time by pasting a
+marker pair where you want the content.
+
+Refreshes arrive as a pull request, never as a direct commit to the default
+branch. Set `README_SELF_UPDATE_REPO=owner/repo` to enable it for the
+deployment's own repository.
+
+---
+
 ## Local development
 
 ```bash
@@ -307,7 +435,7 @@ python server.py
 ```
 
 ```bash
-pytest tests/ -v              # 1054 tests, 80% coverage — the CI badge is the live number
+pytest tests/ -v              # full suite; the tests badge above is the live count
 ruff check app/               # lint
 ```
 
@@ -320,7 +448,9 @@ ruff check app/               # lint
 - Autofix cannot touch CI workflows, Dockerfiles, env files, or security modules (path allowlist + prefix blocklist + traversal guard); changes require human `/apply`
 - Optional `MCP_ALLOWED_INSTALLATIONS` allowlist for tenant isolation
 - Bot-loop prevention on all event handlers
-- Prompt-injection mitigation: input sanitization + delimiter-wrapped user content
+- Prompt-injection mitigation: input sanitization + delimiter-wrapped user content, with delimiter-shaped sequences inside that content escaped so it cannot close its own block
+- Oversized bodies are refused **while being read** (`MAX_CONTENT_LENGTH`), not after — checking `len(request.data)` cannot run until the body is fully materialised, and that check runs before any signature is verified
+- The per-IP rate limit reads X-Forwarded-For from the trusted end of the chain, with how much of the chain is trustworthy declared by `TRUSTED_PROXY_HOPS` — set it to `0` if you expose the app without a proxy
 - **No code-execution path**: the bot never runs untrusted repo code (no `eval`/`exec`/`subprocess`/`pickle`) — a malicious repo cannot execute code on the host
 
 Full analysis: [reliability & isolation audit](docs/architecture/reliability-audit.md) · where we're headed: [roadmap](docs/architecture/roadmap.md).
@@ -330,6 +460,120 @@ Found a vulnerability? Please email rather than opening a public issue.
 ---
 
 ## Changelog
+
+### V7.2.0 — 2026-08-20
+
+Full-codebase audit. The theme is features that were wired, tested, and shipped — and then silently did nothing in production.
+
+**Seven commands were dead in the field**
+- `check_command_permission()` treated *every* non-200 from GitHub's collaborator API as "this user has no permission". A 403 (the App lacks the `members` scope), a 5xx, or a dropped connection all cached `"none"` for an hour, so `/autofix`, `/apply`, `/merge`, `/rollback`, `/release`, `/ignore` and `/secfull` refused to run for the repository owner and blamed the *user's* access in the reply. Transport and authorization failures now return an `unknown` sentinel that is **never cached** and produces a reply naming the App installation as the suspect. A denial also costs one API call now instead of two.
+- Notifications were off by default. `notifications.slack` and `notifications.discord` defaulted to `False`, so a correctly configured `SLACK_WEBHOOK_URL` delivered nothing. The tests passed because they patched the `SLACK_ENABLED` / `DISCORD_ENABLED` module constants — which is precisely why nobody noticed. Those constants were read once at import, so setting the env var after import had no effect either; they are call-time functions now, and Slack gained the rich-block sender Discord already had.
+- `/notify` reported success for channels it had never contacted. It now sends per channel and reports delivered-vs-configured truthfully, including "configured but unreachable".
+
+**`/rollback` could not roll back**
+- The pre-rollback safety snapshot's return value was discarded, so a failed snapshot still let the rollback proceed with no way back. It now aborts.
+- Undo ran **oldest-first**. Reverting action 1 before action 5 is not an undo; the order is now newest-first (LIFO), and an action type the handler does not recognise is reported as failed instead of counted as reverted.
+- Four handlers crashed on real payload shapes: a null `user` on a ghosted comment, a null `patch` on a binary file, a null `body`, and a missing `filename`. All GitHub reads in `snapshot.py` are now shape-guarded.
+
+**Scanner accuracy — no false positives, no silent misses**
+- The dependency scanner matched versions by regex prefix, so `flask 3.10.0` matched the `3.1.x` advisory and `requests 2.30.0` matched `2.3.x`. Replaced with real version-range comparison. Findings report the *affected range*, not a "fixed in" version — the range ends are series boundaries, and printing `flask>=4.0.0` would be advertising a release that does not exist.
+- Several secret patterns were mathematically unable to fire: a flat Shannon-entropy floor rejects short high-quality tokens because entropy is bounded by `log2(length)`. The gate is now a normalized ratio against that ceiling plus a distinct-character floor, and the Slack patterns were widened to the lengths Slack actually issues. Structural non-secrets (UUIDs, hashes, base64 blobs in lockfiles) are excluded explicitly rather than by luck.
+- Detection turned out to be *probabilistic* — a randomly generated key passes or fails depending on the characters it happens to draw. The accuracy tests are statistical now, with thresholds set from a measured 5000-sample distribution instead of a lucky seed.
+- `/security` scanned the base branch instead of the PR head, so it reported on code the PR had already changed.
+
+**New: see the codebase, not a diagram**
+- `app/intelligence/codegraph.py` extracts a real import graph with the `ast` module — top-level vs. runtime edges, iterative Tarjan cycle detection, orphan and hotspot detection — and `/graph` renders it as a force-directed graph in canvas, no CDN and no external asset.
+- The graph found its own first bug: a five-module import cycle in `app/handlers/comments/`. Broken via a deferred-delegation shim; the repo now reports **zero cycles**, and CI fails if a new one appears.
+
+**New: the bot writes on push**
+- Professional commit-message suggestions on push (one LLM call, capped at five commits, merge/revert skipped, SHA-keyed dedup that fails closed).
+- README managed regions between `<!-- autopilot:NAME:start -->` markers, regenerated as the project changes and delivered by pull request only — never a direct push to the default branch. Region replacement slices the string rather than using `re.sub`, so a `\g<1>` in generated content cannot corrupt the file.
+
+**`/autofix`'s path guard could be walked around with `./`**
+- `/autofix` opens a PR that rewrites a file, and the path comes from the model's `target_file` — derived from an issue body, which is attacker-controlled on a public repo. `BLOCKED_PATHS` and `BLOCKED_PREFIXES` are the only thing keeping it away from `server.py`, `requirements.txt`, the CI workflows and `app/core/authorization.py`, **the module that decides who may run destructive commands at all**.
+- Those lists are exact strings and prefixes, so they only work if the path being tested is spelled the way they are. **Seven of fifteen probe paths walked straight through** — `./server.py`, `./requirements.txt`, `./pyproject.toml`, `./setup.py`, `app/core/./config.py`, `app//core//config.py`, `./app/core/authorization.py`. GitHub's Contents API resolves every one to the protected file, and `target` went verbatim into the `PUT`: the guard checked one spelling and the write used another.
+- Fixed by normalising once, at the top, and using that spelling for every later decision *and* the write. `_block_reason` normalises identically, so the two can never disagree about which path they are judging. The tests generate their respelling variants **from the blocklists themselves**, so a path added tomorrow is covered without anyone remembering to add cases.
+
+**The secret scanner reported placeholders as leaks**
+- Run against **this repository's own source** it produced eight findings, every one a placeholder — including four `CRITICAL` "private key" hits on `app/security/enhanced_secrets.py`, where the matched text was the regex that *detects* private keys. A scanner that reports its own ruleset as a leak is not one anyone reads twice. It is now **zero**, with every real credential shape still firing.
+- Three separate causes. `FALSE_POSITIVE_FILE_PATTERNS` contained `/tests/` **with a leading slash**, and GitHub reports repo-relative paths — so `tests/conftest.py` never matched and the exclusion had never worked for the commonest layout there is. The placeholder word list was five words and missed `replace`, `dummy`, `sample`, `not_real`, `${…}` and `{{ … }}`. And a PEM *header* matched on its own, when what makes a private key a leak is the key **material**.
+- The material check looks at the following lines as well as the rest of the current one, because a real key is base64 across many lines — requiring the body on the same line would have missed every genuine multi-line leak, which is far worse than the noise it removes.
+
+**Ollama earns its place: a local triage gate**
+- The provider was reachable only through `LLM_LOCAL_ONLY` and `LLM_PREFER_LOCAL` — two all-or-nothing switches that route *everything* local. Neither is set in a normal deployment, so the integration existed and did nothing. As a **gatekeeper** it fits: a local call costs nothing, so it is affordable to ask about every diff, and *"is there anything here worth reviewing"* is a far easier question than reviewing. Version bumps, lockfile churn, formatting and comment edits now skip the cloud entirely.
+- **It fails open, always.** Unreachable, slow, circuit open, empty answer, rambling answer, both words at once — every one of those means "review it", identical to having no gate. A gate that failed closed would silently stop reviewing pull requests while every test still passed, which is the exact failure this codebase has spent its history removing. There is deliberately no setting that makes it strict, and a test asserts only one code path in the whole function can skip a review.
+- Inert unless `OLLAMA_HOST` is set, so nothing changes for anyone who does not want it.
+
+**Webhook hardening — the only endpoint the internet is meant to reach**
+- **An unauthenticated 30 MB request allocated 62 MB before being rejected.** `verify_webhook` checks `len(request.data)`, which cannot run until the whole body has been materialised — and the size check is *step one*, so no signature was needed to trigger it. A handful of concurrent requests exhausts a 512 MB instance. Werkzeug now refuses the body against the stream: the same request peaks at **0.2 MB**. The explicit length check stays as defence in depth for a chunked request that declares no `Content-Length`.
+- **X-Forwarded-For was trusted whenever present.** With a proxy in front that is correct; with no proxy the entire header is attacker-supplied, so a flood could pick a fresh rate-limit bucket on every single request. How much of the chain is trustworthy is a property of the *deployment*, so it is now `TRUSTED_PROXY_HOPS` — default `1`, which is exactly Render's shape and changes nothing for the standard install. The module's own docstring had claimed spoofing was fixed; it was fixed for Render and nowhere else.
+- `[]`, `"str"` and `123` are all valid JSON and none of them has `.get()`. A non-object payload raised `AttributeError` and surfaced as a 500 — an internal error for what is really a malformed request.
+
+**The code review silently dropped findings when GitHub rejected them**
+- A finding that anchors to a diff line is deliberately left **out** of the per-file markdown, which renders *"All findings posted as inline comments"* in its place. When the Reviews API returns 422 — a line it considers non-commentable, an outdated diff, a force-pushed head — `_post_inline_review` builds recovery markdown and returns it. **The caller discarded the return value**, so the finding existed in neither place and the sticky report asserted it had been posted as an inline comment that did not exist.
+- There was already a test called `test_reviews_api_rejection_does_not_lose_findings`. It passed, because its harness dropped the return value the same way production did — it tested the function, not the wiring. Both are fixed, and a third test now asserts the caller reads the value.
+- Found by `vulture`, which flagged the ignored `review_body` parameter next door. Of its six findings, five were false positives (signal-handler arguments, and a name used only inside a string annotation) — worth stating, because the tool's value here was one true positive that led to a different bug entirely.
+
+**Performance: profiled, not guessed**
+- The webhook path is 0.57 ms/request, so local CPU was never the bottleneck — but the profile found that **two `logging.warning` calls fired on every single event** when Redis was unavailable, and that was ~40% of the handler's own time. "Redis is unavailable" does not become more true the four-thousandth time it is logged; it becomes less readable, and it buries the warnings that are about one specific event. Both are logged on the *transition* now, in each direction, so an operator still learns when it starts and when it recovers.
+- `_is_duplicate_local` filtered all 2000 dedup entries on every event to expire the handful that had aged out. It is an `OrderedDict` written in time order, so the oldest key is always first — popping from the front until the head is live is **2.2× faster** (measured: 418 µs → 186 µs) and drops the O(n)-per-event term entirely.
+- The in-memory IP rate limiter **never freed an address**. The old code tried to delete empty windows but appended the current timestamp *before* testing for emptiness, so the window was never empty and the delete branch was unreachable — a comment describing a fix that could not fire, and one dict entry per source address forever on a public endpoint. It also appended while *over* the limit, so a flooding IP grew its own window for a full minute: the limiter paying for the flood it was refusing.
+- `_perm_cache` and `_config_cache` checked their TTL **on read only**, so an entry for a user who never came back was invalid but never freed — one entry per `(repo, user)` pair, forever, in a process meant to run for weeks on 512 MB. Checking a TTL is not the same as honouring it. Both prune on write now, amortised so the sweep is not paid per request.
+- That leak existed because `invalidate_permission_cache()` and `invalidate_config_cache()` had **zero callers**. They now have a real one: a push that edits `.ai-repo-manager.yml` drops both caches for that repo — the config one because it is stale, and the permission one because `commands.permissions.maintainer_only` lives in that same file. A maintainer fixing their config previously waited up to five minutes to learn whether the fix worked, which is long enough to conclude it had not and change something else.
+
+**Licence declarations disagreed with each other**
+- `plugin.json` and `marketplace.json` both said `MIT` while `pyproject.toml`, the README and the `LICENSE` files said `MIT OR Apache-2.0`; `mcp-manifest.json` declared nothing at all. Understating the grant is the harmless direction, but a licence that disagrees with itself is worse than none — someone reads the manifest, adopts under the narrower terms, and never learns the broader grant exists. All four now agree, pinned by a test that also checks both licence files actually ship.
+
+**The licence scanner was wrong about three quarters of this repo's own dependencies**
+- It read PyPI's `info.license` and nothing else. **Six of this repository's eight direct dependencies leave that field empty** — Flask, redis, gunicorn, cryptography, PyJWT and structlog all declare their licence in `license_expression` (PEP 639) or in trove classifiers — so all six were reported as "unknown", i.e. as something a maintainer must go and check. A scanner that is wrong about three quarters of a normal requirements file teaches people to skim past it. All three metadata sources are now read in order of authority, and the fixtures in the tests are the real payloads those packages publish, not shapes invented to make the parser pass.
+- Matching was by substring, which got dual licences backwards: `"MIT" in "MIT AND GPL-3.0"` is true, so a package that genuinely imposes the GPL was reported safe — a false **negative** in the one direction that costs someone a licence violation. Expressions are parsed now: `OR` takes the most permissive branch (the consumer picks), `AND` the most restrictive (all apply). The first version of that parser split on `OR` without respecting parentheses and called `GPL-3.0 AND (MIT OR Apache-2.0)` safe; a test caught it, not a re-read.
+- "Could not check" is now separate from "no licence declared". A private index, a git dependency or a network blip is not evidence of a licence problem, and reporting it as one is the false positive that makes the whole section ignorable.
+
+**CI: measured, then cut**
+- The three test legs each booted a Redis service container (~19s of startup apiece) that **nothing connected to** — `conftest.py` installs an in-process fake and its autouse fixture forces `REDIS_URL=""`, and there are zero tests marked `integration`, which is what the service existed for. Removed, with a note to give integration tests their own job rather than re-attaching it to the unit matrix.
+- Coverage instrumentation costs 49% on this suite (measured: 23.2s → 34.6s). Only the 3.11 leg uploads a report, so the other two were paying it for a file nothing reads. The floor is still enforced, on the leg that measures it.
+- The matrix no longer waits on lint: lint takes ~10s and the matrix spends longer than that on setup, so the gate delayed every green run by about what it saved on a red one.
+- `-v` in `addopts` was also measured, at 22.7s vs 23.5s for `-q` — inside the noise, so it was left alone rather than changed on a hunch. The `integration`/`e2e` markers CI filters on are now registered, so `--strict-markers` catches a typo that would otherwise silently exclude nothing.
+
+**Visualization is tested against the real payload, and rendered**
+- `graphview.py` reported "100% coverage" on three statements, because the page is one string constant — a meaningless number. The gap that mattered was the contract between `codegraph.py` (which writes the JSON) and the page's JavaScript (which reads it): a rename on the Python side produces an **empty canvas, not an exception**. Tests now derive the field names the shipped page dereferences and assert the generator emits every one, plus that no edge endpoint dangles and the payload stays small enough for an O(n²) layout to animate.
+- Verified by actually rendering it in headless Chromium against the live endpoint: 72,480 pixels painted, all eight layers in the legend with correct counts, hotspots populated, and zero external requests — the self-contained claim confirmed rather than asserted.
+
+**User content could close its own prompt delimiter**
+- The README advertises *"input sanitization + delimiter-wrapped user content"* as this app's prompt-injection defence. The sanitization half worked; the delimiter half did not. `wrap_user_content()` interpolated attacker-controlled text between `<PR_BODY>` and `</PR_BODY>` **without checking whether that text contained `</PR_BODY>` itself** — so a PR body could close the block early and land its own instructions *outside* the delimiters, where the model reads them as system text rather than as data. `sanitize_user_input()` never caught it: its XML patterns cover `<system>` and `</instructions>`, not the label names the module invents for itself.
+- Worst on the PR path, where the body is written by whoever opened the pull request — an outside contributor could aim it at the risk assessment that decides whether a PR is safe to auto-merge. Reproduced end-to-end before fixing, and the test asserts on what escapes the block rather than on the presence of a string.
+- Delimiter-shaped sequences are now escaped rather than deleted, so a legitimate `<TODO>` in a diff survives as `&lt;TODO&gt;` instead of vanishing — a scanner that silently eats content is its own bug. The escaping lives in `wrap_user_content`, **not** in `sanitize_user_input`: the router sanitizes the fully assembled prompt, which by then legitimately contains these delimiters, so defanging at that layer would destroy the markers it exists to protect.
+
+**The memory index was a list used as a set**
+- `_index_repo()` deduplicated by reading the entire index back on **every memory write** — O(n) in the number of repos, on the hottest path in the module whose own docstring says that complexity was removed from `remember()`. It was also not atomic: two concurrent writers for a new repo both saw "absent" and both pushed it. Now a Redis set: O(1), atomic, no duplicates, with the pre-7.2.0 list migrated on first read under a new key (reading a set with `LRANGE` raises `WRONGTYPE`, so changing the type in place would have broken every running worker until it restarted).
+- `clear(repo)` dropped the memory list and the dedup hash but left the repo in the index, so `known_repos()` kept reporting a repo with nothing in it and the backup carried an empty record for it forever.
+
+**Five more LLM fields requested, validated, and thrown away**
+- A systematic sweep of `validator.py` against every reader in the codebase found that `pr_type` and `labels` (PR analysis) and `verdict`, `positives` and `refactor_opportunity` (code review) were sanitised and consumed by nothing. PRs are never labelled at all — only issues are — so `labels` had no destination even in principle. `verdict` duplicated `summary` under a comment claiming `app/mcp/handlers.py` and `evals/` read it; **neither ever did**. All five removed; `verdict` is still accepted as an *input* alias, which is the half that fixed the original blank-summary bug.
+- This is the same defect the repo has shipped four times (`improved_title`, `verdict`/`summary`, `time_estimate`, `description`), and it was invisible every time because the validator's own tests pass — they assert the sanitising is correct, which says nothing about whether anyone consumes the result. `TestNoDeadValidatorFields` now checks the other half, so a field added without a reader fails the build.
+
+**Six unguarded payload reads on the paths that matter most**
+- `pr["user"]["login"]` in the PR handler and `issue["user"]["login"]` in the issue handler both run *before the EventLogger exists*. An issue or PR from a deleted account raised a `TypeError` that `server._run_handler`'s blanket handler swallowed, so the event vanished with a log line naming no cause. Also fixed: `/merge` read `pr["head"]["sha"]` and told the user "Merge failed" when a PR's source fork had been deleted, and the auto-merge guardrail raised on a change request from a deleted reviewer — turning "correctly blocked by a review" into a generic error.
+- Guarded structurally rather than site-by-site: a test walks the AST for bare subscripts of `user`/`head`/`base`/`patch`, verified against the pre-fix tree to confirm it catches all six rather than passing vacuously.
+
+**Durability and the quality gate — the two things nothing was watching**
+- Memory backup now runs itself, every 15 days. The encrypted export existed and was correct; nothing invoked it, so a free-tier Redis wipe still lost every learned fact. **Export is scheduled, restore is not**: exporting writes ciphertext elsewhere, restoring *overwrites live memory*, so restore runs at boot and only when memory is empty — non-destructive by construction rather than by being careful about when it is called. If it cannot prove memory is empty, it does not restore. A test asserts the maintenance module cannot so much as name `restore_from_github`.
+- **The schedule is a due time in Redis, not a `sleep()`.** This runs on a free tier that restarts on deploy and on idle, and every restart puts a `sleep(15 days)` back to zero — the timer would never have fired once. The due time survives restarts, is advanced *before* the work starts (so a pass that dies halfway costs one cycle instead of retrying every hour forever), and is claimed with `SET NX` so one of N gunicorn workers runs it rather than all of them.
+- The same pass runs a **full security scan of every repository the app has seen**. That needed something new: an installation id arrives only on a webhook and nothing persisted it, so anything running on a schedule had no credential for any repository at all. `app/core/installations.py` is a small repo → installation-id registry, refreshed per event and expiring on its own; only the id is stored, never a token.
+- The eval suite — the only check that can see the bot getting *worse* at reviewing code — failed loudly on a missing `GROQ_API_KEY`, but then filed an issue saying quality had regressed. That sends a maintainer to diff prompts and model versions when the fix is one repository secret; the two failures are now reported as the different things they are. A `push`-triggered CI job also reports when the nightly evals last ran, because GitHub disables scheduled workflows after 60 days of repository inactivity and a cron that stopped firing produces no failure and no issue.
+
+**The PR description the bot generated but never wrote**
+- The PR analysis prompt asks for a structured `## Summary / ## Changes / ## Testing` body, `validate_pr_analysis()` sanitises it to 5000 characters, `pull_requests.auto_fill_description` is documented as "Fills empty PR descriptions" and defaults to true, and `check_pr_description_update()` decides whether it is allowed — and **no code path ever wrote it**. Every PR analysis since the feature was written has been paying for a field it discarded. Same bug class as v7.0.0's `time_estimate`. Title and body now go in one PATCH, because GitHub emits a `pull_request.edited` webhook per write and this bot listens to those.
+- The prelaunch "every config key is read" audit passed this, because the key *was* read — inside a function nothing called. That check is now generalised: every config-reading guardrail must be reachable from outside its own module. Verified by reverting the fix and watching it fail.
+- `_analyze_pr` also subscripted `pr["user"]["login"]`, `pr["base"]["ref"]` and `pr["head"]["ref"]` directly. A PR from a deleted fork has a null `head` and one from a deleted account has a null `user`; either raised inside the function that decides the PR's risk level, losing the whole review.
+
+**Hygiene, testing and CI**
+- `app/handlers/pull_request.py` split into a package (classify / analysis / review / gaps / report); routing policy extracted from the LLM router; `/runtests` and `/notify` moved out of `publisher.py`, which had grown past the repo's own 600-line guard.
+- Two existing tests were asserting on patch targets the code never resolved — they had been passing without testing anything. Two hardcoded MCP tool counts now derive from the registry, with handler↔catalog symmetry assertions.
+- `record_latency()` had no callers, so `/health` and the health endpoint reported a 0% error rate no matter what the providers did. Wired into the circuit breaker and router.
+- The dependency-free `Codebase map` CI job broke on a third-party import reached through a package `__init__`. The command registry moved to a pure-stdlib `app/core/commands.py`, and five subprocess tests now fail if any third-party import creeps back into that path.
+- **Six unreachable modules resolved, none left.** `app/security/secrets.py` removed (superseded by `enhanced_secrets`). `app/security/licenses.py` — a complete copyleft-compliance scanner with green tests that nothing had ever imported, so the bot had never once reported a restrictive licence — is now part of `/secfull`, bounded to 20 packages and a 20-second budget, and omits packages it did not reach rather than reporting them as "unknown". `app/core/memory_backup.py` gained the operator CLI its documentation had been describing as `python -c` one-liners. `app/core/cache.py` was **deleted rather than wired**: every read it could have served either feeds a guardrail (`archived`, where a stale answer is precisely the bug v7.1.1 fixed) or picks a branch to write to (`default_branch`, where a stale answer targets the wrong ref) — and `load_config` already caches the one hot read that is safe to cache. Fixing bugs in unreachable code does not make it earn its place.
+- Tests 1054 → 1855, coverage 79% → 84%, orphan modules 6 → **0**, import cycles 1 → **0**. Both are now CI gates rather than reports.
 
 ### V7.1.1 — 2026-08-03
 

@@ -34,6 +34,10 @@ def run() -> None:
 
     startup_check()
 
+    # Maintenance (memory restore + the periodic sweep) is already running:
+    # `from server import _run_handler` above imports server.py, whose module
+    # scope calls _boot() when it is not __main__. Calling it again here would
+    # read as a second requirement when it is the same one.
     started = start_consumers(_run_handler)
     if not started:
         log.error("worker.no_consumers — Redis unavailable or EVENT_QUEUE_CONSUMERS=0")

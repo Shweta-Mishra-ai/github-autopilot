@@ -12,6 +12,13 @@ on:
 permissions:
   contents: read
 
+# A new push to the same branch supersedes the run already in flight. Without
+# this, a branch pushed three times queues three full matrices and the useful
+# result waits behind two obsolete ones.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
 
   # ── Lint ─────────────────────────────────────────────────────────────────────
@@ -50,23 +57,25 @@ jobs:
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: lint
+    # Deliberately NOT `needs: lint`. Lint takes ~10s and the matrix spends
+    # longer than that on setup, so gating on it delayed every green run by
+    # about the same amount it saved on a red one. Ruff runs locally before a
+    # push; a lint failure costing three runners is the cheaper mistake.
 
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
       fail-fast: false
 
-    services:
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+    # No Redis service. It cost ~19s of container startup on each of the three
+    # legs, and nothing connected to it: tests/conftest.py installs an
+    # in-process fake and its autouse env fixture forces REDIS_URL="", so the
+    # service was provisioned and then ignored. There are also zero tests
+    # marked `integration`, which is what it existed for.
+    #
+    # To bring it back when integration tests are written, give them their own
+    # job with the service attached rather than re-attaching it here — the unit
+    # matrix should not pay for a dependency it does not use.
 
     steps:
       - uses: actions/checkout@v4
@@ -93,7 +102,6 @@ jobs:
           GITHUB_APP_ID: "99999"
           GITHUB_PRIVATE_KEY: ""
           GROQ_API_KEY: "test_key_not_real"
-          REDIS_URL: "redis://localhost:6379/0"
           MCP_API_KEY: "test-mcp-key"
         run: |
           python -c "
@@ -107,13 +115,29 @@ jobs:
           import app.handlers.comments
           import app.handlers.autofix
           import app.intelligence.embeddings
-          from app.github.client import GitHubError, GitHubError
+          from app.github.client import GitHubError, GitHubSecondaryRateLimitError
           print('All imports OK')
           "
 
+      # Coverage instrumentation costs ~49% (measured: 23.2s -> 34.6s on this
+      # suite). Only 3.11 uploads a report, so the other two legs were paying
+      # that for a file nothing reads. The floor is still enforced — on the one
+      # leg that measures it.
       - name: Run tests
+        if: matrix.python-version != '3.11'
         env:
-          REDIS_URL: "redis://localhost:6379/0"
+          GROQ_API_KEY: "test_key_not_real"
+          GITHUB_APP_ID: "99999"
+          GITHUB_PRIVATE_KEY: ""
+          GITHUB_WEBHOOK_SECRET: "test-webhook-secret-32chars-abc!"
+          METRICS_AUTH_TOKEN: "test_metrics_token"
+          MCP_API_KEY: "test-mcp-api-key-xyz"
+          LOG_FORMAT: "text"
+        run: pytest tests/ --tb=short -m "not e2e and not integration"
+
+      - name: Run tests with coverage
+        if: matrix.python-version == '3.11'
+        env:
           GROQ_API_KEY: "test_key_not_real"
           GITHUB_APP_ID: "99999"
           GITHUB_PRIVATE_KEY: ""
@@ -123,14 +147,12 @@ jobs:
           LOG_FORMAT: "text"
         run: |
           pytest tests/ \
-            -v \
             --tb=short \
             --cov=app \
             --cov-report=xml \
             --cov-report=term-missing \
-            --cov-fail-under=60 \
-            -m "not e2e and not integration" \
-            -x
+            --cov-fail-under=80 \
+            -m "not e2e and not integration"
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
@@ -160,6 +182,185 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip-audit --requirement requirements.txt --ignore-vuln PYSEC-2023-62
+
+  # ── Static analysis of our own code ──────────────────────────────────────────
+  # pip-audit only covers third-party CVEs. This scans app/ itself for the
+  # injection / unsafe-call / weak-crypto classes that a dependency audit
+  # cannot see. Separate job so a SAST finding does not mask a dependency CVE.
+  sast:
+    name: SAST (bandit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install bandit
+        run: pip install "bandit[toml]==1.8.0"
+
+      - name: Scan application code
+        # Skips live in pyproject.toml [tool.bandit], so a local
+        # `bandit -c pyproject.toml -r app/ --severity-level medium`
+        # reproduces CI exactly.
+        #
+        # MEDIUM floor: the remaining LOW findings are all `except: pass` on
+        # deliberately-optional paths (analytics, audit writes) that were
+        # audited individually. Failing on them would train everyone to ignore
+        # this job, which is worse than not running it.
+        run: |
+          bandit -c pyproject.toml -r app/ server.py worker.py \
+            --severity-level medium \
+            --confidence-level medium
+
+  # ── Codebase map ─────────────────────────────────────────────────────────────
+  # Regenerates docs/diagrams/codegraph.json from the AST. This is the whole
+  # point of generating the map instead of drawing it: a committed diagram goes
+  # quietly wrong three refactors later, and nothing tells you.
+  #
+  # On a PR it only verifies the file is current, so a reviewer sees structural
+  # drift in the diff. On main it commits the refresh.
+  codegraph:
+    name: Codebase map
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Regenerate the graph
+        # Pure stdlib ast — no dependencies to install, and it never imports
+        # the code it reads.
+        run: |
+          python -m app.intelligence.codegraph app server.py worker.py \
+            --entrypoint app \
+            --entrypoint server \
+            --entrypoint worker \
+            --entrypoint app.dashboard \
+            --entrypoint app.graphview \
+            --out docs/diagrams/codegraph.json
+
+      - name: Report structure
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          s = json.load(open("docs/diagrams/codegraph.json"))["stats"]
+          print("## Codebase map\n")
+          print(f"- **{s['modules']}** modules, **{s['edges']}** imports, "
+                f"**{s['total_loc']:,}** lines")
+          if s.get("cycles"):
+              print(f"- ⚠️ **{len(s['cycles'])}** import cycle(s):")
+              for c in s["cycles"]:
+                  print(f"  - `{' → '.join(c)}`")
+          else:
+              print("- ✅ no import cycles")
+          if s.get("orphans"):
+              print(f"- **{len(s['orphans'])}** module(s) nothing imports:")
+              for o in s["orphans"]:
+                  print(f"  - `{o}`")
+          print("\n### Hotspots\n")
+          print("| Module | Lines | Imported by |")
+          print("|---|---:|---:|")
+          for h in s["hotspots"][:8]:
+              print(f"| `{h['id']}` | {h['loc']} | {h['fan_in']} |")
+          PY
+
+      - name: Fail on import cycles or unreachable modules
+        # Reporting these in the job summary was not enough — a summary nobody
+        # opens is the same as no check. A cycle is a design defect and an
+        # unreachable module is either dead code to delete or an entrypoint to
+        # declare; either way it is a decision, so it blocks the build until
+        # someone makes one.
+        run: |
+          python - <<'PY'
+          import json, sys
+          s = json.load(open("docs/diagrams/codegraph.json"))["stats"]
+          bad = False
+          for c in s.get("cycles") or []:
+              print(f"::error::import cycle: {' -> '.join(c)}")
+              bad = True
+          for o in s.get("orphans") or []:
+              print(f"::error::nothing imports {o} — delete it, or declare it with --entrypoint")
+              bad = True
+          sys.exit(1 if bad else 0)
+          PY
+
+      - name: Fail if the committed map is stale (PRs only)
+        if: github.event_name == 'pull_request'
+        run: |
+          if ! git diff --quiet -- docs/diagrams/codegraph.json; then
+            echo "::error::docs/diagrams/codegraph.json is out of date. Run:"
+            echo "::error::  python -m app.intelligence.codegraph app server.py worker.py \\"
+            echo "::error::    --entrypoint app --entrypoint server --entrypoint worker \\"
+            echo "::error::    --entrypoint app.dashboard --entrypoint app.graphview \\"
+            echo "::error::    --out docs/diagrams/codegraph.json"
+            git diff --stat -- docs/diagrams/codegraph.json
+            exit 1
+          fi
+
+      - name: Fail if the README's generated sections are stale
+        # These blocks restate what the code knows (module counts, the command
+        # registry, the layer graph). Unchecked, they rot: this README claimed
+        # the MCP endpoint had "8 tools" for as long as it took to add a ninth.
+        run: python -m app.handlers.readme --check
+
+  # ── Is the quality gate still running? (main only) ───────────────────────────
+  # The eval suite is the only check that can see the bot getting *worse* at
+  # reviewing code; every other job checks that the code is correct. It runs on
+  # a nightly cron, and a cron has two silent failure modes the suite itself
+  # cannot report:
+  #
+  #   1. GitHub disables scheduled workflows after 60 days of repository
+  #      inactivity. No run means no failure means no issue filed.
+  #   2. The workflow can be disabled by hand and look identical from the
+  #      Actions tab unless you go looking.
+  #
+  # This job runs on push, so activity is what triggers it — exactly the
+  # condition under which the cron might have been switched off. It reports
+  # rather than fails: a genuinely quiet fortnight is not a broken build.
+  eval-freshness:
+    name: Eval gate freshness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      actions: read
+    steps:
+      - name: Check when the evals last ran
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          LAST=$(gh api "repos/$REPO/actions/workflows/evals.yml/runs?per_page=1" \
+            --jq '.workflow_runs[0].created_at // ""' 2>/dev/null || echo "")
+
+          if [ -z "$LAST" ]; then
+            echo "::warning::The eval workflow has never run. The one gate that "\
+              "measures review quality is not active."
+            echo "- ⚠️ evals have never run" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          AGE_DAYS=$(( ( $(date -u +%s) - $(date -u -d "$LAST" +%s) ) / 86400 ))
+          echo "Last eval run: $LAST (${AGE_DAYS}d ago)" >> "$GITHUB_STEP_SUMMARY"
+
+          # Nightly cron, so anything past three days means it is not firing.
+          if [ "$AGE_DAYS" -gt 3 ]; then
+            echo "::warning::Evals last ran ${AGE_DAYS} days ago on a nightly "\
+              "schedule. GitHub disables scheduled workflows after 60 days of "\
+              "repository inactivity — re-enable it under Actions."
+            echo "- ⚠️ stale: nightly evals last ran ${AGE_DAYS}d ago" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- ✅ eval gate is running" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   # ── Test-count badge (main only) ─────────────────────────────────────────────
   # Publishes the real pytest pass count from THIS run to the `badges` branch.
@@ -220,7 +421,7 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    needs: [test, lint, security]
+    needs: [test, lint, security, sast]
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write

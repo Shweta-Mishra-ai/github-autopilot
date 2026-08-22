@@ -90,3 +90,42 @@ class TestCommands:
         import re
 
         assert not re.search(r"[A-Fa-f0-9]{40,}", cfg_raw)
+
+
+class TestPluginCommandsMapToRealTools:
+    """
+    A plugin command is a promise that an MCP tool exists behind it. Nothing
+    checked that, so a renamed or removed tool would leave a slash command that
+    fails at the moment someone tries it — with no signal until then.
+    """
+
+    @staticmethod
+    def _commands() -> dict[str, str]:
+        import pathlib
+
+        return {
+            p.stem: p.read_text(encoding="utf-8")
+            for p in pathlib.Path("plugin/commands").glob("*.md")
+        }
+
+    def test_every_command_names_a_tool_that_exists(self):
+        import re
+
+        from app.mcp.tools import MCP_TOOLS
+
+        names = {t["name"] for t in MCP_TOOLS}
+        for stem, body in self._commands().items():
+            referenced = set(re.findall(r"`([a-z_]+)`", body)) & (names | {"module"})
+            tools = referenced - {"module"}
+            assert tools, f"{stem}.md names no MCP tool"
+            assert tools <= names, f"{stem}.md references unknown tools: {tools - names}"
+
+    def test_every_command_has_frontmatter(self):
+        for stem, body in self._commands().items():
+            assert body.startswith("---\n"), f"{stem}.md has no frontmatter"
+            assert "description:" in body.split("---")[1], f"{stem}.md has no description"
+
+    def test_the_codebase_map_command_ships(self):
+        """Added because codebase_map was the newest and most visual tool and
+        had no way to reach it from an IDE."""
+        assert "map" in self._commands()

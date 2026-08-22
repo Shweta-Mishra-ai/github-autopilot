@@ -7,37 +7,13 @@ Commands that write to GitHub: /merge, /apply, /rollback, /release,
 from __future__ import annotations
 
 import logging
-import os
 import re
 
 import contextlib
 from app.github.client import GitHubError
 from app.github.helpers import fmt_error
-import app.handlers.comments as hc
+from ._client import gh_get, gh_post, gh_put, gh_delete, router  # noqa: F401  (re-exported: tests patch these names)
 
-
-def gh_get(*a, **kw):
-    return hc.gh_get(*a, **kw)
-
-
-def gh_post(*a, **kw):
-    return hc.gh_post(*a, **kw)
-
-
-def gh_put(*a, **kw):
-    return hc.gh_put(*a, **kw)
-
-
-def gh_delete(*a, **kw):
-    return hc.gh_delete(*a, **kw)
-
-
-class RouterProxy:
-    def __getattr__(self, name):
-        return getattr(hc.router, name)
-
-
-router = RouterProxy()
 
 log = logging.getLogger(__name__)
 
@@ -57,7 +33,16 @@ def cmd_merge(
     try:
         pr = gh_get(f"/repos/{repo}/pulls/{issue_number}", token)
         reviews = gh_get(f"/repos/{repo}/pulls/{issue_number}/reviews", token)
-        commit_sha = pr["head"]["sha"]
+        # A PR whose source fork was deleted carries a null `head`. This
+        # raised inside cmd_merge's try/except, so the user was told "Merge
+        # failed" with a TypeError rather than the real reason.
+        head = pr.get("head") or {}
+        commit_sha = head.get("sha", "")
+        if not commit_sha:
+            return (
+                "## 🚫 Cannot Merge\n\n**Reason:** this PR has no head commit — "
+                "its source branch or fork was deleted."
+            )
         check_runs = gh_get(f"/repos/{repo}/commits/{commit_sha}/check-runs", token)
 
         from app.core.guardrails import check_pr_auto_merge
@@ -66,8 +51,8 @@ def cmd_merge(
         if not guard.passed:
             return f"## 🚫 Cannot Merge\n\n**Reason:** {guard.reason}"
 
-        head_branch = pr["head"]["ref"]
-        base_branch = pr["base"]["ref"]
+        head_branch = head.get("ref", "")
+        base_branch = (pr.get("base") or {}).get("ref", "")
         result = gh_put(
             f"/repos/{repo}/pulls/{issue_number}/merge",
             token,
@@ -275,17 +260,37 @@ def cmd_rollback(
     if not confirm:
         return f"## ⚠️ Confirm Rollback\n\n**Snapshot #{n}** — `{snap_ts}` trigger: `{snap.get('trigger', 'unknown')}`\n\n**Actions to undo:**\n{action_lines}\n\n{'*(and more...)*' if len(bot_actions) > 5 else ''}\n\n**Proceed:** `/rollback {n} confirm`\n**Cancel:** ignore this message"
 
-    # Take safety snapshot first — abort if it fails
+    # Take a safety snapshot first — abort if it fails.
+    #
+    # take_snapshot() catches its own exceptions and returns None, so the
+    # try/except that used to guard this could never fire: a failed safety
+    # snapshot was swallowed and the rollback proceeded anyway, with nothing
+    # to undo it. The return value is what has to be checked.
     try:
-        take_snapshot(repo, token, trigger=f"pre_rollback_by_{author}")
-    except Exception as exc:
-        log.error(f"cmd_rollback safety snapshot failed: {exc}")
-        return f"## ⚠️ Rollback Aborted\n\nCould not create a safety snapshot before rolling back.\n\nError: `{str(exc)[:200]}`\n\nRollback was **not** performed."
+        safety_id = take_snapshot(repo, token, trigger=f"pre_rollback_by_{author}")
+    except Exception as exc:  # defensive — take_snapshot should not raise
+        log.error(f"cmd_rollback safety snapshot raised: {exc}")
+        safety_id = None
+
+    if not safety_id:
+        log.error(f"cmd_rollback.aborted repo={repo} — safety snapshot failed")
+        return (
+            "## ⚠️ Rollback Aborted\n\n"
+            "Could not create a safety snapshot before rolling back, so there "
+            "would be no way to undo this. Rollback was **not** performed.\n\n"
+            "This usually means Redis or the GitHub API is unavailable. "
+            "Check `/health` and try again."
+        )
 
     restored: list[str] = []
     failed: list[str] = []
 
-    for action in reversed(bot_actions):
+    # Newest action first. bot_actions arrives newest-first already, so the
+    # previous `reversed()` undid oldest-first — and undoing is LIFO. With two
+    # recorded title edits on one PR (X->Y then Y->Z), oldest-first restores X
+    # and then Y, leaving the intermediate title; newest-first restores Y then
+    # X, which is the original.
+    for action in bot_actions:
         action_type = action.get("type", "")
         num = action.get("number")
         try:
@@ -315,8 +320,19 @@ def cmd_rollback(
                     failed.append(f"remove labels from #{num}: {'; '.join(label_errors)}")
                 else:
                     restored.append(f"Removed labels from #{num}")
+            elif action_type and not num:
+                # A known type with no target is unusable, and silently
+                # skipping it reported "Rollback Complete" for work not done.
+                failed.append(f"{action_type}: no issue/PR number recorded")
             else:
+                # Reported, not just logged. This branch means the snapshot
+                # holds an action this version cannot undo — the user needs to
+                # know it survived the rollback rather than reading "Complete".
                 log.warning(f"cmd_rollback: unknown action type {action_type!r}, skipping")
+                failed.append(
+                    f"`{action_type or 'unrecognised'}` on #{num or '?'}: "
+                    f"no undo is implemented for this action type"
+                )
 
         except GitHubError as exc:
             failed.append(f"{action_type} #{num or '?'}: {str(exc)[:80]}")
@@ -419,137 +435,7 @@ Return JSON:
         return f"## ⚠️ Release failed: `{str(exc)[:200]}`"
 
 
-def cmd_runtests(repo: str, token_or_issue_number: str | int, token: str | None = None) -> str:
-    """Trigger CI workflow via workflow_dispatch."""
-    actual_token = token if token is not None else str(token_or_issue_number)
-    try:
-        repo_data = gh_get(f"/repos/{repo}", actual_token)
-        default_branch = repo_data.get("default_branch", "main")
-        workflows_data = gh_get(f"/repos/{repo}/actions/workflows", actual_token)
-        all_workflows = (
-            workflows_data.get("workflows", []) if isinstance(workflows_data, dict) else []
-        )
-
-        TEST_NAMES = ("test", "ci", "pytest", "check", "lint", "build")
-        test_workflow = next(
-            (
-                wf
-                for wf in all_workflows
-                if any(
-                    n in wf.get("path", "").lower() or n in wf.get("name", "").lower()
-                    for n in TEST_NAMES
-                )
-            ),
-            None,
-        )
-
-        if not test_workflow:
-            wf_names = [w.get("name", w.get("path", "?")) for w in all_workflows[:5]]
-            existing = (
-                f"\nExisting workflows: {', '.join(f'`{n}`' for n in wf_names)}" if wf_names else ""
-            )
-            return (
-                f"## ⚠️ No Test Workflow Found{existing}\n\n"
-                "Create a workflow (e.g. test.yml or ci.yml) with `workflow_dispatch` trigger to enable `/runtests`."
-            )
-
-        wf_id = test_workflow["id"]
-        wf_name = test_workflow.get("name", "Test workflow")
-        wf_file = test_workflow.get("path", "").split("/")[-1]
-        wf_url = f"https://github.com/{repo}/actions/workflows/{wf_file}"
-
-        try:
-            gh_post(
-                f"/repos/{repo}/actions/workflows/{wf_id}/dispatches",
-                actual_token,
-                {"ref": default_branch},
-            )
-        except GitHubError as exc:
-            if exc.status_code == 422:
-                return (
-                    f"## ⚠️ Workflow Cannot Be Dispatched\n\n"
-                    f"Add `workflow_dispatch:` trigger to `{wf_file}`."
-                )
-            if exc.status_code == 403:
-                return "## ⚠️ Permission Denied\n\nGitHub App needs `actions: write` permission."
-            raise
-
-        return (
-            f"## 🧪 Tests Triggered\n\n"
-            f"**Workflow:** `{wf_name}`\n"
-            f"**Branch:** `{default_branch}`\n\n"
-            f"[View runs]({wf_url})"
-        )
-
-    except GitHubError as exc:
-        return f"## ⚠️ Could not trigger tests: `{str(exc)[:200]}`"
-    except Exception as exc:
-        log.error(f"cmd_runtests error: {exc}")
-        return f"## ⚠️ Could not trigger tests: `{str(exc)[:200]}`"
-
-
-def cmd_notify(
-    repo: str,
-    issue_number: int,
-    issue: dict,
-    token: str,
-    cmd_args: str,
-) -> str:
-    """Send Discord/Slack notification about this issue or PR."""
-    discord_url = os.environ.get("DISCORD_WEBHOOK_URL", "")
-    slack_url = os.environ.get("SLACK_WEBHOOK_URL", "")
-
-    if not discord_url and not slack_url:
-        return (
-            "## ⚠️ Notifications Not Configured\n\n"
-            "Add `DISCORD_WEBHOOK_URL` or `SLACK_WEBHOOK_URL` to your Render env vars."
-        )
-
-    try:
-        from app.github.notifications import send_rich_discord
-
-        title = issue.get("title", f"Issue #{issue_number}")
-        is_pr = "pull_request" in issue
-        labels = [lb.get("name", "") for lb in issue.get("labels", [])]
-        kind = "PR" if is_pr else "Issue"
-        url = issue.get("html_url", f"https://github.com/{repo}/issues/{issue_number}")
-        custom_msg = (cmd_args or "").strip()
-
-        color = 0x5865F2  # Discord blurple
-        for lb in labels:
-            lb_l = lb.lower()
-            if any(w in lb_l for w in ("bug", "security", "critical")):
-                color = 0xE74C3C
-                break
-            if any(w in lb_l for w in ("feature", "enhancement")):
-                color = 0x2ECC71
-                break
-
-        desc_parts = [f"**Repo:** `{repo}`", f"**Labels:** {', '.join(labels) or 'none'}"]
-        if custom_msg:
-            desc_parts.append(f"**Note:** {custom_msg[:200]}")
-
-        success, msg = send_rich_discord(
-            title=f"🔔 {kind} #{issue_number} — {title[:80]}",
-            description="\n".join(desc_parts),
-            color=color,
-            fields=[
-                {"name": "Type", "value": kind, "inline": True},
-                {"name": "Number", "value": f"#{issue_number}", "inline": True},
-                {"name": "Repo", "value": repo, "inline": False},
-            ],
-            url=url,
-        )
-
-        channels = [c for c, u in [("Discord", discord_url), ("Slack", slack_url)] if u]
-        if success:
-            return (
-                f"## 🔔 Notification Sent\n\n"
-                f"Alert posted to: **{', '.join(channels)}**\n\n"
-                f"**{kind} #{issue_number}:** {title[:80]}"
-            )
-        return f"## ⚠️ Notification Failed\n\nWebhook error: `{msg[:200]}`"
-
-    except Exception as exc:
-        log.error(f"cmd_notify error: {exc}")
-        return f"## ⚠️ Notify error: `{str(exc)[:200]}`"
+# Moved to integrations.py when this module crossed the package's line ceiling.
+# Re-exported because `from .publisher import cmd_runtests` is how the package
+# __init__ and the test suite reach them.
+from .integrations import cmd_notify, cmd_runtests  # noqa: E402,F401

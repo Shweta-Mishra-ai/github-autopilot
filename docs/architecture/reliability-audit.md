@@ -29,7 +29,7 @@ Render service private.
 
 ## 2. Silent failures — is anything failing invisibly?
 
-Audited every `except Exception: pass` (30 sites). They split cleanly:
+Audited every `except Exception: pass`. They split cleanly:
 
 - **Critical paths fail closed and log** — webhook verification, dispatch
   (`server._run_handler` catches, logs, and increments error metrics), auth,
@@ -55,11 +55,19 @@ consumer group (2 threads) → bounded `ThreadPoolExecutor` (6) as fallback.
 
 Everything is **bounded** — no unbounded growth is possible:
 
+The payload limit is enforced by Werkzeug against the request stream, not by
+the application after the fact. Checking `len(request.data)` cannot run until
+the whole body has been materialised: rejecting a 30 MB request that way was
+measured at 62 MB of peak allocation, and since the size check is the first
+step of verification, **no signature was required to trigger it**. It is now
+0.2 MB. The explicit length check remains as defence in depth for a chunked
+request that declares no `Content-Length`.
+
 | Limit | Value | Purpose |
 |-------|-------|---------|
 | Event queue length | 200 | over → 503 → GitHub redelivers |
 | Envelope size | 512 KB | oversized → direct dispatch, not Redis |
-| Webhook payload | 25 MB | reject oversized bodies |
+| Webhook payload | 25 MB | rejected **during the read** (`MAX_CONTENT_LENGTH`) |
 | Per-IP rate limit | 100 / min | flood protection |
 | Per-user cmd limit | 10 / hr | abuse protection |
 | Memory per repo | 500 items | bounds free-tier Redis |
@@ -79,8 +87,21 @@ raising it requires moving those caches to Redis first — documented in
   events dead-letter after 2 attempts.
 - **Idempotency** keys live 24 h — matches GitHub's retry window; Redis runs
   `noeviction` so they're never silently dropped.
-- **Memory** ("the brain") has encrypted client-side backup (`memory_backup.py`)
-  so a free-tier Redis wipe doesn't lose learned context.
+- **Memory** ("the brain") has an encrypted client-side backup
+  (`memory_backup.py`, Fernet, key never leaves the process), exported on a
+  15-day schedule by `app/core/maintenance.py` and restored at boot **only when
+  memory is empty**. The asymmetry is deliberate: export is safe to automate,
+  restore overwrites live data, so restore is gated on a condition that makes
+  it non-destructive by construction rather than by being careful about when it
+  is called. Nothing on a timer can reach the restore path — a test asserts the
+  maintenance module does not so much as name it. A `python -m
+  app.core.memory_backup export|restore` CLI covers deliberate migrations.
+- The 15-day cadence is stored in Redis as a **due time**, not a `sleep()`. On
+  a free tier that restarts on deploy and on idle, a thread sleeping for 15
+  days would never fire; the due time survives restarts, is advanced *before*
+  the work starts so a crashed pass costs one cycle rather than retrying
+  hourly, and is claimed with `SET NX` so only one of N gunicorn workers runs
+  it. Visible on `/health` as `maintenance.next_run_at` / `maintenance.overdue`.
 
 ## 5. Stability
 

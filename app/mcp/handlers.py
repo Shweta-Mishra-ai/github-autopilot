@@ -426,8 +426,91 @@ def _handle_run_command(args: dict) -> str:
         return f"Error: {str(e)[:200]}"
 
 
+def _handle_codebase_map(args: dict) -> str:
+    """
+    Structural map of the local codebase, derived from the AST.
+
+    Local-only and read-only: it needs no GitHub token and no installation_id
+    because it analyses the deployed source tree, not a remote repository. It
+    never imports what it reads, so pointing it at untrusted code executes
+    nothing.
+    """
+    from app.intelligence.codegraph import build_graph
+
+    focus = (args.get("module") or "").strip()
+    targets = args.get("targets") or ["app", "server.py", "worker.py"]
+
+    try:
+        graph = build_graph(*targets, root=args.get("root") or ".")
+    except Exception as e:
+        log.error(f"mcp.codebase_map error: {e}")
+        return f"Error: {str(e)[:200]}"
+
+    if not graph.nodes:
+        return "No Python modules found. Check the `targets` argument."
+
+    if focus:
+        node = graph.nodes.get(focus)
+        if node is None:
+            near = [n for n in sorted(graph.nodes) if focus in n][:8]
+            hint = ("\n\nDid you mean:\n" + "\n".join(f"- `{n}`" for n in near)) if near else ""
+            return f"No module `{focus}` in the graph.{hint}"
+
+        importers = sorted(e.source for e in graph.edges if e.target == focus)
+        imports = sorted(e.target for e in graph.edges if e.source == focus)
+        lines = [
+            f"## `{focus}`",
+            "",
+            f"**Path:** `{node.path}` · **Layer:** {node.layer} · **Lines:** {node.loc}",
+            f"**Functions:** {node.functions} · **Classes:** {node.classes}",
+            "",
+            f"### Imported by ({len(importers)})",
+            *([f"- `{m}`" for m in importers] or ["_nothing — this module may be dead code_"]),
+            "",
+            f"### Imports ({len(imports)})",
+            *([f"- `{m}`" for m in imports] or ["_nothing internal_"]),
+        ]
+        if node.external_deps:
+            lines += ["", "### External", ", ".join(f"`{d}`" for d in node.external_deps)]
+        return "\n".join(lines)
+
+    stats = graph.to_dict()["stats"]
+    entrypoints = tuple(args.get("entrypoints") or ("app", "server", "worker"))
+    orphans = graph.orphans(entrypoints)
+
+    lines = [
+        "## Codebase map",
+        "",
+        f"**{stats['modules']}** modules · **{stats['edges']}** internal imports · "
+        f"**{stats['total_loc']:,}** lines",
+        "",
+        "### Most depended-on",
+        "",
+        "| Module | Lines | Imported by | Imports |",
+        "|---|---:|---:|---:|",
+    ]
+    lines += [
+        f"| `{h['id']}` | {h['loc']} | {h['fan_in']} | {h['fan_out']} |"
+        for h in stats["hotspots"][:10]
+    ]
+
+    if stats["cycles"]:
+        lines += ["", "### Import cycles", ""]
+        lines += [f"- `{' → '.join(c)}`" for c in stats["cycles"]]
+    else:
+        lines += ["", "### Import cycles", "", "None."]
+
+    if orphans:
+        lines += ["", f"### Imported by nothing ({len(orphans)})", ""]
+        lines += [f"- `{o}`" for o in orphans]
+
+    lines += ["", "_Pass `module` for the dependants of a single module._"]
+    return "\n".join(lines)
+
+
 TOOL_HANDLERS = {
     "analyze_pr": _handle_analyze_pr,
+    "codebase_map": _handle_codebase_map,
     "fix_issue": _handle_fix_issue,
     "scan_secrets": _handle_scan_secrets,
     "explain_code": _handle_explain_code,

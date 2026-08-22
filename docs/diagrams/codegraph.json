@@ -1,0 +1,2871 @@
+{
+  "nodes": [
+    {
+      "id": "app",
+      "path": "app/__init__.py",
+      "layer": "other",
+      "loc": 6,
+      "functions": 0,
+      "classes": 0,
+      "is_package": true,
+      "fan_in": 3,
+      "fan_out": 0,
+      "external_deps": []
+    },
+    {
+      "id": "app.ai",
+      "path": "app/ai/__init__.py",
+      "layer": "ai",
+      "loc": 2,
+      "functions": 0,
+      "classes": 0,
+      "is_package": true,
+      "fan_in": 0,
+      "fan_out": 0,
+      "external_deps": []
+    },
+    {
+      "id": "app.ai.circuit_breaker",
+      "path": "app/ai/circuit_breaker.py",
+      "layer": "ai",
+      "loc": 144,
+      "functions": 4,
+      "classes": 3,
+      "is_package": false,
+      "fan_in": 13,
+      "fan_out": 1,
+      "external_deps": [
+        "app",
+        "dataclasses",
+        "enum",
+        "logging",
+        "threading",
+        "time"
+      ]
+    },
+    {
+      "id": "app.ai.gatekeeper",
+      "path": "app/ai/gatekeeper.py",
+      "layer": "ai",
+      "loc": 156,
+      "functions": 4,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 3,
+      "external_deps": [
+        "__future__",
+        "app",
+        "logging",
+        "os",
+        "re"
+      ]
+    },
+    {
+      "id": "app.ai.guarded",
+      "path": "app/ai/guarded.py",
+      "layer": "ai",
+      "loc": 181,
+      "functions": 5,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 5,
+      "fan_out": 6,
+      "external_deps": [
+        "__future__",
+        "app",
+        "logging"
+      ]
+    },
+    {
+      "id": "app.ai.hallucination",
+      "path": "app/ai/hallucination.py",
+      "layer": "ai",
+      "loc": 224,
+      "functions": 5,
+      "classes": 1,
+      "is_package": false,
+      "fan_in": 2,
+      "fan_out": 0,
+      "external_deps": [
+        "dataclasses",
+        "logging",
+        "re"
+      ]
+    },
+    {
+      "id": "app.ai.metrics",
+      "path": "app/ai/metrics.py",
+      "layer": "ai",
+      "loc": 173,
+      "functions": 3,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 2,
+      "external_deps": [
+        "app",
+        "datetime",
+        "logging",
+        "os"
+      ]
+    },
+    {
+      "id": "app.ai.providers",
+      "path": "app/ai/providers/__init__.py",
+      "layer": "ai",
+      "loc": 2,
+      "functions": 0,
+      "classes": 0,
+      "is_package": true,
+      "fan_in": 0,
+      "fan_out": 0,
+      "external_deps": []
+    },
+    {
+      "id": "app.ai.providers.base",
+      "path": "app/ai/providers/base.py",
+      "layer": "ai",
+      "loc": 162,
+      "functions": 1,
+      "classes": 2,
+      "is_package": false,
+      "fan_in": 7,
+      "fan_out": 0,
+      "external_deps": [
+        "abc",
+        "dataclasses",
+        "json",
+        "re",
+        "time"
+      ]
+    },
+    {
+      "id": "app.ai.providers.gemini",
+      "path": "app/ai/providers/gemini.py",
+      "layer": "ai",
+      "loc": 183,
+      "functions": 0,
+      "classes": 1,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 3,
+      "external_deps": [
+        "app",
+        "datetime",
+        "logging",
+        "os",
+        "requests"
+      ]
+    },
+    {
+      "id": "app.ai.providers.groq",
+      "path": "app/ai/providers/groq.py",
+      "layer": "ai",
+      "loc": 185,
+      "functions": 0,
+      "classes": 1,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 3,
+      "external_deps": [
+        "app",
+        "datetime",
+        "logging",
+        "os",
+        "requests"
+      ]
+    },
+    {
+      "id": "app.ai.providers.ollama",
+      "path": "app/ai/providers/ollama.py",
+      "layer": "ai",
+      "loc": 153,
+      "functions": 1,
+      "classes": 1,
+      "is_package": false,
+      "fan_in": 2,
+      "fan_out": 2,
+      "external_deps": [
+        "app",
+        "logging",
+        "os",
+        "requests"
+      ]
+    },
+    {
+      "id": "app.ai.providers.openrouter",
+      "path": "app/ai/providers/openrouter.py",
+      "layer": "ai",
+      "loc": 215,
+      "functions": 0,
+      "classes": 1,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 3,
+      "external_deps": [
+        "app",
+        "logging",
+        "os",
+        "requests",
+        "time"
+      ]
+    },
+    {
+      "id": "app.ai.router",
+      "path": "app/ai/router.py",
+      "layer": "ai",
+      "loc": 535,
+      "functions": 3,
+      "classes": 1,
+      "is_package": false,
+      "fan_in": 11,
+      "fan_out": 12,
+      "external_deps": [
+        "app",
+        "datetime",
+        "logging",
+        "os",
+        "threading"
+      ]
+    },
+    {
+      "id": "app.ai.routing_policy",
+      "path": "app/ai/routing_policy.py",
+      "layer": "ai",
+      "loc": 136,
+      "functions": 7,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 0,
+      "external_deps": [
+        "__future__",
+        "os"
+      ]
+    },
+    {
+      "id": "app.ai.validator",
+      "path": "app/ai/validator.py",
+      "layer": "ai",
+      "loc": 230,
+      "functions": 7,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 6,
+      "fan_out": 0,
+      "external_deps": [
+        "logging",
+        "typing"
+      ]
+    },
+    {
+      "id": "app.core",
+      "path": "app/core/__init__.py",
+      "layer": "core",
+      "loc": 2,
+      "functions": 0,
+      "classes": 0,
+      "is_package": true,
+      "fan_in": 1,
+      "fan_out": 0,
+      "external_deps": []
+    },
+    {
+      "id": "app.core.analytics",
+      "path": "app/core/analytics.py",
+      "layer": "core",
+      "loc": 240,
+      "functions": 17,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 2,
+      "external_deps": [
+        "datetime",
+        "logging"
+      ]
+    },
+    {
+      "id": "app.core.authorization",
+      "path": "app/core/authorization.py",
+      "layer": "core",
+      "loc": 221,
+      "functions": 5,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 2,
+      "fan_out": 3,
+      "external_deps": [
+        "app",
+        "logging",
+        "threading",
+        "time"
+      ]
+    },
+    {
+      "id": "app.core.commands",
+      "path": "app/core/commands.py",
+      "layer": "core",
+      "loc": 75,
+      "functions": 0,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 3,
+      "fan_out": 0,
+      "external_deps": [
+        "__future__"
+      ]
+    },
+    {
+      "id": "app.core.confidence",
+      "path": "app/core/confidence.py",
+      "layer": "core",
+      "loc": 142,
+      "functions": 1,
+      "classes": 1,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 1,
+      "external_deps": [
+        "app",
+        "contextlib"
+      ]
+    },
+    {
+      "id": "app.core.config",
+      "path": "app/core/config.py",
+      "layer": "core",
+      "loc": 392,
+      "functions": 5,
+      "classes": 1,
+      "is_package": false,
+      "fan_in": 7,
+      "fan_out": 1,
+      "external_deps": [
+        "app",
+        "base64",
+        "copy",
+        "logging",
+        "threading",
+        "time",
+        "typing",
+        "yaml"
+      ]
+    },
+    {
+      "id": "app.core.event_queue",
+      "path": "app/core/event_queue.py",
+      "layer": "core",
+      "loc": 284,
+      "functions": 7,
+      "classes": 1,
+      "is_package": false,
+      "fan_in": 2,
+      "fan_out": 2,
+      "external_deps": [
+        "__future__",
+        "app",
+        "json",
+        "logging",
+        "os",
+        "threading",
+        "time",
+        "typing"
+      ]
+    },
+    {
+      "id": "app.core.guardrails",
+      "path": "app/core/guardrails.py",
+      "layer": "core",
+      "loc": 227,
+      "functions": 10,
+      "classes": 1,
+      "is_package": false,
+      "fan_in": 7,
+      "fan_out": 1,
+      "external_deps": [
+        "app",
+        "dataclasses",
+        "datetime",
+        "logging",
+        "os",
+        "re"
+      ]
+    },
+    {
+      "id": "app.core.health_check",
+      "path": "app/core/health_check.py",
+      "layer": "core",
+      "loc": 183,
+      "functions": 5,
+      "classes": 1,
+      "is_package": false,
+      "fan_in": 3,
+      "fan_out": 3,
+      "external_deps": [
+        "app",
+        "dataclasses",
+        "json",
+        "logging",
+        "time"
+      ]
+    },
+    {
+      "id": "app.core.idempotency",
+      "path": "app/core/idempotency.py",
+      "layer": "core",
+      "loc": 134,
+      "functions": 5,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 1,
+      "external_deps": [
+        "app",
+        "collections",
+        "hashlib",
+        "logging",
+        "time"
+      ]
+    },
+    {
+      "id": "app.core.installations",
+      "path": "app/core/installations.py",
+      "layer": "core",
+      "loc": 148,
+      "functions": 7,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 2,
+      "fan_out": 1,
+      "external_deps": [
+        "__future__",
+        "app",
+        "logging",
+        "time"
+      ]
+    },
+    {
+      "id": "app.core.learning",
+      "path": "app/core/learning.py",
+      "layer": "core",
+      "loc": 192,
+      "functions": 14,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 2,
+      "fan_out": 1,
+      "external_deps": [
+        "app",
+        "datetime",
+        "json",
+        "logging"
+      ]
+    },
+    {
+      "id": "app.core.logger",
+      "path": "app/core/logger.py",
+      "layer": "core",
+      "loc": 128,
+      "functions": 2,
+      "classes": 2,
+      "is_package": false,
+      "fan_in": 7,
+      "fan_out": 0,
+      "external_deps": [
+        "json",
+        "logging",
+        "sys"
+      ]
+    },
+    {
+      "id": "app.core.maintenance",
+      "path": "app/core/maintenance.py",
+      "layer": "core",
+      "loc": 311,
+      "functions": 12,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 6,
+      "external_deps": [
+        "__future__",
+        "app",
+        "contextlib",
+        "json",
+        "logging",
+        "os",
+        "threading",
+        "time"
+      ]
+    },
+    {
+      "id": "app.core.memory_backup",
+      "path": "app/core/memory_backup.py",
+      "layer": "core",
+      "loc": 353,
+      "functions": 13,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 2,
+      "fan_out": 3,
+      "external_deps": [
+        "__future__",
+        "app",
+        "argparse",
+        "base64",
+        "cryptography",
+        "json",
+        "logging",
+        "os",
+        "sys",
+        "time"
+      ]
+    },
+    {
+      "id": "app.core.metrics",
+      "path": "app/core/metrics.py",
+      "layer": "core",
+      "loc": 59,
+      "functions": 1,
+      "classes": 1,
+      "is_package": false,
+      "fan_in": 9,
+      "fan_out": 0,
+      "external_deps": [
+        "collections",
+        "threading",
+        "time"
+      ]
+    },
+    {
+      "id": "app.core.redaction",
+      "path": "app/core/redaction.py",
+      "layer": "core",
+      "loc": 61,
+      "functions": 1,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 1,
+      "external_deps": [
+        "__future__",
+        "app",
+        "re"
+      ]
+    },
+    {
+      "id": "app.core.redis_client",
+      "path": "app/core/redis_client.py",
+      "layer": "core",
+      "loc": 497,
+      "functions": 5,
+      "classes": 1,
+      "is_package": false,
+      "fan_in": 27,
+      "fan_out": 0,
+      "external_deps": [
+        "__future__",
+        "fnmatch",
+        "logging",
+        "os",
+        "redis",
+        "threading",
+        "time"
+      ]
+    },
+    {
+      "id": "app.core.sanitizer",
+      "path": "app/core/sanitizer.py",
+      "layer": "core",
+      "loc": 163,
+      "functions": 3,
+      "classes": 1,
+      "is_package": false,
+      "fan_in": 9,
+      "fan_out": 0,
+      "external_deps": [
+        "contextlib",
+        "logging",
+        "re",
+        "unicodedata"
+      ]
+    },
+    {
+      "id": "app.core.snapshot",
+      "path": "app/core/snapshot.py",
+      "layer": "core",
+      "loc": 290,
+      "functions": 9,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 3,
+      "external_deps": [
+        "app",
+        "datetime",
+        "json",
+        "logging",
+        "time",
+        "uuid"
+      ]
+    },
+    {
+      "id": "app.core.thread_pool",
+      "path": "app/core/thread_pool.py",
+      "layer": "core",
+      "loc": 145,
+      "functions": 5,
+      "classes": 1,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 0,
+      "external_deps": [
+        "concurrent",
+        "logging",
+        "os",
+        "threading",
+        "typing"
+      ]
+    },
+    {
+      "id": "app.core.webhook_security",
+      "path": "app/core/webhook_security.py",
+      "layer": "core",
+      "loc": 374,
+      "functions": 11,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 3,
+      "fan_out": 1,
+      "external_deps": [
+        "app",
+        "hashlib",
+        "hmac",
+        "logging",
+        "os",
+        "threading",
+        "time"
+      ]
+    },
+    {
+      "id": "app.dashboard",
+      "path": "app/dashboard.py",
+      "layer": "other",
+      "loc": 161,
+      "functions": 1,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 0,
+      "external_deps": []
+    },
+    {
+      "id": "app.github",
+      "path": "app/github/__init__.py",
+      "layer": "github",
+      "loc": 2,
+      "functions": 0,
+      "classes": 0,
+      "is_package": true,
+      "fan_in": 0,
+      "fan_out": 0,
+      "external_deps": []
+    },
+    {
+      "id": "app.github.auth",
+      "path": "app/github/auth.py",
+      "layer": "github",
+      "loc": 94,
+      "functions": 3,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 8,
+      "fan_out": 0,
+      "external_deps": [
+        "jwt",
+        "logging",
+        "os",
+        "requests",
+        "threading",
+        "time"
+      ]
+    },
+    {
+      "id": "app.github.client",
+      "path": "app/github/client.py",
+      "layer": "github",
+      "loc": 215,
+      "functions": 9,
+      "classes": 2,
+      "is_package": false,
+      "fan_in": 21,
+      "fan_out": 1,
+      "external_deps": [
+        "app",
+        "logging",
+        "requests",
+        "urllib3"
+      ]
+    },
+    {
+      "id": "app.github.helpers",
+      "path": "app/github/helpers.py",
+      "layer": "github",
+      "loc": 13,
+      "functions": 1,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 4,
+      "fan_out": 0,
+      "external_deps": [
+        "logging"
+      ]
+    },
+    {
+      "id": "app.github.notifications",
+      "path": "app/github/notifications.py",
+      "layer": "github",
+      "loc": 523,
+      "functions": 20,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 8,
+      "fan_out": 3,
+      "external_deps": [
+        "app",
+        "datetime",
+        "logging",
+        "os",
+        "requests",
+        "threading"
+      ]
+    },
+    {
+      "id": "app.github.patch_parser",
+      "path": "app/github/patch_parser.py",
+      "layer": "github",
+      "loc": 124,
+      "functions": 4,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 0,
+      "external_deps": [
+        "__future__",
+        "re"
+      ]
+    },
+    {
+      "id": "app.github.rate_limit",
+      "path": "app/github/rate_limit.py",
+      "layer": "github",
+      "loc": 132,
+      "functions": 5,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 3,
+      "fan_out": 1,
+      "external_deps": [
+        "app",
+        "logging",
+        "requests",
+        "time"
+      ]
+    },
+    {
+      "id": "app.github.sticky",
+      "path": "app/github/sticky.py",
+      "layer": "github",
+      "loc": 62,
+      "functions": 2,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 2,
+      "fan_out": 1,
+      "external_deps": [
+        "__future__",
+        "app",
+        "logging"
+      ]
+    },
+    {
+      "id": "app.graphview",
+      "path": "app/graphview.py",
+      "layer": "other",
+      "loc": 434,
+      "functions": 1,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 0,
+      "external_deps": []
+    },
+    {
+      "id": "app.handlers",
+      "path": "app/handlers/__init__.py",
+      "layer": "handlers",
+      "loc": 2,
+      "functions": 0,
+      "classes": 0,
+      "is_package": true,
+      "fan_in": 0,
+      "fan_out": 0,
+      "external_deps": []
+    },
+    {
+      "id": "app.handlers.autofix",
+      "path": "app/handlers/autofix.py",
+      "layer": "handlers",
+      "loc": 521,
+      "functions": 12,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 3,
+      "external_deps": [
+        "app",
+        "base64",
+        "logging",
+        "posixpath",
+        "typing"
+      ]
+    },
+    {
+      "id": "app.handlers.ci",
+      "path": "app/handlers/ci.py",
+      "layer": "handlers",
+      "loc": 209,
+      "functions": 4,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 7,
+      "external_deps": [
+        "app",
+        "logging"
+      ]
+    },
+    {
+      "id": "app.handlers.comments",
+      "path": "app/handlers/comments.py",
+      "layer": "handlers",
+      "loc": 12,
+      "functions": 0,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 6,
+      "fan_out": 10,
+      "external_deps": [
+        "app"
+      ]
+    },
+    {
+      "id": "app.handlers.comments._client",
+      "path": "app/handlers/comments/_client.py",
+      "layer": "handlers",
+      "loc": 64,
+      "functions": 4,
+      "classes": 1,
+      "is_package": false,
+      "fan_in": 5,
+      "fan_out": 1,
+      "external_deps": [
+        "__future__"
+      ]
+    },
+    {
+      "id": "app.handlers.comments.constants",
+      "path": "app/handlers/comments/constants.py",
+      "layer": "handlers",
+      "loc": 27,
+      "functions": 0,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 2,
+      "fan_out": 1,
+      "external_deps": [
+        "app"
+      ]
+    },
+    {
+      "id": "app.handlers.comments.dispatcher",
+      "path": "app/handlers/comments/dispatcher.py",
+      "layer": "handlers",
+      "loc": 159,
+      "functions": 9,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 2,
+      "fan_out": 5,
+      "external_deps": [
+        "__future__",
+        "app",
+        "logging",
+        "re",
+        "threading",
+        "time"
+      ]
+    },
+    {
+      "id": "app.handlers.comments.generator",
+      "path": "app/handlers/comments/generator.py",
+      "layer": "handlers",
+      "loc": 411,
+      "functions": 10,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 2,
+      "fan_out": 6,
+      "external_deps": [
+        "__future__",
+        "app",
+        "logging"
+      ]
+    },
+    {
+      "id": "app.handlers.comments.integrations",
+      "path": "app/handlers/comments/integrations.py",
+      "layer": "handlers",
+      "loc": 192,
+      "functions": 2,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 3,
+      "external_deps": [
+        "__future__",
+        "app",
+        "logging",
+        "os"
+      ]
+    },
+    {
+      "id": "app.handlers.comments.publisher",
+      "path": "app/handlers/comments/publisher.py",
+      "layer": "handlers",
+      "loc": 442,
+      "functions": 4,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 2,
+      "fan_out": 11,
+      "external_deps": [
+        "__future__",
+        "app",
+        "contextlib",
+        "json",
+        "logging",
+        "re",
+        "time"
+      ]
+    },
+    {
+      "id": "app.handlers.comments.reviewer",
+      "path": "app/handlers/comments/reviewer.py",
+      "layer": "handlers",
+      "loc": 411,
+      "functions": 10,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 3,
+      "fan_out": 8,
+      "external_deps": [
+        "__future__",
+        "app",
+        "logging",
+        "re"
+      ]
+    },
+    {
+      "id": "app.handlers.comments.security",
+      "path": "app/handlers/comments/security.py",
+      "layer": "handlers",
+      "loc": 131,
+      "functions": 4,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 2,
+      "fan_out": 6,
+      "external_deps": [
+        "__future__",
+        "app",
+        "base64",
+        "logging"
+      ]
+    },
+    {
+      "id": "app.handlers.comments.service",
+      "path": "app/handlers/comments/service.py",
+      "layer": "handlers",
+      "loc": 277,
+      "functions": 3,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 16,
+      "external_deps": [
+        "__future__",
+        "app",
+        "logging"
+      ]
+    },
+    {
+      "id": "app.handlers.commit_message",
+      "path": "app/handlers/commit_message.py",
+      "layer": "handlers",
+      "loc": 282,
+      "functions": 8,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 6,
+      "external_deps": [
+        "__future__",
+        "app",
+        "logging"
+      ]
+    },
+    {
+      "id": "app.handlers.issues",
+      "path": "app/handlers/issues.py",
+      "layer": "handlers",
+      "loc": 288,
+      "functions": 2,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 11,
+      "external_deps": [
+        "app",
+        "contextlib",
+        "logging"
+      ]
+    },
+    {
+      "id": "app.handlers.pull_request",
+      "path": "app/handlers/pull_request/__init__.py",
+      "layer": "handlers",
+      "loc": 233,
+      "functions": 1,
+      "classes": 0,
+      "is_package": true,
+      "fan_in": 2,
+      "fan_out": 19,
+      "external_deps": [
+        "__future__",
+        "app"
+      ]
+    },
+    {
+      "id": "app.handlers.pull_request.analysis",
+      "path": "app/handlers/pull_request/analysis.py",
+      "layer": "handlers",
+      "loc": 198,
+      "functions": 2,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 7,
+      "external_deps": [
+        "__future__",
+        "app"
+      ]
+    },
+    {
+      "id": "app.handlers.pull_request.classify",
+      "path": "app/handlers/pull_request/classify.py",
+      "layer": "handlers",
+      "loc": 150,
+      "functions": 5,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 3,
+      "fan_out": 0,
+      "external_deps": [
+        "__future__"
+      ]
+    },
+    {
+      "id": "app.handlers.pull_request.gaps",
+      "path": "app/handlers/pull_request/gaps.py",
+      "layer": "handlers",
+      "loc": 113,
+      "functions": 1,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 3,
+      "external_deps": [
+        "__future__",
+        "app"
+      ]
+    },
+    {
+      "id": "app.handlers.pull_request.report",
+      "path": "app/handlers/pull_request/report.py",
+      "layer": "handlers",
+      "loc": 49,
+      "functions": 1,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 0,
+      "external_deps": [
+        "__future__",
+        "datetime"
+      ]
+    },
+    {
+      "id": "app.handlers.pull_request.review",
+      "path": "app/handlers/pull_request/review.py",
+      "layer": "handlers",
+      "loc": 246,
+      "functions": 2,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 6,
+      "external_deps": [
+        "__future__",
+        "app"
+      ]
+    },
+    {
+      "id": "app.handlers.push",
+      "path": "app/handlers/push.py",
+      "layer": "handlers",
+      "loc": 524,
+      "functions": 11,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 2,
+      "fan_out": 14,
+      "external_deps": [
+        "app",
+        "base64",
+        "logging",
+        "re"
+      ]
+    },
+    {
+      "id": "app.handlers.readme",
+      "path": "app/handlers/readme.py",
+      "layer": "handlers",
+      "loc": 389,
+      "functions": 13,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 6,
+      "external_deps": [
+        "__future__",
+        "app",
+        "argparse",
+        "base64",
+        "logging",
+        "os",
+        "pathlib",
+        "re"
+      ]
+    },
+    {
+      "id": "app.intelligence",
+      "path": "app/intelligence/__init__.py",
+      "layer": "intelligence",
+      "loc": 17,
+      "functions": 0,
+      "classes": 0,
+      "is_package": true,
+      "fan_in": 0,
+      "fan_out": 0,
+      "external_deps": []
+    },
+    {
+      "id": "app.intelligence.codegraph",
+      "path": "app/intelligence/codegraph.py",
+      "layer": "intelligence",
+      "loc": 526,
+      "functions": 7,
+      "classes": 4,
+      "is_package": false,
+      "fan_in": 2,
+      "fan_out": 0,
+      "external_deps": [
+        "__future__",
+        "argparse",
+        "ast",
+        "dataclasses",
+        "json",
+        "logging",
+        "os",
+        "pathlib"
+      ]
+    },
+    {
+      "id": "app.intelligence.embeddings",
+      "path": "app/intelligence/embeddings.py",
+      "layer": "intelligence",
+      "loc": 101,
+      "functions": 5,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 2,
+      "fan_out": 0,
+      "external_deps": [
+        "logging",
+        "os",
+        "sentence_transformers",
+        "threading"
+      ]
+    },
+    {
+      "id": "app.intelligence.memory",
+      "path": "app/intelligence/memory.py",
+      "layer": "intelligence",
+      "loc": 328,
+      "functions": 15,
+      "classes": 1,
+      "is_package": false,
+      "fan_in": 5,
+      "fan_out": 2,
+      "external_deps": [
+        "__future__",
+        "app",
+        "dataclasses",
+        "hashlib",
+        "json",
+        "logging",
+        "os",
+        "re",
+        "time"
+      ]
+    },
+    {
+      "id": "app.intelligence.retrieval",
+      "path": "app/intelligence/retrieval.py",
+      "layer": "intelligence",
+      "loc": 114,
+      "functions": 3,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 1,
+      "external_deps": [
+        "app",
+        "logging"
+      ]
+    },
+    {
+      "id": "app.intelligence.summarizer",
+      "path": "app/intelligence/summarizer.py",
+      "layer": "intelligence",
+      "loc": 145,
+      "functions": 2,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 1,
+      "external_deps": [
+        "app",
+        "logging"
+      ]
+    },
+    {
+      "id": "app.mcp",
+      "path": "app/mcp/__init__.py",
+      "layer": "mcp",
+      "loc": 10,
+      "functions": 0,
+      "classes": 0,
+      "is_package": true,
+      "fan_in": 0,
+      "fan_out": 1,
+      "external_deps": [
+        "app"
+      ]
+    },
+    {
+      "id": "app.mcp.handlers",
+      "path": "app/mcp/handlers.py",
+      "layer": "mcp",
+      "loc": 522,
+      "functions": 10,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 6,
+      "external_deps": [
+        "app",
+        "logging",
+        "os"
+      ]
+    },
+    {
+      "id": "app.mcp.mcp_server",
+      "path": "app/mcp/mcp_server.py",
+      "layer": "mcp",
+      "loc": 164,
+      "functions": 4,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 2,
+      "fan_out": 4,
+      "external_deps": [
+        "app",
+        "hmac",
+        "logging",
+        "os",
+        "time"
+      ]
+    },
+    {
+      "id": "app.mcp.tools",
+      "path": "app/mcp/tools.py",
+      "layer": "mcp",
+      "loc": 179,
+      "functions": 0,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 3,
+      "fan_out": 0,
+      "external_deps": []
+    },
+    {
+      "id": "app.security",
+      "path": "app/security/__init__.py",
+      "layer": "security",
+      "loc": 2,
+      "functions": 0,
+      "classes": 0,
+      "is_package": true,
+      "fan_in": 0,
+      "fan_out": 0,
+      "external_deps": []
+    },
+    {
+      "id": "app.security.dependencies",
+      "path": "app/security/dependencies.py",
+      "layer": "security",
+      "loc": 375,
+      "functions": 8,
+      "classes": 1,
+      "is_package": false,
+      "fan_in": 3,
+      "fan_out": 0,
+      "external_deps": [
+        "dataclasses",
+        "logging",
+        "re"
+      ]
+    },
+    {
+      "id": "app.security.enhanced_secrets",
+      "path": "app/security/enhanced_secrets.py",
+      "layer": "security",
+      "loc": 654,
+      "functions": 13,
+      "classes": 1,
+      "is_package": false,
+      "fan_in": 4,
+      "fan_out": 0,
+      "external_deps": [
+        "dataclasses",
+        "logging",
+        "math",
+        "re"
+      ]
+    },
+    {
+      "id": "app.security.licenses",
+      "path": "app/security/licenses.py",
+      "layer": "security",
+      "loc": 345,
+      "functions": 10,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 2,
+      "external_deps": [
+        "app",
+        "re",
+        "requests",
+        "time"
+      ]
+    },
+    {
+      "id": "app.security.scanner",
+      "path": "app/security/scanner.py",
+      "layer": "security",
+      "loc": 284,
+      "functions": 5,
+      "classes": 2,
+      "is_package": false,
+      "fan_in": 2,
+      "fan_out": 1,
+      "external_deps": [
+        "app",
+        "dataclasses",
+        "logging"
+      ]
+    },
+    {
+      "id": "server",
+      "path": "server.py",
+      "layer": "other",
+      "loc": 573,
+      "functions": 25,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 26,
+      "external_deps": [
+        "app",
+        "flask",
+        "hmac",
+        "logging",
+        "os",
+        "signal",
+        "time",
+        "traceback"
+      ]
+    },
+    {
+      "id": "worker",
+      "path": "worker.py",
+      "layer": "other",
+      "loc": 60,
+      "functions": 1,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 0,
+      "fan_out": 3,
+      "external_deps": [
+        "app",
+        "logging",
+        "os",
+        "server",
+        "signal",
+        "sys",
+        "time"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "source": "app.ai.circuit_breaker",
+      "target": "app.core.health_check",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.gatekeeper",
+      "target": "app.ai.circuit_breaker",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.gatekeeper",
+      "target": "app.ai.providers.ollama",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.gatekeeper",
+      "target": "app.core.sanitizer",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.guarded",
+      "target": "app.ai.circuit_breaker",
+      "kind": "import"
+    },
+    {
+      "source": "app.ai.guarded",
+      "target": "app.ai.hallucination",
+      "kind": "import"
+    },
+    {
+      "source": "app.ai.guarded",
+      "target": "app.ai.router",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.guarded",
+      "target": "app.ai.validator",
+      "kind": "import"
+    },
+    {
+      "source": "app.ai.guarded",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.guarded",
+      "target": "app.github.notifications",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.metrics",
+      "target": "app.ai.circuit_breaker",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.metrics",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.providers.gemini",
+      "target": "app.ai.circuit_breaker",
+      "kind": "import"
+    },
+    {
+      "source": "app.ai.providers.gemini",
+      "target": "app.ai.providers.base",
+      "kind": "import"
+    },
+    {
+      "source": "app.ai.providers.gemini",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.providers.groq",
+      "target": "app.ai.circuit_breaker",
+      "kind": "import"
+    },
+    {
+      "source": "app.ai.providers.groq",
+      "target": "app.ai.providers.base",
+      "kind": "import"
+    },
+    {
+      "source": "app.ai.providers.groq",
+      "target": "app.core.redis_client",
+      "kind": "import"
+    },
+    {
+      "source": "app.ai.providers.ollama",
+      "target": "app.ai.circuit_breaker",
+      "kind": "import"
+    },
+    {
+      "source": "app.ai.providers.ollama",
+      "target": "app.ai.providers.base",
+      "kind": "import"
+    },
+    {
+      "source": "app.ai.providers.openrouter",
+      "target": "app.ai.circuit_breaker",
+      "kind": "import"
+    },
+    {
+      "source": "app.ai.providers.openrouter",
+      "target": "app.ai.providers.base",
+      "kind": "import"
+    },
+    {
+      "source": "app.ai.providers.openrouter",
+      "target": "app.ai.providers.base",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.router",
+      "target": "app.ai.circuit_breaker",
+      "kind": "import"
+    },
+    {
+      "source": "app.ai.router",
+      "target": "app.ai.circuit_breaker",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.router",
+      "target": "app.ai.providers.base",
+      "kind": "import"
+    },
+    {
+      "source": "app.ai.router",
+      "target": "app.ai.providers.base",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.router",
+      "target": "app.ai.providers.gemini",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.router",
+      "target": "app.ai.providers.groq",
+      "kind": "import"
+    },
+    {
+      "source": "app.ai.router",
+      "target": "app.ai.providers.ollama",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.router",
+      "target": "app.ai.providers.openrouter",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.router",
+      "target": "app.ai.routing_policy",
+      "kind": "import"
+    },
+    {
+      "source": "app.ai.router",
+      "target": "app.core.health_check",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.router",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.router",
+      "target": "app.core.sanitizer",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.analytics",
+      "target": "app.core",
+      "kind": "import"
+    },
+    {
+      "source": "app.core.analytics",
+      "target": "app.core.redis_client",
+      "kind": "import"
+    },
+    {
+      "source": "app.core.authorization",
+      "target": "app.core.commands",
+      "kind": "import"
+    },
+    {
+      "source": "app.core.authorization",
+      "target": "app.core.metrics",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.authorization",
+      "target": "app.github.client",
+      "kind": "import"
+    },
+    {
+      "source": "app.core.confidence",
+      "target": "app.core.logger",
+      "kind": "import"
+    },
+    {
+      "source": "app.core.config",
+      "target": "app.github.client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.event_queue",
+      "target": "app.core.metrics",
+      "kind": "import"
+    },
+    {
+      "source": "app.core.event_queue",
+      "target": "app.core.redis_client",
+      "kind": "import"
+    },
+    {
+      "source": "app.core.guardrails",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.health_check",
+      "target": "app.ai.circuit_breaker",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.health_check",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.health_check",
+      "target": "app.github.rate_limit",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.idempotency",
+      "target": "app.core.redis_client",
+      "kind": "import"
+    },
+    {
+      "source": "app.core.installations",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.learning",
+      "target": "app.core.redis_client",
+      "kind": "import"
+    },
+    {
+      "source": "app.core.maintenance",
+      "target": "app.core.installations",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.maintenance",
+      "target": "app.core.memory_backup",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.maintenance",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.maintenance",
+      "target": "app.github.auth",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.maintenance",
+      "target": "app.github.notifications",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.maintenance",
+      "target": "app.security.scanner",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.memory_backup",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.memory_backup",
+      "target": "app.github.client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.memory_backup",
+      "target": "app.intelligence.memory",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.redaction",
+      "target": "app.security.enhanced_secrets",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.snapshot",
+      "target": "app.core.redis_client",
+      "kind": "import"
+    },
+    {
+      "source": "app.core.snapshot",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.snapshot",
+      "target": "app.github.client",
+      "kind": "import"
+    },
+    {
+      "source": "app.core.webhook_security",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.github.client",
+      "target": "app.github.rate_limit",
+      "kind": "import"
+    },
+    {
+      "source": "app.github.notifications",
+      "target": "app",
+      "kind": "import"
+    },
+    {
+      "source": "app.github.notifications",
+      "target": "app.ai.circuit_breaker",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.github.notifications",
+      "target": "app.core.metrics",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.github.rate_limit",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.github.sticky",
+      "target": "app.github.client",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.autofix",
+      "target": "app.ai.circuit_breaker",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.autofix",
+      "target": "app.ai.router",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.autofix",
+      "target": "app.github.client",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.ci",
+      "target": "app.ai.guarded",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.ci",
+      "target": "app.core.config",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.ci",
+      "target": "app.core.logger",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.ci",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.ci",
+      "target": "app.core.sanitizer",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.ci",
+      "target": "app.github.auth",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.ci",
+      "target": "app.github.sticky",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments",
+      "target": "app.ai.router",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments",
+      "target": "app.core.config",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments",
+      "target": "app.github.auth",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments",
+      "target": "app.github.client",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments",
+      "target": "app.handlers.comments.dispatcher",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments",
+      "target": "app.handlers.comments.generator",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments",
+      "target": "app.handlers.comments.publisher",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments",
+      "target": "app.handlers.comments.reviewer",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments",
+      "target": "app.handlers.comments.security",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments",
+      "target": "app.handlers.comments.service",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments._client",
+      "target": "app.handlers.comments",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.constants",
+      "target": "app.core.commands",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.dispatcher",
+      "target": "app.ai.guarded",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.dispatcher",
+      "target": "app.core.metrics",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.dispatcher",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.dispatcher",
+      "target": "app.handlers.comments.constants",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.dispatcher",
+      "target": "app.intelligence.memory",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.generator",
+      "target": "app.ai.guarded",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.generator",
+      "target": "app.ai.hallucination",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.generator",
+      "target": "app.core.learning",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.generator",
+      "target": "app.core.sanitizer",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.generator",
+      "target": "app.handlers.comments",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.generator",
+      "target": "app.intelligence.memory",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.integrations",
+      "target": "app.github.client",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.integrations",
+      "target": "app.github.notifications",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.integrations",
+      "target": "app.handlers.comments._client",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.publisher",
+      "target": "app.core.guardrails",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.publisher",
+      "target": "app.core.learning",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.publisher",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.publisher",
+      "target": "app.core.snapshot",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.publisher",
+      "target": "app.github.client",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.publisher",
+      "target": "app.github.helpers",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.publisher",
+      "target": "app.handlers.comments",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.publisher",
+      "target": "app.handlers.comments._client",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.publisher",
+      "target": "app.handlers.comments.integrations",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.publisher",
+      "target": "app.handlers.comments.reviewer",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.publisher",
+      "target": "app.intelligence.memory",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.reviewer",
+      "target": "app.ai.guarded",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.reviewer",
+      "target": "app.ai.metrics",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.reviewer",
+      "target": "app.core.analytics",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.reviewer",
+      "target": "app.github.client",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.reviewer",
+      "target": "app.github.helpers",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.reviewer",
+      "target": "app.handlers.comments._client",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.reviewer",
+      "target": "app.handlers.pull_request",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.reviewer",
+      "target": "app.intelligence.summarizer",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.security",
+      "target": "app.github.helpers",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.security",
+      "target": "app.handlers.comments._client",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.security",
+      "target": "app.security.dependencies",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.security",
+      "target": "app.security.enhanced_secrets",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.security",
+      "target": "app.security.licenses",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.security",
+      "target": "app.security.scanner",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.service",
+      "target": "app.ai.router",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.service",
+      "target": "app.core.authorization",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.service",
+      "target": "app.core.config",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.service",
+      "target": "app.core.logger",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.service",
+      "target": "app.github.auth",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.service",
+      "target": "app.github.client",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.service",
+      "target": "app.github.helpers",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.service",
+      "target": "app.handlers.autofix",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.service",
+      "target": "app.handlers.comments",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.service",
+      "target": "app.handlers.comments._client",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.service",
+      "target": "app.handlers.comments.constants",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.service",
+      "target": "app.handlers.comments.dispatcher",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.service",
+      "target": "app.handlers.comments.generator",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.service",
+      "target": "app.handlers.comments.publisher",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.service",
+      "target": "app.handlers.comments.reviewer",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.service",
+      "target": "app.handlers.comments.security",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.commit_message",
+      "target": "app.ai.guarded",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.commit_message",
+      "target": "app.core.metrics",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.commit_message",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.commit_message",
+      "target": "app.core.sanitizer",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.commit_message",
+      "target": "app.github.client",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.commit_message",
+      "target": "app.handlers.push",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.issues",
+      "target": "app.ai.router",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.issues",
+      "target": "app.ai.validator",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.issues",
+      "target": "app.core.config",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.issues",
+      "target": "app.core.guardrails",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.issues",
+      "target": "app.core.guardrails",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.issues",
+      "target": "app.core.logger",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.issues",
+      "target": "app.core.sanitizer",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.issues",
+      "target": "app.github.auth",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.issues",
+      "target": "app.github.client",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.issues",
+      "target": "app.github.notifications",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.issues",
+      "target": "app.intelligence.memory",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.ai.gatekeeper",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.ai.router",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.ai.validator",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.core.confidence",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.core.config",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.core.guardrails",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.core.guardrails",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.core.logger",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.core.sanitizer",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.github.auth",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.github.client",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.github.notifications",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.github.sticky",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.handlers.pull_request.analysis",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.handlers.pull_request.classify",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.handlers.pull_request.gaps",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.handlers.pull_request.report",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.handlers.pull_request.review",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.intelligence.retrieval",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request.analysis",
+      "target": "app.ai.router",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.analysis",
+      "target": "app.ai.validator",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.analysis",
+      "target": "app.core.guardrails",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.analysis",
+      "target": "app.core.guardrails",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request.analysis",
+      "target": "app.core.sanitizer",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.analysis",
+      "target": "app.github.client",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.analysis",
+      "target": "app.github.notifications",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.gaps",
+      "target": "app.ai.router",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.gaps",
+      "target": "app.ai.validator",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.gaps",
+      "target": "app.handlers.pull_request.classify",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.review",
+      "target": "app.ai.router",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.review",
+      "target": "app.ai.validator",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.review",
+      "target": "app.core.sanitizer",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.review",
+      "target": "app.github.client",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.review",
+      "target": "app.github.patch_parser",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request.review",
+      "target": "app.handlers.pull_request.classify",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.push",
+      "target": "app.core.authorization",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.push",
+      "target": "app.core.config",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.push",
+      "target": "app.core.config",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.push",
+      "target": "app.core.logger",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.push",
+      "target": "app.core.metrics",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.push",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.push",
+      "target": "app.github.auth",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.push",
+      "target": "app.github.client",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.push",
+      "target": "app.github.notifications",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.push",
+      "target": "app.handlers.commit_message",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.push",
+      "target": "app.handlers.readme",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.push",
+      "target": "app.intelligence.embeddings",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.push",
+      "target": "app.security.dependencies",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.push",
+      "target": "app.security.enhanced_secrets",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.readme",
+      "target": "app.core.commands",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.readme",
+      "target": "app.core.metrics",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.readme",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.readme",
+      "target": "app.github.client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.readme",
+      "target": "app.intelligence.codegraph",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.readme",
+      "target": "app.mcp.tools",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.intelligence.memory",
+      "target": "app.core.redaction",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.intelligence.memory",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.intelligence.retrieval",
+      "target": "app.intelligence.embeddings",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.intelligence.summarizer",
+      "target": "app.ai.router",
+      "kind": "import"
+    },
+    {
+      "source": "app.mcp",
+      "target": "app.mcp.mcp_server",
+      "kind": "import"
+    },
+    {
+      "source": "app.mcp.handlers",
+      "target": "app.ai.router",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.mcp.handlers",
+      "target": "app.github.auth",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.mcp.handlers",
+      "target": "app.github.client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.mcp.handlers",
+      "target": "app.handlers.comments",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.mcp.handlers",
+      "target": "app.intelligence.codegraph",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.mcp.handlers",
+      "target": "app.security.enhanced_secrets",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.mcp.mcp_server",
+      "target": "app",
+      "kind": "import"
+    },
+    {
+      "source": "app.mcp.mcp_server",
+      "target": "app.core.metrics",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.mcp.mcp_server",
+      "target": "app.mcp.handlers",
+      "kind": "import"
+    },
+    {
+      "source": "app.mcp.mcp_server",
+      "target": "app.mcp.tools",
+      "kind": "import"
+    },
+    {
+      "source": "app.security.licenses",
+      "target": "app.core.logger",
+      "kind": "import"
+    },
+    {
+      "source": "app.security.licenses",
+      "target": "app.security.dependencies",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.security.scanner",
+      "target": "app.github.client",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
+      "target": "app",
+      "kind": "import"
+    },
+    {
+      "source": "server",
+      "target": "app.ai.circuit_breaker",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
+      "target": "app.core.event_queue",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
+      "target": "app.core.health_check",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
+      "target": "app.core.idempotency",
+      "kind": "import"
+    },
+    {
+      "source": "server",
+      "target": "app.core.installations",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
+      "target": "app.core.maintenance",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
+      "target": "app.core.memory_backup",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
+      "target": "app.core.metrics",
+      "kind": "import"
+    },
+    {
+      "source": "server",
+      "target": "app.core.redis_client",
+      "kind": "import"
+    },
+    {
+      "source": "server",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
+      "target": "app.core.thread_pool",
+      "kind": "import"
+    },
+    {
+      "source": "server",
+      "target": "app.core.webhook_security",
+      "kind": "import"
+    },
+    {
+      "source": "server",
+      "target": "app.core.webhook_security",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
+      "target": "app.dashboard",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
+      "target": "app.github.client",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
+      "target": "app.github.notifications",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
+      "target": "app.github.rate_limit",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
+      "target": "app.graphview",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
+      "target": "app.handlers.ci",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
+      "target": "app.handlers.comments",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
+      "target": "app.handlers.issues",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
+      "target": "app.handlers.pull_request",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
+      "target": "app.handlers.push",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
+      "target": "app.mcp.mcp_server",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
+      "target": "app.mcp.tools",
+      "kind": "runtime"
+    },
+    {
+      "source": "worker",
+      "target": "app.core.event_queue",
+      "kind": "runtime"
+    },
+    {
+      "source": "worker",
+      "target": "app.core.webhook_security",
+      "kind": "runtime"
+    },
+    {
+      "source": "worker",
+      "target": "server",
+      "kind": "runtime"
+    }
+  ],
+  "stats": {
+    "modules": 88,
+    "edges": 267,
+    "total_loc": 18797,
+    "layers": [
+      "ai",
+      "core",
+      "github",
+      "handlers",
+      "intelligence",
+      "mcp",
+      "other",
+      "security"
+    ],
+    "cycles": [],
+    "hotspots": [
+      {
+        "id": "app.core.redis_client",
+        "loc": 497,
+        "fan_in": 27,
+        "fan_out": 0
+      },
+      {
+        "id": "app.ai.router",
+        "loc": 535,
+        "fan_in": 11,
+        "fan_out": 12
+      },
+      {
+        "id": "app.github.client",
+        "loc": 215,
+        "fan_in": 21,
+        "fan_out": 1
+      },
+      {
+        "id": "app.github.notifications",
+        "loc": 523,
+        "fan_in": 8,
+        "fan_out": 3
+      },
+      {
+        "id": "app.security.enhanced_secrets",
+        "loc": 654,
+        "fan_in": 4,
+        "fan_out": 0
+      },
+      {
+        "id": "app.core.config",
+        "loc": 392,
+        "fan_in": 7,
+        "fan_out": 1
+      },
+      {
+        "id": "app.ai.circuit_breaker",
+        "loc": 144,
+        "fan_in": 13,
+        "fan_out": 1
+      },
+      {
+        "id": "app.intelligence.memory",
+        "loc": 328,
+        "fan_in": 5,
+        "fan_out": 2
+      },
+      {
+        "id": "app.core.guardrails",
+        "loc": 227,
+        "fan_in": 7,
+        "fan_out": 1
+      },
+      {
+        "id": "app.handlers.comments.reviewer",
+        "loc": 411,
+        "fan_in": 3,
+        "fan_out": 8
+      }
+    ],
+    "orphans": []
+  }
+}

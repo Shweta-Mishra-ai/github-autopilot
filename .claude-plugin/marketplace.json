@@ -9,10 +9,10 @@
     {
       "name": "github-autopilot",
       "description": "Call GitHub Autopilot's AI tools (analyze PR, fix issue, scan secrets, repo health) from Claude Code via MCP.",
-      "version": "7.1.1",
+      "version": "7.2.0",
       "source": "./plugin",
       "homepage": "https://github.com/Shweta-Mishra-ai/github-autopilot",
-      "license": "MIT",
+      "license": "MIT OR Apache-2.0",
       "keywords": ["github", "mcp", "ai", "code-review", "security", "automation"]
     }
   ]

@@ -22,6 +22,7 @@ FIXES vs V4.1:
 
 import base64
 import logging
+import posixpath
 from typing import Optional
 
 from app.github.client import gh_get, gh_post, gh_put, GitHubError
@@ -149,10 +150,18 @@ def run_autofix(
     llm_target = fix_plan.get("target_file", "").strip()
     target = target_file.strip() if target_file.strip() else llm_target
 
-    # Path traversal guard
-    if ".." in target or target.startswith("/"):
-        log.warning(f"autofix.path_traversal_attempt target={target!r}")
-        return f"## ⚠️ Autofix Blocked\n\nInvalid file path `{target}`. Path traversal not allowed."
+    # Normalise ONCE, here, and use that spelling for every later decision and
+    # for the write itself. Checking one spelling and writing another is the
+    # whole bug: GitHub resolved `./app/core/authorization.py` to the protected
+    # file while the blocklist, which holds the plain path, saw no match.
+    raw_target = target
+    target = normalise_path(target)
+    if not target or ".." in raw_target:
+        log.warning(f"autofix.path_traversal_attempt target={raw_target!r}")
+        return (
+            f"## ⚠️ Autofix Blocked\n\nInvalid file path `{raw_target}`. "
+            "Path traversal not allowed."
+        )
 
     if not _is_allowed(target):
         reason = _block_reason(target)
@@ -275,9 +284,13 @@ def _make_diff_preview(original: str, fixed: str, filepath: str) -> str:
 
 
 def _generate_fix_plan(title: str, body: str, target_file: str) -> Optional[dict]:
-    try:
-        from app.ai.circuit_breaker import AllProvidersDown
+    # Imported before the try block: an `except AllProvidersDown` clause is
+    # evaluated at exception time, so importing the name *inside* the try meant
+    # that if the import itself ever failed, the handler raised NameError while
+    # handling the original error and masked it entirely.
+    from app.ai.circuit_breaker import AllProvidersDown
 
+    try:
         hint = f"Focus on file: {target_file}" if target_file else ""
         r, meta = router.ask(
             "Principal engineer. Generate precise minimal code fixes. JSON only.",
@@ -405,19 +418,54 @@ def _build_pr_body(fix_plan: dict, issue_number: int, title: str) -> str:
     )
 
 
+def normalise_path(filepath: str) -> str:
+    """
+    The single spelling of a path that every check and the write must agree on.
+
+    The blocklists are exact strings and prefixes, so they only work if the
+    path being tested is spelled the way they are. It was not: the path comes
+    from the model's `target_file`, and GitHub's Contents API resolves
+    `./server.py`, `app/core//config.py` and `app/core/./config.py` to exactly
+    the files the blocklist exists to protect, while none of those literal
+    strings appears in it. Seven of fifteen probe paths defeated the guard,
+    including `./app/core/authorization.py` — the module that decides who may
+    run destructive commands at all.
+
+    posixpath, not os.path: these are repository paths, and on a Windows
+    checkout os.path would introduce a separator GitHub never uses. Backslashes
+    are folded first for the same reason.
+
+    Returns "" for anything that escapes the repository root, which every
+    caller treats as "not allowed".
+    """
+    if not filepath:
+        return ""
+    cleaned = filepath.strip().replace("\\", "/")
+    if not cleaned or cleaned.startswith("/"):
+        return ""
+    cleaned = posixpath.normpath(cleaned)
+    # normpath resolves interior "..", so anything left is an escape attempt.
+    if cleaned == ".." or cleaned.startswith("../") or cleaned.startswith("/"):
+        return ""
+    if cleaned == ".":
+        return ""
+    return cleaned
+
+
 def _is_allowed(filepath: str) -> bool:
     """
     Return True only if the file path is safe to auto-modify.
+
+    Normalises before testing — see normalise_path. Testing the raw string is
+    what let `./server.py` through.
 
     FIXED: .yml/.yaml was in ALLOWED_EXTENSIONS, allowing LLM to modify
     any yaml file not explicitly blocked by prefix — e.g. "deploy/api.yml"
     could be a CI/CD config not under .github/workflows/. Yaml files now
     require an exact match against ALLOWED_YAML_PATTERNS.
     """
+    filepath = normalise_path(filepath)
     if not filepath:
-        return False
-    # Path traversal
-    if ".." in filepath or filepath.startswith("/"):
         return False
     # Exact blocked paths
     if filepath in BLOCKED_PATHS:
@@ -436,8 +484,28 @@ def _is_allowed(filepath: str) -> bool:
     return ext in ALLOWED_EXTENSIONS
 
 
-def _block_reason(filepath: str) -> str:
-    """Human-readable reason why a file is blocked."""
+def _block_reason(filepath: str) -> Optional[str]:
+    """
+    Human-readable reason why a file is blocked, or None if it is not blocked.
+
+    The string is interpolated straight into the comment the user sees, so
+    every path for which _is_allowed() returns False must produce a sentence —
+    otherwise the reader gets the literal text "Cannot auto-modify `x` — None."
+    Two rejections previously had no matching branch here and did exactly that:
+    an empty target file, and a path rejected for traversal.
+
+    Invariant (asserted in tests): _is_allowed(p) is False => _block_reason(p)
+    is a non-empty str. Reaching the final `return None` means the file is
+    allowed, so no caller should be asking.
+    """
+    if not filepath or not filepath.strip():
+        return "no target file could be determined"
+    raw = filepath
+    filepath = normalise_path(filepath)
+    if not filepath:
+        return "the path is not repository-relative"
+    if ".." in raw:
+        return "the path is not repository-relative"
     if filepath in BLOCKED_PATHS:
         return "this is a security-sensitive file"
     for prefix in BLOCKED_PREFIXES:
@@ -447,5 +515,6 @@ def _block_reason(filepath: str) -> str:
     if ext in (".yml", ".yaml"):
         return "YAML files are restricted to known-safe config files (e.g. mkdocs.yml)"
     if ext not in ALLOWED_EXTENSIONS:
-        return f"extension `{ext}` is not in the allowed list"
+        allowed = ", ".join(f"`{e}`" for e in sorted(ALLOWED_EXTENSIONS))
+        return f"extension `{ext}` is not editable by autofix (allowed: {allowed})"
     return None

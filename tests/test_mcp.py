@@ -77,11 +77,29 @@ class TestMCPProtocol:
         assert resp["protocolVersion"] == "2024-11-05"
         assert resp["serverInfo"]["name"] == "github-autopilot"
 
-    def test_tools_list_returns_8_tools(self):
+    def test_tools_list_returns_the_whole_catalog(self):
+        """Derived from MCP_TOOLS, not a literal: a hardcoded count fails on
+        every tool added and tests nothing about the response beyond arithmetic.
+        What matters is that tools/list advertises exactly the catalog."""
         mod = _import_mcp()
         resp, status = mod.handle_mcp_request("tools/list", {}, _TEST_KEY)
         assert status == 200
-        assert len(resp["tools"]) == 8
+        assert len(resp["tools"]) == len(mod.MCP_TOOLS)
+        assert {t["name"] for t in resp["tools"]} == {t["name"] for t in mod.MCP_TOOLS}
+
+    def test_every_advertised_tool_has_a_handler(self):
+        """A tool in the catalog with no handler is advertised but unusable."""
+        mod = _import_mcp()
+        for tool in mod.MCP_TOOLS:
+            assert tool["name"] in mod.TOOL_HANDLERS, (
+                f"{tool['name']} is advertised by tools/list but has no handler"
+            )
+
+    def test_every_handler_is_advertised(self):
+        mod = _import_mcp()
+        advertised = {t["name"] for t in mod.MCP_TOOLS}
+        for name in mod.TOOL_HANDLERS:
+            assert name in advertised, f"{name} has a handler but is not advertised"
 
     def test_each_tool_has_required_fields(self):
         mod = _import_mcp()
@@ -497,3 +515,96 @@ class TestMCPNamedKeys:
 
 if __name__ == "__main__":
     print("Run with: python -m pytest tests/test_mcp.py -v")
+
+
+class TestRunCommandBindingsAreReal:
+    """
+    `_handle_run_command` maps 17 slash commands to lambdas over
+    app.handlers.comments. A comment above that map says "Signatures verified
+    against comments.py" — which was true when someone typed it, and is exactly
+    the kind of claim that goes stale silently: every call site sits inside a
+    blanket `except Exception`, so a renamed function or a changed signature
+    turns into "Error: ..." returned to the IDE, with nothing failing in CI.
+
+    The names are reached through backwards-compatible `_cmd_*` aliases, so
+    hasattr() alone proves nothing useful either — the binding has to be
+    checked against the real signature.
+    """
+
+    # command -> (attribute the map uses, positional args the lambda supplies)
+    BINDINGS = {
+        "/fix": ("_cmd_fix", ("title", "ctx")),
+        "/explain": ("_cmd_explain", ("ctx",)),
+        "/improve": ("_cmd_improve", ("ctx",)),
+        "/refactor": ("_cmd_refactor", ("ctx",)),
+        "/perf": ("_cmd_perf", ("ctx",)),
+        "/gaps": ("_cmd_gaps", ("ctx",)),
+        "/docs": ("_cmd_docs", ("ctx",)),
+        "/test": ("_cmd_test", ("ctx",)),
+        "/arch": ("_cmd_arch", ("repo", 1, {}, "tok")),
+        "/impact": ("_cmd_impact", ("repo", 1, {}, "tok")),
+        "/summarize": ("_cmd_summarize", ("repo", 1, "tok")),
+        "/security": ("_cmd_security", ("repo", 1, {}, "tok")),
+        "/changelog": ("_cmd_changelog", ("repo", "tok")),
+        "/health": ("_cmd_health", ("repo", "tok")),
+        "/version": ("_cmd_version", ("repo", "tok")),
+        "/report": ("_cmd_report", ("repo",)),
+        "/budget": ("_cmd_budget", ()),
+    }
+
+    def test_every_mapped_command_binds_against_its_real_signature(self):
+        import inspect
+
+        import app.handlers.comments as ch
+
+        failures = []
+        for cmd, (attr, args) in self.BINDINGS.items():
+            fn = getattr(ch, attr, None)
+            if fn is None:
+                failures.append(f"{cmd}: {attr} does not exist")
+                continue
+            try:
+                inspect.signature(fn).bind(*args)
+            except TypeError as exc:
+                failures.append(f"{cmd}: {attr}{inspect.signature(fn)} — {exc}")
+
+        assert failures == [], "MCP run_command would fail at runtime for:\n  " + "\n  ".join(
+            failures
+        )
+
+    def test_the_allowlist_and_the_handler_map_agree(self):
+        """A command in ALLOWED with no handler answers 'allowed but not yet
+        wired' — a dead end the tool advertises. One wired but not allowed is
+        unreachable code."""
+        import pathlib
+        import re
+
+        src = pathlib.Path("app/mcp/handlers.py").read_text(encoding="utf-8")
+        allowed_block = src.split("ALLOWED = {", 1)[1].split("}", 1)[0]
+        allowed = set(re.findall(r'"(/[a-z]+)"', allowed_block))
+
+        assert allowed == set(self.BINDINGS), (
+            f"only in ALLOWED: {sorted(allowed - set(self.BINDINGS))}; "
+            f"only wired: {sorted(set(self.BINDINGS) - allowed)}"
+        )
+
+    def test_destructive_commands_are_not_reachable_over_mcp(self):
+        """These write to GitHub. They require a comment on the issue so the
+        action has an audit trail with a named author; an MCP key has neither."""
+        import pathlib
+
+        src = pathlib.Path("app/mcp/handlers.py").read_text(encoding="utf-8")
+        allowed_block = src.split("ALLOWED = {", 1)[1].split("}", 1)[0]
+
+        for destructive in ("/merge", "/autofix", "/apply", "/release", "/rollback", "/runtests"):
+            assert f'"{destructive}"' not in allowed_block, f"{destructive} is reachable via MCP"
+
+    def test_the_tool_description_lists_what_is_actually_allowed(self):
+        """The description is what an IDE agent reads to decide what to call.
+        A command listed there but refused by ALLOWED is a promise the tool
+        breaks on use."""
+        from app.mcp.tools import MCP_TOOLS
+
+        described = next(t for t in MCP_TOOLS if t["name"] == "run_command")["description"]
+        for cmd in self.BINDINGS:
+            assert cmd in described, f"{cmd} is wired but not advertised"

@@ -146,13 +146,13 @@ class TestAnalyzePR:
         cfg.get.side_effect = lambda *a, **kw: kw.get("default", True)
         with patch("app.handlers.pull_request.router.ask",
                    return_value=_fake_router_response(analysis)), \
-             patch("app.handlers.pull_request.validate_pr_analysis",
+             patch("app.handlers.pull_request.analysis.validate_pr_analysis",
                    return_value=analysis), \
-             patch("app.handlers.pull_request.gh_put") as mock_put, \
-             patch("app.handlers.pull_request.gh_post") as mock_post, \
-             patch("app.handlers.pull_request.check_pr_title_update",
+             patch("app.handlers.pull_request.analysis.gh_put") as mock_put, \
+             patch("app.handlers.pull_request.review.gh_post") as mock_post, \
+             patch("app.handlers.pull_request.analysis.check_pr_title_update",
                    return_value=MagicMock(allowed=True)), \
-             patch("app.handlers.pull_request.notify_high_risk_pr"):
+             patch("app.handlers.pull_request.analysis.notify_high_risk_pr"):
             from app.handlers.pull_request import _analyze_pr
             pr = _pr()["pull_request"]
             log = MagicMock()
@@ -176,13 +176,13 @@ class TestAnalyzePR:
         cfg.get.side_effect = lambda *a, **kw: kw.get("default", True)
         with patch("app.handlers.pull_request.router.ask",
                    return_value=_fake_router_response(analysis)), \
-             patch("app.handlers.pull_request.validate_pr_analysis",
+             patch("app.handlers.pull_request.analysis.validate_pr_analysis",
                    return_value=analysis), \
-             patch("app.handlers.pull_request.gh_put"), \
-             patch("app.handlers.pull_request.gh_post"), \
-             patch("app.handlers.pull_request.check_pr_title_update",
+             patch("app.handlers.pull_request.analysis.gh_put"), \
+             patch("app.handlers.pull_request.review.gh_post"), \
+             patch("app.handlers.pull_request.analysis.check_pr_title_update",
                    return_value=MagicMock(allowed=True)), \
-             patch("app.handlers.pull_request.notify_high_risk_pr") as mock_notif:
+             patch("app.handlers.pull_request.analysis.notify_high_risk_pr") as mock_notif:
             from app.handlers.pull_request import _analyze_pr
             pr = _pr()["pull_request"]
             log = MagicMock()
@@ -197,7 +197,7 @@ class TestAnalyzePR:
         cfg.get.side_effect = lambda *a, **kw: kw.get("default", True)
         with patch("app.handlers.pull_request.router.ask",
                    side_effect=Exception("LLM timeout")), \
-             patch("app.handlers.pull_request.gh_post"):
+             patch("app.handlers.pull_request.review.gh_post"):
             from app.handlers.pull_request import _analyze_pr
             pr = _pr()["pull_request"]
             log = MagicMock()
@@ -261,7 +261,7 @@ class TestReviewCode:
         cfg.get.side_effect = lambda *a, **kw: kw.get("default", True)
         with patch("app.handlers.pull_request.router.ask",
                    return_value=_fake_router_response(review)), \
-             patch("app.handlers.pull_request.gh_post") as mock_post:
+             patch("app.handlers.pull_request.review.gh_post") as mock_post:
             from app.handlers.pull_request import _review_code
             pr = _pr()["pull_request"]
             log = MagicMock()
@@ -273,7 +273,7 @@ class TestReviewCode:
         files = [{"filename": "app/auth.py"}]  # no patch key
         cfg = _mock_config()
         with patch("app.handlers.pull_request.router.ask") as mock_ask, \
-             patch("app.handlers.pull_request.gh_post") as mock_post:
+             patch("app.handlers.pull_request.review.gh_post") as mock_post:
             from app.handlers.pull_request import _review_code
             pr = _pr()["pull_request"]
             log = MagicMock()
@@ -324,7 +324,7 @@ class TestDetectTestGaps:
         cfg.footer = ""
         with patch("app.handlers.pull_request.router.ask",
                    return_value=_fake_router_response(gaps)), \
-             patch("app.handlers.pull_request.gh_post") as mock_post:
+             patch("app.handlers.pull_request.review.gh_post") as mock_post:
             from app.handlers.pull_request import _detect_test_gaps
             pr = _pr()["pull_request"]
             log = MagicMock()
@@ -346,7 +346,7 @@ class TestDetectTestGaps:
         cfg = _mock_config()
         with patch("app.handlers.pull_request.router.ask",
                    return_value=_fake_router_response(gaps)), \
-             patch("app.handlers.pull_request.gh_post") as mock_post:
+             patch("app.handlers.pull_request.review.gh_post") as mock_post:
             from app.handlers.pull_request import _detect_test_gaps
             pr = _pr()["pull_request"]
             log = MagicMock()
@@ -358,7 +358,7 @@ class TestDetectTestGaps:
 class TestFileReviewPriority:
 
     def test_priority_ordering(self):
-        from app.handlers.pull_request import _file_review_priority, _review_code
+        from app.handlers.pull_request import _file_review_priority
 
         assert _file_review_priority("app/main.py") == 3
         assert _file_review_priority("tests/test_main.py") == 2

@@ -232,6 +232,11 @@ def env_defaults(monkeypatch):
         "GROQ_API_KEY": "test_groq_key_not_real",
         "REDIS_URL": "",
         "MCP_API_KEY": "test-mcp-api-key-xyz",
+        # Set because CI sets it. Without it the auth-gated endpoints were OPEN
+        # locally and CLOSED in CI, so a test could assert on an unauthenticated
+        # 400 here and get a 401 there — which is exactly what happened, and the
+        # kind of divergence that is only ever found by a red build.
+        "METRICS_AUTH_TOKEN": "test_metrics_token",
         "LOG_LEVEL": "WARNING",
         "LOG_FORMAT": "text",
     }

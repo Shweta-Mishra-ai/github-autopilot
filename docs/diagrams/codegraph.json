@@ -818,8 +818,8 @@
       "id": "app.handlers.autofix",
       "path": "app/handlers/autofix.py",
       "layer": "handlers",
-      "loc": 473,
-      "functions": 11,
+      "loc": 521,
+      "functions": 12,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
@@ -828,6 +828,7 @@
         "app",
         "base64",
         "logging",
+        "posixpath",
         "typing"
       ]
     },
@@ -2791,7 +2792,7 @@
   "stats": {
     "modules": 88,
     "edges": 267,
-    "total_loc": 18749,
+    "total_loc": 18797,
     "layers": [
       "ai",
       "core",

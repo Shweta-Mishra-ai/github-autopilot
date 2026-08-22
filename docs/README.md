@@ -17,6 +17,8 @@
 | Understand how `/autofix` works | [Autofix Engine →](ai-system/autofix-engine.md) |
 | Monitor in production | [Observability →](observability/observability.md) |
 | Write or run tests | [Testing Guide →](testing/testing-guide.md) |
+| Upgrade from an earlier version | [Migrating →](MIGRATING.md) |
+| See what changed and why | [Changelog →](../CHANGELOG.md) |
 
 ---
 

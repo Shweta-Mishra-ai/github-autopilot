@@ -349,6 +349,61 @@ class TestNoDeadConfig:
             "A toggle for an unreachable feature is a promise the product cannot keep."
         )
 
+    def test_every_config_reading_guardrail_has_a_caller(self):
+        """
+        The generalisation of the check above, and the one that was missing.
+
+        check_pr_description_update() read `pull_requests.auto_fill_description`
+        — a key that is documented ("Fills empty PR descriptions"), defaults to
+        true, and ships in .ai-repo-manager.yml. The read-check passed it
+        because the key *was* read. It was read inside a function nothing
+        called, so the PR body was never filled: the model was asked for one,
+        the validator sanitised it, and the value was dropped.
+
+        A guardrail exists to gate an action. One with no caller gates nothing,
+        so every config-reading guardrail must be reached from outside its own
+        module.
+        """
+        import ast
+
+        guardrails = Path("app/core/guardrails.py")
+        tree = ast.parse(guardrails.read_text(encoding="utf-8"))
+
+        # Module-level functions whose body reads a config key.
+        config_readers = set()
+        for node in tree.body:
+            if not isinstance(node, ast.FunctionDef) or node.name.startswith("_"):
+                continue
+            for sub in ast.walk(node):
+                if (
+                    isinstance(sub, ast.Call)
+                    and isinstance(sub.func, ast.Attribute)
+                    and isinstance(sub.func.value, ast.Name)
+                    and sub.func.value.id == "config"
+                ):
+                    config_readers.add(node.name)
+                    break
+
+        assert config_readers, "no config-reading guardrails found — has the file moved?"
+
+        called: set[str] = set()
+        for path in list(Path("app").rglob("*.py")) + [Path("server.py"), Path("worker.py")]:
+            if path == guardrails:
+                continue  # a guardrail calling itself proves nothing
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if isinstance(node, ast.Call):
+                    fn = node.func
+                    if isinstance(fn, ast.Name):
+                        called.add(fn.id)
+                    elif isinstance(fn, ast.Attribute):
+                        called.add(fn.attr)
+
+        dead = sorted(config_readers - called)
+        assert dead == [], (
+            f"guardrails that read config but nothing calls: {dead}. "
+            "Each gates a documented setting that therefore has no effect."
+        )
+
     def test_archived_repositories_are_not_acted_on(self):
         """
         check_archived_repo() had zero callers, so the bot commented on,
@@ -544,6 +599,46 @@ class TestPublishedNumbersAreTrue:
             assert int(claimed) == len(ALL_COMMANDS), (
                 f"README claims {claimed} slash commands, registry has {len(ALL_COMMANDS)}"
             )
+
+    def test_license_is_consistent_everywhere(self):
+        """
+        A licence declaration that disagrees with itself is worse than none:
+        someone reads the manifest, adopts under the narrower terms, and never
+        learns the broader grant exists.
+
+        plugin.json and marketplace.json both said "MIT" while pyproject.toml,
+        the README and the LICENSE files said "MIT OR Apache-2.0", and
+        mcp-manifest.json declared nothing at all. Understating the grant is
+        the harmless direction, but it is still wrong, and the next drift may
+        not be.
+        """
+        import json
+
+        expected = "MIT OR Apache-2.0"
+
+        for manifest in (
+            "mcp-manifest.json",
+            "plugin/.claude-plugin/plugin.json",
+        ):
+            data = json.loads((_ROOT / manifest).read_text(encoding="utf-8"))
+            assert data.get("license") == expected, f"{manifest}: {data.get('license')!r}"
+
+        marketplace = json.loads(
+            (_ROOT / ".claude-plugin/marketplace.json").read_text(encoding="utf-8")
+        )
+        licences = {p.get("license") for p in marketplace.get("plugins", [])}
+        assert licences == {expected}, licences
+
+        pyproject = (_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        assert f'license = {{ text = "{expected}" }}' in pyproject
+
+        # Both halves of the dual licence must actually be present as files —
+        # an SPDX expression naming a licence the repository does not ship is
+        # a promise with nothing behind it.
+        for path in ("LICENSE", "LICENSE-MIT", "LICENSE-APACHE"):
+            assert (_ROOT / path).is_file(), f"missing {path}"
+        assert "Apache License" in (_ROOT / "LICENSE-APACHE").read_text(encoding="utf-8")
+        assert "MIT License" in (_ROOT / "LICENSE-MIT").read_text(encoding="utf-8")
 
     def test_version_is_consistent_everywhere(self):
         """A stale version string in any manifest is a launch-day embarrassment."""

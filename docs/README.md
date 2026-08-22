@@ -28,7 +28,7 @@
 End-to-end installation guide. Covers GitHub App creation, Render deployment, Redis setup, environment variables, and first-command verification. Start here.
 
 **[Slash Commands Reference](guides/slash-commands.md)**
-All 26 commands with syntax, examples, permission requirements, and expected output.
+All 27 commands with syntax, examples, permission requirements, and expected output.
 
 ---
 

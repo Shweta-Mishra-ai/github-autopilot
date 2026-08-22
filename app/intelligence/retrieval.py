@@ -83,8 +83,13 @@ def get_context_for_pr(repo: str, changed_files: list[dict]) -> str:
     changed_paths = []
 
     for f in changed_files[:5]:
-        filepath = f.get("filename", "")
-        patch = f.get("patch", "")[:200]
+        filepath = f.get("filename") or ""
+        # GitHub omits `patch` for binary files and for diffs over its size
+        # limit, sending an explicit null. .get("patch", "") returns that None,
+        # and None[:200] raised TypeError. Unlike get_relevant_context() this
+        # function has no try/except, so a single binary file in a PR took the
+        # whole review path down rather than degrading to no context.
+        patch = (f.get("patch") or "")[:200]
         changed_paths.append(filepath)
         if filepath:
             query_parts.append(filepath)
@@ -102,5 +107,7 @@ def get_context_for_pr(repo: str, changed_files: list[dict]) -> str:
 
 def get_context_for_issue(repo: str, title: str, body: str) -> str:
     """Build context for issue triage by finding related code."""
-    query = f"{title}\n{body[:300]}"
+    # An issue opened with no description has body=None in the webhook payload,
+    # and None[:300] raised TypeError out of this un-wrapped function.
+    query = f"{title or ''}\n{(body or '')[:300]}"
     return get_relevant_context(repo=repo, query=query, top_k=3)

@@ -69,8 +69,23 @@ PATTERNS: list[tuple[str, str, str, bool]] = [
     ("Stripe Restricted Key", r"\brk_live_[0-9a-zA-Z]{24,}\b", "critical", False),
     ("Stripe Publishable Key", r"\bpk_live_[0-9a-zA-Z]{24,}\b", "medium", False),
     # Slack
-    ("Slack Bot Token", r"\bxoxb-[0-9]{11}-[0-9]{11}-[0-9a-zA-Z]{24}\b", "critical", False),
-    ("Slack App Token", r"\bxapp-[0-9]-[A-Z0-9]{10}-[0-9]{13}-[a-z0-9]{64}\b", "critical", False),
+    # Slack workspace and bot IDs are not a fixed width — the hardcoded {11}
+    # missed real tokens whose team ID is 10 or 13 digits. The `xoxb-` prefix
+    # carries the specificity here, so widening the numeric segments costs no
+    # precision: nothing but a Slack token looks like this.
+    ("Slack Bot Token", r"\bxoxb-[0-9]{9,16}-[0-9]{9,16}-[0-9a-zA-Z]{24,}\b", "critical", False),
+    (
+        "Slack User Token",
+        r"\bxoxp-[0-9]{9,16}-[0-9]{9,16}-[0-9]{9,16}-[0-9a-f]{32}\b",
+        "critical",
+        False,
+    ),
+    (
+        "Slack App Token",
+        r"\bxapp-[0-9]-[A-Z0-9]{8,12}-[0-9]{11,15}-[a-z0-9]{64}\b",
+        "critical",
+        False,
+    ),
     (
         "Slack Webhook",
         r"https://hooks\.slack\.com/services/T[A-Z0-9]{8}/B[A-Z0-9]{8}/[a-zA-Z0-9]{24}",
@@ -172,20 +187,30 @@ FALSE_POSITIVE_VALUES = {
 }
 
 # File patterns to skip (test files, docs, examples)
+# Paths whose CONVENTION rules out a real credential.
+#
+# Anchored with `(^|/)` on purpose. GitHub reports repo-relative paths, so
+# `tests/conftest.py` has no leading slash and the old `/tests/` entry could
+# never match a top-level tests directory — the exclusion existed and did
+# nothing for the most common layout there is.
 FALSE_POSITIVE_FILE_PATTERNS = [
     r"\.md$",
     r"\.txt$",
     r"\.example$",
     r"\.sample$",
-    r"test_",
+    r"\.template$",
+    r"(^|/)test_",
     r"_test\.",
-    r"/tests/",
-    r"docs/",
+    r"(^|/)tests?/",
+    r"(^|/)conftest\.py$",
+    r"(^|/)fixtures?/",
+    r"(^|/)docs?/",
     r"README",
     r"CHANGELOG",
     r"CONTRIBUTING",
     r"\.env\.example",
     r"\.env\.sample",
+    r"\.env\.template",
 ]
 
 HIGH_ENTROPY_THRESHOLD = 4.5
@@ -204,13 +229,77 @@ class SecretFinding:
 
 
 def _entropy(s: str) -> float:
-    """Shannon entropy of a string."""
+    """Shannon entropy of a string, in bits per character."""
     if not s:
         return 0.0
     freq: dict = {}
     for c in s:
         freq[c] = freq.get(c, 0) + 1
     return -sum((f / len(s)) * math.log2(f / len(s)) for f in freq.values())
+
+
+# A string of length n drawn from an alphabet of k symbols cannot exceed
+# log2(min(k, n)) bits per character — you cannot observe more than n distinct
+# symbols in n characters, however large the alphabet.
+#
+# That ceiling is why a flat 4.5-bit threshold silently disabled patterns:
+#
+#   Cloudflare API Key  [0-9a-f]{37}  ceiling log2(16) = 4.00  -> unreachable
+#   Datadog API Key     [a-f0-9]{32}  ceiling log2(16) = 4.00  -> unreachable
+#   Generic Password    24 chars      ceiling log2(24) = 4.58  -> marginal, flaky
+#
+# Those are not tuning choices, they are arithmetic: a real hex API key can
+# never clear 4.5, so the gate rejected every one of them. Measuring entropy as
+# a FRACTION of the achievable ceiling makes the test mean "is this string as
+# random as a string of its length and alphabet could be", which is the
+# question actually being asked, and it behaves the same for hex, base64 and
+# alphanumeric secrets.
+# Thresholds set from measurement, not taste. Over 5000 random samples of each
+# real credential shape this codebase has a pattern for, the worst case was:
+#
+#   ratio     0.857  (37-char hex — short strings under-sample their alphabet)
+#   distinct  9      (32-char hex)
+#
+# Both bounds sit below those worst cases with margin, because this gate is
+# only ever reached after a keyword anchor has already matched ("aws...secret",
+# "datadog...", "password="). The anchor supplies the specificity; the gate
+# only has to separate a credential from a placeholder sitting in the same
+# position, and placeholders are caught by _is_false_positive() and by the
+# distinct-character floor ("changeme", "xxxxxxxx", "0000...").
+#
+# The unanchored entropy-only detector at the bottom of scan_diff() has no such
+# anchor and is held to a much stricter bar. That is where false positives come
+# from, and that is where the strictness belongs.
+MIN_DISTINCT_CHARS = 8
+ENTROPY_RATIO_THRESHOLD = 0.80
+
+
+def _entropy_ratio(s: str) -> float:
+    """
+    Entropy as a fraction (0..1) of the maximum achievable for this string.
+
+    Returns 0.0 when the string is too short or too repetitive to judge.
+    """
+    if len(s) < 2:
+        return 0.0
+    distinct = len(set(s))
+    if distinct < 2:
+        return 0.0
+    ceiling = math.log2(min(distinct, len(s)))
+    if ceiling <= 0:
+        return 0.0
+    return _entropy(s) / ceiling
+
+
+def _looks_random(s: str) -> bool:
+    """
+    True when `s` is as close to random as its length and alphabet allow.
+
+    The distinct-character floor is load-bearing: "abcabcabcabc" has a perfect
+    entropy ratio (it uses its 3-symbol alphabet uniformly) but is obviously
+    not a credential. Requiring breadth as well as uniformity rejects it.
+    """
+    return len(set(s)) >= MIN_DISTINCT_CHARS and _entropy_ratio(s) >= ENTROPY_RATIO_THRESHOLD
 
 
 def _redact(matched: str) -> str:
@@ -220,14 +309,141 @@ def _redact(matched: str) -> str:
     return matched[:4] + ("*" * min(len(matched) - 8, 20)) + matched[-4:]
 
 
+# Structurally-recognisable non-secrets. These are high-entropy by design and
+# appear in ordinary diffs constantly, so the entropy heuristic alone flags them
+# every time. Each is a *shape* a credential does not have:
+#
+#   - a hex digest of a standard length (git SHA, md5/sha1/sha256/sha512)
+#   - a subresource/lockfile integrity value ("sha512-…", "sha256:…")
+#   - a UUID
+#   - a data: URI or an obvious base64 image blob
+#
+# Recognising the shape is safer than a denylist of values: it generalises to
+# digests nobody has seen yet, and none of these shapes can encode a real
+# credential without also matching one of the named PATTERNS above (which are
+# checked first and are not affected by this).
+_STRUCTURAL_NON_SECRETS = (
+    # Bare hex digests at exactly the lengths real hash functions produce.
+    re.compile(r"^[0-9a-f]{32}$", re.IGNORECASE),  # md5
+    re.compile(r"^[0-9a-f]{40}$", re.IGNORECASE),  # sha1 / git object id
+    re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE),  # sha256
+    re.compile(r"^[0-9a-f]{128}$", re.IGNORECASE),  # sha512
+    # Prefixed integrity values: npm lockfiles, SRI attributes, OCI digests.
+    re.compile(r"^sha(1|256|384|512)[-:]", re.IGNORECASE),
+    re.compile(r"^md5[-:]", re.IGNORECASE),
+    # UUID / GUID.
+    re.compile(
+        r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        re.IGNORECASE,
+    ),
+    # Encoded asset blobs.
+    re.compile(r"^data:[a-z]+/[a-z0-9.+-]+;base64,", re.IGNORECASE),
+    re.compile(r"^iVBORw0KGgo"),  # PNG magic bytes, base64-encoded
+    re.compile(r"^/9j/"),  # JPEG magic bytes, base64-encoded
+)
+
+
+def _is_structural_non_secret(value: str) -> bool:
+    """
+    True for values whose *shape* rules them out as a credential.
+
+    Split from _is_false_positive so the reason a finding was suppressed stays
+    legible: this is "that is a hash", not "that contains the word example".
+    """
+    v = value.strip()
+    return any(p.search(v) for p in _STRUCTURAL_NON_SECRETS)
+
+
+# Words that only ever appear in a value somebody typed as a stand-in. A real
+# credential is issued by a provider and does not contain English instructions.
+#
+# Matched anywhere in the value, case-insensitively. That is safe because these
+# are dictionary words: the chance a randomly issued key contains "replace_with"
+# or "not_real" is negligible, and being wrong in this direction only means one
+# missed placeholder, while being wrong in the other means an issue filed
+# against a maintainer for a key that says REPLACE_ME.
+_PLACEHOLDER_TOKENS = (
+    "placeholder",
+    "example",
+    "changeme",
+    "change_me",
+    "change-me",
+    "replace",
+    "insert",
+    "your_",
+    "your-",
+    "yourkey",
+    "yourtoken",
+    "dummy",
+    "sample",
+    "not_real",
+    "notreal",
+    "fake",
+    "redacted",
+    "todo",
+    "_here",
+    "-here",
+    "abc123",
+    "foobar",
+)
+
+_PLACEHOLDER_SHAPES = (
+    re.compile(r"x{6,}", re.IGNORECASE),  # xxxxxxxx
+    re.compile(r"^<[^>]{2,}>$"),  # <your-token>
+    re.compile(r"\$\{[^}]+\}"),  # ${GITHUB_TOKEN}
+    re.compile(r"\{\{[^}]+\}\}"),  # {{ secrets.X }}
+    re.compile(r"^\*{4,}$"),  # ****
+    re.compile(r"^(.)\1{7,}$"),  # the same character, repeated
+)
+
+
+# Prefix-anchored, not substring. "test" appearing somewhere inside a random
+# key is plausible; a credential that BEGINS with "test-" was typed by a person.
+# Anchoring is what makes this safe to apply to the value itself.
+_PLACEHOLDER_PREFIXES = ("test-", "test_", "testing", "demo-", "demo_", "my-", "my_")
+
+
+def _candidate_values(matched: str) -> list[str]:
+    """
+    The match, plus the quoted value inside it if there is one.
+
+    Patterns are keyword-anchored, so `matched` is `API_KEY: "…"` rather than
+    the credential. A prefix rule has to see the value, not the keyword in
+    front of it.
+    """
+    values = [matched.strip()]
+    quoted = re.findall(r"['\"]([^'\"]+)['\"]", matched)
+    values.extend(q.strip() for q in quoted)
+    # `KEY=value` with no quotes, as .env files are written.
+    if "=" in matched:
+        values.append(matched.split("=", 1)[1].strip())
+    if ":" in matched:
+        values.append(matched.split(":", 1)[1].strip().strip("\"'"))
+    return [v for v in values if v]
+
+
+def _is_placeholder(value: str) -> bool:
+    """True for a value a human typed as a stand-in for a real credential."""
+    for candidate in _candidate_values(value):
+        low = candidate.lower()
+        if any(tok in low for tok in _PLACEHOLDER_TOKENS):
+            return True
+        if low.startswith(_PLACEHOLDER_PREFIXES):
+            return True
+        if any(p.search(candidate) for p in _PLACEHOLDER_SHAPES):
+            return True
+    return False
+
+
 def _is_false_positive(value: str) -> bool:
     """Returns True if match is likely a false positive."""
+    if _is_structural_non_secret(value):
+        return True
     v_lower = value.lower()
     for fp in FALSE_POSITIVE_VALUES:
         if fp.lower() in v_lower or v_lower in fp.lower():
             return True
-    # Common placeholder patterns
-    return bool(re.search(r"(x{6,}|placeholder|example|changeme|your[_-]|insert)", v_lower))
+    return _is_placeholder(value)
 
 
 def _is_test_line(line: str) -> bool:
@@ -241,6 +457,36 @@ def _is_test_line(line: str) -> bool:
     # Word-boundary markers (standalone words only)
     word_markers = [r"\bmock\b", r"\bfake\b", r"\bdummy\b"]
     return any(re.search(m, line_lower) for m in word_markers)
+
+
+# A PEM header on its own proves nothing. It appears verbatim in three places
+# that are not leaks: a scanner's own ruleset (this file matched itself, at
+# CRITICAL severity), a test fixture whose "key" is the word `test`, and any
+# documentation showing the format. What makes it a leak is the key MATERIAL.
+_PEM_HEADER_RE = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----")
+_PEM_BODY_RE = re.compile(r"[A-Za-z0-9+/]{40,}={0,2}")
+
+
+def _pem_has_key_material(lines: list[str], index: int, matched: str) -> bool:
+    """
+    True when a PEM header is followed by something that looks like a key.
+
+    A real private key is base64 over many lines, so the body is usually on the
+    lines AFTER the header — requiring it on the same line would miss every
+    genuine multi-line leak, which is far worse than the noise it removes.
+    Both placements are checked: the remainder of this line (a key embedded in
+    source with escaped newlines) and the next few added lines.
+    """
+    remainder = lines[index][1:].split(matched, 1)[-1]
+    if _PEM_BODY_RE.search(remainder):
+        return True
+
+    for follow in lines[index + 1 : index + 6]:
+        if not follow.startswith("+"):
+            continue
+        if _PEM_BODY_RE.search(follow[1:]):
+            return True
+    return False
 
 
 def scan_diff(diff: str, file_path: str = "") -> list[SecretFinding]:
@@ -286,13 +532,22 @@ def scan_diff(diff: str, file_path: str = "") -> list[SecretFinding]:
             if _is_false_positive(matched):
                 continue
 
-            # Entropy gate for patterns that require it
+            # A PEM header with no key material after it is a format string,
+            # not a credential.
+            if _PEM_HEADER_RE.fullmatch(matched) and not _pem_has_key_material(
+                lines, lineno - 1, matched
+            ):
+                continue
+
+            # Entropy gate for patterns that require it. These patterns are all
+            # keyword-anchored ("aws...secret", "datadog...", "password="), so
+            # the gate only has to separate a real credential from a placeholder
+            # sitting in the same position — not to find secrets on its own.
             if entropy_required:
                 value_match = re.search(r"['\"]([^'\"]{16,})['\"]", matched)
                 check_str = value_match.group(1) if value_match else matched
-                ent = _entropy(check_str)
-                if ent < HIGH_ENTROPY_THRESHOLD:
-                    continue  # Low entropy → likely a placeholder
+                if not _looks_random(check_str):
+                    continue  # Not random enough → placeholder or example
 
             seen_matches.add(matched)
             findings.append(
@@ -320,8 +575,17 @@ def scan_diff(diff: str, file_path: str = "") -> list[SecretFinding]:
                     continue
                 if _is_false_positive(token):
                     continue
-                ent = _entropy(token)
-                if ent > HIGH_ENTROPY_THRESHOLD + 0.5:
+                # Deliberately stricter than the keyword-anchored gate above:
+                # this branch has no context to lean on, so it is the one that
+                # can invent a finding out of an ordinary random-looking string.
+                #
+                # The distinct-character floor of 20 is what keeps digests out.
+                # Hex tops out at 16 distinct symbols, so a git SHA, an md5, a
+                # sha256 or a lockfile integrity value can never clear it — and
+                # a real credential with no recognisable prefix and only 16
+                # distinct characters is not something this heuristic should be
+                # guessing at anyway.
+                if len(set(token)) >= 20 and _entropy_ratio(token) >= 0.95:
                     seen_matches.add(token)
                     findings.append(
                         SecretFinding(
@@ -330,7 +594,7 @@ def scan_diff(diff: str, file_path: str = "") -> list[SecretFinding]:
                             severity="medium",
                             redacted_match=_redact(token),
                             file_path=file_path,
-                            entropy=round(ent, 2),
+                            entropy=round(_entropy(token), 2),
                             confidence="medium",
                         )
                     )

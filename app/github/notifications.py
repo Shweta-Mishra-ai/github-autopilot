@@ -16,10 +16,34 @@ from app import __version__
 
 log = logging.getLogger(__name__)
 
-SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
-DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
-SLACK_ENABLED = bool(SLACK_WEBHOOK_URL)
-DISCORD_ENABLED = bool(DISCORD_WEBHOOK_URL)
+# Read at call time, not import time.
+#
+# These were module-level constants evaluated once when the module was first
+# imported, so a webhook URL set after that point — or changed, or provided by
+# a test — was never seen. send_rich_discord() already read the environment on
+# each call, so the same file disagreed with itself about when configuration
+# is decided.
+#
+# The env var is the MASTER switch: it says whether the deployment has the
+# channel at all. Per-repo config keys (notifications.slack / .discord) are
+# overrides on top of it.
+
+
+def slack_webhook_url() -> str:
+    return os.environ.get("SLACK_WEBHOOK_URL", "").strip()
+
+
+def discord_webhook_url() -> str:
+    return os.environ.get("DISCORD_WEBHOOK_URL", "").strip()
+
+
+def slack_enabled() -> bool:
+    return bool(slack_webhook_url())
+
+
+def discord_enabled() -> bool:
+    return bool(discord_webhook_url())
+
 
 NOTIFY_FILTER: dict[str, bool] = {
     "secret_detected": True,
@@ -29,6 +53,12 @@ NOTIFY_FILTER: dict[str, bool] = {
     "pr_opened": True,
     "new_issue": True,
     "all_providers_down": True,
+    # The scheduled sweep runs every 15 days by default, so this fires at most
+    # a handful of times a month and only for CRITICAL findings — it is a page,
+    # not a digest. Deliberately not in _CONFIG_EVENT_KEYS: it is an operator
+    # concern about the deployment, not a per-repository preference, and a repo
+    # cannot opt out of being told its own secrets leaked.
+    "scheduled_scan_critical": True,
     "vulnerability_low": False,
     "commit_lint": False,
     "pr_reviewed": False,
@@ -58,6 +88,22 @@ _CONFIG_EVENT_KEYS = {
     "high_risk_pr": "on_high_risk_pr",
     "all_providers_down": "on_all_providers_down",
 }
+
+
+def _count(metric: str) -> None:
+    """
+    Record a delivery outcome.
+
+    Sends happen on daemon threads, so a failing webhook only ever produced a
+    log line in a thread nobody reads. Counting makes it visible on /metrics
+    and /health, where "notifications stopped arriving" is actually diagnosable.
+    """
+    try:
+        from app.core.metrics import metrics
+
+        metrics.increment(metric)
+    except Exception:  # metrics must never break a notification
+        pass
 
 
 def _event_allowed(event_type: str, config=None) -> bool:
@@ -91,14 +137,24 @@ def notify(
         log.debug(f"notification.suppressed event_type={event_type}")
         return
 
-    slack_on = SLACK_ENABLED and (
+    slack_on = slack_enabled() and (
         config is None or config.get("notifications", "slack", default=True)
     )
-    discord_on = DISCORD_ENABLED and (
+    discord_on = discord_enabled() and (
         config is None or config.get("notifications", "discord", default=True)
     )
     if not slack_on and not discord_on:
-        log.debug("notification.skipped no_enabled_channel")
+        # Distinguish "no channel configured" from "a repo turned it off".
+        # Both used to log the same line, so an operator whose webhook URL was
+        # set but whose notifications never arrived had nothing to go on.
+        if not slack_enabled() and not discord_enabled():
+            log.debug("notification.skipped no_webhook_url_configured")
+        else:
+            log.info(
+                f"notification.skipped_by_repo_config repo={repo or '?'} "
+                f"event={event_type or '?'} — a webhook URL is set but this "
+                f"repository's notifications.slack/.discord disable it"
+            )
         return
 
     emoji = _EMOJIS.get(severity, "ℹ️")
@@ -147,12 +203,17 @@ def _send_slack(title: str, message: str, severity: str):
                 }
             ]
         }
-        resp = requests.post(SLACK_WEBHOOK_URL, json=payload, timeout=5)
+        resp = requests.post(slack_webhook_url(), json=payload, timeout=10)
         if resp.status_code == 200:
+            _count("notifications.slack.sent")
             log.info("notification.slack_sent")
         else:
-            log.warning(f"notification.slack_failed status={resp.status_code}")
+            _count("notifications.slack.failed")
+            log.warning(
+                f"notification.slack_failed status={resp.status_code} " f"body={resp.text[:200]}"
+            )
     except Exception as e:
+        _count("notifications.slack.failed")
         log.error(f"notification.slack_error: {e}")
 
 
@@ -186,18 +247,21 @@ def _send_discord(
 
         payload = {"embeds": [embed]}
         resp = requests.post(
-            DISCORD_WEBHOOK_URL,
+            discord_webhook_url(),
             json=payload,
             headers={"Content-Type": "application/json"},
-            timeout=5,
+            timeout=10,
         )
         if resp.status_code in (200, 204):
+            _count("notifications.discord.sent")
             log.info("notification.discord_sent")
         else:
+            _count("notifications.discord.failed")
             log.warning(
                 f"notification.discord_failed status={resp.status_code} body={resp.text[:200]}"
             )
     except Exception as e:
+        _count("notifications.discord.failed")
         log.error(f"notification.discord_error: {e}")
 
 
@@ -311,7 +375,7 @@ def notify_all_providers_down(config=None):
 
 
 def test_discord() -> tuple[bool, str]:
-    if not DISCORD_ENABLED:
+    if not discord_enabled():
         return False, "DISCORD_WEBHOOK_URL environment variable is not set"
 
     try:
@@ -331,7 +395,7 @@ def test_discord() -> tuple[bool, str]:
             ]
         }
         resp = requests.post(
-            DISCORD_WEBHOOK_URL,
+            discord_webhook_url(),
             json=payload,
             headers={"Content-Type": "application/json"},
             timeout=10,
@@ -354,7 +418,7 @@ def send_rich_discord(
     Sprint 6: Rich Discord embed with color-coded severity.
     Colors: 0x2ECC71=green, 0xF1C40F=yellow, 0xE74C3C=red, 0x5865F2=blue
     """
-    webhook_url = os.environ.get("DISCORD_WEBHOOK_URL", "")
+    webhook_url = discord_webhook_url()
     if not webhook_url:
         return False, "DISCORD_WEBHOOK_URL not set"
     try:
@@ -376,8 +440,56 @@ def send_rich_discord(
             ]
         payload = {"embeds": [embed]}
         r = requests.post(webhook_url, json=payload, timeout=10)
-        return r.status_code in (200, 204), f"HTTP {r.status_code}"
+        ok = r.status_code in (200, 204)
+        _count(f"notifications.discord.{'sent' if ok else 'failed'}")
+        return ok, f"HTTP {r.status_code}"
     except Exception as e:
+        _count("notifications.discord.failed")
+        return False, str(e)
+
+
+def send_rich_slack(
+    title: str,
+    description: str,
+    color: str = "#3498DB",
+    fields: list = None,
+    url: str = "",
+) -> tuple[bool, str]:
+    """
+    Slack counterpart to send_rich_discord, with the same (ok, detail) contract.
+
+    It did not exist, so /notify — which explicitly accepts a Slack-only
+    configuration — had nothing to call and sent Discord alone, while still
+    reporting that Slack had been notified.
+    """
+    webhook_url = slack_webhook_url()
+    if not webhook_url:
+        return False, "SLACK_WEBHOOK_URL not set"
+    try:
+        attachment: dict = {
+            "color": color,
+            "title": title[:256],
+            "text": description[:3000],
+            "footer": "GitHub Autopilot",
+            "ts": int(datetime.now(timezone.utc).timestamp()),
+        }
+        if url:
+            attachment["title_link"] = url
+        if fields:
+            attachment["fields"] = [
+                {
+                    "title": str(f.get("name", ""))[:256],
+                    "value": str(f.get("value", ""))[:1024],
+                    "short": bool(f.get("inline", False)),
+                }
+                for f in fields[:10]
+            ]
+        r = requests.post(webhook_url, json={"attachments": [attachment]}, timeout=10)
+        ok = r.status_code == 200
+        _count(f"notifications.slack.{'sent' if ok else 'failed'}")
+        return ok, f"HTTP {r.status_code}"
+    except Exception as e:
+        _count("notifications.slack.failed")
         return False, str(e)
 
 

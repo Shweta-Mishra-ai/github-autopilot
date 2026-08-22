@@ -75,7 +75,7 @@ def run_review_cases() -> list:
         pr = {"head": {"sha": "eval0000"}}
 
         try:
-            with patch("app.handlers.pull_request.gh_post", side_effect=_capture):
+            with patch("app.handlers.pull_request.review.gh_post", side_effect=_capture):
                 _review_code(pr, "eval/repo", 1, files, "tok", cfg, MagicMock(), "", MagicMock())
         except Exception as e:
             results.append(CaseResult(case["id"], 0.0, False, [f"exception: {e}"]))

@@ -1,6 +1,6 @@
 [project]
 name = "github-autopilot"
-version = "7.1.1"
+version = "7.2.0"
 description = "AI-powered GitHub automation bot — auto-fix, PR review, secret scanning, and more"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -97,10 +97,19 @@ filterwarnings = [
 [tool.coverage.run]
 source = ["app"]
 omit = [
-    "app/auth.py",           # deprecated legacy file
-    "archive/*",
     "tests/*",
-    "app/intelligence/*",    # optional layer, no hard deps
+]
+
+# ── Bandit (SAST) ────────────────────────────────────────────────────────────
+# Complements pip-audit: that covers third-party CVEs, this covers our own code.
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "build", "dist"]
+# Report MEDIUM and HIGH only. LOW is dominated by findings that are noise in
+# this codebase (asserts in helpers, binding to 0.0.0.0 in a container) and a
+# scanner nobody can keep green is a scanner everyone learns to ignore.
+skips = [
+    "B101",  # assert_used — asserts are not used for runtime enforcement here
+    "B104",  # hardcoded_bind_all_interfaces — required inside a container
 ]
 
 [tool.coverage.report]

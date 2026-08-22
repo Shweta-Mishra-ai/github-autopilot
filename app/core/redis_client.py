@@ -276,6 +276,35 @@ class _FakeRedis:
             self._evict(key)
             return 1 if key in self._store else 0
 
+    def scan_iter(self, match: str = "*", count: int = None):
+        """
+        Iterate keys matching a glob, like redis-py's scan_iter.
+
+        Absent entirely before: callers that scanned for keys raised
+        AttributeError here, which their surrounding try/except swallowed — so
+        on any deployment without Redis, key-scanning operations silently did
+        nothing rather than failing visibly. Snapshotting the key list under
+        the lock keeps iteration safe while other threads mutate the store.
+        """
+        import fnmatch
+
+        with self._lock:
+            for key in list(self._store):
+                self._evict(key)
+            candidates = list(self._store)
+        for key in candidates:
+            if fnmatch.fnmatch(key, match):
+                yield key
+
+    def keys(self, pattern: str = "*") -> list:
+        """
+        Glob match, like redis-py's KEYS.
+
+        Prefer scan_iter: against real Redis, KEYS is O(N) over the whole
+        keyspace and blocks the server for the duration.
+        """
+        return list(self.scan_iter(match=pattern))
+
     def sadd(self, key: str, *values) -> int:
         """Returns the number of values actually added (0 if all present)."""
         with self._lock:
@@ -296,6 +325,20 @@ class _FakeRedis:
             self._evict(key)
             s = self._store.get(key)
             return isinstance(s, set) and str(value) in s
+
+    def smembers(self, key: str) -> set:
+        """
+        All members of a set, like redis-py's SMEMBERS.
+
+        sadd/sismember/srem/scard were all present but this was not, so any
+        caller that stored a set could add to it and test it but never read it
+        back — and the AttributeError surfaced only on a deployment without
+        Redis, where the surrounding try/except turned it into silence.
+        """
+        with self._lock:
+            self._evict(key)
+            s = self._store.get(key)
+            return set(s) if isinstance(s, set) else set()
 
     def srem(self, key: str, *values) -> int:
         with self._lock:

@@ -13,6 +13,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import pytest
+
 from app.handlers.autofix import _is_allowed, _block_reason, ALLOWED_YAML_PATTERNS
 
 
@@ -147,6 +149,35 @@ class TestBlockReason:
 
     def test_allowed_file_returns_none(self):
         assert _block_reason("app/utils.py") is None
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "",  # LLM returned no target_file
+            "../../etc/passwd",
+            "/etc/passwd",
+            "server.py",
+            "app/core/webhook_security.py",
+            ".github/workflows/ci.yml",
+            ".env.production",
+            "secrets/prod.py",
+            "deploy/api.yml",
+            "malware.exe",
+            "no_extension",
+        ],
+    )
+    def test_every_rejection_has_a_readable_reason(self, path):
+        """Invariant: a blocked path must never render as "— None." in the
+        comment the user reads. Empty target and traversal paths previously
+        fell through to None and did exactly that."""
+        from app.handlers.autofix import _is_allowed
+
+        assert _is_allowed(path) is False, "test path is not actually blocked"
+        reason = _block_reason(path)
+        assert isinstance(reason, str) and reason.strip(), (
+            f"_block_reason({path!r}) returned {reason!r}; it is interpolated "
+            f"into user-facing text and must be a non-empty string"
+        )
 
 
 class TestAllowedYamlPatterns:

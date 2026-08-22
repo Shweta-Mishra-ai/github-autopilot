@@ -9,14 +9,17 @@ FIXES vs V4:
   2. Content-Length bypass: verify_webhook() now checks len(request.data)
      instead of the Content-Length header. A missing or spoofed header can no
      longer let an oversized body bypass the size check.
-  3. X-Forwarded-For IP spoofing: The IP used for rate limiting is no longer
-     taken blindly from X-Forwarded-For. We read the *last* trusted hop from
-     the header chain (Render always appends the real client IP) and fall back
-     to request.remote_addr. Attackers can no longer spoof IPs by injecting a
-     forged X-Forwarded-For header value.
-  4. In-memory IP dict memory leak: old IP keys were never removed after their
-     sliding window emptied. Under a flood, every unique IP stayed in
-     _ip_counts forever. Fixed: delete key when window becomes empty.
+  3. X-Forwarded-For IP spoofing: the rate-limit address is taken from the
+     trusted end of the chain rather than the client-supplied end. How much of
+     the chain is trustworthy is a property of the DEPLOYMENT, not of this
+     code, so it is configured via TRUSTED_PROXY_HOPS (default 1, matching
+     Render). At 0 the header is ignored entirely — which is the correct and
+     necessary setting for a deployment with no proxy, where the whole header
+     is attacker-controlled.
+  4. In-memory IP dict memory leak: addresses are swept once their window goes
+     idle. The earlier attempt appended the current timestamp before testing
+     the window for emptiness, so the window was never empty and the delete
+     branch was unreachable.
   5. startup_check() now also validates GITHUB_APP_ID (numeric) and
      GITHUB_PRIVATE_KEY (non-empty). Auth failures at request time are now
      caught at boot instead.
@@ -161,29 +164,78 @@ def verify_timestamp(headers: dict) -> bool:
 # ── IP extraction — spoofing-resistant ────────────────────────────────────────
 
 
+# How many reverse proxies sit in front of this app. Render is one, which is
+# why that is the default and why nothing changes for the standard deployment.
+#
+# It has to be configurable, and it has to be able to be zero. Taking the last
+# X-Forwarded-For entry is spoofing-resistant ONLY when a trusted proxy wrote
+# that entry. With no proxy in front, remote_addr is already the real client
+# and the entire header is attacker-controlled — so trusting it unconditionally
+# means an attacker picks their own rate-limit bucket by sending a header, and
+# picks a *different* one on every request. This module's docstring claimed
+# spoofing was fixed; it was fixed for Render and nowhere else.
+#
+#   TRUSTED_PROXY_HOPS=0  no proxy — use remote_addr, ignore XFF entirely
+#   TRUSTED_PROXY_HOPS=1  one proxy (Render, Fly, most PaaS) — default
+#   TRUSTED_PROXY_HOPS=2  e.g. Cloudflare in front of a PaaS router
+TRUSTED_PROXY_HOPS_ENV = "TRUSTED_PROXY_HOPS"
+DEFAULT_TRUSTED_PROXY_HOPS = 1
+
+
+def _trusted_proxy_hops() -> int:
+    """Read per call so it can be changed without a redeploy, like the secret."""
+    try:
+        return max(0, int(os.environ.get(TRUSTED_PROXY_HOPS_ENV, DEFAULT_TRUSTED_PROXY_HOPS)))
+    except (TypeError, ValueError):
+        return DEFAULT_TRUSTED_PROXY_HOPS
+
+
 def _get_client_ip(request) -> str:
     """
-    Extract real client IP in a spoofing-resistant way.
+    The client address to rate-limit on, resisting X-Forwarded-For spoofing.
 
-    FIXED: V4 took the *first* value from X-Forwarded-For, which an attacker
-    can inject freely (X-Forwarded-For: spoofed, real). The platform (Render)
-    always appends the actual client IP as the *last* entry in the chain.
-    Taking the last value makes forged prefixes irrelevant.
+    A proxy APPENDS the address it saw, so the chain reads
+    [client-supplied…, seen-by-outer-proxy, …, seen-by-inner-proxy]. With N
+    trusted proxies the honest value is the Nth entry from the right; anything
+    to its left was written by someone we do not trust and is ignored.
 
-    Falls back to request.remote_addr if the header is missing (direct
-    connections / local dev).
+    Falls back to remote_addr whenever the header is absent, empty, or shorter
+    than the configured chain — a chain that is too short means the request did
+    not come through the proxies we expect, which is not a reason to trust it
+    more.
     """
+    hops = _trusted_proxy_hops()
+    remote = request.remote_addr or "unknown"
+    if hops == 0:
+        return remote
+
     xff = request.headers.get("X-Forwarded-For", "")
-    if xff:
-        # Last entry = the IP the platform saw; earlier entries are client-supplied
-        return xff.split(",")[-1].strip()
-    return request.remote_addr or "unknown"
+    if not xff:
+        return remote
+
+    parts = [p.strip() for p in xff.split(",") if p.strip()]
+    if len(parts) < hops:
+        log.debug(f"webhook_security.short_forwarded_chain entries={len(parts)} expected>={hops}")
+        return remote
+    return parts[-hops]
 
 
 # ── IP Rate Limiting (sliding window) ─────────────────────────────────────────
 
 _ip_counts: dict[str, list] = {}
 _ip_lock = threading.Lock()
+
+# Whether the limiter is running without Redis. Logging that on every request
+# does not make it more true, only less readable — and this is the webhook
+# path, so "every request" is the busiest thing in the process.
+_rl_in_fallback = False
+
+# Amortised sweep of IPs nobody has seen in a while. Without it the dict grows
+# once per distinct source address, forever: the old code tried to delete empty
+# windows, but appended the current timestamp *before* testing for emptiness,
+# so the window was never empty and the delete branch could not run.
+_last_sweep = 0.0
+_SWEEP_INTERVAL = 60.0
 
 
 def check_ip_rate_limit(ip: str) -> bool:
@@ -204,27 +256,62 @@ def check_ip_rate_limit(ip: str) -> bool:
                 log.warning(f"webhook_security.rate_limit_redis ip={ip} count={count}")
             return ok
     except Exception as e:
-        log.warning(
-            f"webhook_security.rate_limit_redis_unavailable ip={ip}: {e} — falling back to in-memory"
-        )
+        _rate_limit_fallback_once(e)
 
     # In-memory sliding window fallback
     now = time.time()
     with _ip_lock:
-        window = _ip_counts.get(ip, [])
-        window = [t for t in window if now - t < 60]
-        window.append(now)
+        _sweep_stale_ips(now)
 
-        # FIXED: remove the key when the window is empty to prevent unbounded growth
+        window = [t for t in _ip_counts.get(ip, []) if now - t < 60]
+        ok = len(window) < IP_RATE_LIMIT
+
+        # Only record requests that are actually allowed. Appending while over
+        # the limit let a flooding IP grow its own window without bound for a
+        # full minute — the limiter paying for the flood it is refusing.
+        if ok:
+            window.append(now)
+
         if window:
             _ip_counts[ip] = window
         else:
             _ip_counts.pop(ip, None)
 
-        ok = len(window) <= IP_RATE_LIMIT
         if not ok:
             log.warning(f"webhook_security.rate_limit_memory ip={ip} count={len(window)}")
         return ok
+
+
+def _rate_limit_fallback_once(exc: Exception) -> None:
+    """Log the drop to in-memory limiting once per episode, not per request."""
+    global _rl_in_fallback
+    if not _rl_in_fallback:
+        _rl_in_fallback = True
+        log.warning(
+            f"webhook_security.rate_limit_memory_fallback ({exc}) — the limit is "
+            "per-process until Redis returns, so N workers allow N times the "
+            "configured rate. Logged once, not per request."
+        )
+
+
+def _sweep_stale_ips(now: float) -> None:
+    """
+    Drop IPs with no request in the last window. Caller holds _ip_lock.
+
+    Amortised: at most once per _SWEEP_INTERVAL, so the O(addresses) pass is
+    not paid on every webhook. Without any sweep the dict gains an entry per
+    distinct source address and never loses one — a public endpoint is scanned
+    by a lot of addresses that never come back.
+    """
+    global _last_sweep
+    if now - _last_sweep < _SWEEP_INTERVAL:
+        return
+    _last_sweep = now
+    stale = [addr for addr, win in _ip_counts.items() if not win or now - win[-1] >= 60]
+    for addr in stale:
+        del _ip_counts[addr]
+    if stale:
+        log.debug(f"webhook_security.rate_limit_swept addresses={len(stale)}")
 
 
 # ── Bot loop prevention ────────────────────────────────────────────────────────

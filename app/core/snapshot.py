@@ -42,26 +42,44 @@ def take_snapshot(repo: str, token: str, trigger: str = "manual") -> str | None:
         commits = gh_get(f"/repos/{repo}/commits?per_page=5", token)
         repo_data = gh_get(f"/repos/{repo}", token)
 
+        # Every read below is guarded. A snapshot is the only thing standing
+        # between /rollback and an unrecoverable change, and take_snapshot()
+        # swallows exceptions and returns None — so a single unexpected field
+        # in any of four API responses used to mean "no snapshot", silently,
+        # with the rollback proceeding regardless. `or []` rather than a
+        # truthiness check because an error response is a dict, and iterating
+        # a dict yields its keys as strings.
+        issues_data = issues_data if isinstance(issues_data, list) else []
+        prs_data = prs_data if isinstance(prs_data, list) else []
+        commits = commits if isinstance(commits, list) else []
+        repo_data = repo_data if isinstance(repo_data, dict) else {}
+
         open_issues = [
             {
-                "number": i["number"],
-                "title": i["title"],
-                "labels": [item["name"] for item in i["labels"]],
+                "number": i.get("number"),
+                "title": i.get("title", ""),
+                "labels": [
+                    lbl.get("name", "") for lbl in (i.get("labels") or []) if isinstance(lbl, dict)
+                ],
             }
             for i in issues_data
-            if "pull_request" not in i
+            if isinstance(i, dict) and "pull_request" not in i
         ]
 
         open_prs = [
             {
-                "number": p["number"],
-                "title": p["title"],
-                "head": p["head"]["ref"],
+                "number": p.get("number"),
+                "title": p.get("title", ""),
+                # GitHub sends a null head for a PR from a deleted fork.
+                "head": (p.get("head") or {}).get("ref", ""),
             }
             for p in prs_data
+            if isinstance(p, dict)
         ]
 
-        latest_sha = commits[0]["sha"] if commits else ""
+        latest_sha = ""
+        if commits and isinstance(commits[0], dict):
+            latest_sha = commits[0].get("sha", "") or ""
 
         snapshot = {
             "id": _make_id(),
@@ -150,6 +168,12 @@ def list_snapshots(repo: str) -> list[dict]:
 
             snap = json.loads(raw)
             actions = _get_bot_actions(r, repo, snap_id)
+            # .get() throughout: one snapshot written by an older version, or
+            # truncated, used to raise KeyError out of the loop and take the
+            # entire list with it — so a single malformed entry made every
+            # snapshot unlistable and /rollback report "none available".
+            state = snap.get("state") or {}
+            latest_commit = state.get("latest_commit") or ""
 
             summaries.append(
                 {
@@ -157,11 +181,9 @@ def list_snapshots(repo: str) -> list[dict]:
                     "number": len(summaries) + 1,
                     "trigger": snap.get("trigger", "unknown"),
                     "timestamp": snap.get("timestamp", ""),
-                    "issues_count": snap["state"]["open_issues_count"],
-                    "prs_count": snap["state"]["open_prs_count"],
-                    "commit": snap["state"]["latest_commit"][:7]
-                    if snap["state"].get("latest_commit")
-                    else "—",
+                    "issues_count": state.get("open_issues_count", 0),
+                    "prs_count": state.get("open_prs_count", 0),
+                    "commit": latest_commit[:7] if latest_commit else "—",
                     "bot_actions": len(actions),
                 }
             )
@@ -219,6 +241,14 @@ def format_snapshot_list(repo: str) -> str:
         )
 
     table = "\n".join(rows)
+    # Derived from what actually exists. The examples were hardcoded to 1 and
+    # 2, so a repo with a single snapshot was told to run `/rollback 2`, which
+    # can only answer "Snapshot #2 Not Found".
+    highest = snapshots[-1]["number"]
+    examples = ["- `/rollback 1` — preview the most recent snapshot"]
+    if highest > 1:
+        examples.append(f"- `/rollback {highest}` — preview the oldest kept snapshot")
+    examples.append("- `/rollback 1 confirm` — actually restore it")
 
     return f"""## 📸 Repo Snapshots — `{repo}`
 
@@ -227,10 +257,10 @@ def format_snapshot_list(repo: str) -> str:
 {table}
 
 ### How to restore
-- `/rollback 1`
-- `/rollback 2`
+{chr(10).join(examples)}
 
-> ⚠️ Rollback does NOT revert code commits.
+> ⚠️ Rollback undoes the bot's own recorded actions (issues it opened, titles
+> it rewrote, labels it added). It does **not** revert code commits.
 
 ---
 *Snapshots expire after 7 days. Last {len(snapshots)} shown.*"""

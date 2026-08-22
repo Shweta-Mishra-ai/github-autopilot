@@ -19,7 +19,7 @@ from app import __version__
 from app.core.metrics import metrics
 from app.core.redis_client import is_redis_available
 from app.core.thread_pool import is_saturated, pool_stats, shutdown
-from app.core.webhook_security import startup_check
+from app.core.webhook_security import MAX_PAYLOAD_BYTES, startup_check
 import app.core.idempotency as idempotency
 import app.core.thread_pool as thread_pool
 import app.core.webhook_security as webhook_security
@@ -49,9 +49,31 @@ log = logging.getLogger("server")
 
 app = Flask(__name__)
 
+# Refuse an oversized body while it is being READ, not after.
+#
+# verify_webhook() checks len(request.data), which cannot run until the entire
+# body has been materialised — measured at 62 MB of peak allocation to reject a
+# 30 MB request, and the size check is step one, so no signature is required to
+# trigger it. A handful of concurrent requests exhausts a 512 MB instance.
+#
+# Werkzeug enforces this limit against the stream and raises
+# RequestEntityTooLarge before the body reaches the application. The explicit
+# length check in verify_webhook stays as defence in depth for a chunked
+# request that declares no Content-Length.
+app.config["MAX_CONTENT_LENGTH"] = MAX_PAYLOAD_BYTES
+
 METRICS_TOKEN = os.environ.get("METRICS_AUTH_TOKEN", "")
 START_TIME = time.time()
 VERSION = __version__
+
+
+@app.errorhandler(413)
+def _payload_too_large(_e):
+    """Werkzeug aborts oversized bodies before any route runs; answer in the
+    same JSON shape every other rejection uses so a client does not have to
+    parse an HTML error page."""
+    metrics.increment("webhook.rejected_too_large")
+    return jsonify({"error": "Payload too large"}), 413
 
 
 def _authorized(req) -> bool:
@@ -117,6 +139,53 @@ def dashboard():
     return dashboard_html(), 200, {"Content-Type": "text/html; charset=utf-8"}
 
 
+@app.route("/graph", methods=["GET"])
+def graph():
+    """
+    Interactive codebase map (HTML). Like /dashboard, the shell holds no secret
+    — it fetches /graph.json with a token the operator pastes in.
+    """
+    from app.graphview import graph_html
+
+    return graph_html(), 200, {"Content-Type": "text/html; charset=utf-8"}
+
+
+@app.route("/graph.json", methods=["GET"])
+def graph_json():
+    """
+    The generated dependency graph.
+
+    Auth-gated with the same token as /health: a dependency graph is a map of
+    the codebase — module names, sizes, and what depends on what — and should
+    not be public on a private deployment.
+
+    Served from the file CI commits, not built per-request: walking and parsing
+    every module on a web request would be slow and would report the *deployed*
+    tree, which for an installed package is not the repository anyone is
+    looking at.
+    """
+    if not _authorized(request):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    path = os.environ.get("CODEGRAPH_PATH", "docs/diagrams/codegraph.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return app.response_class(fh.read(), mimetype="application/json")
+    except FileNotFoundError:
+        return jsonify(
+            {
+                "error": "No graph generated yet",
+                "hint": (
+                    "python -m app.intelligence.codegraph app server.py worker.py "
+                    "--out docs/diagrams/codegraph.json"
+                ),
+            }
+        ), 404
+    except OSError as e:
+        log.error(f"graph_json.read_failed path={path}: {e}")
+        return jsonify({"error": "Could not read graph"}), 500
+
+
 @app.route("/health", methods=["GET"])
 def health():
     """
@@ -159,7 +228,26 @@ def health():
                 "errors_total": metrics.get("events.error", 0),
                 "events_dropped": metrics.get("events.dropped", 0),
                 "secondary_rate_limited": metrics.get("events.secondary_rate_limited", 0),
+                # Non-zero means the collaborator-permission API is failing, so
+                # every maintainer-only command is being denied regardless of who
+                # runs it. Surfaced here because the symptom (commands "not
+                # working") otherwise looks nothing like its cause.
+                "permission_check_failures": metrics.get("auth.permission_check_failed", 0),
             },
+            # Notifications are delivered on daemon threads, so a rejected
+            # webhook only ever produced a log line nobody reads. "Slack went
+            # quiet" is now answerable without grepping logs.
+            "notifications": _notification_status(),
+            # Per-provider latency and error rate. health_check computed these
+            # from a dataset nothing wrote to, so they always read zero; the
+            # router and the circuit breaker now feed it.
+            "providers": _provider_health(),
+            # The 15-day sweep and the encrypted memory backup. A schedule that
+            # silently stopped running looks exactly like one that is running
+            # fine, so next_run_at and the last result are reported rather than
+            # a bare on/off — an operator can see it is due, overdue, or never
+            # configured.
+            "maintenance": _maintenance_status(),
         }
     ), 200 if overall == "ok" else 207
 
@@ -222,6 +310,13 @@ def webhook():
         payload = request.get_json(force=True)
     except Exception:
         return jsonify({"error": "Invalid JSON"}), 400
+
+    # `[]`, `"str"` and `123` are all valid JSON and none of them has .get().
+    # Every line below assumes a mapping, so the AttributeError surfaced as a
+    # 500 — an internal error for what is really a malformed request.
+    if not isinstance(payload, dict):
+        log.warning(f"webhook.non_object_payload type={type(payload).__name__}")
+        return jsonify({"error": "Payload must be a JSON object"}), 400
 
     webhook_event = request.headers.get("X-GitHub-Event", "")
     delivery_id = request.headers.get("X-GitHub-Delivery", "")
@@ -291,6 +386,20 @@ def _run_handler(webhook_event: str, payload: dict, repo: str):
     try:
         log.info(f"dispatch.start event={webhook_event} repo={repo}")
 
+        # Record which installation can act on this repo. The id arrives only
+        # on the webhook, and nothing persisted it — so anything that runs on a
+        # schedule rather than in response to an event (the 15-day security
+        # sweep) had no credential for any repository at all.
+        try:
+            from app.core.installations import remember_installation, touch
+
+            inst = (payload.get("installation") or {}).get("id", 0)
+            if repo and inst:
+                remember_installation(repo, inst)
+                touch(repo)
+        except Exception as e:
+            log.debug(f"installations.record_skipped repo={repo}: {e}")
+
         if webhook_event == "pull_request":
             from app.handlers.pull_request import handle
 
@@ -352,12 +461,104 @@ def _queue_stats() -> dict:
     return queue_stats()
 
 
+def _provider_health() -> dict:
+    """
+    Per-provider latency and error rate from app/core/health_check.py.
+
+    Degrades to an empty dict rather than failing /health — a telemetry gap
+    must not take the health endpoint down with it.
+    """
+    try:
+        from app.core.health_check import get_system_health
+
+        return get_system_health().get("providers", {})
+    except Exception as e:
+        log.debug(f"health.provider_stats_unavailable: {e}")
+        return {}
+
+
+def _maintenance_status() -> dict:
+    """
+    Scheduled-sweep and backup state. Never raises — /health must answer even
+    when the thing it is reporting on is broken.
+
+    `overdue` is the value worth reading: the scheduler is a daemon thread on a
+    free tier that restarts often, and the due time lives in Redis precisely so
+    a restart cannot silently reset the clock. If this is ever true, the pass
+    is not running and nobody would otherwise find out for 15 days.
+    """
+    import time as _time
+
+    try:
+        from app.core.maintenance import status as maintenance_state
+        from app.core.memory_backup import backup_status
+
+        state = maintenance_state()
+        due = state.get("next_run_at") or 0
+        state["overdue"] = bool(due and _time.time() > due + 3600)
+        state["memory_backup"] = backup_status()
+        return state
+    except Exception as e:
+        return {"error": str(e)[:120]}
+
+
+def _notification_status() -> dict:
+    """
+    Whether each channel is configured, and how its deliveries have gone.
+
+    `configured: false` means no webhook URL is set for that channel — the most
+    common reason notifications "stop working", and previously invisible.
+    """
+    from app.github.notifications import discord_enabled, slack_enabled
+
+    out = {}
+    for channel, configured in (
+        ("slack", slack_enabled()),
+        ("discord", discord_enabled()),
+    ):
+        sent = metrics.get(f"notifications.{channel}.sent", 0)
+        failed = metrics.get(f"notifications.{channel}.failed", 0)
+        out[channel] = {
+            "configured": configured,
+            "sent": sent,
+            "failed": failed,
+            "status": "ok" if configured and not failed else ("failing" if failed else "off"),
+        }
+    return out
+
+
 def _boot():
     """Shared boot path for gunicorn import and `python server.py`."""
     startup_check()
     from app.core.event_queue import start_consumers
 
     start_consumers(_run_handler)
+    _boot_maintenance()
+
+
+def _boot_maintenance():
+    """
+    Restore memory if it is empty, then start the periodic maintenance pass.
+
+    Both are best-effort: a backup that cannot be reached must not stop the app
+    from serving webhooks, which is its actual job. Ordering matters — restore
+    runs before the scheduler so a wiped instance is warm before anything reads
+    memory, and it is safe to run in every worker because it no-ops unless
+    memory is genuinely empty.
+    """
+    try:
+        from app.core.memory_backup import maybe_restore_on_boot
+
+        maybe_restore_on_boot()
+    except Exception as e:
+        log.warning(f"boot.memory_restore_skipped: {e}")
+
+    try:
+        from app.core.maintenance import start_scheduler
+
+        start_scheduler()
+    except Exception as e:
+        log.warning(f"boot.maintenance_not_started: {e}")
 
 
 # ── Boot ───────────────────────────────────────────────────────────────────

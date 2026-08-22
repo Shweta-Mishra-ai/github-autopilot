@@ -120,6 +120,42 @@ MCP_TOOLS = [
         },
     },
     {
+        "name": "codebase_map",
+        "description": (
+            "Structural map of the codebase, derived from the AST: which modules "
+            "exist, what imports what, import cycles, modules nothing imports "
+            "(dead-code candidates), and the most depended-on files. Pass "
+            "'module' to get the dependants of one module instead of the whole "
+            "map. Read-only and local — no GitHub token needed."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "module": {
+                    "type": "string",
+                    "description": (
+                        "Dotted module path, e.g. app.core.config. Omit for the "
+                        "whole-codebase summary."
+                    ),
+                },
+                "targets": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Paths to scan. Default: app, server.py, worker.py",
+                },
+                "entrypoints": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "Modules expected to have no importers, so they are not "
+                        "reported as dead code."
+                    ),
+                },
+            },
+            "required": [],
+        },
+    },
+    {
         "name": "run_command",
         "description": (
             "Run a read-only GitHub Autopilot slash command on an issue or PR. "

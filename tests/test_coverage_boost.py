@@ -152,10 +152,13 @@ def test_reviewer_commands(mock_guarded_ask, mock_router, mock_gh_get):
     res = R.cmd_changelog("repo", "token")
     assert "CHANGELOG" in res
 
-@patch("app.handlers.comments.publisher.gh_get")
-@patch("app.handlers.comments.publisher.gh_post")
-@patch("app.handlers.comments.publisher.gh_put")
-@patch("app.handlers.comments.publisher.gh_delete")
+# Patched at the package level, not on publisher: /runtests and /notify live in
+# integrations.py now, and every module in this package delegates to
+# app.handlers.comments.gh_* — so one target reaches all of them.
+@patch("app.handlers.comments.gh_get")
+@patch("app.handlers.comments.gh_post")
+@patch("app.handlers.comments.gh_put")
+@patch("app.handlers.comments.gh_delete")
 @patch("app.handlers.comments.router")
 def test_publisher_commands(mock_router, mock_gh_delete, mock_gh_put, mock_gh_post, mock_gh_get):
     mock_router.ask.return_value = ({"version": "v1.0.1", "title": "t", "release_notes": "notes", "highlights": ["h"]}, None)

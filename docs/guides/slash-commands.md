@@ -593,6 +593,8 @@ pip install Pillow>=9.3.0 requests>=2.28.1
 
 **What it does:** Full security audit using GitHub's Security APIs — Dependabot alerts, CodeQL findings, and Secret Scanning alerts. Summarises all open security issues in one report.
 
+**Licence compliance:** if the repository has a `requirements.txt`, the report also carries a licence section flagging copyleft and unidentified dependency licences, resolved against PyPI. It is bounded to 20 packages and a 20-second budget; a package the scan did not reach is **omitted rather than reported as unknown**, so a truncated scan cannot manufacture a finding. Repositories without a `requirements.txt` get the security report with no licence section — not an error.
+
 **Why maintainer-only:** Exposes all open security vulnerabilities in the repository. This is sensitive information that should not be broadcast in public issue comments.
 
 ---
@@ -738,7 +740,7 @@ commands:
 ```
 ```
 
-If `commands.enabled` is not present in the config file, all 26 commands are active by default.
+If `commands.enabled` is not present in the config file, all 27 commands are active by default.
 
 To disable a single command without listing all others:
 

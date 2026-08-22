@@ -28,21 +28,24 @@ class TestPRAnalysisValidator:
         data = {
             "suggested_title": "feat: add authentication system",
             "description":     "Adds JWT-based auth with refresh tokens.",
-            "labels":          ["feature ✨"],
             "risk_level":      "medium",
+            # `labels` and `pr_type` are still sent by some models; they are
+            # dropped rather than validated, because nothing reads them.
+            "labels":          ["feature ✨"],
             "pr_type":         "feat",
         }
         result = validate_pr_analysis(data)
         # FIXED: field is "suggested_title" not "title"
         assert result["suggested_title"] == "feat: add authentication system"
+        assert result["description"] == "Adds JWT-based auth with refresh tokens."
         assert result["risk_level"] == "medium"
+        assert "labels" not in result and "pr_type" not in result
 
     def test_missing_fields_use_safe_defaults(self):
         result = validate_pr_analysis({})
         # FIXED: field is "suggested_title"
         assert result["suggested_title"] == ""
         assert result["risk_level"] == "medium"
-        assert result["labels"] == []
 
     def test_title_truncated_at_200_chars(self):
         data = {"suggested_title": "x" * 300}
@@ -55,15 +58,18 @@ class TestPRAnalysisValidator:
         result = validate_pr_analysis(data)
         assert result["risk_level"] == "medium"
 
-    def test_labels_truncated_at_10(self):
-        data = {"labels": [f"label-{i}" for i in range(20)]}
-        result = validate_pr_analysis(data)
-        assert len(result["labels"]) <= 10
-
-    def test_invalid_pr_type_replaced_with_chore(self):
-        data = {"pr_type": "unknown_type_xyz"}
-        result = validate_pr_analysis(data)
-        assert result["pr_type"] == "chore"
+    def test_unread_fields_are_dropped_not_validated(self):
+        """`labels` and `pr_type` were validated here for as long as the file
+        existed and consumed by nothing: PRs are never labelled (only issues
+        are), and no reader ever asked for the conventional-commit type. Tests
+        asserting the truncation and the fallback passed the whole time,
+        because sanitising a value correctly says nothing about whether anyone
+        uses it."""
+        result = validate_pr_analysis(
+            {"labels": [f"label-{i}" for i in range(20)], "pr_type": "unknown_type_xyz"}
+        )
+        assert "labels" not in result
+        assert "pr_type" not in result
 
     def test_error_response_returns_safe_defaults(self):
         result = validate_pr_analysis({"error": "AI timed out"})
@@ -164,3 +170,88 @@ class TestCodeReviewValidator:
         # FIXED: When score can't be parsed, validator returns None
         # Old test: isinstance(result["score"], int) — None is not int
         assert result["score"] is None
+
+
+# ── Every validated field must have a reader ──────────────────────────────────
+
+
+class TestNoDeadValidatorFields:
+    """
+    This repository has shipped the same bug four times.
+
+      v7.0.0  `improved_title` was returned under a name the reader did not
+              use, so every PR shipped with a blank title suggestion.
+      v7.0.0  `validate_code_review` returned the assessment as `verdict`
+              while the renderer read `summary` — every review had a blank
+              summary.
+      v7.0.0  `time_estimate` was requested and discarded, so the Est. Effort
+              row could never render.
+      v7.2.0  `description` was prompted for, validated, and never written to
+              the PR; `pr_type`, `labels`, `positives` and
+              `refactor_opportunity` were validated and read by nothing.
+
+    Every one was invisible because the validator's own tests passed: they
+    assert the sanitising is correct, which says nothing about whether anyone
+    consumes the result. This checks the other half.
+    """
+
+    @staticmethod
+    def _validator_fields() -> dict[str, set[str]]:
+        import ast
+        from pathlib import Path
+
+        tree = ast.parse(Path("app/ai/validator.py").read_text(encoding="utf-8"))
+        out: dict[str, set[str]] = {}
+        for fn in tree.body:
+            if not isinstance(fn, ast.FunctionDef) or not fn.name.startswith("validate_"):
+                continue
+            keys: set[str] = set()
+            for node in ast.walk(fn):
+                if isinstance(node, ast.Dict):
+                    for k in node.keys:
+                        if isinstance(k, ast.Constant) and isinstance(k.value, str):
+                            keys.add(k.value)
+            # Nested dicts (an issue record) are consumed as a unit by their
+            # renderer; only the top-level contract is checked here.
+            out[fn.name] = {k for k in keys if not k.startswith("_")}
+        return out
+
+    @staticmethod
+    def _read_anywhere() -> set[str]:
+        """Every string literal and attribute name used outside the validator."""
+        import re
+        from pathlib import Path
+
+        seen: set[str] = set()
+        targets = list(Path("app").rglob("*.py")) + [Path("server.py")]
+        for p in targets:
+            if p.name == "validator.py":
+                continue
+            text = p.read_text(encoding="utf-8")
+            seen |= set(re.findall(r"""["']([a-z_][a-z0-9_]*)["']""", text))
+            seen |= set(re.findall(r"\.([a-z_][a-z0-9_]*)\b", text))
+        return seen
+
+    def test_every_returned_field_is_read_by_something(self):
+        read = self._read_anywhere()
+        dead = {
+            fn: sorted(keys - read)
+            for fn, keys in self._validator_fields().items()
+            if keys - read
+        }
+        assert dead == {}, (
+            f"validated but never consumed: {dead}. Each is a field the model is "
+            "asked for, charged for, sanitised, and then dropped — the bug this "
+            "codebase has shipped four times. Wire it to a reader or remove it."
+        )
+
+    def test_the_nested_issue_record_is_still_the_shape_renderers_expect(self):
+        """The check above deliberately ignores nested dicts, so the issue
+        record — the one nested shape that IS read field-by-field — is pinned
+        separately rather than left uncovered."""
+        from app.ai.validator import validate_code_review
+
+        out = validate_code_review(
+            {"issues": [{"severity": "critical", "line": "12", "issue": "x", "fix": "y"}]}
+        )
+        assert set(out["issues"][0]) == {"severity", "line", "issue", "fix"}

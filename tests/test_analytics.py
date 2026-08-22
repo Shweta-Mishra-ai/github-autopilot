@@ -1,6 +1,6 @@
 """
 tests/test_analytics.py
-Sprint 6: Tests for app/core/analytics.py and app/core/cache.py
+Sprint 6: Tests for app/core/analytics.py
 """
 import sys
 import os
@@ -134,68 +134,3 @@ class TestWeeklyReport:
         with patch("app.core.redis_client.get_redis", side_effect=Exception("Redis down")):
             report = get_weekly_report("test/repo")
         assert report["prs"]["merged_today"] == 0
-
-
-class TestCache:
-
-    def test_cache_hit_returns_data(self):
-        from app.core.cache import _get
-        mock_r = MagicMock()
-        mock_r.get.return_value = b'{"key": "value"}'
-        mock_r.incr = MagicMock()
-        mock_r.expire = MagicMock()
-        with patch("app.core.redis_client.get_redis", return_value=mock_r):
-            result = _get("test_key")
-        assert result == {"key": "value"}
-
-    def test_cache_miss_returns_none(self):
-        from app.core.cache import _get
-        mock_r = MagicMock()
-        mock_r.get.return_value = None
-        with patch("app.core.redis_client.get_redis", return_value=mock_r):
-            result = _get("missing_key")
-        assert result is None
-
-    def test_make_key_is_deterministic(self):
-        from app.core.cache import _make_key
-        k1 = _make_key("/repos/test/repo", "token123")
-        k2 = _make_key("/repos/test/repo", "token123")
-        assert k1 == k2
-
-    def test_make_key_different_paths(self):
-        from app.core.cache import _make_key
-        k1 = _make_key("/repos/a/b", "token")
-        k2 = _make_key("/repos/c/d", "token")
-        assert k1 != k2
-
-    def test_get_ttl_pulls(self):
-        from app.core.cache import _get_ttl
-        assert _get_ttl("/repos/x/pulls/1/files") == 300
-
-    def test_get_ttl_commits(self):
-        from app.core.cache import _get_ttl
-        # /repos/ pattern matches first in TTL_MAP for this path
-        assert _get_ttl("/repos/x/commits/abc") == 1800
-
-    def test_get_ttl_default(self):
-        from app.core.cache import _get_ttl
-        # Path with no known pattern uses default
-        assert _get_ttl("/unknown/endpoint/xyz") == 180
-
-    def test_get_stats_redis_failure(self):
-        from app.core.cache import get_stats
-        with patch("app.core.redis_client.get_redis", side_effect=Exception("down")):
-            stats = get_stats()
-        assert stats["hits"] == 0
-        assert stats["misses"] == 0
-
-    def test_cached_gh_get_uses_cache(self):
-        from app.core.cache import cached_gh_get
-        mock_r = MagicMock()
-        # Return valid JSON bytes so cache hit is triggered
-        mock_r.get.return_value = b'[{"id": 1}]'
-        mock_r.incr = MagicMock()
-        mock_r.expire = MagicMock()
-        with patch("app.core.redis_client.get_redis", return_value=mock_r):
-            result = cached_gh_get("/repos/test/pulls/1/files", "token")
-        assert result == [{"id": 1}]

@@ -504,7 +504,7 @@ graph TB
     subgraph Handlers["Event Handlers"]
         PR[pull_request.py<br/>PR analysis]
         IS[issues.py<br/>Triage]
-        CO[comments.py<br/>26 commands]
+        CO[comments/<br/>27 commands]
         PU[push.py<br/>Scan + lint]
         CI[ci.py<br/>CI analysis]
     end

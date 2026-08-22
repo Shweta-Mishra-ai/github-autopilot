@@ -1,10 +1,21 @@
 # .github/workflows/evals.yml
-# AI-output quality evals — manual trigger only (spends real provider quota).
+# AI-output quality evals — the gate that catches the bot getting *worse* at
+# reviewing code, which no unit test can see.
+#
+# Runs nightly rather than per-PR: each run spends real provider quota, so
+# per-PR would be expensive and rate-limited, while manual-only meant it
+# effectively never ran and prompt/provider regressions shipped unnoticed.
+# Still manually triggerable for a one-off check before a prompt change.
+#
 # Requires the GROQ_API_KEY repository secret. See evals/README.md.
 
 name: Evals
 
 on:
+  schedule:
+    # 03:17 UTC daily. Off the hour on purpose — scheduled runs bunched on the
+    # hour queue behind the rest of GitHub's cron load.
+    - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
       task:
@@ -19,11 +30,18 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   evals:
     name: AI output evals
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write # only used to report a scheduled regression
     steps:
       - uses: actions/checkout@v4
 
@@ -31,12 +49,35 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: evals-pip-${{ hashFiles('requirements-dev.txt') }}
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
+      - name: Check provider key is configured
+        id: preflight
+        # Without this the run exits 2 ("unrunnable") and reads as a pass to a
+        # skim of the Actions tab. Fail loudly instead — a silently-unrun
+        # quality gate is worse than none.
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          if [ -z "$GROQ_API_KEY" ]; then
+            echo "unconfigured=true" >> "$GITHUB_OUTPUT"
+            echo "::error::GROQ_API_KEY secret is not set — evals cannot run."
+            echo "::error::Set it at Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          echo "unconfigured=false" >> "$GITHUB_OUTPUT"
+
       - name: Run evals
+        id: run
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -45,7 +86,81 @@ jobs:
           GITHUB_WEBHOOK_SECRET: "eval-run-secret-32chars-long-abc!"
           MCP_API_KEY: "eval-run-mcp-key"
           LOG_FORMAT: "text"
+          # inputs.* are empty on a schedule trigger — fall back to the same
+          # defaults the workflow_dispatch form shows.
+          TASK: ${{ inputs.task || 'all' }}
+          MIN_PASS_RATE: ${{ inputs.min_pass_rate || '0.7' }}
         run: |
-          python -m evals.run \
-            --task "${{ inputs.task }}" \
-            --min-pass-rate "${{ inputs.min_pass_rate }}"
+          set -o pipefail
+          python -m evals.run --task "$TASK" --min-pass-rate "$MIN_PASS_RATE" \
+            | tee eval-output.txt
+
+      - name: Summarise on the run page
+        if: always()
+        run: |
+          {
+            echo "## AI output evals"
+            echo ""
+            echo "Task: \`${{ inputs.task || 'all' }}\` · "
+            echo "Min pass rate: \`${{ inputs.min_pass_rate || '0.7' }}\`"
+            echo ""
+            echo '```'
+            tail -n 40 eval-output.txt 2>/dev/null || echo "(no output captured)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload eval output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-output
+          path: eval-output.txt
+          if-no-files-found: ignore
+
+      - name: Report a nightly regression
+        # Only on the scheduled run: a manual run is already being watched by
+        # whoever clicked it. Reuses one open issue so a week of failures does
+        # not create seven.
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # Two very different failures reach this step, and saying the wrong
+          # one costs real time: "quality regressed" sends a maintainer to read
+          # prompts and diff model versions, when the actual fix is one
+          # repository secret. Report what actually happened.
+          if [ "${{ steps.preflight.outputs.unconfigured }}" = "true" ]; then
+            TITLE="Nightly AI evals cannot run — GROQ_API_KEY is not set"
+            BODY=$(printf '%s\n' \
+              "The nightly eval suite did not run. It is not a quality regression:" \
+              "the \`GROQ_API_KEY\` repository secret is missing, so the suite had no" \
+              "provider to call." \
+              "" \
+              "Run: $RUN_URL" \
+              "" \
+              "Fix: Settings > Secrets and variables > Actions > New repository secret," \
+              "named \`GROQ_API_KEY\`." \
+              "" \
+              "Until then this is the only quality gate in CI that is not running —" \
+              "everything else checks that the code is correct, and only this checks" \
+              "that the bot is still good at reviewing code." )
+          else
+            TITLE="Nightly AI evals are failing"
+            BODY=$(printf '%s\n' \
+              "The nightly AI-output eval suite fell below its pass-rate threshold." \
+              "" \
+              "Run: $RUN_URL" \
+              "" \
+              "This measures whether the bot still finds the planted bugs in" \
+              "\`evals/cases/\` — a drop usually means a prompt, model, or provider" \
+              "change degraded review quality." )
+          fi
+          EXISTING=$(gh issue list --state open --label evals --json number \
+            --jq '.[0].number' 2>/dev/null || echo "")
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY"
+          else
+            gh issue create --title "$TITLE" --body "$BODY" --label evals \
+              || gh issue create --title "$TITLE" --body "$BODY"
+          fi

@@ -76,7 +76,7 @@ Eight non-negotiable properties. Every tradeoff in this document traces back to 
 ╔═════════════════════════════════════════════════════════════════════════════╗
 ║                          SECURITY LAYER                                     ║
 ║                                                                             ║
-║  [1] Size limit  →  [2] IP rate limit  →  [3] HMAC-SHA256 verify           ║
+║  [1] Size limit (during read)  →  [2] IP rate limit  →  [3] HMAC verify    ║
 ║  [4] JSON parse  →  [5] Bot detection  →  [6] Replay protection            ║
 ║  [7] ThreadPool dispatch  →  ACK 202 (< 50ms)                              ║
 ║                                                                             ║
@@ -154,7 +154,7 @@ Five handlers, each responsible for exactly one GitHub event type. Independent �
 
 ### Authorization Layer
 
-Runs inside the handler after config is loaded, before any destructive command executes. Calls `GET /repos/{repo}/collaborators/{user}/permission`. Requires `write`, `maintain`, or `admin`. Results cached 5 minutes per `(repo, user)` pair in a module-level dict protected by `threading.RLock`. Fails closed — any API error returns `"none"` permission, which denies access.
+Runs inside the handler after config is loaded, before any destructive command executes. Calls `GET /repos/{repo}/collaborators/{user}/permission`. Requires `write`, `maintain`, or `admin`. Results cached 5 minutes per `(repo, user)` pair in a module-level dict protected by `threading.RLock`. Fails closed, but distinguishes two cases: a `404` means GitHub answered and the user is genuinely not a collaborator (`"none"`, cached), while a `403`/`5xx`/network failure means the question was never answered (`PERMISSION_UNKNOWN`, **not** cached, so a transient failure or a just-granted permission recovers on the next command). Both deny access; only the first is a statement about the user. Failures increment `auth.permission_check_failed`, surfaced on `/health`.
 
 ### AI Router Layer
 

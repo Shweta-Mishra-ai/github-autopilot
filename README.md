@@ -124,7 +124,7 @@ Comment `/health` on any issue. The bot replies with a repo health grade. Done. 
 | | |
 |---|---|
 | Modules | 88 |
-| Lines of code | 18,749 |
+| Lines of code | 18,797 |
 | Slash commands | 27 |
 | MCP tools | 9 |
 | Internal imports | 267 |
@@ -489,6 +489,11 @@ Full-codebase audit. The theme is features that were wired, tested, and shipped 
 - Professional commit-message suggestions on push (one LLM call, capped at five commits, merge/revert skipped, SHA-keyed dedup that fails closed).
 - README managed regions between `<!-- autopilot:NAME:start -->` markers, regenerated as the project changes and delivered by pull request only — never a direct push to the default branch. Region replacement slices the string rather than using `re.sub`, so a `\g<1>` in generated content cannot corrupt the file.
 
+**`/autofix`'s path guard could be walked around with `./`**
+- `/autofix` opens a PR that rewrites a file, and the path comes from the model's `target_file` — derived from an issue body, which is attacker-controlled on a public repo. `BLOCKED_PATHS` and `BLOCKED_PREFIXES` are the only thing keeping it away from `server.py`, `requirements.txt`, the CI workflows and `app/core/authorization.py`, **the module that decides who may run destructive commands at all**.
+- Those lists are exact strings and prefixes, so they only work if the path being tested is spelled the way they are. **Seven of fifteen probe paths walked straight through** — `./server.py`, `./requirements.txt`, `./pyproject.toml`, `./setup.py`, `app/core/./config.py`, `app//core//config.py`, `./app/core/authorization.py`. GitHub's Contents API resolves every one to the protected file, and `target` went verbatim into the `PUT`: the guard checked one spelling and the write used another.
+- Fixed by normalising once, at the top, and using that spelling for every later decision *and* the write. `_block_reason` normalises identically, so the two can never disagree about which path they are judging. The tests generate their respelling variants **from the blocklists themselves**, so a path added tomorrow is covered without anyone remembering to add cases.
+
 **The secret scanner reported placeholders as leaks**
 - Run against **this repository's own source** it produced eight findings, every one a placeholder — including four `CRITICAL` "private key" hits on `app/security/enhanced_secrets.py`, where the matched text was the regex that *detects* private keys. A scanner that reports its own ruleset as a leak is not one anyone reads twice. It is now **zero**, with every real credential shape still firing.
 - Three separate causes. `FALSE_POSITIVE_FILE_PATTERNS` contained `/tests/` **with a leading slash**, and GitHub reports repo-relative paths — so `tests/conftest.py` never matched and the exclusion had never worked for the commonest layout there is. The placeholder word list was five words and missed `replace`, `dummy`, `sample`, `not_real`, `${…}` and `{{ … }}`. And a PEM *header* matched on its own, when what makes a private key a leak is the key **material**.
@@ -568,7 +573,7 @@ Full-codebase audit. The theme is features that were wired, tested, and shipped 
 - `record_latency()` had no callers, so `/health` and the health endpoint reported a 0% error rate no matter what the providers did. Wired into the circuit breaker and router.
 - The dependency-free `Codebase map` CI job broke on a third-party import reached through a package `__init__`. The command registry moved to a pure-stdlib `app/core/commands.py`, and five subprocess tests now fail if any third-party import creeps back into that path.
 - **Six unreachable modules resolved, none left.** `app/security/secrets.py` removed (superseded by `enhanced_secrets`). `app/security/licenses.py` — a complete copyleft-compliance scanner with green tests that nothing had ever imported, so the bot had never once reported a restrictive licence — is now part of `/secfull`, bounded to 20 packages and a 20-second budget, and omits packages it did not reach rather than reporting them as "unknown". `app/core/memory_backup.py` gained the operator CLI its documentation had been describing as `python -c` one-liners. `app/core/cache.py` was **deleted rather than wired**: every read it could have served either feeds a guardrail (`archived`, where a stale answer is precisely the bug v7.1.1 fixed) or picks a branch to write to (`default_branch`, where a stale answer targets the wrong ref) — and `load_config` already caches the one hot read that is safe to cache. Fixing bugs in unreachable code does not make it earn its place.
-- Tests 1054 → 1786, coverage 79% → 84%, orphan modules 6 → **0**, import cycles 1 → **0**. Both are now CI gates rather than reports.
+- Tests 1054 → 1855, coverage 79% → 84%, orphan modules 6 → **0**, import cycles 1 → **0**. Both are now CI gates rather than reports.
 
 ### V7.1.1 — 2026-08-03
 

@@ -45,6 +45,21 @@ def client(monkeypatch):
     return server.app.test_client()
 
 
+def auth_headers() -> dict:
+    """
+    Credentials for the auth-gated endpoints.
+
+    METRICS_TOKEN is read once at import, so the value here has to come from
+    the module rather than the environment. Sending it unconditionally means
+    these tests behave the same whether or not a token is configured — the
+    earlier version assumed the gate was open, which was true locally and false
+    in CI.
+    """
+    import server
+
+    return {"Authorization": f"Bearer {server.METRICS_TOKEN}"} if server.METRICS_TOKEN else {}
+
+
 class TestTheManifestMatchesWhatTheCodeCalls:
     def test_it_requests_every_permission_the_handlers_need(self):
         perms = build_manifest(BASE)["default_permissions"]
@@ -191,11 +206,26 @@ class TestTheDoctorReportsEvidence:
         """It names repositories and reports what the App may do."""
         import server
 
-        monkeypatch.setattr(server, "METRICS_TOKEN", "tok")
+        monkeypatch.setattr(server, "METRICS_TOKEN", "a-known-token")
         assert client.get("/setup/doctor?repo=o/r&installation_id=1").status_code == 401
+        assert (
+            client.get(
+                "/setup/doctor?repo=o/r&installation_id=1",
+                headers={"Authorization": "Bearer wrong"},
+            ).status_code
+            == 401
+        )
+
+    def test_the_setup_page_is_reachable_without_credentials(self, client, monkeypatch):
+        """It is the page you reach BEFORE you have credentials. Gating it
+        would make the one-click flow unusable for its only audience."""
+        import server
+
+        monkeypatch.setattr(server, "METRICS_TOKEN", "a-known-token")
+        assert client.get("/setup").status_code == 200
 
     def test_it_explains_what_it_needs(self, client):
-        body = client.get("/setup/doctor").get_json()
+        body = client.get("/setup/doctor", headers=auth_headers()).get_json()
         assert "usage" in body and "installation_id" in body["usage"]
         assert "hint" in body
 
@@ -203,7 +233,8 @@ class TestTheDoctorReportsEvidence:
         "query", ["repo=notarepo&installation_id=1", "repo=o/r&installation_id=abc", "repo=o/r"]
     )
     def test_it_rejects_malformed_input(self, client, query):
-        assert client.get(f"/setup/doctor?{query}").status_code == 400
+        resp = client.get(f"/setup/doctor?{query}", headers=auth_headers())
+        assert resp.status_code == 400
 
     def test_a_broken_capability_names_the_commands_it_breaks(self):
         """The whole point: not "denied", but "these seven stop working, and

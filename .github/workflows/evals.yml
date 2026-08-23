@@ -92,8 +92,17 @@ jobs:
           MIN_PASS_RATE: ${{ inputs.min_pass_rate || '0.7' }}
         run: |
           set -o pipefail
+          # Exit 3 means the configured model no longer exists at the provider.
+          # That is an infrastructure failure, not a quality one, and the two
+          # send a maintainer to opposite ends of the codebase — so record which
+          # it was rather than letting the report guess.
+          set +e
           python -m evals.run --task "$TASK" --min-pass-rate "$MIN_PASS_RATE" \
             | tee eval-output.txt
+          code=${PIPESTATUS[0]}
+          set -e
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit "$code"
 
       - name: Summarise on the run page
         if: always()
@@ -130,7 +139,22 @@ jobs:
           # one costs real time: "quality regressed" sends a maintainer to read
           # prompts and diff model versions, when the actual fix is one
           # repository secret. Report what actually happened.
-          if [ "${{ steps.preflight.outputs.unconfigured }}" = "true" ]; then
+          if [ "${{ steps.run.outputs.exit_code }}" = "3" ]; then
+            TITLE="Nightly AI evals cannot run — the configured model no longer exists"
+            BODY=$(printf '%s\n' \
+              "The eval suite did not measure anything. It is NOT a quality regression:" \
+              "the provider returned 404 for the model this deployment asks for, so every" \
+              "request failed and every case scored zero on empty output." \
+              "" \
+              "Run: $RUN_URL" \
+              "" \
+              "**The live bot is failing the same way.** Every AI command -- /fix," \
+              "/explain, /review and the rest -- calls the same model id, so they are" \
+              "all returning provider errors right now, not just this suite." \
+              "" \
+              "Fix: set \`LLM_PRIMARY_MODEL\` and \`LLM_FALLBACK_MODEL\` to ids the" \
+              "provider still serves. The run log lists what is currently available." )
+          elif [ "${{ steps.preflight.outputs.unconfigured }}" = "true" ]; then
             TITLE="Nightly AI evals cannot run — GROQ_API_KEY is not set"
             BODY=$(printf '%s\n' \
               "The nightly eval suite did not run. It is not a quality regression:" \

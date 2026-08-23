@@ -13,6 +13,17 @@ See [docs/MIGRATING.md](docs/MIGRATING.md).
 
 ---
 
+### Unreleased
+
+**The eval gate blamed the prompts for a provider outage**
+- The suite's first scheduled run returned a 0.0 pass rate and filed an issue reading "review quality has regressed". The actual cause was a `404` from Groq for a retired model id: every request failed, so all eleven cases scored zero on "no code fence" because there was no output at all. The whole run took 0.6 seconds. Eleven failing cases described a prompt problem that did not exist, and the real fix was one environment variable.
+- Same defect class as reporting a missing API key as a quality drop, which this workflow already handled: a diagnosis pointing at the wrong half of the system costs more time than no diagnosis.
+- `evals/run.py` now checks the configured model ids against the provider's own model list before spending any quota, and exits `3` — distinct from `1`, "the bot answered and answered badly" — when none of them exist. The message names the missing ids, lists what the provider currently serves, and says plainly that **the live bot is failing the same way for every AI command**, since it calls the same ids. The workflow branches on that code so the issue it files says which of the two happened.
+- The check never raises and never blocks on its own failure: an unreachable or unreadable model list runs the suite anyway, because the suite is the real measurement and refusing to run it over an inconclusive probe would be the worse failure. A rejected key is reported as a key problem rather than a missing model. One missing model out of two warns and continues, since one working model is still worth measuring.
+- A test asserts the ids the check validates are the ids `app/ai/router.py` actually calls — otherwise the check could quietly validate a model nothing uses.
+
+---
+
 ### V7.2.0 — 2026-08-20
 
 Full-codebase audit. The theme is features that were wired, tested, and shipped — and then silently did nothing in production.

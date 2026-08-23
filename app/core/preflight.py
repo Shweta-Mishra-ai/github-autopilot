@@ -100,6 +100,112 @@ class Diagnosis:
         return not self.error and not self.broken
 
 
+@dataclass
+class EnvFinding:
+    """One deployment setting, its state, and what it costs when unset."""
+
+    name: str
+    state: str  # "ok" | "warn" | "off" | "unknown"
+    detail: str
+
+
+def inspect_environment() -> list[EnvFinding]:
+    """
+    The deployment-level settings that are silently optional. Never raises.
+
+    Separate from the capability probes because these need no token and no
+    repository — which is exactly when they matter most, since a deployment
+    whose credentials are wrong still needs to be told its backups are off.
+
+    Reports whether a secret is SET, never what it contains.
+    """
+    import os
+
+    findings: list[EnvFinding] = []
+
+    # Rate-limit trust model, judged against traffic rather than assumed.
+    try:
+        from app.core.webhook_security import proxy_configuration_verdict
+
+        verdict, detail = proxy_configuration_verdict()
+        findings.append(EnvFinding("X-Forwarded-For trust", verdict, detail))
+    except Exception as exc:  # a diagnostic must not break the diagnostic
+        findings.append(EnvFinding("X-Forwarded-For trust", "unknown", str(exc)[:160]))
+
+    # Encrypted memory backup. Partial configuration is the dangerous state:
+    # it looks configured and silently keeps nothing off-box.
+    key = bool(os.environ.get("MEMORY_BACKUP_KEY", "").strip())
+    repo = bool(os.environ.get("MEMORY_BACKUP_REPO", "").strip())
+    token = bool(os.environ.get("MEMORY_BACKUP_TOKEN", "").strip())
+    if key and repo and token:
+        findings.append(
+            EnvFinding("Memory backup", "ok", "Configured — learned state survives a redeploy.")
+        )
+    elif not key and not repo and not token:
+        findings.append(
+            EnvFinding(
+                "Memory backup",
+                "off",
+                "MEMORY_BACKUP_KEY, MEMORY_BACKUP_REPO and MEMORY_BACKUP_TOKEN are "
+                "all unset, so nothing is backed up. Everything the bot has learned "
+                "about this repository is lost when the instance restarts — which on "
+                "a free tier is routine, not exceptional. Generate a key with "
+                "`python -m app.core.memory_backup genkey`.",
+            )
+        )
+    else:
+        missing = [
+            n
+            for n, present in (
+                ("MEMORY_BACKUP_KEY", key),
+                ("MEMORY_BACKUP_REPO", repo),
+                ("MEMORY_BACKUP_TOKEN", token),
+            )
+            if not present
+        ]
+        findings.append(
+            EnvFinding(
+                "Memory backup",
+                "warn",
+                f"Partially configured — {', '.join(missing)} still unset, so no "
+                f"backup is written. This is the worst of the three states: it "
+                f"looks configured and keeps nothing.",
+            )
+        )
+
+    # Local triage gate. Absent is a valid choice, not a fault.
+    if os.environ.get("OLLAMA_HOST", "").strip():
+        findings.append(
+            EnvFinding(
+                "Local triage gate",
+                "ok",
+                "OLLAMA_HOST is set — trivial events are filtered locally before "
+                "any hosted model is called.",
+            )
+        )
+    else:
+        findings.append(
+            EnvFinding(
+                "Local triage gate",
+                "off",
+                "OLLAMA_HOST is unset, so the gate is inert and every event goes "
+                "to a hosted provider. Valid, and the default; setting it cuts "
+                "spend on events that were never worth a review.",
+            )
+        )
+
+    return findings
+
+
+def format_environment_report(findings: list[EnvFinding]) -> str:
+    """Markdown for the deployment settings. Never raises."""
+    marks = {"ok": "✅", "warn": "⚠️", "off": "⚪", "unknown": "❔"}
+    lines = ["### Deployment settings", "", "| Setting | State | Notes |", "|---|---|---|"]
+    for f in findings:
+        lines.append(f"| {f.name} | {marks.get(f.state, '❔')} {f.state} | {f.detail} |")
+    return "\n".join(lines)
+
+
 def _probe(path: str, token: str) -> tuple[bool, int | str, str]:
     """Make the real call. Never raises; the failure IS the result."""
     from app.github.client import GitHubError, gh_get
@@ -147,8 +253,9 @@ def diagnose(repo: str, installation_id: int, actor: str = "") -> Diagnosis:
 
 def format_report(d: Diagnosis) -> str:
     """Markdown an operator can act on. Never raises."""
+    env = format_environment_report(inspect_environment())
     if d.error:
-        return f"## ❌ Setup check failed\n\n{d.error}"
+        return f"## ❌ Setup check failed\n\n{d.error}\n\n{env}"
 
     head = "## ✅ Setup looks correct" if d.healthy else "## ⚠️ Setup is incomplete"
     lines = [head, "", f"Repository `{d.repo}` · installation `{d.installation_id}`", ""]
@@ -187,4 +294,5 @@ def format_report(d: Diagnosis) -> str:
     else:
         lines += ["", "_GitHub reported no permission list for this installation._"]
 
+    lines += ["", env]
     return "\n".join(lines)

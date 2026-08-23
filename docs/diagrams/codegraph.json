@@ -307,7 +307,7 @@
       "id": "app.core.commands",
       "path": "app/core/commands.py",
       "layer": "core",
-      "loc": 75,
+      "loc": 88,
       "functions": 0,
       "classes": 0,
       "is_package": false,
@@ -2881,7 +2881,7 @@
   "stats": {
     "modules": 91,
     "edges": 274,
-    "total_loc": 19828,
+    "total_loc": 19841,
     "layers": [
       "ai",
       "core",

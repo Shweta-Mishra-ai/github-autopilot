@@ -143,7 +143,7 @@ Done. ✈️
 | | |
 |---|---|
 | Modules | 91 |
-| Lines of code | 19,828 |
+| Lines of code | 19,841 |
 | Slash commands | 27 |
 | MCP tools | 9 |
 | Internal imports | 274 |
@@ -186,6 +186,10 @@ Type any of these in a GitHub issue or PR comment:
 | `/notify` | Send Discord/Slack alert | Maintainers |
 | `/ignore <rule>` | Teach the bot to stop flagging a pattern in this repo | Maintainers |
 | `/autofix` | Auto-apply code improvements (human-confirmed via `/apply`) | Maintainers |
+
+**[Full command reference →](docs/COMMANDS.md)** — syntax, arguments, scope
+(issue vs PR), the access model, and what to check when a command does not
+respond.
 
 ---
 

@@ -15,6 +15,13 @@ See [docs/MIGRATING.md](docs/MIGRATING.md).
 
 ### Unreleased
 
+**A provider misconfiguration was handled as an outage, and hidden by it**
+- Groq answers a retired model id with `404`. That fell through to `raise_for_status()` and was recorded as a **circuit-breaker failure**, so three requests opened the breaker on the 70b provider and five more opened it on the 8b fallback. The router then reported `all_providers_down` — sending a maintainer to check provider status when the fix was one environment variable.
+- A breaker exists to stop hammering a service that *might* recover. A model that does not exist, and a key that is not valid, will not recover on their own, so opening the breaker only replaces a precise error with a vague one. `401`, `403` and `404` are now classified as configuration faults: reported with the model id and the variable to change, and the breaker is left alone. A `5xx` still opens it, which is what it is for.
+- The fault is remembered rather than only logged, because it is discovered on a webhook thread and needs to be readable from `/health` on a different request. `/health` now reports `llm_models` and `llm_configuration_error`, and returns status **`misconfigured`** rather than `degraded` — "degraded" reads as something that may pass on its own, and this will not.
+- The user-facing degraded message changes too: `safe_ask` no longer says "providers are busy, try again shortly" when nothing is busy and waiting cannot help. It says what is misconfigured.
+- The default model ids are now named constants in `app/ai/router.py`, imported by both `/health` and the eval preflight rather than copied into each. A check that validates a different model than the one in use reports success for a configuration that cannot work — which is how this survived.
+
 **The eval gate blamed the prompts for a provider outage**
 - The suite's first scheduled run returned a 0.0 pass rate and filed an issue reading "review quality has regressed". The actual cause was a `404` from Groq for a retired model id: every request failed, so all eleven cases scored zero on "no code fence" because there was no output at all. The whole run took 0.6 seconds. Eleven failing cases described a prompt problem that did not exist, and the real fix was one environment variable.
 - Same defect class as reporting a missing API key as a quality drop, which this workflow already handled: a diagnosis pointing at the wrong half of the system costs more time than no diagnosis.

@@ -45,15 +45,21 @@ CASES_DIR = Path(__file__).parent / "cases"
 # suite runs costs one cheap request and turns "eleven cases failed, review
 # quality has regressed" into one line naming the model that no longer exists.
 GROQ_MODELS_URL = "https://api.groq.com/openai/v1/models"
-DEFAULT_PRIMARY = "llama-3.3-70b-versatile"
-DEFAULT_FALLBACK = "llama-3.1-8b-instant"
 
 
 def configured_models() -> list[str]:
-    """The Groq model ids this deployment will actually ask for."""
+    """
+    The Groq model ids this deployment will actually ask for.
+
+    Defaults are imported from the router rather than copied: a preflight that
+    validates a different model than the one in use is worse than no preflight,
+    because it reports success for a configuration that cannot work.
+    """
+    from app.ai.router import DEFAULT_FALLBACK_MODEL, DEFAULT_PRIMARY_MODEL
+
     return [
-        os.environ.get("LLM_PRIMARY_MODEL", DEFAULT_PRIMARY),
-        os.environ.get("LLM_FALLBACK_MODEL", DEFAULT_FALLBACK),
+        os.environ.get("LLM_PRIMARY_MODEL", DEFAULT_PRIMARY_MODEL),
+        os.environ.get("LLM_FALLBACK_MODEL", DEFAULT_FALLBACK_MODEL),
     ]
 
 

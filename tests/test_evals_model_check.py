@@ -102,20 +102,14 @@ class TestModelCheck:
         monkeypatch.setenv("LLM_FALLBACK_MODEL", "b")
         assert configured_models() == ["a", "b"]
 
-    def test_defaults_match_the_router(self, monkeypatch):
-        # If these drift apart the check validates models the bot never calls.
+    def test_defaults_come_from_the_router_not_a_copy(self, monkeypatch):
+        # If these drift apart the check validates models the bot never calls,
+        # reporting success for a configuration that cannot work.
         monkeypatch.delenv("LLM_PRIMARY_MODEL", raising=False)
         monkeypatch.delenv("LLM_FALLBACK_MODEL", raising=False)
-        import inspect
+        from app.ai.router import DEFAULT_FALLBACK_MODEL, DEFAULT_PRIMARY_MODEL
 
-        from app.ai import router
-
-        source = inspect.getsource(router)
-        for model in configured_models():
-            assert model in source, (
-                f"evals check model {model!r} but the router does not use it — "
-                f"the check would validate a model nothing calls"
-            )
+        assert configured_models() == [DEFAULT_PRIMARY_MODEL, DEFAULT_FALLBACK_MODEL]
 
 
 class TestExitCodeContract:

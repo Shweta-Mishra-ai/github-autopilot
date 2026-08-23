@@ -143,10 +143,10 @@ Done. ✈️
 | | |
 |---|---|
 | Modules | 91 |
-| Lines of code | 19,841 |
+| Lines of code | 19,978 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 274 |
+| Internal imports | 276 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>

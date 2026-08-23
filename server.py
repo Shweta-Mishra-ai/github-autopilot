@@ -341,7 +341,25 @@ def health():
     gh_ok = gh_rl_status().get("remaining", 5000) > 50
     breaker_status = status_all()
     any_llm_ok = any(s["state"] == "closed" for s in breaker_status.values())
-    overall = "ok" if (gh_ok and any_llm_ok) else "degraded"
+
+    # A provider misconfiguration is worse than a degraded provider: it cannot
+    # recover on its own and every AI command fails until someone changes an
+    # environment variable. Open breakers alone cannot express that — they look
+    # identical to a bad hour at the provider, which is worth waiting out.
+    from app.ai.router import LLMRouter
+
+    llm_config_error = ""
+    llm_models = {}
+    try:
+        ai_status = LLMRouter().status()
+        llm_config_error = ai_status.get("configuration_error", "")
+        llm_models = ai_status.get("models", {})
+    except Exception as exc:  # health must not fail on its own reporting
+        log.debug(f"health.llm_status_failed: {exc}")
+
+    overall = "ok" if (gh_ok and any_llm_ok and not llm_config_error) else "degraded"
+    if llm_config_error:
+        overall = "misconfigured"
 
     pool = pool_stats()
     pool_saturated = pool.get("saturation_pct", 0) > 80
@@ -356,6 +374,12 @@ def health():
                 "redis_memory": redis_mem,
                 "github_api": "ok" if gh_ok else "rate_limited",
                 "llm_providers": breaker_status,
+                "llm_models": llm_models,
+                # Non-empty means the provider is answering, and refusing:
+                # a model id it does not serve, or a key it will not accept.
+                # Retrying cannot fix either, so this is reported separately
+                # from the breakers rather than folded into "degraded".
+                "llm_configuration_error": llm_config_error,
                 "thread_pool": "saturated" if pool_saturated else "ok",
             },
             "thread_pool": pool,

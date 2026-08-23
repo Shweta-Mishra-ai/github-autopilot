@@ -31,6 +31,51 @@ GROQ_COST = {
 }
 
 
+# Marker prefix so callers can tell a permanent configuration fault from a
+# transient outage without parsing prose.
+CONFIG_ERROR_PREFIX = "CONFIG_ERROR:"
+
+
+def _client_error_detail(response, status: int, model: str) -> str:
+    """
+    An actionable message for a 4xx that will never fix itself.
+
+    Reads the provider's own error code where it gives one, rather than
+    inferring from the status alone — Groq answers a retired model id with
+    `code: model_not_found`, which is more specific than "404".
+    """
+    code = ""
+    try:
+        body = response.json()
+        err = body.get("error") or {}
+        code = str(err.get("code") or "")
+    except Exception:
+        code = ""
+
+    if status == 404 or code == "model_not_found":
+        return (
+            f"{CONFIG_ERROR_PREFIX} the provider does not serve the model "
+            f"`{model}`. This is configuration, not an outage — every AI command "
+            f"fails until it is fixed. Set LLM_PRIMARY_MODEL and "
+            f"LLM_FALLBACK_MODEL to model ids the provider currently serves."
+        )
+    if status == 401:
+        return (
+            f"{CONFIG_ERROR_PREFIX} the provider rejected GROQ_API_KEY (401). "
+            f"The key is set but not valid — regenerate it and update the "
+            f"deployment's environment."
+        )
+    return (
+        f"{CONFIG_ERROR_PREFIX} the provider refused the request for `{model}` "
+        f"({status}). The key may lack access to this model."
+    )
+
+
+def is_configuration_error(error: str | None) -> bool:
+    """True when an LLMResponse.error describes a fault retrying cannot fix."""
+    return bool(error) and str(error).startswith(CONFIG_ERROR_PREFIX)
+
+
 class GroqProvider(LLMProvider):
     def __init__(self, model: str = "llama-3.3-70b-versatile"):
         self._model = model
@@ -114,6 +159,31 @@ class GroqProvider(LLMProvider):
                     provider="groq",
                     model=self._model,
                     error=f"Server error {_status}",
+                )
+
+            # A 4xx here is CONFIGURATION, not an outage, and the difference
+            # decides whether retrying can ever work.
+            #
+            # A retired model id returns 404. That used to fall through to
+            # raise_for_status() and be recorded as a breaker failure, so three
+            # requests opened the circuit on groq_70b, five more opened it on
+            # groq_8b, and the router reported "all providers down" — sending a
+            # maintainer to check provider status when the fix was one
+            # environment variable. It happened: the nightly evals scored 0.0
+            # and filed an issue blaming review quality.
+            #
+            # A breaker exists to stop hammering a service that might recover.
+            # A model that does not exist, or a key that is not valid, will not
+            # recover on its own, so opening the breaker only replaces a precise
+            # error with a vague one. Report these and leave the breaker alone.
+            if _status in (401, 403, 404):
+                detail = _client_error_detail(r, _status, self._model)
+                log.error(f"groq.configuration_error status={_status} model={self._model}")
+                return LLMResponse(
+                    text="",
+                    provider="groq",
+                    model=self._model,
+                    error=detail,
                 )
 
             r.raise_for_status()

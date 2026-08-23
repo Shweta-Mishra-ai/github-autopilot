@@ -70,5 +70,18 @@ RESTRICTED_COMMANDS: frozenset[str] = frozenset(
         # vector that outlives the comment. Its own docstring always said
         # "maintainer preference"; this makes that true.
         "/ignore",
+        # Spends the maintainer's resources on a stranger's say-so. Both were
+        # DOCUMENTED as maintainer-only — the README has listed them that way
+        # since before they had a gate — and neither actually had one, so the
+        # documentation was a promise the code did not keep. On a public repo
+        # that means any commenter can dispatch CI runs against the owner's
+        # Actions minutes, or push messages into the team's Slack and Discord,
+        # as often as they care to comment.
+        #
+        # Neither reads or writes code, so the risk is not disclosure; it is
+        # that the cost lands on someone who never agreed to it. Gating them
+        # makes the behaviour match what every user was already told.
+        "/runtests",
+        "/notify",
     }
 )

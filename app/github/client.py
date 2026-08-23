@@ -3,7 +3,7 @@ GitHub Client - app/github/client.py
 V4 Sprint 5: Production-grade GitHub API client.
 
 ADDED (Sprint 5):
-  - Automatic retry with exponential backoff on 5xx errors
+  - Automatic retry with exponential backoff on 5xx errors (idempotent methods)
   - Retry on connection errors (network blip on Render free tier)
   - Per-request timeout enforcement
   - Structured error logging with request ID
@@ -20,6 +20,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from app.core.retry_after import parse_retry_after
 from app.github.rate_limit import update_from_headers, check_and_wait
 
 log = logging.getLogger(__name__)
@@ -44,18 +45,39 @@ class GitHubSecondaryRateLimitError(GitHubError):
         self.retry_after = retry_after
 
 
+# Only these are safe to replay. A 502/503/504 means the gateway could not
+# give us an answer -- NOT that GitHub failed to act. If a POST creating a
+# comment reached GitHub and the response was lost on the way back, retrying
+# it posts the comment twice, and the bot writes comments on every push.
+#
+# This previously listed POST, PUT, PATCH and DELETE as well, so a single lost
+# response duplicated whatever the call had already done. Replaying a write to
+# save one round trip trades a rare transient error for a permanent wrong
+# result, which is the wrong side of that trade.
+#
+# Connection errors are still retried for every method, including writes:
+# those are raised before the request is established, so nothing can have been
+# processed. Read timeouts are NOT retried for writes -- urllib3 gates those
+# on this same set, which is exactly the distinction we want, since a read
+# timeout happens after the request was sent.
+IDEMPOTENT_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
 def _make_session() -> requests.Session:
     """
     Session with automatic retry on transient network errors.
-    Retries: connection errors, read timeouts, 502, 503, 504.
-    Does NOT retry 4xx (client errors) or 429 (rate limit — we handle manually).
+
+    Retries: connection errors (any method), and 502/503/504 or read timeouts
+    on idempotent methods only. Does NOT retry 4xx (client errors), 429 (rate
+    limit — handled manually), or any write that may already have taken
+    effect. See IDEMPOTENT_METHODS.
     """
     session = requests.Session()
     retry = Retry(
         total=MAX_RETRIES,
         backoff_factor=RETRY_BACKOFF,
         status_forcelist=[502, 503, 504],
-        allowed_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+        allowed_methods=IDEMPOTENT_METHODS,
         raise_on_status=False,
     )
     adapter = HTTPAdapter(max_retries=retry)
@@ -86,7 +108,10 @@ def _handle_response(r: requests.Response, method: str, path: str):
 
     # Primary rate limit — caller should respect Retry-After
     if r.status_code == 429:
-        retry_after = int(r.headers.get("Retry-After", 30))
+        # Tolerant parse: a bare int() here raised ValueError on the
+        # HTTP-date form of the header, and ValueError escapes every
+        # caller — they all catch GitHubError, not Exception.
+        retry_after = parse_retry_after(r.headers.get("Retry-After"), 30)
         raise GitHubError(f"Primary rate limit — retry after {retry_after}s", 429)
 
     # Secondary rate limit (abuse detection)
@@ -99,7 +124,7 @@ def _handle_response(r: requests.Response, method: str, path: str):
             body = r.json()
             msg = body.get("message", "").lower()
             if "secondary rate limit" in msg or "abuse" in msg:
-                retry_after = int(r.headers.get("Retry-After", 60))
+                retry_after = parse_retry_after(r.headers.get("Retry-After"), 60)
                 log.warning(
                     f"github.secondary_rate_limit path={path} "
                     f"retry_after={retry_after}s — raising immediately (no sleep)"

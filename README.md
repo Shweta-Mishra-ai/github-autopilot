@@ -131,11 +131,11 @@ Done. ✈️
 <!-- autopilot:stats:start -->
 | | |
 |---|---|
-| Modules | 90 |
-| Lines of code | 19,444 |
+| Modules | 91 |
+| Lines of code | 19,524 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 271 |
+| Internal imports | 273 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>
@@ -210,7 +210,7 @@ code. Explore it interactively at [`/graph`](#codebase-map), or regenerate with
 ```mermaid
 graph LR
     ai["ai<br/>15 modules"]
-    core["core<br/>23 modules"]
+    core["core<br/>24 modules"]
     github["github<br/>8 modules"]
     handlers["handlers<br/>23 modules"]
     intelligence["intelligence<br/>6 modules"]

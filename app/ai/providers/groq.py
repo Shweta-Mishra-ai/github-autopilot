@@ -18,6 +18,7 @@ import requests as http_requests
 import app.ai.circuit_breaker as cb
 from app.ai.providers.base import LLMProvider, LLMResponse
 from app.core.redis_client import get_redis
+from app.core.retry_after import parse_retry_after
 
 log = logging.getLogger(__name__)
 
@@ -91,7 +92,9 @@ class GroqProvider(LLMProvider):
             r = http_requests.post(GROQ_URL, headers=headers, json=body, timeout=timeout)
 
             if r.status_code == 429:
-                retry_after = int(r.headers.get("Retry-After", 30))
+                # Groq sends fractional delays (e.g. "7.66"), which int()
+                # cannot parse; parse_retry_after rounds them up instead.
+                retry_after = parse_retry_after(r.headers.get("Retry-After"), 30)
                 breaker.record_failure(f"rate_limit retry_after={retry_after}s")
                 return LLMResponse(
                     text="",

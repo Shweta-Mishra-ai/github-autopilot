@@ -29,6 +29,7 @@ import pytest
 
 from app.security.enhanced_secrets import (
     MIN_DISTINCT_CHARS,
+    _PLACEHOLDER_WORDS,
     _entropy,
     _entropy_ratio,
     _is_structural_non_secret,
@@ -163,6 +164,55 @@ def test_real_secret_is_always_reported(name):
         f"bits per character, and short strings fall well below that ceiling "
         f"by chance."
     )
+
+
+# Every placeholder word, embedded as a WHOLE TOKEN in an otherwise real
+# credential. This is the shape that a randomised test only finds by luck:
+# the generated Docker Hub PAT that exposed it drew "xxx" between two
+# separators at a rate of roughly 1 in 30,000, so the 40-sample loop above
+# caught it on one CI run and would have passed on the next twenty.
+#
+# Built by construction instead. Each case is a real, high-entropy secret
+# that happens to contain one placeholder word, and every one of them must
+# be reported.
+def _secret_carrying_placeholder_word(word: str) -> str:
+    head = _rand(ALNUM, 14)
+    tail = _rand(ALNUM, 12)
+    return f'+dockerhub_pat = "{head}_{word}-{tail}"'
+
+
+@pytest.mark.parametrize("word", sorted(_PLACEHOLDER_WORDS))
+def test_placeholder_word_inside_real_key_material_is_still_reported(word):
+    """
+    A placeholder word only means something when nothing ELSE in the value
+    looks like a secret.
+
+    Whole-word matching fixed words buried inside a token, but a generated
+    credential contains separators of its own, and the fragments between them
+    are whole words in exactly that sense. A human writing a stand-in writes
+    only stand-in text — never a 14-character random string with one
+    placeholder-shaped fragment in it.
+    """
+    diff = _secret_carrying_placeholder_word(word)
+    assert scan_diff(diff, file_path=SCANNED_FILE), (
+        f"MISSED a real credential because it contained the placeholder word "
+        f"{word!r} as a token: {diff}. A false negative in a secret scanner is "
+        f"the one failure that cannot be noticed in production."
+    )
+
+
+def test_a_value_that_is_only_placeholder_words_is_still_suppressed():
+    """The guard above must not reopen the false-positive direction."""
+    for value in (
+        "your_api_key_here",
+        "REPLACE_WITH_RANDOM",
+        "changeme",
+        "insert-your-token-here",
+        "my_secret_placeholder",
+    ):
+        assert not scan_diff(f'+api_key = "{value}"', file_path=SCANNED_FILE), (
+            f"{value!r} is a placeholder and must never be reported"
+        )
 
 
 @pytest.mark.parametrize("length", [10, 11, 13])

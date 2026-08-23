@@ -448,18 +448,67 @@ def _words(value: str) -> set[str]:
     return set(re.split(r"[^a-z0-9]+", value.lower())) - {""}
 
 
+# A token this long that also looks random is key material. Real placeholders
+# are typed by hand and their longest word is "placeholder" (11) — nobody types
+# a 12-character random string as a stand-in for one.
+_KEY_MATERIAL_CHARS = 12
+
+
+def _has_key_material(candidate: str) -> bool:
+    """
+    True when the candidate contains a token that is itself real key material.
+
+    This is the guard on every word heuristic below, and it exists because
+    whole-word matching alone was not enough. Splitting on separators fixed
+    words buried INSIDE a token, but a generated credential contains
+    separators of its own, and the short fragments between them are words in
+    exactly the sense _words() means:
+
+        WlI3_DYSTkQuU2TWezrdcA-xxx_2GcmZ3E6O
+                               ^^^ a whole word, and pure coincidence
+
+    That is a real Docker Hub PAT, and it was silently dropped. So a
+    placeholder word only counts when nothing else in the value looks like a
+    secret: a human writing a stand-in writes ONLY stand-in text, never a
+    17-character random string with one placeholder-shaped fragment in it.
+
+    Mixed character classes are accepted alongside the entropy test because a
+    short-but-mixed token (AbCd1234EfGh) is well above what anyone types by
+    hand while sitting below the entropy floor tuned for longer strings.
+    """
+    for token in _words(re.sub(r"['\"]", " ", candidate)):
+        if len(token) < _KEY_MATERIAL_CHARS:
+            continue
+        if _looks_random(token):
+            return True
+    # Case is destroyed by _words(); re-split the raw candidate to see it.
+    for token in re.split(r"[^A-Za-z0-9]+", candidate):
+        if len(token) < _KEY_MATERIAL_CHARS:
+            continue
+        if (
+            any(c.islower() for c in token)
+            and any(c.isupper() for c in token)
+            and any(c.isdigit() for c in token)
+        ):
+            return True
+    return False
+
+
 def _has_placeholder_word(value: str) -> bool:
     """
     True when the value contains a stand-in WORD.
 
-    Whole words only. This was a substring check, and a substring check on
-    English words is a false negative waiting to happen: a real GitHub token
+    Whole words only, and never when the value also carries key material.
+    This was a substring check, and a substring check on English words is a
+    false negative waiting to happen: a real GitHub token
     `ghp_...DJzpGFAKe` lowercases to a tail containing "fake", so a genuine
     credential was silently dropped. Measured at 1 in 30,000 — rare enough to
     pass review, common enough that CI found it, and in the one direction a
     secret scanner must never fail.
     """
     for candidate in _candidate_values(value):
+        if _has_key_material(candidate):
+            continue
         words = _words(candidate)
         if any(tok in words for tok in _PLACEHOLDER_WORDS):
             return True
@@ -499,7 +548,7 @@ def _is_placeholder(value: str) -> bool:
 _DISTINCTIVE_LITERAL_CHARS = 12
 
 
-def _matches_known_placeholder(value: str) -> bool:
+def _matches_known_placeholder(value: str, word_rules: bool = True) -> bool:
     """True when the value is one of the documented non-secrets."""
     v_lower = value.lower()
     words = _words(value)
@@ -509,7 +558,14 @@ def _matches_known_placeholder(value: str) -> bool:
             if fp_lower in v_lower or v_lower in fp_lower:
                 return True
         # Short entry: every word of it must appear as a word of the value.
-        elif _words(fp) and _words(fp) <= words:
+        # Guarded by key material for the same reason _has_placeholder_word is
+        # — "changeme" or "example" appearing as one token among several, in a
+        # value that also carries a random 14-character string, is a
+        # coincidence in the generated part, not a human's stand-in. The
+        # long-literal branch above stays unguarded on purpose: a 12-character
+        # distinctive literal like AWS's published AKIAIOSFODNN7EXAMPLE does
+        # not turn up by chance, so key material is no excuse for it.
+        elif word_rules and _words(fp) and _words(fp) <= words:
             return True
     return False
 
@@ -529,11 +585,12 @@ def _is_false_positive(value: str, word_rules: bool = True) -> bool:
     """
     if _is_structural_non_secret(value):
         return True
-    if _matches_known_placeholder(value):
+    has_material = _has_key_material(value)
+    if _matches_known_placeholder(value, word_rules=not has_material):
         return True
     if _has_placeholder_shape(value):
         return True
-    return word_rules and _has_placeholder_word(value)
+    return word_rules and not has_material and _has_placeholder_word(value)
 
 
 def _is_test_line(line: str) -> bool:

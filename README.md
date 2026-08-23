@@ -132,7 +132,7 @@ Done. ✈️
 | | |
 |---|---|
 | Modules | 91 |
-| Lines of code | 19,524 |
+| Lines of code | 19,581 |
 | Slash commands | 27 |
 | MCP tools | 9 |
 | Internal imports | 273 |

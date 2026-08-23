@@ -543,17 +543,18 @@
       "id": "app.core.preflight",
       "path": "app/core/preflight.py",
       "layer": "core",
-      "loc": 191,
-      "functions": 3,
-      "classes": 3,
+      "loc": 299,
+      "functions": 5,
+      "classes": 4,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 2,
+      "fan_out": 3,
       "external_deps": [
         "__future__",
         "app",
         "dataclasses",
-        "logging"
+        "logging",
+        "os"
       ]
     },
     {
@@ -666,11 +667,11 @@
       "id": "app.core.webhook_security",
       "path": "app/core/webhook_security.py",
       "layer": "core",
-      "loc": 374,
-      "functions": 11,
+      "loc": 474,
+      "functions": 15,
       "classes": 0,
       "is_package": false,
-      "fan_in": 3,
+      "fan_in": 4,
       "fan_out": 1,
       "external_deps": [
         "app",
@@ -729,7 +730,7 @@
       "id": "app.github.client",
       "path": "app/github/client.py",
       "layer": "github",
-      "loc": 219,
+      "loc": 240,
       "functions": 9,
       "classes": 2,
       "is_package": false,
@@ -1467,7 +1468,7 @@
       "id": "server",
       "path": "server.py",
       "layer": "other",
-      "loc": 692,
+      "loc": 710,
       "functions": 29,
       "classes": 0,
       "is_package": false,
@@ -1809,6 +1810,11 @@
     {
       "source": "app.core.memory_backup",
       "target": "app.intelligence.memory",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.preflight",
+      "target": "app.core.webhook_security",
       "kind": "runtime"
     },
     {
@@ -2874,8 +2880,8 @@
   ],
   "stats": {
     "modules": 91,
-    "edges": 273,
-    "total_loc": 19581,
+    "edges": 274,
+    "total_loc": 19828,
     "layers": [
       "ai",
       "core",
@@ -2902,7 +2908,7 @@
       },
       {
         "id": "app.github.client",
-        "loc": 219,
+        "loc": 240,
         "fan_in": 22,
         "fan_out": 2
       },
@@ -2925,6 +2931,12 @@
         "fan_out": 1
       },
       {
+        "id": "app.core.webhook_security",
+        "loc": 474,
+        "fan_in": 4,
+        "fan_out": 1
+      },
+      {
         "id": "app.ai.circuit_breaker",
         "loc": 144,
         "fan_in": 13,
@@ -2941,12 +2953,6 @@
         "loc": 227,
         "fan_in": 7,
         "fan_out": 1
-      },
-      {
-        "id": "app.handlers.comments.reviewer",
-        "loc": 411,
-        "fan_in": 3,
-        "fan_out": 8
       }
     ],
     "orphans": []

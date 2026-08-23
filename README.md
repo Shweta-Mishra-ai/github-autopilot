@@ -115,6 +115,17 @@ not work and why** — including the App-permission failure that used to be
 invisible. `installation_id` is in the URL of the App's installation settings
 page.
 
+It also reports the deployment settings that fail *quietly* when unset —
+encrypted memory backup, the local triage gate, and whether
+`TRUSTED_PROXY_HOPS` matches the X-Forwarded-For chains your traffic actually
+carries. Those need no repository, so the doctor answers with them even
+without arguments:
+
+```bash
+curl -H "Authorization: Bearer $METRICS_AUTH_TOKEN" \
+  "https://<your-deployment>/setup/doctor"
+```
+
 Then comment `/health` on any issue. The bot replies with a repo health grade.
 Done. ✈️
 
@@ -132,10 +143,10 @@ Done. ✈️
 | | |
 |---|---|
 | Modules | 91 |
-| Lines of code | 19,581 |
+| Lines of code | 19,828 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 273 |
+| Internal imports | 274 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>

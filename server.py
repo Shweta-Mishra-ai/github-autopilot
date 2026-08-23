@@ -265,22 +265,39 @@ def setup_doctor():
     if not _authorized(request):
         return jsonify({"error": "Unauthorized"}), 401
 
+    from app.core.preflight import (
+        diagnose,
+        format_environment_report,
+        format_report,
+        inspect_environment,
+    )
+
     repo = (request.args.get("repo") or "").strip()
     raw_id = (request.args.get("installation_id") or "").strip()
+
+    def _env_payload():
+        findings = inspect_environment()
+        return [{"name": f.name, "state": f.state, "detail": f.detail} for f in findings], findings
+
+    # The deployment settings need neither a repo nor a token, and they are
+    # most useful precisely when those are wrong. So answer with them rather
+    # than refusing outright — a diagnostic that requires you to already have
+    # the working configuration is not much of a diagnostic.
     if not repo or "/" not in repo or not raw_id.isdigit():
+        env_json, findings = _env_payload()
         return jsonify(
             {
-                "error": "repo and installation_id are required",
+                "error": "repo and installation_id are required to probe permissions",
                 "usage": "/setup/doctor?repo=owner/name&installation_id=123",
                 "hint": (
                     "The installation id is in the URL of the App's installation "
                     "settings page, and in the `installation.id` field of any "
                     "webhook delivery."
                 ),
+                "environment": env_json,
+                "report_markdown": format_environment_report(findings),
             }
         ), 400
-
-    from app.core.preflight import diagnose, format_report
 
     result = diagnose(repo, int(raw_id), actor=(request.args.get("actor") or "").strip())
     payload = {
@@ -300,6 +317,7 @@ def setup_doctor():
             }
             for p in result.probes
         ],
+        "environment": _env_payload()[0],
         "report_markdown": format_report(result),
     }
     return jsonify(payload), 200 if result.healthy else 207

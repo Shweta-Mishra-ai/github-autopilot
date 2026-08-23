@@ -3,7 +3,7 @@ GitHub Client - app/github/client.py
 V4 Sprint 5: Production-grade GitHub API client.
 
 ADDED (Sprint 5):
-  - Automatic retry with exponential backoff on 5xx errors
+  - Automatic retry with exponential backoff on 5xx errors (idempotent methods)
   - Retry on connection errors (network blip on Render free tier)
   - Per-request timeout enforcement
   - Structured error logging with request ID
@@ -45,18 +45,39 @@ class GitHubSecondaryRateLimitError(GitHubError):
         self.retry_after = retry_after
 
 
+# Only these are safe to replay. A 502/503/504 means the gateway could not
+# give us an answer -- NOT that GitHub failed to act. If a POST creating a
+# comment reached GitHub and the response was lost on the way back, retrying
+# it posts the comment twice, and the bot writes comments on every push.
+#
+# This previously listed POST, PUT, PATCH and DELETE as well, so a single lost
+# response duplicated whatever the call had already done. Replaying a write to
+# save one round trip trades a rare transient error for a permanent wrong
+# result, which is the wrong side of that trade.
+#
+# Connection errors are still retried for every method, including writes:
+# those are raised before the request is established, so nothing can have been
+# processed. Read timeouts are NOT retried for writes -- urllib3 gates those
+# on this same set, which is exactly the distinction we want, since a read
+# timeout happens after the request was sent.
+IDEMPOTENT_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
 def _make_session() -> requests.Session:
     """
     Session with automatic retry on transient network errors.
-    Retries: connection errors, read timeouts, 502, 503, 504.
-    Does NOT retry 4xx (client errors) or 429 (rate limit — we handle manually).
+
+    Retries: connection errors (any method), and 502/503/504 or read timeouts
+    on idempotent methods only. Does NOT retry 4xx (client errors), 429 (rate
+    limit — handled manually), or any write that may already have taken
+    effect. See IDEMPOTENT_METHODS.
     """
     session = requests.Session()
     retry = Retry(
         total=MAX_RETRIES,
         backoff_factor=RETRY_BACKOFF,
         status_forcelist=[502, 503, 504],
-        allowed_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+        allowed_methods=IDEMPOTENT_METHODS,
         raise_on_status=False,
     )
     adapter = HTTPAdapter(max_retries=retry)

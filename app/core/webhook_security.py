@@ -206,18 +206,118 @@ def _get_client_ip(request) -> str:
     """
     hops = _trusted_proxy_hops()
     remote = request.remote_addr or "unknown"
+    xff = request.headers.get("X-Forwarded-For", "")
+    parts = [p.strip() for p in xff.split(",") if p.strip()] if xff else []
+    _record_chain_length(len(parts))
+
     if hops == 0:
         return remote
-
-    xff = request.headers.get("X-Forwarded-For", "")
-    if not xff:
+    if not parts:
         return remote
-
-    parts = [p.strip() for p in xff.split(",") if p.strip()]
     if len(parts) < hops:
         log.debug(f"webhook_security.short_forwarded_chain entries={len(parts)} expected>={hops}")
         return remote
     return parts[-hops]
+
+
+# ── Is TRUSTED_PROXY_HOPS actually right? ─────────────────────────────────────
+#
+# Getting this wrong is silent in both directions. Too high and every request
+# falls back to remote_addr, so the whole deployment shares one rate-limit
+# bucket. Too low and we trust an entry a client may have written, which is
+# the spoofing this setting exists to prevent. Nothing told the operator
+# either way: the mismatch was logged at DEBUG, which nobody reads.
+#
+# So record what the traffic actually looks like and let /setup/doctor compare
+# it against the configured value. This is evidence, like the capability
+# probes -- not a guess about the operator's topology.
+#
+# Deliberately lock-free. This runs on the webhook path, the counters are a
+# diagnostic, and a racing increment loses a count rather than corrupting one.
+# Paying for a lock on every request to make a rounding-error accurate would
+# be the wrong trade.
+_MAX_TRACKED_CHAIN = 8
+_chain_observations = [0] * (_MAX_TRACKED_CHAIN + 1)
+
+
+def _record_chain_length(length: int) -> None:
+    index = min(length, _MAX_TRACKED_CHAIN)
+    _chain_observations[index] += 1
+
+
+def forwarded_chain_observations() -> dict[int, int]:
+    """
+    How many requests arrived with an X-Forwarded-For chain of each length.
+
+    Key 0 means the header was absent or empty. The final key is a ceiling:
+    longer chains are counted there.
+    """
+    return {i: n for i, n in enumerate(_chain_observations) if n}
+
+
+def trusted_proxy_hops() -> int:
+    """The configured hop count. Public accessor for diagnostics."""
+    return _trusted_proxy_hops()
+
+
+def proxy_configuration_verdict() -> tuple[str, str]:
+    """
+    ("ok" | "warn" | "unknown", explanation) — judged against real traffic.
+
+    Says "unknown" rather than guessing when no request has been seen yet: a
+    verdict with no evidence behind it is exactly what this module refuses to
+    produce elsewhere.
+    """
+    seen = forwarded_chain_observations()
+    hops = _trusted_proxy_hops()
+    total = sum(seen.values())
+    if not total:
+        return "unknown", (
+            f"TRUSTED_PROXY_HOPS={hops}, but no request has reached the webhook "
+            f"yet, so there is nothing to check it against."
+        )
+
+    usable = sum(n for length, n in seen.items() if length >= hops and length > 0)
+    typical = max(seen, key=lambda k: seen[k])
+
+    if hops == 0:
+        if typical > 0:
+            return "warn", (
+                f"TRUSTED_PROXY_HOPS=0, so X-Forwarded-For is ignored and every "
+                f"client is bucketed by remote_addr — but {seen[typical]} of "
+                f"{total} requests arrived with a {typical}-entry chain, which "
+                f"means there IS a proxy in front. With a proxy, remote_addr is "
+                f"the proxy, so the whole internet shares one rate-limit bucket. "
+                f"Set TRUSTED_PROXY_HOPS={typical}."
+            )
+        return "ok", (
+            "TRUSTED_PROXY_HOPS=0 and no request has carried an "
+            "X-Forwarded-For header. Consistent with a directly exposed app."
+        )
+
+    if usable == 0:
+        return "warn", (
+            f"TRUSTED_PROXY_HOPS={hops}, but none of the {total} requests seen "
+            f"carried a chain that long (most common length: {typical}). Every "
+            f"one fell back to remote_addr, so rate limiting is not per-client. "
+            f"Set TRUSTED_PROXY_HOPS={typical} if that is your real topology, "
+            f"or 0 if nothing proxies this app."
+        )
+
+    if typical > hops:
+        return "warn", (
+            f"TRUSTED_PROXY_HOPS={hops}, but the most common chain has "
+            f"{typical} entries. If {typical} proxies really do append to it, "
+            f"entry -{hops} was written by one of them and is trustworthy; if "
+            f"only {hops} do, the extra entries came from the client and the "
+            f"one being trusted is attacker-chosen. Confirm which, and set this "
+            f"to the number of proxies that actually append."
+        )
+
+    return "ok", (
+        f"TRUSTED_PROXY_HOPS={hops} matches the observed traffic "
+        f"({usable} of {total} requests carried a usable chain)."
+    )
 
 
 # ── IP Rate Limiting (sliding window) ─────────────────────────────────────────

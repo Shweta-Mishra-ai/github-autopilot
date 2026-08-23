@@ -654,3 +654,69 @@ class TestPublishedNumbersAreTrue:
         )["version"] == __version__
         pyproject = (_ROOT / "pyproject.toml").read_text(encoding="utf-8")
         assert f'version = "{__version__}"' in pyproject
+
+
+class TestEveryEnvVarIsDocumented:
+    """
+    An undocumented environment variable is a feature only its author can use.
+
+    Seven were reachable from the code and mentioned in no document at the time
+    this check was written — including LLM_PRIMARY_MODEL and LLM_FALLBACK_MODEL,
+    which V7.1.0 deliberately MOVED out of repo config into the environment,
+    for a stated reason, and then never wrote down.
+    """
+
+    # Read by the process but supplied by the platform or the test harness, so
+    # documenting them would be documenting Python, not this app.
+    NOT_OURS = frozenset(
+        {"PORT", "PYTHONPATH", "HOME", "PATH", "RENDER", "CI", "GITHUB_STEP_SUMMARY"}
+    )
+
+    @staticmethod
+    def _env_vars_read() -> set[str]:
+        import ast
+
+        found: set[str] = set()
+        sources = list(Path("app").rglob("*.py")) + [Path("server.py"), Path("worker.py")]
+        for path in sources:
+            tree = ast.parse((_ROOT / path).read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                # os.environ.get("X") / os.getenv("X")
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr in ("get", "getenv")
+                    and node.args
+                    and isinstance(node.args[0], ast.Constant)
+                    and isinstance(node.args[0].value, str)
+                    and (
+                        getattr(node.func.value, "attr", None)
+                        or getattr(node.func.value, "id", None)
+                    )
+                    in ("environ", "os")
+                ):
+                    found.add(node.args[0].value)
+                # os.environ["X"]
+                if (
+                    isinstance(node, ast.Subscript)
+                    and isinstance(node.slice, ast.Constant)
+                    and isinstance(node.slice.value, str)
+                    and getattr(node.value, "attr", "") == "environ"
+                ):
+                    found.add(node.slice.value)
+        return found
+
+    def test_no_env_var_is_undocumented(self):
+        corpus = " ".join(
+            (_ROOT / f).read_text(encoding="utf-8")
+            for f in [".env.example", "README.md", "CHANGELOG.md"]
+        )
+        corpus += " ".join(p.read_text(encoding="utf-8") for p in (_ROOT / "docs").rglob("*.md"))
+
+        undocumented = sorted(
+            v for v in self._env_vars_read() if v not in self.NOT_OURS and v not in corpus
+        )
+        assert undocumented == [], (
+            f"read by the app, documented nowhere: {undocumented}. "
+            "Add them to .env.example with what they do and what happens if unset."
+        )

@@ -190,3 +190,44 @@ class TestObservability:
         ):
             get_user_permission("o/r", "stranger", "tok")
         assert metrics.get("auth.permission_check_failed", 0) == before
+
+
+class TestResourceSpendingCommandsAreGated:
+    """
+    /runtests and /notify were documented as maintainer-only — the README
+    listed them that way — and had no gate at all.
+
+    Neither reads or writes code, so the exposure was never disclosure. It was
+    that a stranger could spend the maintainer's resources: dispatch CI runs
+    against their Actions minutes, or push messages into their team's Slack and
+    Discord, as often as they cared to comment. On a public repository that is
+    anyone at all.
+    """
+
+    @pytest.mark.parametrize("cmd", ["/runtests", "/notify"])
+    def test_a_stranger_is_denied(self, cmd):
+        with patch("app.core.authorization.get_user_permission", return_value="none"):
+            allowed, reason = check_command_permission(cmd, "o/r", "stranger", "tok", _Config())
+        assert allowed is False, f"{cmd} must not run for a non-collaborator"
+        assert "write/maintain/admin" in reason
+
+    @pytest.mark.parametrize("cmd", ["/runtests", "/notify"])
+    def test_a_read_only_collaborator_is_denied(self, cmd):
+        with patch("app.core.authorization.get_user_permission", return_value="read"):
+            allowed, _ = check_command_permission(cmd, "o/r", "reader", "tok", _Config())
+        assert allowed is False, f"read access must not be enough for {cmd}"
+
+    @pytest.mark.parametrize("cmd", ["/runtests", "/notify"])
+    def test_a_maintainer_is_allowed(self, cmd):
+        with patch("app.core.authorization.get_user_permission", return_value="write"):
+            allowed, reason = check_command_permission(cmd, "o/r", "owner", "tok", _Config())
+        assert allowed is True, f"{cmd} must still work for a maintainer: {reason}"
+
+    @pytest.mark.parametrize("cmd", ["/runtests", "/notify"])
+    def test_a_failed_permission_check_denies_rather_than_assuming(self, cmd):
+        with patch(
+            "app.core.authorization.get_user_permission", return_value=PERMISSION_UNKNOWN
+        ):
+            allowed, reason = check_command_permission(cmd, "o/r", "owner", "tok", _Config())
+        assert allowed is False, f"{cmd} must fail closed like every other gated command"
+        assert "not a statement about your access" in reason

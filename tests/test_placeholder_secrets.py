@@ -183,3 +183,70 @@ class TestRealCredentialsStillFire:
             1 for _ in range(40) if scan_diff(f'+api_key = "{_rand(40)}"', file_path="app/c.py")
         )
         assert caught >= 38, f"only {caught}/40 random credentials detected"
+
+
+class TestPlaceholderWordsNeverSuppressARealSecret:
+    """
+    Placeholder matching was a case-insensitive SUBSTRING check, and English
+    words are short. A genuine GitHub token whose random tail happened to
+    contain "fake" was silently dropped:
+
+        ghp_zHDiR5GWjhyRy5AGMUwGLGBfzZ8DJzpGFAKe
+                                          ^^^^ -> "fake"
+
+    Measured at 1 in 30,000 — rare enough to pass review, common enough that
+    CI found it within a day, and in the one direction a secret scanner must
+    never fail. Two fixes, and this class covers both.
+    """
+
+    REAL_TOKEN_CI_MISSED = "ghp_zHDiR5GWjhyRy5AGMUwGLGBfzZ8DJzpGFAKe"
+
+    def test_the_exact_token_ci_caught(self):
+        assert scan_diff(f'+t = "{self.REAL_TOKEN_CI_MISSED}"', file_path="app/x.py")
+
+    @pytest.mark.parametrize(
+        "token",
+        [
+            "ghp_aaaaaaaaaaaaaaaaaaFAKEaaaaaaaaaaaaaa",
+            "ghp_bbbbbbbbbbbbbbbTODObbbbbbbbbbbbbbbbb",
+            "ghp_ccccccccccccccDUMMYcccccccccccccccc1",
+            "ghp_dddddddddddSAMPLEddddddddddddddddd12",
+            "ghp_eeeeeeeeeeeEXAMPLEeeeeeeeeeeeeeeee12",
+        ],
+    )
+    def test_a_placeholder_word_inside_a_random_tail_is_a_coincidence(self, token):
+        """Whole words only. A provider's tail is one long token, so a word
+        buried in it is never a word."""
+        assert scan_diff(f'+t = "{token}"', file_path="app/x.py"), token
+
+    def test_a_provider_prefix_outranks_every_word_heuristic(self):
+        """`ghp_` is issued by GitHub and nobody else. That prefix IS the
+        context, so word guessing can only lose information there."""
+        assert scan_diff('+t = "ghp_fakefakefakefakefakefakefakefakefake"', file_path="app/x.py")
+
+    def test_shape_rules_still_apply_to_anchored_patterns(self):
+        """The exemption is for WORD rules. A token of repeated characters is
+        unambiguous whatever prefix it wears."""
+        assert scan_diff('+t = "ghp_' + "X" * 36 + '"', file_path="app/x.py") == []
+
+    def test_weak_context_patterns_keep_their_word_rules(self):
+        """`api_key = "..."` could be anything, so there the words are the only
+        signal available and must keep working."""
+        assert scan_diff('+api_key = "replace_with_your_real_key_here"', file_path="app/x.py") == []
+        assert scan_diff('+api_key = "dummy_value_for_tests"', file_path="app/x.py") == []
+
+    def test_detection_holds_across_many_random_tokens(self):
+        """The original bug showed up once in 30,000, so a handful of samples
+        would not have caught it. This is sized to notice a regression that
+        reintroduces substring matching, which would fail at roughly 1 in 750
+        here."""
+        import secrets
+        import string
+
+        alnum = string.ascii_letters + string.digits
+        misses = 0
+        for _ in range(3000):
+            token = "ghp_" + "".join(secrets.choice(alnum) for _ in range(36))
+            if not scan_diff(f'+t = "{token}"', file_path="app/x.py"):
+                misses += 1
+        assert misses == 0, f"{misses}/3000 real tokens missed"

@@ -20,6 +20,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from app.core.retry_after import parse_retry_after
 from app.github.rate_limit import update_from_headers, check_and_wait
 
 log = logging.getLogger(__name__)
@@ -86,7 +87,10 @@ def _handle_response(r: requests.Response, method: str, path: str):
 
     # Primary rate limit — caller should respect Retry-After
     if r.status_code == 429:
-        retry_after = int(r.headers.get("Retry-After", 30))
+        # Tolerant parse: a bare int() here raised ValueError on the
+        # HTTP-date form of the header, and ValueError escapes every
+        # caller — they all catch GitHubError, not Exception.
+        retry_after = parse_retry_after(r.headers.get("Retry-After"), 30)
         raise GitHubError(f"Primary rate limit — retry after {retry_after}s", 429)
 
     # Secondary rate limit (abuse detection)
@@ -99,7 +103,7 @@ def _handle_response(r: requests.Response, method: str, path: str):
             body = r.json()
             msg = body.get("message", "").lower()
             if "secondary rate limit" in msg or "abuse" in msg:
-                retry_after = int(r.headers.get("Retry-After", 60))
+                retry_after = parse_retry_after(r.headers.get("Retry-After"), 60)
                 log.warning(
                     f"github.secondary_rate_limit path={path} "
                     f"retry_after={retry_after}s — raising immediately (no sleep)"

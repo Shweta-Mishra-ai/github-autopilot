@@ -31,7 +31,7 @@ SUBJECT_REPO_PATH = os.environ.get(
     "SUBJECT_REPO", os.path.expanduser("~/github-autopilot"))
 sys.path.insert(0, SUBJECT_REPO_PATH)
 os.environ.setdefault("REDIS_URL", "redis://127.0.0.1:6399/0")
-os.environ["GITHUB_WEBHOOK_SECRET"] = "bench-secret-not-a-real-credential"
+os.environ["GITHUB_WEBHOOK_SECRET"] = "bench-secret-not-real-credential"
 
 REDIS_PORT = 6399
 

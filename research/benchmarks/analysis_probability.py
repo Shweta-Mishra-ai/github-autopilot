@@ -170,7 +170,7 @@ def main():
                  "hyphen), which differs by credential construction and is "
                  "ZERO for base64url encodings whose byte length is not a "
                  "multiple of three."),
-        "p_ends_hyphen_uniform_64_symbol_tail": p_uniform,
+        "p_hyphen_uniform64": p_uniform,
         "jwt_signature_analysis": jwt_sigs,
         "conditional_rates_measured": conditional,
         "marginal_rates": marginal,

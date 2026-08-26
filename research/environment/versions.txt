@@ -1,0 +1,4 @@
+python      3.11.15
+redis       7.0.15   (loopback only, persistence disabled, port 6399)
+gitleaks    8.21.2
+trufflehog  3.82.13

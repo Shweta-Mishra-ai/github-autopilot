@@ -1,0 +1,282 @@
+{
+  "design": "Two corpora, identical negatives, differing only in how positives are constructed. Corpus A uses published prefix+alphabet+length specs; Corpus B additionally makes each credential structurally well-formed. Tools that validate beyond the prefix score higher on B; the gap measures how much of a tool's detection is shape-only.",
+  "negative_composition": {
+    "real_source_lines_from_system_under_test": 500,
+    "structural_non_secrets": 200
+  },
+  "n_samples_per_positive_type": 40,
+  "corpus_A": {
+    "corpus_label": "A_format_spec",
+    "n_total": 1100,
+    "n_positive": 400,
+    "n_negative": 700,
+    "results": [
+      {
+        "tool": "GitHub Autopilot",
+        "confusion": {
+          "tp": 400,
+          "fp": 17,
+          "tn": 683,
+          "fn": 0
+        },
+        "precision": 0.9592,
+        "precision_ci95": [
+          0.9357,
+          0.9744
+        ],
+        "recall": 1.0,
+        "recall_ci95": [
+          0.9905,
+          1.0
+        ],
+        "f1": 0.9792,
+        "macro_recall": 1.0,
+        "per_type_recall": {
+          "aws_access_key_id": 1.0,
+          "gcp_api_key": 1.0,
+          "github_oauth": 1.0,
+          "github_pat": 1.0,
+          "jwt": 1.0,
+          "npm_token": 1.0,
+          "openai_project_key": 1.0,
+          "sendgrid_api_key": 1.0,
+          "slack_bot_token": 1.0,
+          "stripe_secret_key": 1.0
+        },
+        "per_negative_type_fp_rate": {
+          "real_code": 0.0,
+          "structural_nonsecret": 0.085
+        },
+        "wall_s": 0.09,
+        "samples_per_s": 12204.6
+      },
+      {
+        "tool": "Gitleaks 8.21.2",
+        "confusion": {
+          "tp": 320,
+          "fp": 0,
+          "tn": 700,
+          "fn": 80
+        },
+        "precision": 1.0,
+        "precision_ci95": [
+          0.9881,
+          1.0
+        ],
+        "recall": 0.8,
+        "recall_ci95": [
+          0.758,
+          0.8363
+        ],
+        "f1": 0.8889,
+        "macro_recall": 0.8,
+        "per_type_recall": {
+          "aws_access_key_id": 1.0,
+          "gcp_api_key": 1.0,
+          "github_oauth": 1.0,
+          "github_pat": 1.0,
+          "jwt": 0.0,
+          "npm_token": 1.0,
+          "openai_project_key": 0.0,
+          "sendgrid_api_key": 1.0,
+          "slack_bot_token": 1.0,
+          "stripe_secret_key": 1.0
+        },
+        "per_negative_type_fp_rate": {
+          "real_code": 0.0,
+          "structural_nonsecret": 0.0
+        },
+        "wall_s": 0.086,
+        "samples_per_s": 12723.0
+      },
+      {
+        "tool": "TruffleHog 3.82.13",
+        "confusion": {
+          "tp": 240,
+          "fp": 0,
+          "tn": 700,
+          "fn": 160
+        },
+        "precision": 1.0,
+        "precision_ci95": [
+          0.9842,
+          1.0
+        ],
+        "recall": 0.6,
+        "recall_ci95": [
+          0.5513,
+          0.6468
+        ],
+        "f1": 0.75,
+        "macro_recall": 0.6,
+        "per_type_recall": {
+          "aws_access_key_id": 0.0,
+          "gcp_api_key": 0.0,
+          "github_oauth": 1.0,
+          "github_pat": 1.0,
+          "jwt": 0.0,
+          "npm_token": 1.0,
+          "openai_project_key": 0.0,
+          "sendgrid_api_key": 1.0,
+          "slack_bot_token": 1.0,
+          "stripe_secret_key": 1.0
+        },
+        "per_negative_type_fp_rate": {
+          "real_code": 0.0,
+          "structural_nonsecret": 0.0
+        },
+        "wall_s": 2.446,
+        "samples_per_s": 449.6
+      }
+    ]
+  },
+  "corpus_B": {
+    "corpus_label": "B_structural",
+    "n_total": 1100,
+    "n_positive": 400,
+    "n_negative": 700,
+    "results": [
+      {
+        "tool": "GitHub Autopilot",
+        "confusion": {
+          "tp": 400,
+          "fp": 17,
+          "tn": 683,
+          "fn": 0
+        },
+        "precision": 0.9592,
+        "precision_ci95": [
+          0.9357,
+          0.9744
+        ],
+        "recall": 1.0,
+        "recall_ci95": [
+          0.9905,
+          1.0
+        ],
+        "f1": 0.9792,
+        "macro_recall": 1.0,
+        "per_type_recall": {
+          "aws_access_key_id": 1.0,
+          "gcp_api_key": 1.0,
+          "github_oauth": 1.0,
+          "github_pat": 1.0,
+          "jwt": 1.0,
+          "npm_token": 1.0,
+          "openai_project_key": 1.0,
+          "sendgrid_api_key": 1.0,
+          "slack_bot_token": 1.0,
+          "stripe_secret_key": 1.0
+        },
+        "per_negative_type_fp_rate": {
+          "real_code": 0.0,
+          "structural_nonsecret": 0.085
+        },
+        "wall_s": 0.083,
+        "samples_per_s": 13332.9
+      },
+      {
+        "tool": "Gitleaks 8.21.2",
+        "confusion": {
+          "tp": 360,
+          "fp": 0,
+          "tn": 700,
+          "fn": 40
+        },
+        "precision": 1.0,
+        "precision_ci95": [
+          0.9894,
+          1.0
+        ],
+        "recall": 0.9,
+        "recall_ci95": [
+          0.8667,
+          0.9257
+        ],
+        "f1": 0.9474,
+        "macro_recall": 0.9,
+        "per_type_recall": {
+          "aws_access_key_id": 1.0,
+          "gcp_api_key": 1.0,
+          "github_oauth": 1.0,
+          "github_pat": 1.0,
+          "jwt": 1.0,
+          "npm_token": 1.0,
+          "openai_project_key": 0.0,
+          "sendgrid_api_key": 1.0,
+          "slack_bot_token": 1.0,
+          "stripe_secret_key": 1.0
+        },
+        "per_negative_type_fp_rate": {
+          "real_code": 0.0,
+          "structural_nonsecret": 0.0
+        },
+        "wall_s": 0.112,
+        "samples_per_s": 9782.2
+      },
+      {
+        "tool": "TruffleHog 3.82.13",
+        "confusion": {
+          "tp": 240,
+          "fp": 0,
+          "tn": 700,
+          "fn": 160
+        },
+        "precision": 1.0,
+        "precision_ci95": [
+          0.9842,
+          1.0
+        ],
+        "recall": 0.6,
+        "recall_ci95": [
+          0.5513,
+          0.6468
+        ],
+        "f1": 0.75,
+        "macro_recall": 0.6,
+        "per_type_recall": {
+          "aws_access_key_id": 0.0,
+          "gcp_api_key": 0.0,
+          "github_oauth": 1.0,
+          "github_pat": 1.0,
+          "jwt": 0.0,
+          "npm_token": 1.0,
+          "openai_project_key": 0.0,
+          "sendgrid_api_key": 1.0,
+          "slack_bot_token": 1.0,
+          "stripe_secret_key": 1.0
+        },
+        "per_negative_type_fp_rate": {
+          "real_code": 0.0,
+          "structural_nonsecret": 0.0
+        },
+        "wall_s": 2.321,
+        "samples_per_s": 473.9
+      }
+    ]
+  },
+  "corpus_sensitivity": {
+    "GitHub Autopilot": {
+      "recall_A_format_spec": 1.0,
+      "recall_B_structural": 1.0,
+      "delta_recall": 0.0,
+      "f1_A": 0.9792,
+      "f1_B": 0.9792
+    },
+    "Gitleaks 8.21.2": {
+      "recall_A_format_spec": 0.8,
+      "recall_B_structural": 0.9,
+      "delta_recall": 0.1,
+      "f1_A": 0.8889,
+      "f1_B": 0.9474
+    },
+    "TruffleHog 3.82.13": {
+      "recall_A_format_spec": 0.6,
+      "recall_B_structural": 0.6,
+      "delta_recall": 0.0,
+      "f1_A": 0.75,
+      "f1_B": 0.75
+    }
+  },
+  "seed": 20260823
+}

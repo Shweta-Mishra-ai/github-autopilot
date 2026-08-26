@@ -1,0 +1,141 @@
+{
+  "design": "Four deployment conditions spanning adversarial to favourable for co-occurrence-based detectors. Detection is measured at file level (did the tool report anything for this file).",
+  "n_samples_per_cell": 30,
+  "n_conditions": 4,
+  "n_types": 6,
+  "n_files": 720,
+  "results": {
+    "GitHub Autopilot": {
+      "tool": "GitHub Autopilot",
+      "detection_rate_by_condition": {
+        "A_single_credential": 1.0,
+        "B_paired_with_companion": 1.0,
+        "C_multiple_credentials": 1.0,
+        "D_realistic_settings_module": 0.9944
+      },
+      "per_type_by_condition": {
+        "A_single_credential": {
+          "aws_access_key_id": 1.0,
+          "github_pat": 1.0,
+          "gcp_api_key": 1.0,
+          "stripe_secret_key": 1.0,
+          "sendgrid_api_key": 1.0,
+          "npm_token": 1.0
+        },
+        "B_paired_with_companion": {
+          "aws_access_key_id": 1.0,
+          "github_pat": 1.0,
+          "gcp_api_key": 1.0,
+          "stripe_secret_key": 1.0,
+          "sendgrid_api_key": 1.0,
+          "npm_token": 1.0
+        },
+        "C_multiple_credentials": {
+          "aws_access_key_id": 1.0,
+          "github_pat": 1.0,
+          "gcp_api_key": 1.0,
+          "stripe_secret_key": 1.0,
+          "sendgrid_api_key": 1.0,
+          "npm_token": 1.0
+        },
+        "D_realistic_settings_module": {
+          "aws_access_key_id": 1.0,
+          "github_pat": 1.0,
+          "gcp_api_key": 1.0,
+          "stripe_secret_key": 1.0,
+          "sendgrid_api_key": 0.9667,
+          "npm_token": 1.0
+        }
+      },
+      "condition_A_to_D_delta": -0.0056
+    },
+    "Gitleaks 8.21.2": {
+      "tool": "Gitleaks 8.21.2",
+      "detection_rate_by_condition": {
+        "A_single_credential": 1.0,
+        "B_paired_with_companion": 1.0,
+        "C_multiple_credentials": 1.0,
+        "D_realistic_settings_module": 1.0
+      },
+      "per_type_by_condition": {
+        "A_single_credential": {
+          "aws_access_key_id": 1.0,
+          "github_pat": 1.0,
+          "gcp_api_key": 1.0,
+          "stripe_secret_key": 1.0,
+          "sendgrid_api_key": 1.0,
+          "npm_token": 1.0
+        },
+        "B_paired_with_companion": {
+          "aws_access_key_id": 1.0,
+          "github_pat": 1.0,
+          "gcp_api_key": 1.0,
+          "stripe_secret_key": 1.0,
+          "sendgrid_api_key": 1.0,
+          "npm_token": 1.0
+        },
+        "C_multiple_credentials": {
+          "aws_access_key_id": 1.0,
+          "github_pat": 1.0,
+          "gcp_api_key": 1.0,
+          "stripe_secret_key": 1.0,
+          "sendgrid_api_key": 1.0,
+          "npm_token": 1.0
+        },
+        "D_realistic_settings_module": {
+          "aws_access_key_id": 1.0,
+          "github_pat": 1.0,
+          "gcp_api_key": 1.0,
+          "stripe_secret_key": 1.0,
+          "sendgrid_api_key": 1.0,
+          "npm_token": 1.0
+        }
+      },
+      "condition_A_to_D_delta": 0.0
+    },
+    "TruffleHog 3.82.13": {
+      "tool": "TruffleHog 3.82.13",
+      "detection_rate_by_condition": {
+        "A_single_credential": 0.6667,
+        "B_paired_with_companion": 0.8333,
+        "C_multiple_credentials": 1.0,
+        "D_realistic_settings_module": 0.8278
+      },
+      "per_type_by_condition": {
+        "A_single_credential": {
+          "aws_access_key_id": 0.0,
+          "github_pat": 1.0,
+          "gcp_api_key": 0.0,
+          "stripe_secret_key": 1.0,
+          "sendgrid_api_key": 1.0,
+          "npm_token": 1.0
+        },
+        "B_paired_with_companion": {
+          "aws_access_key_id": 1.0,
+          "github_pat": 1.0,
+          "gcp_api_key": 0.0,
+          "stripe_secret_key": 1.0,
+          "sendgrid_api_key": 1.0,
+          "npm_token": 1.0
+        },
+        "C_multiple_credentials": {
+          "aws_access_key_id": 1.0,
+          "github_pat": 1.0,
+          "gcp_api_key": 1.0,
+          "stripe_secret_key": 1.0,
+          "sendgrid_api_key": 1.0,
+          "npm_token": 1.0
+        },
+        "D_realistic_settings_module": {
+          "aws_access_key_id": 0.9667,
+          "github_pat": 1.0,
+          "gcp_api_key": 0.0,
+          "stripe_secret_key": 1.0,
+          "sendgrid_api_key": 1.0,
+          "npm_token": 1.0
+        }
+      },
+      "condition_A_to_D_delta": 0.1611
+    }
+  }
+}

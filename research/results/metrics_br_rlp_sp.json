@@ -1,0 +1,170 @@
+{
+ "GCP API Key": {
+  "severity": "high",
+  "n_applicable": 12,
+  "BR": 0.0,
+  "RLP": 0.9116491210354025,
+  "SP": 0.9116491210354025
+ },
+ "SendGrid API Key": {
+  "severity": "critical",
+  "n_applicable": 12,
+  "BR": 0.0,
+  "RLP": 1.0,
+  "SP": 1.0
+ },
+ "OpenAI API Key (new)": {
+  "severity": "critical",
+  "n_applicable": 12,
+  "BR": 0.8417,
+  "RLP": 0.9860974347847855,
+  "SP": 0.9860974347847855
+ },
+ "JWT Token": {
+  "severity": "high",
+  "n_applicable": 12,
+  "BR": 0.8833,
+  "RLP": 1.0,
+  "SP": 1.0
+ },
+ "Google OAuth Token": {
+  "severity": "high",
+  "n_applicable": 12,
+  "BR": 0.8917,
+  "RLP": 1.0,
+  "SP": 1.0
+ },
+ "AWS Access Key ID": {
+  "severity": "critical",
+  "n_applicable": 10,
+  "BR": 1.0,
+  "RLP": 1.0,
+  "SP": 1.0
+ },
+ "GitHub PAT (classic)": {
+  "severity": "critical",
+  "n_applicable": 10,
+  "BR": 1.0,
+  "RLP": 1.0,
+  "SP": 1.0
+ },
+ "GitHub OAuth Token": {
+  "severity": "critical",
+  "n_applicable": 10,
+  "BR": 1.0,
+  "RLP": 1.0,
+  "SP": 1.0
+ },
+ "GitHub App Token": {
+  "severity": "critical",
+  "n_applicable": 10,
+  "BR": 1.0,
+  "RLP": 1.0,
+  "SP": 1.0
+ },
+ "GitHub Refresh Token": {
+  "severity": "critical",
+  "n_applicable": 10,
+  "BR": 1.0,
+  "RLP": 1.0,
+  "SP": 1.0
+ },
+ "GitHub Fine-Grained PAT": {
+  "severity": "critical",
+  "n_applicable": 11,
+  "BR": 1.0,
+  "RLP": 1.0,
+  "SP": 1.0
+ },
+ "OpenAI API Key": {
+  "severity": "critical",
+  "n_applicable": 10,
+  "BR": 1.0,
+  "RLP": 1.0,
+  "SP": 1.0
+ },
+ "Anthropic API Key": {
+  "severity": "critical",
+  "n_applicable": 10,
+  "BR": 1.0,
+  "RLP": 1.0,
+  "SP": 1.0
+ },
+ "Stripe Secret Key": {
+  "severity": "critical",
+  "n_applicable": 10,
+  "BR": 1.0,
+  "RLP": 1.0,
+  "SP": 1.0
+ },
+ "Stripe Restricted Key": {
+  "severity": "critical",
+  "n_applicable": 10,
+  "BR": 1.0,
+  "RLP": 1.0,
+  "SP": 1.0
+ },
+ "Stripe Publishable Key": {
+  "severity": "medium",
+  "n_applicable": 10,
+  "BR": 1.0,
+  "RLP": 1.0,
+  "SP": 1.0
+ },
+ "Slack Bot Token": {
+  "severity": "critical",
+  "n_applicable": 10,
+  "BR": 1.0,
+  "RLP": 1.0,
+  "SP": 1.0
+ },
+ "Slack User Token": {
+  "severity": "critical",
+  "n_applicable": 10,
+  "BR": 1.0,
+  "RLP": 1.0,
+  "SP": 1.0
+ },
+ "Slack App Token": {
+  "severity": "critical",
+  "n_applicable": 10,
+  "BR": 1.0,
+  "RLP": 1.0,
+  "SP": 1.0
+ },
+ "Twilio Account SID": {
+  "severity": "high",
+  "n_applicable": 10,
+  "BR": 1.0,
+  "RLP": 1.0,
+  "SP": 1.0
+ },
+ "Cloudflare API Key": {
+  "severity": "medium",
+  "n_applicable": 10,
+  "BR": 1.0,
+  "RLP": 1.0,
+  "SP": 1.0
+ },
+ "npm Auth Token": {
+  "severity": "high",
+  "n_applicable": 10,
+  "BR": 1.0,
+  "RLP": 1.0,
+  "SP": 1.0
+ },
+ "PagerDuty Integration Key": {
+  "severity": "medium",
+  "n_applicable": 10,
+  "BR": 1.0,
+  "RLP": 1.0,
+  "SP": 1.0
+ },
+ "Groq API Key": {
+  "severity": "critical",
+  "n_applicable": 10,
+  "BR": 1.0,
+  "RLP": 1.0,
+  "SP": 1.0
+ }
+}

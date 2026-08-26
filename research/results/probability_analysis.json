@@ -1,0 +1,297 @@
+{
+  "note": "Marginal miss probability requires P(final character is a hyphen), which differs by credential construction and is ZERO for base64url encodings whose byte length is not a multiple of three.",
+  "p_ends_hyphen_uniform_64_symbol_tail": 0.015365,
+  "jwt_signature_analysis": {
+    "HS256 (32-byte signature)": {
+      "signature_bytes": 32,
+      "len_mod_3": 2,
+      "encoded_len": 43,
+      "distinct_final_chars_observed": 16,
+      "hyphen_observed": 0,
+      "p_ends_hyphen_empirical": 0.0,
+      "p_ends_hyphen_theoretical": 0.0
+    },
+    "HS384 (48-byte signature)": {
+      "signature_bytes": 48,
+      "len_mod_3": 0,
+      "encoded_len": 64,
+      "distinct_final_chars_observed": 64,
+      "hyphen_observed": 3075,
+      "p_ends_hyphen_empirical": 0.015375,
+      "p_ends_hyphen_theoretical": 0.015625
+    },
+    "HS512 (64-byte signature)": {
+      "signature_bytes": 64,
+      "len_mod_3": 1,
+      "encoded_len": 86,
+      "distinct_final_chars_observed": 4,
+      "hyphen_observed": 0,
+      "p_ends_hyphen_empirical": 0.0,
+      "p_ends_hyphen_theoretical": 0.0
+    },
+    "RS256 (256-byte signature)": {
+      "signature_bytes": 256,
+      "len_mod_3": 1,
+      "encoded_len": 342,
+      "distinct_final_chars_observed": 4,
+      "hyphen_observed": 0,
+      "p_ends_hyphen_empirical": 0.0,
+      "p_ends_hyphen_theoretical": 0.0
+    }
+  },
+  "conditional_rates_measured": {
+    "SendGrid API Key": {
+      "p_rule_fires_given_hyphen": 0.0,
+      "p_fallback_given_hyphen": 0.0,
+      "p_missed_given_hyphen": 1.0,
+      "p_not_correctly_labelled_given_hyphen": 1.0
+    },
+    "GCP API Key": {
+      "p_rule_fires_given_hyphen": 0.0,
+      "p_fallback_given_hyphen": 1.0,
+      "p_missed_given_hyphen": 0.0,
+      "p_not_correctly_labelled_given_hyphen": 1.0
+    },
+    "Google OAuth Token": {
+      "p_rule_fires_given_hyphen": 0.8917,
+      "p_fallback_given_hyphen": 0.0,
+      "p_missed_given_hyphen": 0.1083,
+      "p_not_correctly_labelled_given_hyphen": 0.1083
+    },
+    "OpenAI API Key (new)": {
+      "p_rule_fires_given_hyphen": 0.8417,
+      "p_fallback_given_hyphen": 0.1583,
+      "p_missed_given_hyphen": 0.0,
+      "p_not_correctly_labelled_given_hyphen": 0.1583
+    },
+    "JWT Token": {
+      "p_rule_fires_given_hyphen": 0.8833,
+      "p_fallback_given_hyphen": 0.0,
+      "p_missed_given_hyphen": 0.1167,
+      "p_not_correctly_labelled_given_hyphen": 0.1167
+    }
+  },
+  "marginal_rates": {
+    "SendGrid API Key": {
+      "p_ends_hyphen": 0.015625,
+      "p_missed_marginal": 0.015625,
+      "one_in_n_missed": 64,
+      "p_not_correctly_labelled_marginal": 0.015625,
+      "one_in_n_not_correctly_labelled": 64
+    },
+    "GCP API Key": {
+      "p_ends_hyphen": 0.015625,
+      "p_missed_marginal": 0.0,
+      "one_in_n_missed": null,
+      "p_not_correctly_labelled_marginal": 0.015625,
+      "one_in_n_not_correctly_labelled": 64
+    },
+    "Google OAuth Token": {
+      "p_ends_hyphen": 0.015625,
+      "p_missed_marginal": 0.00169219,
+      "one_in_n_missed": 591,
+      "p_not_correctly_labelled_marginal": 0.00169219,
+      "one_in_n_not_correctly_labelled": 591
+    },
+    "JWT Token (HS384, 48-byte sig)": {
+      "p_ends_hyphen": 0.015625,
+      "p_missed_marginal": 0.00182344,
+      "one_in_n_missed": 548,
+      "p_not_correctly_labelled_marginal": 0.00182344,
+      "one_in_n_not_correctly_labelled": 548
+    },
+    "JWT Token (HS256, 32-byte sig)": {
+      "p_ends_hyphen": 0.0,
+      "p_missed_marginal": 0.0,
+      "one_in_n_missed": null,
+      "p_not_correctly_labelled_marginal": 0.0,
+      "one_in_n_not_correctly_labelled": null
+    }
+  },
+  "p_ends_hyphen_monte_carlo_confirmation": {
+    "SendGrid API Key": 0.015365,
+    "GCP API Key": 0.015365,
+    "OpenAI API Key (new)": 0.015365,
+    "Google OAuth Token": 0.015365,
+    "JWT Token (HS384, 48-byte sig)": 0.015375,
+    "JWT Token (HS256, 32-byte sig)": 0.0
+  },
+  "BR_SP_metrics_per_rule": {
+    "AWS Access Key ID": {
+      "BR_mean_boundary_robustness": 1.0,
+      "BR_worst_context": 1.0,
+      "detection_rate_any": 1.0,
+      "SP_severity_preservation": 1.0,
+      "n_applicable_contexts": 10
+    },
+    "GitHub PAT (classic)": {
+      "BR_mean_boundary_robustness": 1.0,
+      "BR_worst_context": 1.0,
+      "detection_rate_any": 1.0,
+      "SP_severity_preservation": 1.0,
+      "n_applicable_contexts": 10
+    },
+    "GitHub OAuth Token": {
+      "BR_mean_boundary_robustness": 1.0,
+      "BR_worst_context": 1.0,
+      "detection_rate_any": 1.0,
+      "SP_severity_preservation": 1.0,
+      "n_applicable_contexts": 10
+    },
+    "GitHub App Token": {
+      "BR_mean_boundary_robustness": 1.0,
+      "BR_worst_context": 1.0,
+      "detection_rate_any": 1.0,
+      "SP_severity_preservation": 1.0,
+      "n_applicable_contexts": 10
+    },
+    "GitHub Refresh Token": {
+      "BR_mean_boundary_robustness": 1.0,
+      "BR_worst_context": 1.0,
+      "detection_rate_any": 1.0,
+      "SP_severity_preservation": 1.0,
+      "n_applicable_contexts": 10
+    },
+    "GitHub Fine-Grained PAT": {
+      "BR_mean_boundary_robustness": 1.0,
+      "BR_worst_context": 1.0,
+      "detection_rate_any": 1.0,
+      "SP_severity_preservation": 1.0,
+      "n_applicable_contexts": 11
+    },
+    "OpenAI API Key": {
+      "BR_mean_boundary_robustness": 1.0,
+      "BR_worst_context": 1.0,
+      "detection_rate_any": 1.0,
+      "SP_severity_preservation": 1.0,
+      "n_applicable_contexts": 10
+    },
+    "OpenAI API Key (new)": {
+      "BR_mean_boundary_robustness": 0.9847,
+      "BR_worst_context": 0.8417,
+      "detection_rate_any": 0.9986,
+      "SP_severity_preservation": 0.9861,
+      "n_applicable_contexts": 12
+    },
+    "Anthropic API Key": {
+      "BR_mean_boundary_robustness": 1.0,
+      "BR_worst_context": 1.0,
+      "detection_rate_any": 1.0,
+      "SP_severity_preservation": 1.0,
+      "n_applicable_contexts": 10
+    },
+    "GCP API Key": {
+      "BR_mean_boundary_robustness": 0.9028,
+      "BR_worst_context": 0.0,
+      "detection_rate_any": 0.9903,
+      "SP_severity_preservation": 0.9116,
+      "n_applicable_contexts": 12
+    },
+    "Google OAuth Token": {
+      "BR_mean_boundary_robustness": 0.9903,
+      "BR_worst_context": 0.8917,
+      "detection_rate_any": 0.9903,
+      "SP_severity_preservation": 1.0,
+      "n_applicable_contexts": 12
+    },
+    "Stripe Secret Key": {
+      "BR_mean_boundary_robustness": 1.0,
+      "BR_worst_context": 1.0,
+      "detection_rate_any": 1.0,
+      "SP_severity_preservation": 1.0,
+      "n_applicable_contexts": 10
+    },
+    "Stripe Restricted Key": {
+      "BR_mean_boundary_robustness": 1.0,
+      "BR_worst_context": 1.0,
+      "detection_rate_any": 1.0,
+      "SP_severity_preservation": 1.0,
+      "n_applicable_contexts": 10
+    },
+    "Stripe Publishable Key": {
+      "BR_mean_boundary_robustness": 1.0,
+      "BR_worst_context": 1.0,
+      "detection_rate_any": 1.0,
+      "SP_severity_preservation": 1.0,
+      "n_applicable_contexts": 10
+    },
+    "Slack Bot Token": {
+      "BR_mean_boundary_robustness": 1.0,
+      "BR_worst_context": 1.0,
+      "detection_rate_any": 1.0,
+      "SP_severity_preservation": 1.0,
+      "n_applicable_contexts": 10
+    },
+    "Slack User Token": {
+      "BR_mean_boundary_robustness": 1.0,
+      "BR_worst_context": 1.0,
+      "detection_rate_any": 1.0,
+      "SP_severity_preservation": 1.0,
+      "n_applicable_contexts": 10
+    },
+    "Slack App Token": {
+      "BR_mean_boundary_robustness": 1.0,
+      "BR_worst_context": 1.0,
+      "detection_rate_any": 1.0,
+      "SP_severity_preservation": 1.0,
+      "n_applicable_contexts": 10
+    },
+    "Twilio Account SID": {
+      "BR_mean_boundary_robustness": 1.0,
+      "BR_worst_context": 1.0,
+      "detection_rate_any": 1.0,
+      "SP_severity_preservation": 1.0,
+      "n_applicable_contexts": 10
+    },
+    "SendGrid API Key": {
+      "BR_mean_boundary_robustness": 0.9083,
+      "BR_worst_context": 0.0,
+      "detection_rate_any": 0.9083,
+      "SP_severity_preservation": 1.0,
+      "n_applicable_contexts": 12
+    },
+    "Cloudflare API Key": {
+      "BR_mean_boundary_robustness": 1.0,
+      "BR_worst_context": 1.0,
+      "detection_rate_any": 1.0,
+      "SP_severity_preservation": 1.0,
+      "n_applicable_contexts": 10
+    },
+    "npm Auth Token": {
+      "BR_mean_boundary_robustness": 1.0,
+      "BR_worst_context": 1.0,
+      "detection_rate_any": 1.0,
+      "SP_severity_preservation": 1.0,
+      "n_applicable_contexts": 10
+    },
+    "PagerDuty Integration Key": {
+      "BR_mean_boundary_robustness": 1.0,
+      "BR_worst_context": 1.0,
+      "detection_rate_any": 1.0,
+      "SP_severity_preservation": 1.0,
+      "n_applicable_contexts": 10
+    },
+    "Groq API Key": {
+      "BR_mean_boundary_robustness": 1.0,
+      "BR_worst_context": 1.0,
+      "detection_rate_any": 1.0,
+      "SP_severity_preservation": 1.0,
+      "n_applicable_contexts": 10
+    },
+    "JWT Token": {
+      "BR_mean_boundary_robustness": 0.9882,
+      "BR_worst_context": 0.8833,
+      "detection_rate_any": 0.9882,
+      "SP_severity_preservation": 1.0,
+      "n_applicable_contexts": 12
+    }
+  },
+  "rules_with_worst_context_below_0.9": [
+    "GCP API Key",
+    "Google OAuth Token",
+    "JWT Token",
+    "OpenAI API Key (new)",
+    "SendGrid API Key"
+  ],
+  "n_rules_measured": 24
+}

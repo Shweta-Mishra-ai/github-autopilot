@@ -1,0 +1,155 @@
+........................................................................ [  3%]
+........................................................................ [  7%]
+........................................................................ [ 10%]
+........................................................................ [ 14%]
+........................................................................ [ 17%]
+........................................................................ [ 21%]
+........................................................................ [ 24%]
+........................................................................ [ 28%]
+........................................................................ [ 31%]
+........................................................................ [ 35%]
+........................................................................ [ 38%]
+........................................................................ [ 42%]
+........................................................................ [ 45%]
+........................................................................ [ 49%]
+........................................................................ [ 52%]
+........................................................................ [ 56%]
+........................................................................ [ 59%]
+........................................................................ [ 63%]
+........................................................................ [ 66%]
+........................................................................ [ 70%]
+........................................................................ [ 73%]
+........................................................................ [ 77%]
+........................................................................ [ 80%]
+........................................................................ [ 84%]
+........................................................................ [ 87%]
+........................................................................ [ 91%]
+........................................................................ [ 94%]
+........................................................................ [ 98%]
+......................................                                   [100%]
+
+---------- coverage: platform linux, python 3.11.15-final-0 ----------
+Name                                    Stmts   Miss  Cover   Missing
+---------------------------------------------------------------------
+app/__init__.py                             1      0   100%
+app/ai/__init__.py                          0      0   100%
+app/ai/circuit_breaker.py                  82      6    93%   119, 123, 129-130, 141-142
+app/ai/gatekeeper.py                       57      0   100%
+app/ai/guarded.py                          50      9    82%   47-52, 71, 77-78
+app/ai/hallucination.py                    82      6    93%   132, 155-159
+app/ai/metrics.py                          81     29    64%   61-64, 80-81, 105, 107, 113, 115, 131-138, 145, 158-172
+app/ai/providers/__init__.py                0      0   100%
+app/ai/providers/base.py                   76     23    70%   51, 57, 72, 115, 135-141, 147-159
+app/ai/providers/gemini.py                 72      6    92%   33, 149-151, 181-182
+app/ai/providers/groq.py                   78      4    95%   108-109, 186-187
+app/ai/providers/ollama.py                 51      8    84%   61, 99-100, 130-131, 145-147
+app/ai/providers/openrouter.py             73     41    44%   37-38, 42, 53-75, 118-131, 157-212
+app/ai/router.py                          278     66    76%   105-106, 118-119, 124, 127-132, 144-145, 166-179, 204-207, 213-221, 231, 238, 248-256, 289, 327, 331-332, 366, 379, 383, 417-418, 445-446, 477-499
+app/ai/routing_policy.py                   24      0   100%
+app/ai/validator.py                        90      9    90%   85, 92-93, 143, 147, 193, 198, 215-216
+app/core/__init__.py                        0      0   100%
+app/core/analytics.py                     101      9    91%   161-162, 166-172
+app/core/authorization.py                  79      5    94%   120, 214, 216-218
+app/core/commands.py                        3      0   100%
+app/core/confidence.py                     45      1    98%   93
+app/core/config.py                        142     62    56%   155-165, 177-181, 189-192, 209, 241, 266-270, 274-275, 279-280, 300-358, 370, 383-391
+app/core/event_queue.py                   133      9    93%   172-173, 222-226, 282-283
+app/core/guardrails.py                    125      7    94%   141, 158, 197, 218, 224-226
+app/core/health_check.py                   92     14    85%   57-58, 94, 102, 127, 132-134, 146, 154-155, 172, 181-182
+app/core/idempotency.py                    52      5    90%   78-79, 82-83, 126
+app/core/installations.py                  78     15    81%   110-111, 125-126, 131-137, 142-147
+app/core/learning.py                       99     32    68%   27-28, 39-40, 55-57, 96-99, 109-110, 115-121, 126-135, 169-172, 177-179, 187
+app/core/logger.py                         46     19    59%   26-34, 45-69, 74, 112, 126-127
+app/core/maintenance.py                   139     26    81%   87-89, 126, 129-131, 189-190, 235-236, 246-247, 257-259, 272, 274-275, 282-285, 307-309
+app/core/memory_backup.py                 176     28    84%   57, 95-97, 141, 150, 156, 160-162, 167-178, 223-224, 261-263, 330-331
+app/core/metrics.py                        28      0   100%
+app/core/preflight.py                     116     26    78%   45, 132-133, 211-219, 230-251, 258, 295
+app/core/redaction.py                      23      2    91%   57-58
+app/core/redis_client.py                  303     57    81%   43, 68, 71, 112, 130, 133, 151-152, 181, 289-297, 306, 324-327, 356-359, 365, 375, 400, 409, 430, 434, 439, 442-447, 450-456, 459-465, 477, 483-485
+app/core/retry_after.py                    30      3    90%   63, 67-68
+app/core/sanitizer.py                      38      0   100%
+app/core/snapshot.py                      122     13    89%   138-139, 148-149, 167, 193-195, 211-213, 221, 250
+app/core/thread_pool.py                    57      7    88%   102-103, 112-116
+app/core/webhook_security.py              182     13    93%   58, 72, 260, 350-357, 378, 471
+app/dashboard.py                            3      0   100%
+app/github/__init__.py                      0      0   100%
+app/github/auth.py                         45     23    49%   42, 56, 60-84, 95-102, 111-117
+app/github/client.py                      122     63    48%   105, 107, 139-157, 171-172, 178-199, 203-209, 213-219, 223-229, 233-239
+app/github/helpers.py                       4      0   100%
+app/github/notifications.py               160      3    98%   105-106, 153
+app/github/patch_parser.py                 62      1    98%   53
+app/github/rate_limit.py                   58     32    45%   37-38, 41-42, 48-49, 62-72, 96-120, 125-131
+app/github/sticky.py                       25      0   100%
+app/graphview.py                            3      0   100%
+app/handlers/__init__.py                    0      0   100%
+app/handlers/autofix.py                   192     40    79%   94-95, 102-103, 179-180, 201, 209-214, 230-231, 273-274, 315-316, 323-328, 372-373, 382-386, 390-391, 395-397, 403-405, 409-410, 508
+app/handlers/ci.py                        104      7    93%   69-70, 93-94, 112, 193-194
+app/handlers/comments.py                    2      2     0%   9-11
+app/handlers/comments/__init__.py          12      0   100%
+app/handlers/comments/_client.py           18      0   100%
+app/handlers/comments/constants.py          5      0   100%
+app/handlers/comments/dispatcher.py        64      7    89%   70-79, 147-149
+app/handlers/comments/generator.py        136     22    84%   28-29, 51, 74-76, 81, 106, 108, 137, 139, 168, 202, 237, 278, 280, 346, 348, 404-410
+app/handlers/comments/integrations.py      84     13    85%   73-81, 91, 130-132, 189-191
+app/handlers/comments/publisher.py        199     43    78%   31, 52, 119-122, 135, 149, 156-159, 209-215, 307, 310-322, 339-341, 344, 356, 390, 403-409, 424, 432
+app/handlers/comments/reviewer.py         176     41    77%   46-47, 67-69, 71-72, 77-78, 128-129, 157-158, 178, 183-184, 190-191, 203, 217-218, 223, 248, 251, 282-283, 290, 300-301, 307, 337, 357-358, 368, 375, 398, 406-410
+app/handlers/comments/security.py          64      0   100%
+app/handlers/comments/service.py          145      2    99%   175-176
+app/handlers/commit_message.py            106      0   100%
+app/handlers/issues.py                    105     12    89%   76-77, 86-87, 105-108, 246-247, 284-285
+app/handlers/pull_request/__init__.py     102     21    79%   135-136, 147-149, 155-156, 164-166, 178-181, 194-195, 223-225, 231-232
+app/handlers/pull_request/analysis.py      65     11    83%   77-78, 126-127, 143-144, 190-191, 195-197
+app/handlers/pull_request/classify.py      47      3    94%   130, 132, 138
+app/handlers/pull_request/gaps.py          32      6    81%   75-76, 84, 110-112
+app/handlers/pull_request/report.py        17      0   100%
+app/handlers/pull_request/review.py        77      8    90%   66, 155-156, 167-168, 226-234
+app/handlers/push.py                      235     46    80%   104, 124-129, 136, 263, 269, 294-295, 315-316, 325-326, 409-410, 464-465, 473-513
+app/handlers/readme.py                    159     27    83%   51-53, 57-59, 63-65, 212, 285-295, 363-364, 369-370, 377-384
+app/intelligence/__init__.py                1      0   100%
+app/intelligence/codegraph.py             255      5    98%   132, 370, 388-390
+app/intelligence/embeddings.py             50      0   100%
+app/intelligence/memory.py                156     17    89%   82-83, 106-107, 136, 162-163, 253, 264, 270-272, 295, 306-307, 326-327
+app/intelligence/retrieval.py              52      0   100%
+app/intelligence/summarizer.py             36      0   100%
+app/mcp/__init__.py                         5      0   100%
+app/mcp/handlers.py                       226     68    70%   59, 93, 95, 97, 100-102, 116, 165-167, 188-192, 216-218, 241-243, 289-291, 303, 336-338, 422-426, 438-508
+app/mcp/mcp_server.py                      60      0   100%
+app/mcp/tools.py                            1      0   100%
+app/security/__init__.py                    0      0   100%
+app/security/dependencies.py              122      0   100%
+app/security/enhanced_secrets.py          204      9    96%   234, 290, 511, 519, 540, 633, 699, 767, 769
+app/security/licenses.py                  148     12    92%   126-129, 171, 191, 213, 245, 270-271, 275-276
+app/security/scanner.py                   168      4    98%   123, 217, 255, 282
+app/setup_flow.py                          50     11    78%   153-171
+github_autopilot/cli.py                   134    104    22%   25-44, 57-106, 121-165, 170-171, 185-205, 209-221, 261
+---------------------------------------------------------------------
+TOTAL                                    7600   1223    84%
+Coverage JSON written to file /tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/results/coverage.json
+
+============================= slowest 25 durations =============================
+3.01s call     tests/test_client_retry_safety.py::TestAgainstARealFailingServer::test_a_get_is_retried
+2.80s call     tests/test_comments_security.py::TestCmdSecfull::test_returns_report_markdown
+2.44s call     tests/test_placeholder_secrets.py::TestThisRepositoryScansClean::test_no_findings_anywhere_in_this_repository
+2.20s call     tests/test_notifications.py::TestConfiguredWebhookActuallyDelivers::test_default_repo_config_does_not_suppress_delivery
+1.90s call     tests/test_readme.py::TestDelivery::test_current_readme_opens_no_pr
+1.58s call     tests/test_placeholder_secrets.py::TestPlaceholderWordsNeverSuppressARealSecret::test_detection_holds_across_many_random_tokens
+1.33s call     tests/test_coverage_boost.py::test_reviewer_commands
+1.13s call     tests/test_readme.py::TestRunsWithoutThirdPartyDependencies::test_every_renderer_runs_without_third_party_deps
+1.12s call     tests/test_readme.py::TestRunsWithoutThirdPartyDependencies::test_check_cli_runs_without_third_party_deps
+1.10s call     tests/test_redis_client.py::TestFakeRedis::test_expire_sets_ttl
+1.10s call     tests/test_v6_fixes.py::TestRedisProductionGuard::test_fake_redis_basic_operations
+1.10s call     tests/test_redis_client.py::TestFakeRedis::test_set_with_ex_expires
+1.02s call     tests/test_readme.py::TestDelivery::test_opens_a_pr_when_regions_drift
+0.98s call     tests/test_readme.py::TestDelivery::test_open_pr_blocks_a_second_one
+0.98s call     tests/test_readme.py::TestDelivery::test_never_commits_to_the_default_branch
+0.97s call     tests/test_readme.py::TestThisRepositorysReadme::test_readme_regions_are_current
+0.89s call     tests/test_readme.py::TestDelivery::test_recent_proposal_blocks_a_second_one
+0.54s call     tests/test_codegraph.py::TestAgainstThisRepository::test_every_edge_endpoint_exists
+0.50s teardown tests/test_client_retry_safety.py::TestAgainstARealFailingServer::test_a_post_reaches_the_server_exactly_once
+0.50s call     tests/test_readme.py::TestRenderers::test_stats_are_derived_not_hardcoded
+0.49s call     tests/test_readme.py::TestRenderers::test_architecture_is_a_mermaid_block
+0.49s call     tests/test_codegraph.py::TestAgainstThisRepository::test_builds_without_error
+0.47s call     tests/test_codegraph.py::TestAgainstThisRepository::test_known_hub_has_high_fan_in
+0.47s call     tests/test_prelaunch_audit.py::TestEveryEnvVarIsDocumented::test_no_env_var_is_undocumented
+0.46s call     tests/test_payload_shapes.py::TestTheSweepIsStructural::test_no_handler_bare_subscripts_a_nullable_payload_key
+2054 passed in 53.17s

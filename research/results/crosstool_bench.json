@@ -1,0 +1,2935 @@
+{
+  "design": "Identical boundary-mutation battery applied to three scanners. The expected rule per credential type is determined empirically from each tool's own behaviour in the canonical context, so no tool is judged against another project's rule naming.",
+  "n_samples_per_cell": 40,
+  "n_files": 4320,
+  "n_types": 10,
+  "n_contexts": 12,
+  "scan_wall_s": {
+    "autopilot": 0.62,
+    "gitleaks": 0.33,
+    "trufflehog": 2.51
+  },
+  "results": {
+    "GitHub Autopilot": {
+      "tool": "GitHub Autopilot",
+      "types_detected_canonically": [
+        "aws_access_key_id",
+        "gcp_api_key",
+        "github_oauth",
+        "github_pat",
+        "jwt",
+        "npm_token",
+        "openai_project_key",
+        "sendgrid_api_key",
+        "slack_bot_token",
+        "stripe_secret_key"
+      ],
+      "types_not_detected_canonically": [],
+      "n_types_analysed": 10,
+      "n_boundary_fragile": 2,
+      "boundary_fragile_types": [
+        "gcp_api_key",
+        "sendgrid_api_key"
+      ],
+      "aggregate_note": "aggregated only over types this tool detects canonically, and only over mutations the credential format permits",
+      "aggregate_by_context": {
+        "canonical": {
+          "n": 400,
+          "rule_match_rate": 0.9975,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0025
+        },
+        "single_quoted": {
+          "n": 400,
+          "rule_match_rate": 0.995,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0025,
+          "missed_rate": 0.0025
+        },
+        "unquoted": {
+          "n": 400,
+          "rule_match_rate": 0.995,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.005
+        },
+        "yaml_value": {
+          "n": 400,
+          "rule_match_rate": 0.9925,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0075
+        },
+        "json_value": {
+          "n": 400,
+          "rule_match_rate": 0.9975,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0025,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "n": 400,
+          "rule_match_rate": 0.9975,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0025
+        },
+        "url_query": {
+          "n": 400,
+          "rule_match_rate": 0.995,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.005
+        },
+        "trailing_comma": {
+          "n": 400,
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "in_parens": {
+          "n": 400,
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "leading_space": {
+          "n": 400,
+          "rule_match_rate": 0.9925,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0075
+        },
+        "trailing_hyphen": {
+          "n": 160,
+          "rule_match_rate": 0.5,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.25,
+          "missed_rate": 0.25
+        },
+        "trailing_under": {
+          "n": 160,
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        }
+      },
+      "per_type": {
+        "github_pat": {
+          "expected_rule": "GitHub PAT (classic)",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 1.0,
+          "boundary_robustness_BR": 1.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {},
+          "is_boundary_fragile": false
+        },
+        "github_oauth": {
+          "expected_rule": "GitHub OAuth Token",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 1.0,
+          "boundary_robustness_BR": 1.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {},
+          "is_boundary_fragile": false
+        },
+        "stripe_secret_key": {
+          "expected_rule": "Stripe Secret Key",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 1.0,
+          "boundary_robustness_BR": 1.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {},
+          "is_boundary_fragile": false
+        },
+        "npm_token": {
+          "expected_rule": "npm Auth Token",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 1.0,
+          "boundary_robustness_BR": 1.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {},
+          "is_boundary_fragile": false
+        },
+        "slack_bot_token": {
+          "expected_rule": "Slack Bot Token",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 1.0,
+          "boundary_robustness_BR": 1.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {},
+          "is_boundary_fragile": false
+        },
+        "aws_access_key_id": {
+          "expected_rule": "AWS Access Key ID",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 1.0,
+          "boundary_robustness_BR": 1.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {},
+          "is_boundary_fragile": false
+        },
+        "gcp_api_key": {
+          "expected_rule": "GCP API Key",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 1.0,
+          "boundary_robustness_BR": 0.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 0.975,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.025,
+              "missed_rate": 0.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 0.975,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.025
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 0.95,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.05
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 0.975,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.025,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 0.975,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.025
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 0.975,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.025
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_hyphen": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 1.0,
+              "missed_rate": 0.0
+            },
+            "trailing_under": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {
+            "trailing_hyphen": 0.0
+          },
+          "is_boundary_fragile": true
+        },
+        "sendgrid_api_key": {
+          "expected_rule": "SendGrid API Key",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 0.975,
+          "boundary_robustness_BR": 0.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 0.975,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.025
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 0.975,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.025
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 0.975,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.025
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 0.975,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.025
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 0.975,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.025
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 0.925,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.075
+            },
+            "trailing_hyphen": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "trailing_under": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {
+            "trailing_hyphen": 0.0
+          },
+          "is_boundary_fragile": true
+        },
+        "openai_project_key": {
+          "expected_rule": "OpenAI API Key (new)",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 1.0,
+          "boundary_robustness_BR": 1.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_hyphen": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_under": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {},
+          "is_boundary_fragile": false
+        },
+        "jwt": {
+          "expected_rule": "JWT Token",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 1.0,
+          "boundary_robustness_BR": 1.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_hyphen": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_under": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {},
+          "is_boundary_fragile": false
+        }
+      }
+    },
+    "Gitleaks 8.21.2": {
+      "tool": "Gitleaks 8.21.2",
+      "types_detected_canonically": [
+        "aws_access_key_id",
+        "gcp_api_key",
+        "github_oauth",
+        "github_pat",
+        "jwt",
+        "npm_token",
+        "sendgrid_api_key",
+        "slack_bot_token",
+        "stripe_secret_key"
+      ],
+      "types_not_detected_canonically": [
+        "openai_project_key"
+      ],
+      "n_types_analysed": 9,
+      "n_boundary_fragile": 6,
+      "boundary_fragile_types": [
+        "aws_access_key_id",
+        "gcp_api_key",
+        "jwt",
+        "npm_token",
+        "sendgrid_api_key",
+        "stripe_secret_key"
+      ],
+      "aggregate_note": "aggregated only over types this tool detects canonically, and only over mutations the credential format permits",
+      "aggregate_by_context": {
+        "canonical": {
+          "n": 360,
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "single_quoted": {
+          "n": 360,
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "n": 360,
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "yaml_value": {
+          "n": 360,
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "json_value": {
+          "n": 360,
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "n": 360,
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "url_query": {
+          "n": 360,
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_comma": {
+          "n": 360,
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "in_parens": {
+          "n": 360,
+          "rule_match_rate": 0.3333,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.6667
+        },
+        "leading_space": {
+          "n": 360,
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": {
+          "n": 120,
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_under": {
+          "n": 120,
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        }
+      },
+      "per_type": {
+        "github_pat": {
+          "expected_rule": "github-pat",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 1.0,
+          "boundary_robustness_BR": 1.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {},
+          "is_boundary_fragile": false
+        },
+        "github_oauth": {
+          "expected_rule": "github-oauth",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 1.0,
+          "boundary_robustness_BR": 1.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {},
+          "is_boundary_fragile": false
+        },
+        "stripe_secret_key": {
+          "expected_rule": "stripe-access-token",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 1.0,
+          "boundary_robustness_BR": 0.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {
+            "in_parens": 0.0
+          },
+          "is_boundary_fragile": true
+        },
+        "npm_token": {
+          "expected_rule": "npm-access-token",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 1.0,
+          "boundary_robustness_BR": 0.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {
+            "in_parens": 0.0
+          },
+          "is_boundary_fragile": true
+        },
+        "slack_bot_token": {
+          "expected_rule": "slack-bot-token",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 1.0,
+          "boundary_robustness_BR": 1.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {},
+          "is_boundary_fragile": false
+        },
+        "aws_access_key_id": {
+          "expected_rule": "aws-access-token",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 1.0,
+          "boundary_robustness_BR": 0.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {
+            "in_parens": 0.0
+          },
+          "is_boundary_fragile": true
+        },
+        "gcp_api_key": {
+          "expected_rule": "gcp-api-key",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 1.0,
+          "boundary_robustness_BR": 0.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_hyphen": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_under": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {
+            "in_parens": 0.0
+          },
+          "is_boundary_fragile": true
+        },
+        "sendgrid_api_key": {
+          "expected_rule": "sendgrid-api-token",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 1.0,
+          "boundary_robustness_BR": 0.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_hyphen": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_under": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {
+            "in_parens": 0.0
+          },
+          "is_boundary_fragile": true
+        },
+        "openai_project_key": {
+          "expected_rule": null,
+          "detected_canonically": false,
+          "canonical_rule_match_rate": 0.0,
+          "boundary_robustness_BR": 0.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "trailing_hyphen": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "trailing_under": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            }
+          },
+          "boundary_fragile_contexts": {},
+          "is_boundary_fragile": false
+        },
+        "jwt": {
+          "expected_rule": "jwt",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 1.0,
+          "boundary_robustness_BR": 0.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_hyphen": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_under": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {
+            "in_parens": 0.0
+          },
+          "is_boundary_fragile": true
+        }
+      }
+    },
+    "TruffleHog 3.82.13": {
+      "tool": "TruffleHog 3.82.13",
+      "types_detected_canonically": [
+        "github_oauth",
+        "github_pat",
+        "npm_token",
+        "sendgrid_api_key",
+        "slack_bot_token",
+        "stripe_secret_key"
+      ],
+      "types_not_detected_canonically": [
+        "aws_access_key_id",
+        "gcp_api_key",
+        "openai_project_key",
+        "jwt"
+      ],
+      "n_types_analysed": 6,
+      "n_boundary_fragile": 0,
+      "boundary_fragile_types": [],
+      "aggregate_note": "aggregated only over types this tool detects canonically, and only over mutations the credential format permits",
+      "aggregate_by_context": {
+        "canonical": {
+          "n": 240,
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "single_quoted": {
+          "n": 240,
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "n": 240,
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "yaml_value": {
+          "n": 240,
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "json_value": {
+          "n": 240,
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "n": 240,
+          "rule_match_rate": 0.9958,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0042
+        },
+        "url_query": {
+          "n": 240,
+          "rule_match_rate": 0.9958,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0042
+        },
+        "trailing_comma": {
+          "n": 240,
+          "rule_match_rate": 0.9958,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0042
+        },
+        "in_parens": {
+          "n": 240,
+          "rule_match_rate": 0.9958,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0042
+        },
+        "leading_space": {
+          "n": 240,
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": {
+          "n": 40,
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_under": {
+          "n": 40,
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        }
+      },
+      "per_type": {
+        "github_pat": {
+          "expected_rule": "Github",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 1.0,
+          "boundary_robustness_BR": 0.975,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 0.975,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.025
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {},
+          "is_boundary_fragile": false
+        },
+        "github_oauth": {
+          "expected_rule": "Github",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 1.0,
+          "boundary_robustness_BR": 0.975,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 0.975,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.025
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {},
+          "is_boundary_fragile": false
+        },
+        "stripe_secret_key": {
+          "expected_rule": "Stripe",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 1.0,
+          "boundary_robustness_BR": 1.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {},
+          "is_boundary_fragile": false
+        },
+        "npm_token": {
+          "expected_rule": "NpmToken",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 1.0,
+          "boundary_robustness_BR": 0.975,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 0.975,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.025
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {},
+          "is_boundary_fragile": false
+        },
+        "slack_bot_token": {
+          "expected_rule": "Slack",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 1.0,
+          "boundary_robustness_BR": 0.975,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 0.975,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.025
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {},
+          "is_boundary_fragile": false
+        },
+        "aws_access_key_id": {
+          "expected_rule": null,
+          "detected_canonically": false,
+          "canonical_rule_match_rate": 0.0,
+          "boundary_robustness_BR": 0.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            }
+          },
+          "boundary_fragile_contexts": {},
+          "is_boundary_fragile": false
+        },
+        "gcp_api_key": {
+          "expected_rule": null,
+          "detected_canonically": false,
+          "canonical_rule_match_rate": 0.0,
+          "boundary_robustness_BR": 0.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "trailing_hyphen": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "trailing_under": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            }
+          },
+          "boundary_fragile_contexts": {},
+          "is_boundary_fragile": false
+        },
+        "sendgrid_api_key": {
+          "expected_rule": "SendGrid",
+          "detected_canonically": true,
+          "canonical_rule_match_rate": 1.0,
+          "boundary_robustness_BR": 1.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_hyphen": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            },
+            "trailing_under": {
+              "n": 40,
+              "rule_match_rate": 1.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 0.0
+            }
+          },
+          "boundary_fragile_contexts": {},
+          "is_boundary_fragile": false
+        },
+        "openai_project_key": {
+          "expected_rule": null,
+          "detected_canonically": false,
+          "canonical_rule_match_rate": 0.0,
+          "boundary_robustness_BR": 0.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "trailing_hyphen": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "trailing_under": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            }
+          },
+          "boundary_fragile_contexts": {},
+          "is_boundary_fragile": false
+        },
+        "jwt": {
+          "expected_rule": null,
+          "detected_canonically": false,
+          "canonical_rule_match_rate": 0.0,
+          "boundary_robustness_BR": 0.0,
+          "cells": {
+            "canonical": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "single_quoted": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "unquoted": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "yaml_value": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "json_value": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "env_file": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "url_query": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "trailing_comma": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "in_parens": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "leading_space": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "trailing_hyphen": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            },
+            "trailing_under": {
+              "n": 40,
+              "rule_match_rate": 0.0,
+              "other_rule_rate": 0.0,
+              "fallback_rate": 0.0,
+              "missed_rate": 1.0
+            }
+          },
+          "boundary_fragile_contexts": {},
+          "is_boundary_fragile": false
+        }
+      }
+    }
+  },
+  "seed_note": "credential material from secrets.SystemRandom (CSPRNG)"
+}

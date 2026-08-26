@@ -6,7 +6,7 @@
 \providecommand{\eprint}[2][]{\url{#2}}
  \bibcommenthead
 
-\bibitem[{Basak et~al.(2022)Basak, Neil, Reaves, and Williams}]{basak2023}
+\bibitem[{Basak et~al.(2022)Basak, Neil, Reaves, and Williams}]{basak2022}
 Basak SK, Neil L, Reaves B, et~al (2022) What are the practices for secret
   management in software artifacts? In: Proc. IEEE SecDev, pp 69--76
 
@@ -59,8 +59,8 @@ Jones M, Bradley J, Sakimura N (2015) {JSON} {W}eb {T}oken ({JWT}). Tech. Rep.
 Krawczyk H, Bellare M, Canetti R (1997) {HMAC}: Keyed-hashing for message
   authentication. Tech. Rep. RFC 2104, IETF
 
-\bibitem[{Liem and Panichella(2023)}]{liem2023}
-Liem CCS, Panichella A (2023) Run, forest, run? {O}n randomization and
+\bibitem[{Liem and Panichella(2020)}]{liem2020}
+Liem CCS, Panichella A (2020) Run, forest, run? {O}n randomization and
   reproducibility in {ML} and {SE} research. ArXiv:2012.08387
 
 \bibitem[{McCabe(1976)}]{mccabe1976}

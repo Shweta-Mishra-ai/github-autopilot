@@ -495,7 +495,7 @@ class LLMRouter:
     _config_error: str = ""
 
     def _note_configuration_error(self, error: str) -> None:
-        from app.ai.providers.groq import is_configuration_error
+        from app.ai.providers.base import is_configuration_error
 
         if is_configuration_error(error):
             LLMRouter._config_error = str(error)

@@ -208,3 +208,91 @@ class TestTheNightlyReportReusesOneIssue:
             "failing' when the run now fails for a missing model points the "
             "reader at the wrong thing"
         )
+
+
+class TestTheFreshnessGateChecksTheResult:
+    """
+    The freshness job reported "✅ eval gate is running" while the evals had
+    failed four nights running.
+
+    It read only the last run's timestamp. A gate that runs and fails measures
+    exactly as much as one that never runs, and the green tick actively argued
+    against looking — the job exists to notice when quality stops being
+    measured, and this is one of the two ways that happens.
+    """
+
+    @staticmethod
+    def _step() -> str:
+        from pathlib import Path
+
+        import yaml
+
+        wf = Path(__file__).resolve().parent.parent / ".github/workflows/ci.yml"
+        spec = yaml.safe_load(wf.read_text(encoding="utf-8"))
+        steps = spec["jobs"]["eval-freshness"]["steps"]
+        return steps[0]["run"]
+
+    def test_it_reads_the_conclusion_not_only_the_timestamp(self):
+        run = self._step()
+        assert "conclusion" in run, (
+            "reading only created_at cannot tell a passing nightly run from a "
+            "failing one, and it reported the failing case as healthy"
+        )
+
+    def test_a_failing_run_is_not_reported_with_a_tick(self):
+        run = self._step()
+        assert 'RESULT" != "success"' in run, (
+            "there must be a branch for 'ran recently but did not pass'"
+        )
+        # Only lines that actually emit — a comment quoting the old wording
+        # is documentation, not behaviour, and matching it would fail here for
+        # a reason that has nothing to do with what the job does.
+        emitted = [
+            ln
+            for ln in run.splitlines()
+            if "GITHUB_STEP_SUMMARY" in ln
+            and "eval gate is running" in ln
+            and not ln.lstrip().startswith("#")
+        ]
+        assert emitted, "the healthy summary line should still exist"
+        assert all("passing" in ln for ln in emitted), (
+            "'the eval gate is running' was true and useless while the gate was "
+            "red every night; the healthy line must claim passing, not running"
+        )
+
+
+class TestTheBadgeCannotAdvertiseARedRun:
+    """
+    The badge job pipes pytest into tee and greps the pass count out. Without
+    pipefail a failing pytest exits 0 through the pipe, and the grep reads
+    "2090 passed" straight out of "3 failed, 2090 passed" — publishing a green
+    badge for a red run. The job re-runs the suite itself, so its run can fail
+    independently of the test job it depends on.
+    """
+
+    @staticmethod
+    def _step() -> str:
+        from pathlib import Path
+
+        import yaml
+
+        wf = Path(__file__).resolve().parent.parent / ".github/workflows/ci.yml"
+        spec = yaml.safe_load(wf.read_text(encoding="utf-8"))
+        steps = spec["jobs"]["badge"]["steps"]
+        counting = [s for s in steps if "Count passing tests" in str(s.get("name", ""))]
+        assert counting, "the badge job must still count tests"
+        return counting[0]["run"]
+
+    def test_pipefail_is_set(self):
+        run = self._step()
+        assert "pipefail" in run, (
+            "without pipefail the pytest exit code is swallowed by tee and a "
+            "failing run publishes a passing count"
+        )
+
+    def test_a_run_with_failures_is_refused(self):
+        run = self._step()
+        assert "failed|error" in run, (
+            "the count must be refused when the output reports failures, not "
+            "merely when the pass count is missing"
+        )

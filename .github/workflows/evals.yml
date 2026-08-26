@@ -180,9 +180,32 @@ jobs:
               "\`evals/cases/\` — a drop usually means a prompt, model, or provider" \
               "change degraded review quality." )
           fi
-          EXISTING=$(gh issue list --state open --label evals --json number \
-            --jq '.[0].number' 2>/dev/null || echo "")
+          # Find the existing report by TITLE, not by label.
+          #
+          # This filtered on `--label evals`, and that label had never been
+          # created -- `gh issue create --label evals` fails with "not found"
+          # and falls back to the unlabelled create, so no issue ever carried
+          # it. A filter on a label nothing has matches nothing, so EXISTING
+          # was always empty and every night opened a NEW issue: #86, #88, #89
+          # and #90 in four nights, which is precisely what reusing one issue
+          # was written to prevent.
+          #
+          # Titles are ours and all three start with the same words, so this
+          # needs no search index and no label to keep working.
+          EXISTING=$(gh issue list --state open --limit 100 --json number,title \
+            --jq '[.[] | select(.title | startswith("Nightly AI evals"))]
+                  | .[0].number // empty' 2>/dev/null || echo "")
+
+          # Created best-effort so the reports are filterable in the UI. The
+          # lookup above deliberately does NOT depend on this succeeding.
+          gh label create evals --color B60205 \
+            --description "Nightly AI output eval failures" >/dev/null 2>&1 || true
+
           if [ -n "$EXISTING" ]; then
+            # Retitle as well: the cause can change between nights, and an
+            # issue that still says "are failing" when the run now fails for a
+            # missing model sends the reader to the wrong place.
+            gh issue edit "$EXISTING" --title "$TITLE" >/dev/null 2>&1 || true
             gh issue comment "$EXISTING" --body "$BODY"
           else
             gh issue create --title "$TITLE" --body "$BODY" --label evals \

@@ -131,3 +131,80 @@ class TestExitCodeContract:
             "the report step must branch on exit code 3, or a retired model is "
             "reported as a quality regression again"
         )
+
+
+class TestTheNightlyReportReusesOneIssue:
+    """
+    The report step opened a new issue every night.
+
+    It looked up the existing report with `gh issue list --label evals`, and
+    that label had never been created: `gh issue create --label evals` fails
+    with "not found" and falls back to the unlabelled create, so no issue ever
+    carried it. A filter on a label nothing has matches nothing, so the lookup
+    was always empty. Four nights produced four identical issues — #86, #88,
+    #89, #90 — which is exactly what reusing one issue was written to prevent.
+
+    A comment in that same step claimed the reuse worked. Nothing checked it.
+    """
+
+    @staticmethod
+    def _report_step() -> str:
+        from pathlib import Path
+
+        import yaml
+
+        wf = Path(__file__).resolve().parent.parent / ".github/workflows/evals.yml"
+        spec = yaml.safe_load(wf.read_text(encoding="utf-8"))
+        steps = spec["jobs"]["evals"]["steps"]
+        report = [s for s in steps if str(s.get("name", "")).startswith("Report")]
+        assert report, "the evals workflow must still have a report step"
+        return report[0]["run"]
+
+    def test_the_lookup_does_not_filter_on_a_label(self):
+        run = self._report_step()
+        assert "--label evals --json" not in run, (
+            "filtering the lookup by a label makes the reuse depend on that "
+            "label existing — it did not, and every night opened a new issue"
+        )
+
+    def test_the_lookup_matches_on_the_title_instead(self):
+        run = self._report_step()
+        assert 'startswith("Nightly AI evals")' in run, (
+            "titles are ours and all three causes share a prefix, so matching "
+            "on them needs no label and no search index"
+        )
+
+    def test_every_title_the_step_can_set_shares_that_prefix(self):
+        # If a new cause is added with a different title, the reuse silently
+        # breaks again and nothing else would notice.
+        import re
+
+        run = self._report_step()
+        titles = re.findall(r'TITLE="([^"]+)"', run)
+        assert len(titles) >= 3, f"expected the three failure causes, found {titles}"
+        for title in titles:
+            assert title.startswith("Nightly AI evals"), (
+                f"{title!r} does not share the prefix the lookup matches on, so a "
+                f"run failing this way would open a second issue alongside the first"
+            )
+
+    def test_label_creation_cannot_break_the_step(self):
+        run = self._report_step()
+        assert "gh label create evals" in run, "the label should still be created"
+        # The command spans a line continuation, so join them before looking
+        # for the guard — checking a single line would pass a broken step.
+        joined = run.replace("\\\n", " ")
+        statement = next(ln for ln in joined.splitlines() if "gh label create" in ln)
+        assert "|| true" in statement, (
+            f"label creation must be best-effort — it fails when the label "
+            f"already exists, and `bash -e` would abort the whole step. Got: "
+            f"{statement.strip()!r}"
+        )
+
+    def test_the_existing_issue_is_retitled_to_the_current_cause(self):
+        run = self._report_step()
+        assert "gh issue edit" in run, (
+            "the cause can change between nights; an issue still titled 'are "
+            "failing' when the run now fails for a missing model points the "
+            "reader at the wrong thing"
+        )

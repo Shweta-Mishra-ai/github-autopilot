@@ -1,6 +1,6 @@
 {
   "note": "Marginal miss probability requires P(final character is a hyphen), which differs by credential construction and is ZERO for base64url encodings whose byte length is not a multiple of three.",
-  "p_ends_hyphen_uniform_64_symbol_tail": 0.015365,
+  "p_hyphen_uniform64": 0.0157,
   "jwt_signature_analysis": {
     "HS256 (32-byte signature)": {
       "signature_bytes": 32,
@@ -16,8 +16,8 @@
       "len_mod_3": 0,
       "encoded_len": 64,
       "distinct_final_chars_observed": 64,
-      "hyphen_observed": 3075,
-      "p_ends_hyphen_empirical": 0.015375,
+      "hyphen_observed": 3142,
+      "p_ends_hyphen_empirical": 0.01571,
       "p_ends_hyphen_theoretical": 0.015625
     },
     "HS512 (64-byte signature)": {
@@ -109,11 +109,11 @@
     }
   },
   "p_ends_hyphen_monte_carlo_confirmation": {
-    "SendGrid API Key": 0.015365,
-    "GCP API Key": 0.015365,
-    "OpenAI API Key (new)": 0.015365,
-    "Google OAuth Token": 0.015365,
-    "JWT Token (HS384, 48-byte sig)": 0.015375,
+    "SendGrid API Key": 0.0157,
+    "GCP API Key": 0.0157,
+    "OpenAI API Key (new)": 0.0157,
+    "Google OAuth Token": 0.0157,
+    "JWT Token (HS384, 48-byte sig)": 0.01571,
     "JWT Token (HS256, 32-byte sig)": 0.0
   },
   "BR_SP_metrics_per_rule": {

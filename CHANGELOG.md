@@ -13,6 +13,40 @@ See [docs/MIGRATING.md](docs/MIGRATING.md).
 
 ---
 
+### Unreleased
+
+**A provider misconfiguration was handled as an outage, and hidden by it**
+- Groq answers a retired model id with `404`. That fell through to `raise_for_status()` and was recorded as a **circuit-breaker failure**, so three requests opened the breaker on the 70b provider and five more opened it on the 8b fallback. The router then reported `all_providers_down` — sending a maintainer to check provider status when the fix was one environment variable.
+- A breaker exists to stop hammering a service that *might* recover. A model that does not exist, and a key that is not valid, will not recover on their own, so opening the breaker only replaces a precise error with a vague one. `401`, `403` and `404` are now classified as configuration faults: reported with the model id and the variable to change, and the breaker is left alone. A `5xx` still opens it, which is what it is for.
+- The fault is remembered rather than only logged, because it is discovered on a webhook thread and needs to be readable from `/health` on a different request. `/health` now reports `llm_models` and `llm_configuration_error`, and returns status **`misconfigured`** rather than `degraded` — "degraded" reads as something that may pass on its own, and this will not.
+- The user-facing degraded message changes too: `safe_ask` no longer says "providers are busy, try again shortly" when nothing is busy and waiting cannot help. It says what is misconfigured.
+- The default model ids are now named constants in `app/ai/router.py`, imported by both `/health` and the eval preflight rather than copied into each. A check that validates a different model than the one in use reports success for a configuration that cannot work — which is how this survived.
+
+**The gate that watches the gate reported a tick while it was red**
+- `eval-freshness` exists to notice when review quality stops being measured. It read only the last eval run's *timestamp*, so through four consecutive nights of the suite failing it printed **"✅ eval gate is running"** — true, and useless. A gate that runs and fails measures exactly as much as one that never runs, and the green tick actively argued against looking. It reads the run's `conclusion` now, and the healthy line claims *passing*, not merely running.
+
+**The badge could advertise a green count for a red run**
+- The badge job pipes `pytest` into `tee` and greps the pass count out. Without `pipefail` a failing pytest exits 0 through the pipe, and the grep reads `2090 passed` straight out of `3 failed, 2090 passed`. It depends on the test job, but it **re-runs the suite itself**, so its own run can fail independently — which is not hypothetical, since a random-order flake did exactly that this week. `pipefail` is set and a run reporting failures is refused.
+
+**The fallback provider had the same permanent-fault bug as the primary**
+- `gemini.py` recorded a breaker failure on `400`, and `401`/`403`/`404` fell through `raise_for_status()` into the generic handler which recorded one too. That is the worse place for it: the fallback is what the router reaches for when the primary is already broken, so a misconfigured fallback turns a single-provider fault into "all providers down". The classification now lives in `providers/base.py` and both providers use it, reading the provider's own error code — Google answers an invalid key with `400` and `API_KEY_INVALID` rather than `401`, so the status alone misclassifies it.
+- A pre-existing test asserted `record_failure` **was** called on a 400. It encoded the defect instead of catching it, and has been corrected with the reasoning recorded.
+- **Gemini's model id was hardcoded**, so when the provider retires it — exactly what just happened to this deployment's Groq models — the only fix would be a code change and a deploy. `LLM_GEMINI_MODEL` overrides it now, read per call, and every response names the model actually used including the paths that return before any HTTP call.
+
+**The nightly report opened a new issue every night**
+- The report step looked up its existing issue with `gh issue list --label evals`, and that label had never been created: `gh issue create --label evals` fails with `could not add label: 'evals' not found` and falls back to the unlabelled create, so no issue ever carried it. A filter on a label nothing has matches nothing, so the lookup was always empty and every run opened a fresh issue — **#86, #88, #89 and #90 in four nights**, which is precisely what reusing one issue was written to prevent. A comment in that same step claimed the reuse worked; nothing checked it.
+- The lookup now matches on the title prefix that all three failure causes share, so it needs no label and no search index. The label is still created, best-effort, so the reports stay filterable — but the reuse no longer depends on that succeeding. The existing issue is retitled to the current cause as well, since an issue still reading "are failing" when the run now fails for a missing model points the reader at the wrong thing.
+- Tests assert all of it, including that every title the step can set shares the prefix the lookup matches on — otherwise adding a fourth cause silently reopens the same hole.
+
+**The eval gate blamed the prompts for a provider outage**
+- The suite's first scheduled run returned a 0.0 pass rate and filed an issue reading "review quality has regressed". The actual cause was a `404` from Groq for a retired model id: every request failed, so all eleven cases scored zero on "no code fence" because there was no output at all. The whole run took 0.6 seconds. Eleven failing cases described a prompt problem that did not exist, and the real fix was one environment variable.
+- Same defect class as reporting a missing API key as a quality drop, which this workflow already handled: a diagnosis pointing at the wrong half of the system costs more time than no diagnosis.
+- `evals/run.py` now checks the configured model ids against the provider's own model list before spending any quota, and exits `3` — distinct from `1`, "the bot answered and answered badly" — when none of them exist. The message names the missing ids, lists what the provider currently serves, and says plainly that **the live bot is failing the same way for every AI command**, since it calls the same ids. The workflow branches on that code so the issue it files says which of the two happened.
+- The check never raises and never blocks on its own failure: an unreachable or unreadable model list runs the suite anyway, because the suite is the real measurement and refusing to run it over an inconclusive probe would be the worse failure. A rejected key is reported as a key problem rather than a missing model. One missing model out of two warns and continues, since one working model is still worth measuring.
+- A test asserts the ids the check validates are the ids `app/ai/router.py` actually calls — otherwise the check could quietly validate a model nothing uses.
+
+---
+
 ### V7.2.0 — 2026-08-20
 
 Full-codebase audit. The theme is features that were wired, tested, and shipped — and then silently did nothing in production.

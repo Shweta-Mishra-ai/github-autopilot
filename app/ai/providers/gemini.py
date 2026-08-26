@@ -12,15 +12,28 @@ import os
 import requests as http_requests
 
 from app.ai.circuit_breaker import get_breaker
-from app.ai.providers.base import LLMProvider, LLMResponse
+from app.ai.providers.base import LLMProvider, LLMResponse, client_error_detail
 
 log = logging.getLogger(__name__)
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = "gemini-1.5-flash"
-GEMINI_URL = (
-    f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
-)
+
+# Overridable, and read per call. The model id was hardcoded, so when the
+# provider retires it — which is exactly what just happened to this
+# deployment's Groq models — the only fix would be a code change and a deploy.
+# The primary provider learned that lesson (LLM_PRIMARY_MODEL); the fallback
+# had not, which is the worse place for it: the fallback is what you reach for
+# when the primary is already broken.
+DEFAULT_GEMINI_MODEL = "gemini-1.5-flash"
+GEMINI_MODEL_ENV = "LLM_GEMINI_MODEL"
+
+
+def gemini_model() -> str:
+    return os.environ.get(GEMINI_MODEL_ENV, "").strip() or DEFAULT_GEMINI_MODEL
+
+
+def _gemini_url(model: str) -> str:
+    return f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 
 class GeminiProvider(LLMProvider):
@@ -30,7 +43,7 @@ class GeminiProvider(LLMProvider):
 
     @property
     def model_name(self) -> str:
-        return GEMINI_MODEL
+        return gemini_model()
 
     def call_raw(
         self,
@@ -40,13 +53,17 @@ class GeminiProvider(LLMProvider):
         temperature: float,
         timeout: int,
     ) -> LLMResponse:
+        # Resolved once so every return path below names the model actually
+        # asked for, including the ones that return before the HTTP call.
+        model = gemini_model()
+
         # ── STEP 1: Circuit breaker check — MUST be first ─────────────────────
         breaker = get_breaker("gemini")
         if not breaker.is_available():
             return LLMResponse(
                 text="",
                 provider="gemini",
-                model=GEMINI_MODEL,
+                model=model,
                 error="Circuit OPEN for Gemini",
             )
 
@@ -56,7 +73,7 @@ class GeminiProvider(LLMProvider):
             return LLMResponse(
                 text="",
                 provider="gemini",
-                model=GEMINI_MODEL,
+                model=model,
                 error="GEMINI_API_KEY not set",
             )
 
@@ -69,7 +86,7 @@ class GeminiProvider(LLMProvider):
                 "temperature": temperature,
             },
         }
-        url = f"{GEMINI_URL}?key={api_key}"
+        url = f"{_gemini_url(model)}?key={api_key}"
 
         try:
             r = http_requests.post(
@@ -84,17 +101,27 @@ class GeminiProvider(LLMProvider):
                 return LLMResponse(
                     text="",
                     provider="gemini",
-                    model=GEMINI_MODEL,
+                    model=model,
                     error="RATE_LIMIT:60",
                 )
 
-            if r.status_code == 400:
-                breaker.record_failure("bad_request_400")
+            # 400/401/403/404 are configuration, not an outage: an invalid
+            # key, or a model this account cannot use. Google answers an
+            # invalid key with 400 and API_KEY_INVALID rather than 401, so the
+            # status alone is not enough — client_error_detail reads the body.
+            # These used to record a breaker failure, which opened the circuit
+            # on a fault that cannot recover and reported it as a provider
+            # outage. The breaker is left alone now.
+            if r.status_code in (400, 401, 403, 404):
+                detail = client_error_detail(
+                    r, r.status_code, model, "GEMINI_API_KEY", GEMINI_MODEL_ENV
+                )
+                log.error(f"gemini.configuration_error status={r.status_code} model={model}")
                 return LLMResponse(
                     text="",
                     provider="gemini",
-                    model=GEMINI_MODEL,
-                    error=f"Bad request: {r.text[:100]}",
+                    model=model,
+                    error=detail,
                 )
 
             if r.status_code >= 500:
@@ -102,7 +129,7 @@ class GeminiProvider(LLMProvider):
                 return LLMResponse(
                     text="",
                     provider="gemini",
-                    model=GEMINI_MODEL,
+                    model=model,
                     error=f"Server error {r.status_code}",
                 )
 
@@ -116,7 +143,7 @@ class GeminiProvider(LLMProvider):
                 return LLMResponse(
                     text="",
                     provider="gemini",
-                    model=GEMINI_MODEL,
+                    model=model,
                     error=f"Unexpected response format: {exc}",
                 )
 
@@ -131,7 +158,7 @@ class GeminiProvider(LLMProvider):
             return LLMResponse(
                 text=text,
                 provider="gemini",
-                model=GEMINI_MODEL,
+                model=model,
                 prompt_tokens=p_tok,
                 completion_tokens=c_tok,
                 total_tokens=t_tok,
@@ -143,7 +170,7 @@ class GeminiProvider(LLMProvider):
             return LLMResponse(
                 text="",
                 provider="gemini",
-                model=GEMINI_MODEL,
+                model=model,
                 error="Request timed out",
             )
         except Exception as e:
@@ -151,7 +178,7 @@ class GeminiProvider(LLMProvider):
             return LLMResponse(
                 text="",
                 provider="gemini",
-                model=GEMINI_MODEL,
+                model=model,
                 error=str(e)[:200],
             )
 

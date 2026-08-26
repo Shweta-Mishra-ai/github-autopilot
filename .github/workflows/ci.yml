@@ -339,8 +339,15 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          LAST=$(gh api "repos/$REPO/actions/workflows/evals.yml/runs?per_page=1" \
-            --jq '.workflow_runs[0].created_at // ""' 2>/dev/null || echo "")
+          RUNS=$(gh api "repos/$REPO/actions/workflows/evals.yml/runs?per_page=1" \
+            2>/dev/null || echo '{}')
+          LAST=$(printf '%s' "$RUNS" | jq -r '.workflow_runs[0].created_at // ""')
+          # Whether it PASSED, not just whether it ran. Checking only the
+          # timestamp reported "✅ eval gate is running" through four
+          # consecutive nights of the suite failing — a gate that runs and
+          # fails measures exactly as much as one that never runs, and the
+          # green tick actively argued against looking.
+          RESULT=$(printf '%s' "$RUNS" | jq -r '.workflow_runs[0].conclusion // ""')
 
           if [ -z "$LAST" ]; then
             echo "::warning::The eval workflow has never run. The one gate that "\
@@ -350,7 +357,8 @@ jobs:
           fi
 
           AGE_DAYS=$(( ( $(date -u +%s) - $(date -u -d "$LAST" +%s) ) / 86400 ))
-          echo "Last eval run: $LAST (${AGE_DAYS}d ago)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Last eval run: $LAST (${AGE_DAYS}d ago, ${RESULT:-unknown})" \
+            >> "$GITHUB_STEP_SUMMARY"
 
           # Nightly cron, so anything past three days means it is not firing.
           if [ "$AGE_DAYS" -gt 3 ]; then
@@ -358,8 +366,14 @@ jobs:
               "schedule. GitHub disables scheduled workflows after 60 days of "\
               "repository inactivity — re-enable it under Actions."
             echo "- ⚠️ stale: nightly evals last ran ${AGE_DAYS}d ago" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$RESULT" != "success" ]; then
+            echo "::warning::The nightly evals ran ${AGE_DAYS}d ago and did not "\
+              "pass (${RESULT:-unknown}). Review quality is currently unmeasured "\
+              "— see the open 'Nightly AI evals' issue for the cause."
+            echo "- ⚠️ evals are running but ${RESULT:-not passing} — quality is unmeasured" \
+              >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "- ✅ eval gate is running" >> "$GITHUB_STEP_SUMMARY"
+            echo "- ✅ eval gate is running and passing" >> "$GITHUB_STEP_SUMMARY"
           fi
 
   # ── Test-count badge (main only) ─────────────────────────────────────────────
@@ -396,7 +410,17 @@ jobs:
           MCP_API_KEY: "test-mcp-api-key-xyz"
           LOG_FORMAT: "text"
         run: |
+          # pipefail is load-bearing: without it a failing pytest exits 0
+          # through the pipe, and the grep below happily reads "2090 passed"
+          # out of "3 failed, 2090 passed" — publishing a green badge for a
+          # red run. This job re-runs the suite rather than reusing the test
+          # job's result, so its own run can fail independently.
+          set -euo pipefail
           pytest tests/ -q -m "not e2e and not integration" | tee pytest-out.txt
+          if grep -qE '[0-9]+ (failed|error)' pytest-out.txt; then
+            echo "::error::Refusing to publish a badge from a run with failures."
+            exit 1
+          fi
           COUNT=$(grep -oE '[0-9]+ passed' pytest-out.txt | grep -oE '[0-9]+')
           test -n "$COUNT"
           echo "PASS_COUNT=$COUNT" >> "$GITHUB_ENV"

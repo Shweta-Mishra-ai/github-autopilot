@@ -39,6 +39,14 @@ from app.ai.routing_policy import (
 
 log = logging.getLogger(__name__)
 
+# Model ids the deployment asks for when nothing overrides them. Named rather
+# than inline so the eval preflight and /health report the same values the
+# router actually calls — a check that validates a different model than the one
+# in use is worse than no check.
+DEFAULT_PRIMARY_MODEL = "llama-3.3-70b-versatile"
+DEFAULT_FALLBACK_MODEL = "llama-3.1-8b-instant"
+
+
 __all__ = [
     "LLMRouter",
     "router",
@@ -68,10 +76,8 @@ class LLMRouter:
         # repo-level override would let one tenant pick a model that drains
         # another's quota tier. It was previously declared in repo config
         # (ai.primary_model) where nothing could read it.
-        self._groq_70b = GroqProvider(
-            os.environ.get("LLM_PRIMARY_MODEL", "llama-3.3-70b-versatile")
-        )
-        self._groq_8b = GroqProvider(os.environ.get("LLM_FALLBACK_MODEL", "llama-3.1-8b-instant"))
+        self._groq_70b = GroqProvider(os.environ.get("LLM_PRIMARY_MODEL", DEFAULT_PRIMARY_MODEL))
+        self._groq_8b = GroqProvider(os.environ.get("LLM_FALLBACK_MODEL", DEFAULT_FALLBACK_MODEL))
         self._gemini = None
         self._openrouter = None
         self._ollama = None
@@ -294,6 +300,7 @@ class LLMRouter:
 
         if meta.error:
             log.warning(f"router.primary_failed provider={meta.provider} error={meta.error}")
+            self._note_configuration_error(meta.error)
             fallback = self._try_fallback(
                 system, user, max_tokens, temperature, timeout, meta.provider, task
             )
@@ -320,6 +327,7 @@ class LLMRouter:
         text, meta = provider.ask_text(system, user, max_tokens, timeout)
 
         if meta.error:
+            self._note_configuration_error(meta.error)
             fallback = self._try_fallback_text(
                 system, user, max_tokens, timeout, meta.provider, task
             )
@@ -464,14 +472,40 @@ class LLMRouter:
             return self.ask(system, user, task, max_tokens, temperature, timeout, context_tokens)
         except AllProvidersDown as e:
             log.error(f"router.all_providers_down task={task} retry_in={e.retry_in_seconds}s")
+            config_fault = self.configuration_error()
+            if config_fault:
+                # "Providers are down, try again shortly" is wrong and costly
+                # here: nothing is down and waiting will not help. Say what is
+                # actually misconfigured so the reader fixes it instead of
+                # retrying for a day.
+                log.error(f"router.configuration_fault {config_fault}")
             return (
                 {
                     "_providers_down": True,
                     "retry_in": e.retry_in_seconds,
-                    "message": degraded_message,
+                    "message": config_fault or degraded_message,
+                    "_configuration_error": bool(config_fault),
                 },
                 None,
             )
+
+    # A configuration fault is remembered, not just logged: it is discovered on
+    # a webhook thread and needs to be readable from /health and the doctor,
+    # which run on a different request entirely.
+    _config_error: str = ""
+
+    def _note_configuration_error(self, error: str) -> None:
+        from app.ai.providers.base import is_configuration_error
+
+        if is_configuration_error(error):
+            LLMRouter._config_error = str(error)
+
+    def configuration_error(self) -> str:
+        """The last permanent provider misconfiguration seen, or ""."""
+        return LLMRouter._config_error
+
+    def clear_configuration_error(self) -> None:
+        LLMRouter._config_error = ""
 
     def status(self) -> dict:
         from app.ai.circuit_breaker import status_all
@@ -504,6 +538,15 @@ class LLMRouter:
                 "gemini": bool(os.environ.get("GEMINI_API_KEY")),
                 "openrouter": bool(os.environ.get("OPENROUTER_API_KEY")),
             },
+            "models": {
+                "primary": os.environ.get("LLM_PRIMARY_MODEL", DEFAULT_PRIMARY_MODEL),
+                "fallback": os.environ.get("LLM_FALLBACK_MODEL", DEFAULT_FALLBACK_MODEL),
+            },
+            # Surfaced here because the fault is discovered on a webhook thread
+            # and read from /health on a different request. Open breakers alone
+            # cannot distinguish "the provider is having a bad hour" from "the
+            # model id is wrong", and only one of those is worth waiting out.
+            "configuration_error": self.configuration_error(),
         }
 
 

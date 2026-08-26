@@ -16,12 +16,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.ai.providers.groq import (
+from app.ai.providers.base import (
     CONFIG_ERROR_PREFIX,
-    GroqProvider,
-    _client_error_detail,
+    client_error_detail,
     is_configuration_error,
 )
+from app.ai.providers.groq import GroqProvider
 
 
 def _response(status, body=None):
@@ -34,8 +34,12 @@ def _response(status, body=None):
 
 class TestErrorClassification:
     def test_model_not_found_names_the_model_and_the_fix(self):
-        detail = _client_error_detail(
-            _response(404, {"error": {"code": "model_not_found"}}), 404, "retired-70b"
+        detail = client_error_detail(
+            _response(404, {"error": {"code": "model_not_found"}}),
+            404,
+            "retired-70b",
+            "GROQ_API_KEY",
+            "LLM_PRIMARY_MODEL",
         )
         assert is_configuration_error(detail)
         assert "retired-70b" in detail
@@ -45,18 +49,36 @@ class TestErrorClassification:
     def test_a_404_without_a_body_is_still_diagnosed(self):
         r = _response(404)
         r.json.side_effect = ValueError("no body")
-        detail = _client_error_detail(r, 404, "gone")
+        detail = client_error_detail(r, 404, "gone", "GROQ_API_KEY", "LLM_PRIMARY_MODEL")
         assert is_configuration_error(detail)
         assert "gone" in detail
 
     def test_a_rejected_key_is_reported_as_a_key_problem(self):
-        detail = _client_error_detail(_response(401), 401, "any-model")
+        detail = client_error_detail(_response(401), 401, "any-model", "GROQ_API_KEY")
         assert is_configuration_error(detail)
         assert "GROQ_API_KEY" in detail
         assert "regenerate" in detail.lower()
 
+    def test_the_key_variable_named_is_the_callers(self):
+        # gemini and groq report different variables; a hardcoded name would
+        # send a Gemini operator to regenerate the wrong key.
+        detail = client_error_detail(_response(401), 401, "m", "GEMINI_API_KEY")
+        assert "GEMINI_API_KEY" in detail and "GROQ_API_KEY" not in detail
+
+    def test_google_reports_an_invalid_key_as_400(self):
+        # Google answers an invalid key with 400 + API_KEY_INVALID rather than
+        # 401, so the status alone would misclassify it as a bad request.
+        detail = client_error_detail(
+            _response(400, {"error": {"status": "INVALID_ARGUMENT", "message": "API_KEY_INVALID"}}),
+            400,
+            "gemini-1.5-flash",
+            "GEMINI_API_KEY",
+        )
+        assert is_configuration_error(detail)
+        assert "GEMINI_API_KEY" in detail
+
     def test_a_403_mentions_model_access(self):
-        detail = _client_error_detail(_response(403), 403, "gated-model")
+        detail = client_error_detail(_response(403), 403, "gated-model", "GROQ_API_KEY")
         assert is_configuration_error(detail)
         assert "gated-model" in detail
 
@@ -214,3 +236,92 @@ class TestHealthReportsIt:
             payload = self._get()
         assert payload["status"] in {"ok", "degraded"}, "health must not fail on its own reporting"
         assert payload["checks"]["llm_configuration_error"] == ""
+
+
+class TestGeminiHasTheSameProtection:
+    """
+    The fallback provider had the identical defect: a 400 recorded a breaker
+    failure, and 401/403/404 fell through to raise_for_status() into the
+    generic handler which recorded one too.
+
+    That is the worse place for it. The fallback is what the router reaches for
+    when the primary is already broken, so a misconfigured fallback turns a
+    recoverable single-provider fault into "all providers down".
+    """
+
+    @staticmethod
+    def _resp(status, body=None):
+        r = MagicMock()
+        r.status_code = status
+        r.headers = {}
+        r.text = "{}"
+        r.json.return_value = body if body is not None else {}
+        return r
+
+    @pytest.mark.parametrize("status", [400, 401, 403, 404])
+    def test_a_client_error_does_not_open_the_breaker(self, status, monkeypatch):
+        from app.ai.providers.gemini import GeminiProvider
+
+        monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
+        breaker = MagicMock()
+        breaker.is_available.return_value = True
+
+        with patch("app.ai.providers.gemini.get_breaker", return_value=breaker), patch(
+            "app.ai.providers.gemini.http_requests.post", return_value=self._resp(status)
+        ):
+            resp = GeminiProvider().call_raw("sys", "user", 100, 0.2, 10)
+
+        assert breaker.record_failure.call_count == 0, (
+            f"a {status} is permanent — recording it opens the circuit and turns "
+            f"a configuration fault into a reported outage"
+        )
+        assert is_configuration_error(resp.error)
+
+    def test_a_server_error_still_opens_the_breaker(self, monkeypatch):
+        from app.ai.providers.gemini import GeminiProvider
+
+        monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
+        breaker = MagicMock()
+        breaker.is_available.return_value = True
+
+        with patch("app.ai.providers.gemini.get_breaker", return_value=breaker), patch(
+            "app.ai.providers.gemini.http_requests.post", return_value=self._resp(503)
+        ):
+            resp = GeminiProvider().call_raw("sys", "user", 100, 0.2, 10)
+
+        assert breaker.record_failure.called, "a 503 may recover — the breaker is right here"
+        assert not is_configuration_error(resp.error)
+
+    def test_the_model_id_is_overridable_without_a_deploy(self, monkeypatch):
+        # It was hardcoded. When a provider retires a model — which is exactly
+        # what happened to this deployment's Groq models — a hardcoded id makes
+        # the only fix a code change.
+        from app.ai.providers.gemini import DEFAULT_GEMINI_MODEL, GeminiProvider, gemini_model
+
+        monkeypatch.delenv("LLM_GEMINI_MODEL", raising=False)
+        assert gemini_model() == DEFAULT_GEMINI_MODEL
+
+        monkeypatch.setenv("LLM_GEMINI_MODEL", "gemini-9-future")
+        assert gemini_model() == "gemini-9-future"
+        assert GeminiProvider().model_name == "gemini-9-future"
+
+    def test_every_response_names_the_model_actually_used(self, monkeypatch):
+        # Including the paths that return before any HTTP call — a response
+        # naming the default while the override was in use would send the
+        # reader to check the wrong model.
+        from app.ai.providers.gemini import GeminiProvider
+
+        monkeypatch.setenv("LLM_GEMINI_MODEL", "gemini-9-future")
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        monkeypatch.setattr("app.ai.providers.gemini.GEMINI_API_KEY", "")
+
+        breaker = MagicMock()
+        breaker.is_available.return_value = True
+        with patch("app.ai.providers.gemini.get_breaker", return_value=breaker):
+            resp = GeminiProvider().call_raw("sys", "user", 100, 0.2, 10)
+        assert resp.model == "gemini-9-future", "the no-key path must name the real model"
+
+        breaker.is_available.return_value = False
+        with patch("app.ai.providers.gemini.get_breaker", return_value=breaker):
+            resp = GeminiProvider().call_raw("sys", "user", 100, 0.2, 10)
+        assert resp.model == "gemini-9-future", "the open-circuit path must too"

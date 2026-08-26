@@ -260,18 +260,31 @@ class TestGeminiProvider:
         assert result.text == ""
         mock_breaker.return_value.record_failure.assert_called()
 
-    def test_bad_request_returns_error(self):
+    def test_bad_request_is_reported_without_opening_the_circuit(self):
+        """
+        This test used to assert `record_failure` WAS called on a 400, which
+        encoded the defect rather than catching it.
+
+        A 400 from Gemini is an invalid key or an unusable model — Google
+        answers an invalid key with 400 and API_KEY_INVALID rather than 401.
+        None of that recovers on its own, so opening the circuit replaces a
+        precise error with "provider unavailable". That is how the Groq model
+        outage stayed unreadable for four nights.
+        """
+        from app.ai.providers.base import is_configuration_error
         from app.ai.providers.gemini import GeminiProvider
         provider = GeminiProvider()
         mock_resp = MagicMock()
         mock_resp.status_code = 400
         mock_resp.text = "invalid request body"
+        mock_resp.json.return_value = {"error": {"message": "API_KEY_INVALID"}}
         with patch("app.ai.providers.gemini.http_requests.post", return_value=mock_resp), \
              patch("app.ai.providers.gemini.get_breaker") as mock_breaker:
                 mock_breaker.return_value.is_available.return_value = True
                 result = provider.call_raw("sys", "usr", 500, 0.2, 30)
-        assert "Bad request" in result.error
-        mock_breaker.return_value.record_failure.assert_called()
+        assert is_configuration_error(result.error)
+        assert "GEMINI_API_KEY" in result.error
+        mock_breaker.return_value.record_failure.assert_not_called()
 
     def test_500_server_error_opens_circuit(self):
         from app.ai.providers.gemini import GeminiProvider

@@ -159,3 +159,68 @@ def _extract_json(text: str) -> dict:
                     break
 
     return {"raw": text}
+
+
+# ── Permanent provider faults ────────────────────────────────────────────────
+#
+# A 4xx from a model provider is CONFIGURATION, not an outage, and the
+# difference decides whether retrying can ever work. A retired model id, a
+# rejected key and a model the account cannot reach all return 4xx and none of
+# them recover on their own.
+#
+# Recording them as circuit-breaker failures is what hid the Groq outage: three
+# requests opened the breaker on the primary, five more on the fallback, and
+# the router reported "all providers down" — sending a maintainer to check
+# provider status when the fix was one environment variable.
+#
+# A breaker exists to stop hammering a service that MIGHT recover. These will
+# not, so opening it only replaces a precise error with a vague one.
+CONFIG_ERROR_PREFIX = "CONFIG_ERROR:"
+
+
+def is_configuration_error(error: "str | None") -> bool:
+    """True when an LLMResponse.error describes a fault retrying cannot fix."""
+    return bool(error) and str(error).startswith(CONFIG_ERROR_PREFIX)
+
+
+def client_error_detail(
+    response,
+    status: int,
+    model: str,
+    key_env: str,
+    model_env: str = "",
+) -> str:
+    """
+    An actionable message for a 4xx that will never fix itself.
+
+    Reads the provider's own error code where it gives one rather than
+    inferring from the status alone — `model_not_found` and `API_KEY_INVALID`
+    are more specific than "404" and "400", and providers disagree about which
+    status they use for which fault.
+    """
+    code = ""
+    try:
+        body = response.json()
+        err = body.get("error") or {}
+        code = f"{err.get('code', '')} {err.get('status', '')} {err.get('message', '')}".lower()
+    except Exception:
+        code = ""
+
+    where = f" Set {model_env} to a model id the provider currently serves." if model_env else ""
+
+    if status == 404 or "model_not_found" in code or "not found" in code:
+        return (
+            f"{CONFIG_ERROR_PREFIX} the provider does not serve the model "
+            f"`{model}`. This is configuration, not an outage — every AI command "
+            f"fails until it is fixed.{where}"
+        )
+    if status in (401, 403) or "api_key_invalid" in code or "permission" in code:
+        return (
+            f"{CONFIG_ERROR_PREFIX} the provider rejected {key_env} ({status}). "
+            f"The key is set but not valid, or lacks access to `{model}` — "
+            f"regenerate it and update the deployment's environment."
+        )
+    return (
+        f"{CONFIG_ERROR_PREFIX} the provider refused the request for `{model}` "
+        f"({status}). The key may lack access to this model.{where}"
+    )

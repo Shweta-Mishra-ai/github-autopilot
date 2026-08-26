@@ -462,6 +462,30 @@ pytest tests/ -v              # full suite; the tests badge above is the live co
 ruff check app/               # lint
 ```
 
+**Before you push**, run every gate CI runs, with CI's exact flags:
+
+```bash
+./scripts/verify.sh           # lint, tests twice, generated files
+./scripts/verify.sh fast      # lint + one test run, skips regeneration
+```
+
+The gates are spread across five CI jobs and each has flags that matter — ruff
+lints `app/` only, the suite is run twice because parts of it are randomised,
+and two files are generated, so a stale README region or codebase map fails
+the build for a reason invisible in the diff.
+
+**After you deploy**, check the running service rather than the code:
+
+```bash
+BASE_URL=https://your-app.onrender.com METRICS_AUTH_TOKEN=... \
+  ./scripts/verify-deployment.sh owner/repo <installation_id>
+```
+
+It reports whether the deployment answers, whether the provider still serves
+the model ids it asks for, and which App capabilities are missing. All reads —
+nothing it does changes anything. A green test suite cannot tell you any of
+it: a retired model id took every AI command down while CI stayed green.
+
 ---
 
 ## Security model

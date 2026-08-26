@@ -1,0 +1,1213 @@
+{
+ "design": "bench_fixvalidation.py \u2014 Does the proposed remedy actually work?\n\nThe paper diagnoses five boundary-fragile rules and proposes replacing the\ntrailing \\b with a lookahead. Proposing a fix is not evidence that it works,\nso this harness applies candidate fixes to the rule table IN MEMORY (the\nsubject repository is never modified) and re-runs the full battery.\n\nTwo candidates are evaluated, because they differ on one case that matters:\n\n  A  (?=[^\\w-]|$)     the remedy as first proposed. Requires the following\n                      character to be neither a word character NOR a hyphen.\n  B  (?![A-Za-z0-9_]) requires only that the following character is not a word\n                      character, so a hyphen may legitimately terminate a match.\n\nBoth fix the reported defect. They diverge when a credential whose own final\ncharacter is a word character is immediately followed by a hyphen -- which the\nORIGINAL \\b accepted. If A rejects that case, A is a regression, and the paper\nwould be proposing a fix that trades one boundary defect for another.\n\nMeasured per arm: the four-way outcome distribution over all 12 embeddings,\nboundary robustness BR, and a false-positive regression check over the same\nreal-code corpus used in RQ5.",
+ "n_samples_per_cell": 120,
+ "seed": 20260823,
+ "candidates": {
+  "fix_A": "(?=[^\\w-]|$)",
+  "fix_B": "(?![A-Za-z0-9_])"
+ },
+ "arms": {
+  "baseline": {
+   "per_rule": {
+    "OpenAI API Key (new)": {
+     "BR": 0.975,
+     "cells": {
+      "canonical": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "single_quoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "unquoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "yaml_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "json_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "env_file": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "url_query": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_comma": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "in_parens": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "leading_space": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_hyphen": {
+       "RULE_OK": 0.975,
+       "OTHER": 0.0,
+       "FALLBACK": 0.025,
+       "MISSED": 0.0
+      },
+      "trailing_under": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      }
+     }
+    },
+    "GCP API Key": {
+     "BR": 0.0,
+     "cells": {
+      "canonical": {
+       "RULE_OK": 0.9917,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0083,
+       "MISSED": 0.0
+      },
+      "single_quoted": {
+       "RULE_OK": 0.9917,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0083,
+       "MISSED": 0.0
+      },
+      "unquoted": {
+       "RULE_OK": 0.9917,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0083
+      },
+      "yaml_value": {
+       "RULE_OK": 0.9917,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0083
+      },
+      "json_value": {
+       "RULE_OK": 0.9917,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0083,
+       "MISSED": 0.0
+      },
+      "env_file": {
+       "RULE_OK": 0.9917,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0083
+      },
+      "url_query": {
+       "RULE_OK": 0.9917,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0083
+      },
+      "trailing_comma": {
+       "RULE_OK": 0.9917,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0083,
+       "MISSED": 0.0
+      },
+      "in_parens": {
+       "RULE_OK": 0.9917,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0083
+      },
+      "leading_space": {
+       "RULE_OK": 0.9917,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0083,
+       "MISSED": 0.0
+      },
+      "trailing_hyphen": {
+       "RULE_OK": 0.0,
+       "OTHER": 0.0,
+       "FALLBACK": 1.0,
+       "MISSED": 0.0
+      },
+      "trailing_under": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      }
+     }
+    },
+    "Google OAuth Token": {
+     "BR": 0.9667,
+     "cells": {
+      "canonical": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "single_quoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "unquoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "yaml_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "json_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "env_file": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "url_query": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_comma": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "in_parens": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "leading_space": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_hyphen": {
+       "RULE_OK": 0.9667,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0333
+      },
+      "trailing_under": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      }
+     }
+    },
+    "SendGrid API Key": {
+     "BR": 0.0,
+     "cells": {
+      "canonical": {
+       "RULE_OK": 0.975,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.025
+      },
+      "single_quoted": {
+       "RULE_OK": 0.975,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.025
+      },
+      "unquoted": {
+       "RULE_OK": 0.975,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.025
+      },
+      "yaml_value": {
+       "RULE_OK": 0.975,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.025
+      },
+      "json_value": {
+       "RULE_OK": 0.975,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.025
+      },
+      "env_file": {
+       "RULE_OK": 0.975,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.025
+      },
+      "url_query": {
+       "RULE_OK": 0.975,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.025
+      },
+      "trailing_comma": {
+       "RULE_OK": 0.975,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.025
+      },
+      "in_parens": {
+       "RULE_OK": 0.975,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.025
+      },
+      "leading_space": {
+       "RULE_OK": 0.975,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.025
+      },
+      "trailing_hyphen": {
+       "RULE_OK": 0.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 1.0
+      },
+      "trailing_under": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      }
+     }
+    },
+    "JWT Token": {
+     "BR": 0.9583,
+     "cells": {
+      "canonical": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "single_quoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "unquoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "yaml_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "json_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "env_file": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "url_query": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_comma": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "in_parens": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "leading_space": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_hyphen": {
+       "RULE_OK": 0.9583,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0417
+      },
+      "trailing_under": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      }
+     }
+    }
+   },
+   "hyphen_follows_probe": {
+    "OpenAI API Key (new)": 1.0,
+    "GCP API Key": 1.0,
+    "Google OAuth Token": 1.0,
+    "SendGrid API Key": 1.0,
+    "JWT Token": 1.0
+   }
+  },
+  "fix_A": {
+   "per_rule": {
+    "OpenAI API Key (new)": {
+     "BR": 1.0,
+     "cells": {
+      "canonical": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "single_quoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "unquoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "yaml_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "json_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "env_file": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "url_query": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_comma": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "in_parens": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "leading_space": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_hyphen": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_under": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      }
+     }
+    },
+    "GCP API Key": {
+     "BR": 1.0,
+     "cells": {
+      "canonical": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "single_quoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "unquoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "yaml_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "json_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "env_file": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "url_query": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_comma": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "in_parens": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "leading_space": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_hyphen": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_under": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      }
+     }
+    },
+    "Google OAuth Token": {
+     "BR": 1.0,
+     "cells": {
+      "canonical": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "single_quoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "unquoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "yaml_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "json_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "env_file": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "url_query": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_comma": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "in_parens": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "leading_space": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_hyphen": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_under": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      }
+     }
+    },
+    "SendGrid API Key": {
+     "BR": 1.0,
+     "cells": {
+      "canonical": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "single_quoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "unquoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "yaml_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "json_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "env_file": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "url_query": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_comma": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "in_parens": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "leading_space": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_hyphen": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_under": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      }
+     }
+    },
+    "JWT Token": {
+     "BR": 1.0,
+     "cells": {
+      "canonical": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "single_quoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "unquoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "yaml_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "json_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "env_file": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "url_query": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_comma": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "in_parens": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "leading_space": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_hyphen": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_under": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      }
+     }
+    }
+   },
+   "hyphen_follows_probe": {
+    "OpenAI API Key (new)": 1.0,
+    "GCP API Key": 0.0,
+    "Google OAuth Token": 1.0,
+    "SendGrid API Key": 0.0,
+    "JWT Token": 1.0
+   }
+  },
+  "fix_B": {
+   "per_rule": {
+    "OpenAI API Key (new)": {
+     "BR": 1.0,
+     "cells": {
+      "canonical": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "single_quoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "unquoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "yaml_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "json_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "env_file": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "url_query": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_comma": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "in_parens": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "leading_space": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_hyphen": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_under": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      }
+     }
+    },
+    "GCP API Key": {
+     "BR": 1.0,
+     "cells": {
+      "canonical": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "single_quoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "unquoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "yaml_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "json_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "env_file": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "url_query": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_comma": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "in_parens": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "leading_space": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_hyphen": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_under": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      }
+     }
+    },
+    "Google OAuth Token": {
+     "BR": 1.0,
+     "cells": {
+      "canonical": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "single_quoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "unquoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "yaml_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "json_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "env_file": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "url_query": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_comma": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "in_parens": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "leading_space": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_hyphen": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_under": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      }
+     }
+    },
+    "SendGrid API Key": {
+     "BR": 1.0,
+     "cells": {
+      "canonical": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "single_quoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "unquoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "yaml_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "json_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "env_file": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "url_query": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_comma": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "in_parens": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "leading_space": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_hyphen": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_under": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      }
+     }
+    },
+    "JWT Token": {
+     "BR": 1.0,
+     "cells": {
+      "canonical": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "single_quoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "unquoted": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "yaml_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "json_value": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "env_file": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "url_query": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_comma": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "in_parens": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "leading_space": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_hyphen": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      },
+      "trailing_under": {
+       "RULE_OK": 1.0,
+       "OTHER": 0.0,
+       "FALLBACK": 0.0,
+       "MISSED": 0.0
+      }
+     }
+    }
+   },
+   "hyphen_follows_probe": {
+    "OpenAI API Key (new)": 1.0,
+    "GCP API Key": 1.0,
+    "Google OAuth Token": 1.0,
+    "SendGrid API Key": 1.0,
+    "JWT Token": 1.0
+   }
+  }
+ },
+ "false_positives_real_code": {
+  "baseline": {
+   "files_scanned": 441,
+   "findings": 67
+  },
+  "fix_A": {
+   "files_scanned": 441,
+   "findings": 67
+  },
+  "fix_B": {
+   "files_scanned": 441,
+   "findings": 67
+  }
+ }
+}

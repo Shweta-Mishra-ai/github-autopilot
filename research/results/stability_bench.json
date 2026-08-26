@@ -1,0 +1,127 @@
+{
+ "design": "bench_stability.py \u2014 How stable is the hyphen-boundary result across draws?\n\nThe mutation harness generates credentials from each rule's own expression.\nFor rules with a VARIABLE-count quantifier the generated length varies, and\nwhether a truncated match is still possible depends on that length. This\nharness repeats the hyphen cell R times with distinct seeds and reports the\nspread, separating rules whose failure is deterministic from those whose\nmeasured rate is a sampling estimate.",
+ "n_per_run": 120,
+ "n_runs": 10,
+ "per_rule": {
+  "OpenAI API Key (new)": {
+   "quantifier": "{50,} variable",
+   "runs": [
+    0.975,
+    0.9666666666666667,
+    0.9583333333333334,
+    0.925,
+    0.925,
+    0.9833333333333333,
+    0.9416666666666667,
+    0.9666666666666667,
+    0.975,
+    0.9333333333333333
+   ],
+   "mean": 0.955,
+   "stdev": 0.0219,
+   "min": 0.925,
+   "max": 0.9833,
+   "ci95_mean": [
+    0.9414,
+    0.9686
+   ],
+   "deterministic": false
+  },
+  "GCP API Key": {
+   "quantifier": "{35} fixed",
+   "runs": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "mean": 0.0,
+   "stdev": 0.0,
+   "min": 0.0,
+   "max": 0.0,
+   "ci95_mean": [
+    0.0,
+    0.0
+   ],
+   "deterministic": true
+  },
+  "Google OAuth Token": {
+   "quantifier": "{68,} variable",
+   "runs": [
+    0.9666666666666667,
+    0.925,
+    0.9583333333333334,
+    0.9666666666666667,
+    0.9583333333333334,
+    0.975,
+    0.95,
+    0.95,
+    0.9416666666666667,
+    0.9666666666666667
+   ],
+   "mean": 0.9558,
+   "stdev": 0.0147,
+   "min": 0.925,
+   "max": 0.975,
+   "ci95_mean": [
+    0.9467,
+    0.965
+   ],
+   "deterministic": false
+  },
+  "SendGrid API Key": {
+   "quantifier": "{43} fixed",
+   "runs": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "mean": 0.0,
+   "stdev": 0.0,
+   "min": 0.0,
+   "max": 0.0,
+   "ci95_mean": [
+    0.0,
+    0.0
+   ],
+   "deterministic": true
+  },
+  "JWT Token": {
+   "quantifier": "{10,} variable",
+   "runs": [
+    0.9583333333333334,
+    0.9416666666666667,
+    0.95,
+    0.95,
+    0.95,
+    0.95,
+    0.925,
+    0.9583333333333334,
+    0.9416666666666667,
+    0.95
+   ],
+   "mean": 0.9475,
+   "stdev": 0.0097,
+   "min": 0.925,
+   "max": 0.9583,
+   "ci95_mean": [
+    0.9415,
+    0.9535
+   ],
+   "deterministic": false
+  }
+ }
+}

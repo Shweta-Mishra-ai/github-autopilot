@@ -1,0 +1,4 @@
+# Subject system, pinned. Verified by reproduce.sh before any benchmark runs.
+repo    https://github.com/Shweta-Mishra-ai/github-autopilot
+commit  38b201375926b11ff94703f6257a01aa8723c23d
+short   38b2013

@@ -1,0 +1,615 @@
+{
+  "design": "threading.Barrier synchronises thread start; each thread performs a FIXED 1500 operations so load grows with thread count. Timing begins only after all threads are released.",
+  "repetitions_per_level": 7,
+  "correctness_note": "lost-update oracle is run separately on a pure record_failure() workload (bench_systems.py S2); this mixed workload resets the counter by design",
+  "curve": [
+    {
+      "threads": 1,
+      "ops_per_thread": 1500,
+      "ops_total": 1500,
+      "throughput_ops_per_s": {
+        "mean": 8687.0276,
+        "median": 9436.1398,
+        "ci95_mean": [
+          6836.7598,
+          10537.2955
+        ],
+        "iqr": [
+          9200.4446,
+          9937.12
+        ],
+        "stdev": 2497.6268,
+        "n_repetitions": 7
+      },
+      "p50_ms": {
+        "mean": 0.0027,
+        "median": 0.0026,
+        "ci95_mean": [
+          0.0026,
+          0.0028
+        ],
+        "iqr": [
+          0.0026,
+          0.0027
+        ],
+        "stdev": 0.0001,
+        "n_repetitions": 7
+      },
+      "p95_ms": {
+        "mean": 0.3434,
+        "median": 0.3313,
+        "ci95_mean": [
+          0.3276,
+          0.3592
+        ],
+        "iqr": [
+          0.3265,
+          0.3629
+        ],
+        "stdev": 0.0214,
+        "n_repetitions": 7
+      },
+      "p99_ms": {
+        "mean": 0.4607,
+        "median": 0.4404,
+        "ci95_mean": [
+          0.4117,
+          0.5097
+        ],
+        "iqr": [
+          0.4303,
+          0.4739
+        ],
+        "stdev": 0.0661,
+        "n_repetitions": 7
+      },
+      "wall_s": {
+        "mean": 0.2033,
+        "median": 0.159,
+        "ci95_mean": [
+          0.1108,
+          0.2958
+        ],
+        "iqr": [
+          0.151,
+          0.1631
+        ],
+        "stdev": 0.1248,
+        "n_repetitions": 7
+      },
+      "scaling_efficiency_vs_1_thread": 1.0
+    },
+    {
+      "threads": 2,
+      "ops_per_thread": 1500,
+      "ops_total": 3000,
+      "throughput_ops_per_s": {
+        "mean": 7944.0058,
+        "median": 8064.6589,
+        "ci95_mean": [
+          7474.7196,
+          8413.292
+        ],
+        "iqr": [
+          7475.3394,
+          8300.189
+        ],
+        "stdev": 633.4768,
+        "n_repetitions": 7
+      },
+      "p50_ms": {
+        "mean": 0.0034,
+        "median": 0.0033,
+        "ci95_mean": [
+          0.0031,
+          0.0037
+        ],
+        "iqr": [
+          0.0032,
+          0.0037
+        ],
+        "stdev": 0.0004,
+        "n_repetitions": 7
+      },
+      "p95_ms": {
+        "mean": 0.9122,
+        "median": 0.8951,
+        "ci95_mean": [
+          0.8472,
+          0.9773
+        ],
+        "iqr": [
+          0.8569,
+          0.9543
+        ],
+        "stdev": 0.0879,
+        "n_repetitions": 7
+      },
+      "p99_ms": {
+        "mean": 1.1822,
+        "median": 1.1607,
+        "ci95_mean": [
+          1.0801,
+          1.2844
+        ],
+        "iqr": [
+          1.0894,
+          1.227
+        ],
+        "stdev": 0.1379,
+        "n_repetitions": 7
+      },
+      "wall_s": {
+        "mean": 0.3797,
+        "median": 0.372,
+        "ci95_mean": [
+          0.3572,
+          0.4022
+        ],
+        "iqr": [
+          0.3617,
+          0.4018
+        ],
+        "stdev": 0.0304,
+        "n_repetitions": 7
+      },
+      "scaling_efficiency_vs_1_thread": 0.8547
+    },
+    {
+      "threads": 4,
+      "ops_per_thread": 1500,
+      "ops_total": 6000,
+      "throughput_ops_per_s": {
+        "mean": 4325.1445,
+        "median": 4333.5401,
+        "ci95_mean": [
+          4006.3875,
+          4643.9016
+        ],
+        "iqr": [
+          4104.7676,
+          4407.045
+        ],
+        "stdev": 430.2816,
+        "n_repetitions": 7
+      },
+      "p50_ms": {
+        "mean": 0.004,
+        "median": 0.004,
+        "ci95_mean": [
+          0.0039,
+          0.0042
+        ],
+        "iqr": [
+          0.0039,
+          0.0041
+        ],
+        "stdev": 0.0002,
+        "n_repetitions": 7
+      },
+      "p95_ms": {
+        "mean": 3.73,
+        "median": 3.6389,
+        "ci95_mean": [
+          3.4411,
+          4.0188
+        ],
+        "iqr": [
+          3.5547,
+          3.9317
+        ],
+        "stdev": 0.3899,
+        "n_repetitions": 7
+      },
+      "p99_ms": {
+        "mean": 5.0157,
+        "median": 4.9093,
+        "ci95_mean": [
+          4.578,
+          5.4535
+        ],
+        "iqr": [
+          4.7808,
+          5.2892
+        ],
+        "stdev": 0.5909,
+        "n_repetitions": 7
+      },
+      "wall_s": {
+        "mean": 1.3984,
+        "median": 1.3845,
+        "ci95_mean": [
+          1.3008,
+          1.496
+        ],
+        "iqr": [
+          1.3618,
+          1.462
+        ],
+        "stdev": 0.1317,
+        "n_repetitions": 7
+      },
+      "scaling_efficiency_vs_1_thread": 0.4592
+    },
+    {
+      "threads": 8,
+      "ops_per_thread": 1500,
+      "ops_total": 12000,
+      "throughput_ops_per_s": {
+        "mean": 4481.8866,
+        "median": 4311.6897,
+        "ci95_mean": [
+          4246.0944,
+          4717.6788
+        ],
+        "iqr": [
+          4247.3339,
+          4712.4165
+        ],
+        "stdev": 318.2895,
+        "n_repetitions": 7
+      },
+      "p50_ms": {
+        "mean": 0.004,
+        "median": 0.004,
+        "ci95_mean": [
+          0.0038,
+          0.0041
+        ],
+        "iqr": [
+          0.0039,
+          0.0041
+        ],
+        "stdev": 0.0002,
+        "n_repetitions": 7
+      },
+      "p95_ms": {
+        "mean": 7.2919,
+        "median": 7.539,
+        "ci95_mean": [
+          6.8823,
+          7.7015
+        ],
+        "iqr": [
+          6.8705,
+          7.6886
+        ],
+        "stdev": 0.5529,
+        "n_repetitions": 7
+      },
+      "p99_ms": {
+        "mean": 9.6861,
+        "median": 10.0145,
+        "ci95_mean": [
+          9.0221,
+          10.3502
+        ],
+        "iqr": [
+          9.0295,
+          10.3461
+        ],
+        "stdev": 0.8964,
+        "n_repetitions": 7
+      },
+      "wall_s": {
+        "mean": 2.6887,
+        "median": 2.7831,
+        "ci95_mean": [
+          2.5516,
+          2.8258
+        ],
+        "iqr": [
+          2.548,
+          2.8258
+        ],
+        "stdev": 0.185,
+        "n_repetitions": 7
+      },
+      "scaling_efficiency_vs_1_thread": 0.4569
+    },
+    {
+      "threads": 16,
+      "ops_per_thread": 1500,
+      "ops_total": 24000,
+      "throughput_ops_per_s": {
+        "mean": 6791.7684,
+        "median": 7483.0851,
+        "ci95_mean": [
+          5784.8724,
+          7798.6645
+        ],
+        "iqr": [
+          6129.5462,
+          7547.9822
+        ],
+        "stdev": 1359.1819,
+        "n_repetitions": 7
+      },
+      "p50_ms": {
+        "mean": 0.0038,
+        "median": 0.0035,
+        "ci95_mean": [
+          0.0034,
+          0.0042
+        ],
+        "iqr": [
+          0.0034,
+          0.004
+        ],
+        "stdev": 0.0006,
+        "n_repetitions": 7
+      },
+      "p95_ms": {
+        "mean": 8.9491,
+        "median": 7.6914,
+        "ci95_mean": [
+          7.2098,
+          10.6883
+        ],
+        "iqr": [
+          7.5869,
+          9.9271
+        ],
+        "stdev": 2.3477,
+        "n_repetitions": 7
+      },
+      "p99_ms": {
+        "mean": 11.7267,
+        "median": 10.7881,
+        "ci95_mean": [
+          10.0575,
+          13.396
+        ],
+        "iqr": [
+          10.309,
+          12.6655
+        ],
+        "stdev": 2.2533,
+        "n_repetitions": 7
+      },
+      "wall_s": {
+        "mean": 3.6857,
+        "median": 3.2072,
+        "ci95_mean": [
+          3.0283,
+          4.3431
+        ],
+        "iqr": [
+          3.1798,
+          4.0786
+        ],
+        "stdev": 0.8874,
+        "n_repetitions": 7
+      },
+      "scaling_efficiency_vs_1_thread": 0.793
+    },
+    {
+      "threads": 32,
+      "ops_per_thread": 1500,
+      "ops_total": 48000,
+      "throughput_ops_per_s": {
+        "mean": 13512.6612,
+        "median": 13758.555,
+        "ci95_mean": [
+          12099.5092,
+          14925.8132
+        ],
+        "iqr": [
+          12168.2687,
+          14958.0323
+        ],
+        "stdev": 1907.5759,
+        "n_repetitions": 7
+      },
+      "p50_ms": {
+        "mean": 0.0024,
+        "median": 0.0022,
+        "ci95_mean": [
+          0.0019,
+          0.0029
+        ],
+        "iqr": [
+          0.0021,
+          0.0023
+        ],
+        "stdev": 0.0006,
+        "n_repetitions": 7
+      },
+      "p95_ms": {
+        "mean": 7.515,
+        "median": 6.3911,
+        "ci95_mean": [
+          5.4513,
+          9.5786
+        ],
+        "iqr": [
+          5.9376,
+          7.6052
+        ],
+        "stdev": 2.7857,
+        "n_repetitions": 7
+      },
+      "p99_ms": {
+        "mean": 10.4982,
+        "median": 9.4756,
+        "ci95_mean": [
+          8.2054,
+          12.791
+        ],
+        "iqr": [
+          8.8818,
+          10.1712
+        ],
+        "stdev": 3.095,
+        "n_repetitions": 7
+      },
+      "wall_s": {
+        "mean": 3.6171,
+        "median": 3.4887,
+        "ci95_mean": [
+          3.2179,
+          4.0163
+        ],
+        "iqr": [
+          3.2107,
+          3.9612
+        ],
+        "stdev": 0.5389,
+        "n_repetitions": 7
+      },
+      "scaling_efficiency_vs_1_thread": 1.4581
+    },
+    {
+      "threads": 64,
+      "ops_per_thread": 1500,
+      "ops_total": 96000,
+      "throughput_ops_per_s": {
+        "mean": 22910.1723,
+        "median": 21163.8103,
+        "ci95_mean": [
+          20224.1315,
+          25596.213
+        ],
+        "iqr": [
+          20954.2508,
+          22866.5053
+        ],
+        "stdev": 3625.8142,
+        "n_repetitions": 7
+      },
+      "p50_ms": {
+        "mean": 0.003,
+        "median": 0.0036,
+        "ci95_mean": [
+          0.0023,
+          0.0037
+        ],
+        "iqr": [
+          0.0027,
+          0.0036
+        ],
+        "stdev": 0.001,
+        "n_repetitions": 7
+      },
+      "p95_ms": {
+        "mean": 13.1347,
+        "median": 15.9002,
+        "ci95_mean": [
+          9.3241,
+          16.9453
+        ],
+        "iqr": [
+          11.6252,
+          16.3751
+        ],
+        "stdev": 5.1438,
+        "n_repetitions": 7
+      },
+      "p99_ms": {
+        "mean": 19.9559,
+        "median": 23.9454,
+        "ci95_mean": [
+          14.9302,
+          24.9816
+        ],
+        "iqr": [
+          16.8958,
+          24.6033
+        ],
+        "stdev": 6.7841,
+        "n_repetitions": 7
+      },
+      "wall_s": {
+        "mean": 4.2634,
+        "median": 4.536,
+        "ci95_mean": [
+          3.8624,
+          4.6643
+        ],
+        "iqr": [
+          4.1988,
+          4.5816
+        ],
+        "stdev": 0.5412,
+        "n_repetitions": 7
+      },
+      "scaling_efficiency_vs_1_thread": 2.2428
+    },
+    {
+      "threads": 128,
+      "ops_per_thread": 1500,
+      "ops_total": 192000,
+      "throughput_ops_per_s": {
+        "mean": 31049.5868,
+        "median": 30369.5012,
+        "ci95_mean": [
+          28615.0053,
+          33484.1682
+        ],
+        "iqr": [
+          29194.7983,
+          31284.9896
+        ],
+        "stdev": 3286.3761,
+        "n_repetitions": 7
+      },
+      "p50_ms": {
+        "mean": 0.0033,
+        "median": 0.0033,
+        "ci95_mean": [
+          0.0031,
+          0.0035
+        ],
+        "iqr": [
+          0.0032,
+          0.0034
+        ],
+        "stdev": 0.0003,
+        "n_repetitions": 7
+      },
+      "p95_ms": {
+        "mean": 12.9357,
+        "median": 13.4234,
+        "ci95_mean": [
+          10.949,
+          14.9225
+        ],
+        "iqr": [
+          11.8309,
+          14.5668
+        ],
+        "stdev": 2.6819,
+        "n_repetitions": 7
+      },
+      "p99_ms": {
+        "mean": 32.222,
+        "median": 33.143,
+        "ci95_mean": [
+          28.708,
+          35.7359
+        ],
+        "iqr": [
+          31.4902,
+          35.0935
+        ],
+        "stdev": 4.7434,
+        "n_repetitions": 7
+      },
+      "wall_s": {
+        "mean": 6.2363,
+        "median": 6.3221,
+        "ci95_mean": [
+          5.8044,
+          6.6682
+        ],
+        "iqr": [
+          6.1393,
+          6.5765
+        ],
+        "stdev": 0.583,
+        "n_repetitions": 7
+      },
+      "scaling_efficiency_vs_1_thread": 3.2184
+    }
+  ]
+}

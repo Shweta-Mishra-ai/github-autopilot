@@ -81,13 +81,13 @@ We apply the method to three independent scanners to test \emph{transferability 
 
 \section{Related Work}
 
-\textbf{Secret detection.} \citet{meli2019} measured secret leakage on GitHub at scale, establishing that leaked credentials are common and long-lived. Subsequent work targets the false-positive burden that impedes adoption~\citep{saha2020,rahman2019}, and recent studies examine the accuracy of detection tooling in practice~\citep{basak2023}. To the best of our knowledge, no prior study systematically varies the \emph{context} surrounding a credential while attributing outcomes at the rule level, and we are not aware of prior reports of either defect in Section~\ref{sec:rq3}. Table~\ref{tab:relatedwork} positions this work against the closest related lines.
+\textbf{Secret detection.} \citet{meli2019} measured secret leakage on GitHub at scale, establishing that leaked credentials are common and long-lived. Subsequent work targets the false-positive burden that impedes adoption~\citep{saha2020,rahman2019}, and recent studies examine the accuracy of detection tooling in practice~\citep{basak2022}. To the best of our knowledge, no prior study systematically varies the \emph{context} surrounding a credential while attributing outcomes at the rule level, and we are not aware of prior reports of either defect in Section~\ref{sec:rq3}. Table~\ref{tab:relatedwork} positions this work against the closest related lines.
 
 \textbf{Mutation and metamorphic testing.} Classical mutation testing perturbs the \emph{program} to assess a test suite~\citep{jia2011,demillo1978}. We invert this: the artefact under test is a rule table, and we perturb the \emph{input}. In that respect the method is metamorphic~\citep{chen2018metamorphic,segura2016}: our context mutations are metamorphic relations, since re-quoting a credential or moving it into a YAML file should not change whether it is a credential. The distinguishing elements here are that inputs are generated \emph{from the artefact's own rules}, and that the oracle is rule-level rather than output-level.
 
 \textbf{Input generation and grammar-based testing.} Generating inputs from a formal description relates to grammar-based fuzzing~\citep{godefroid2008} and property-based testing~\citep{claessen2000}, where a generator produces values satisfying a specification. Our generator consumes the detector's own regular expressions, which makes the positive corpus definitionally in-scope for the rule being tested --- a miss cannot be dismissed as outside the rule's syntactic specification, though, as Section~\ref{sec:validity} sets out, syntactic scope is not the same as provider-semantic validity. Work on regular-expression correctness and behaviour~\citep{chapman2016,michael2019} documents that developers frequently misunderstand anchoring and character-class semantics; both defects we report are instances of exactly that, in security-critical rules.
 
-\textbf{Benchmark design as a confound.} Evidence continues to accumulate that benchmark construction, not only technique quality, drives measured outcomes~\citep{liem2023,herbold2022}. Sections~\ref{sec:rq4}--\ref{sec:rq5} contribute three instances in which construction alone reorders tools.
+\textbf{Benchmark design as a confound.} Evidence continues to accumulate that benchmark construction, not only technique quality, drives measured outcomes~\citep{liem2020,herbold2022}. Sections~\ref{sec:rq4}--\ref{sec:rq5} contribute three instances in which construction alone reorders tools.
 
 \textbf{Evaluating security scanners.} A recurring finding in the evaluation of static security tools is that measured effectiveness is highly sensitive to the benchmark rather than to the tool: reported detection rates vary widely across corpora, and tools tuned to one benchmark generalise poorly to another. Our Sections~\ref{sec:rq4}--\ref{sec:rq5} are three instances of the same phenomenon in the secret-detection setting, with the additional observation that the sensitivity is large enough to reverse the ordering. Where that literature typically compares tools, we use the sensitivity itself as the object of study and decline to produce a ranking.
 
@@ -103,7 +103,7 @@ We apply the method to three independent scanners to test \emph{transferability 
 \toprule
 Line of work & Scan. & Mut. & Meta. & Gen. & Oracle \\
 \midrule
-Secret-leakage \& FP studies~\citep{meli2019,saha2020,rahman2019,basak2023} & \checkmark & & & & \\
+Secret-leakage \& FP studies~\citep{meli2019,saha2020,rahman2019,basak2022} & \checkmark & & & & \\
 Classical mutation testing~\citep{jia2011,demillo1978} & & \checkmark & & & \\
 Metamorphic testing~\citep{chen2018metamorphic,segura2016} & & & \checkmark & & \\
 Grammar-/property-based generation~\citep{godefroid2008,claessen2000} & & & & \checkmark$^{*}$ & \\

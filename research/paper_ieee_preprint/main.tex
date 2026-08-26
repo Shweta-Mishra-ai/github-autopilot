@@ -85,13 +85,13 @@ We apply the method to three independent scanners to test \emph{transferability 
 
 \section{Related Work}
 
-\textbf{Secret detection.} Meli et al.~\cite{meli2019} measured secret leakage on GitHub at scale, establishing that leaked credentials are common and long-lived. Subsequent work targets the false-positive burden that impedes adoption~\cite{saha2020,rahman2019}, and recent studies examine the accuracy of detection tooling in practice~\cite{basak2023}. To the best of our knowledge, no prior study systematically varies the \emph{context} surrounding a credential while attributing outcomes at the rule level, and we are not aware of prior reports of either defect in Section~\ref{sec:rq3}. Table~\ref{tab:relatedwork} positions this work against the closest related lines.
+\textbf{Secret detection.} Meli et al.~\cite{meli2019} measured secret leakage on GitHub at scale, establishing that leaked credentials are common and long-lived. Subsequent work targets the false-positive burden that impedes adoption~\cite{saha2020,rahman2019}, and recent studies examine the accuracy of detection tooling in practice~\cite{basak2022}. To the best of our knowledge, no prior study systematically varies the \emph{context} surrounding a credential while attributing outcomes at the rule level, and we are not aware of prior reports of either defect in Section~\ref{sec:rq3}. Table~\ref{tab:relatedwork} positions this work against the closest related lines.
 
 \textbf{Mutation and metamorphic testing.} Classical mutation testing perturbs the \emph{program} to assess a test suite~\cite{jia2011,demillo1978}. We invert this: the artefact under test is a rule table, and we perturb the \emph{input}. In that respect the method is metamorphic~\cite{chen2018metamorphic,segura2016}: our context mutations are metamorphic relations, since re-quoting a credential or moving it into a YAML file should not change whether it is a credential. The distinguishing elements here are that inputs are generated \emph{from the artefact's own rules}, and that the oracle is rule-level rather than output-level.
 
 \textbf{Input generation and grammar-based testing.} Generating inputs from a formal description relates to grammar-based fuzzing~\cite{godefroid2008} and property-based testing~\cite{claessen2000}, where a generator produces values satisfying a specification. Our generator consumes the detector's own regular expressions, which makes the positive corpus definitionally in-scope for the rule being tested --- a miss cannot be dismissed as outside the rule's syntactic specification, though, as Section~\ref{sec:validity} sets out, syntactic scope is not the same as provider-semantic validity. Work on regular-expression correctness and behaviour~\cite{chapman2016,michael2019} documents that developers frequently misunderstand anchoring and character-class semantics; both defects we report are instances of exactly that, in security-critical rules.
 
-\textbf{Benchmark design as a confound.} Evidence continues to accumulate that benchmark construction, not only technique quality, drives measured outcomes~\cite{liem2023,herbold2022}. Sections~\ref{sec:rq4}--\ref{sec:rq5} contribute three instances in which construction alone reorders tools.
+\textbf{Benchmark design as a confound.} Evidence continues to accumulate that benchmark construction, not only technique quality, drives measured outcomes~\cite{liem2020,herbold2022}. Sections~\ref{sec:rq4}--\ref{sec:rq5} contribute three instances in which construction alone reorders tools.
 
 \textbf{Evaluating security scanners.} A recurring finding in the evaluation of static security tools is that measured effectiveness is highly sensitive to the benchmark rather than to the tool: reported detection rates vary widely across corpora, and tools tuned to one benchmark generalise poorly to another. Our Sections~\ref{sec:rq4}--\ref{sec:rq5} are three instances of the same phenomenon in the secret-detection setting, with the additional observation that the sensitivity is large enough to reverse the ordering. Where that literature typically compares tools, we use the sensitivity itself as the object of study and decline to produce a ranking.
 
@@ -107,7 +107,7 @@ We apply the method to three independent scanners to test \emph{transferability 
 \toprule
 Line of work & Scan. & Mut. & Meta. & Gen. & Oracle \\
 \midrule
-Secret-leakage \& FP studies~\cite{meli2019,saha2020,rahman2019,basak2023} & \checkmark & & & & \\
+Secret-leakage \& FP studies~\cite{meli2019,saha2020,rahman2019,basak2022} & \checkmark & & & & \\
 Classical mutation testing~\cite{jia2011,demillo1978} & & \checkmark & & & \\
 Metamorphic testing~\cite{chen2018metamorphic,segura2016} & & & \checkmark & & \\
 Grammar-/property-based generation~\cite{godefroid2008,claessen2000} & & & & \checkmark$^{*}$ & \\
@@ -825,7 +825,7 @@ Fig.~\ref{fig:quality} shows coverage by package and the cyclomatic-complexity d
 
 \bibitem{rahman2019} A.~Rahman, C.~Parnin, and L.~Williams, ``The seven sins: Security smells in Infrastructure as Code scripts,'' in \emph{Proc. ICSE}, 2019, pp. 164--175.
 
-\bibitem{basak2023} S.~K. Basak, L.~Neil, B.~Reaves, and L.~Williams, ``What are the practices for secret management in software artifacts?'' in \emph{Proc. IEEE SecDev}, 2022, pp. 69--76.
+\bibitem{basak2022} S.~K. Basak, L.~Neil, B.~Reaves, and L.~Williams, ``What are the practices for secret management in software artifacts?'' in \emph{Proc. IEEE SecDev}, 2022, pp. 69--76.
 
 \bibitem{gitleaks} Gitleaks contributors, ``Gitleaks: a SAST tool for detecting secrets,'' v8.21.2. [Online]. Available: \url{https://github.com/gitleaks/gitleaks}
 
@@ -847,7 +847,7 @@ Fig.~\ref{fig:quality} shows coverage by package and the cyclomatic-complexity d
 
 \bibitem{michael2019} L.~G. Michael, J.~Donohue, J.~C. Davis, D.~Lee, and F.~Servant, ``Regexes are hard: Decision-making, difficulties, and risks in programming regular expressions,'' in \emph{Proc. ASE}, 2019, pp. 415--426.
 
-\bibitem{liem2023} C.~C.~S. Liem and A.~Panichella, ``Run, forest, run? On randomization and reproducibility in ML and SE research,'' \emph{arXiv:2012.08387}, 2023.
+\bibitem{liem2020} C.~C.~S. Liem and A.~Panichella, ``Run, forest, run? On randomization and reproducibility in ML and SE research,'' \emph{arXiv:2012.08387}, 2020.
 
 \bibitem{herbold2022} S.~Herbold, A.~Trautsch, and F.~Trautsch, ``On the feasibility of automated issue type prediction,'' \emph{Empirical Softw. Eng.}, vol.~27, 2022.
 

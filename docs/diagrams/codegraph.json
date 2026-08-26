@@ -126,8 +126,8 @@
       "id": "app.ai.providers.base",
       "path": "app/ai/providers/base.py",
       "layer": "ai",
-      "loc": 162,
-      "functions": 1,
+      "loc": 227,
+      "functions": 3,
       "classes": 2,
       "is_package": false,
       "fan_in": 7,
@@ -144,8 +144,8 @@
       "id": "app.ai.providers.gemini",
       "path": "app/ai/providers/gemini.py",
       "layer": "ai",
-      "loc": 183,
-      "functions": 0,
+      "loc": 210,
+      "functions": 2,
       "classes": 1,
       "is_package": false,
       "fan_in": 1,
@@ -162,7 +162,7 @@
       "id": "app.ai.providers.groq",
       "path": "app/ai/providers/groq.py",
       "layer": "ai",
-      "loc": 188,
+      "loc": 215,
       "functions": 0,
       "classes": 1,
       "is_package": false,
@@ -215,11 +215,11 @@
       "id": "app.ai.router",
       "path": "app/ai/router.py",
       "layer": "ai",
-      "loc": 535,
+      "loc": 578,
       "functions": 3,
       "classes": 1,
       "is_package": false,
-      "fan_in": 11,
+      "fan_in": 12,
       "fan_out": 12,
       "external_deps": [
         "app",
@@ -1468,12 +1468,12 @@
       "id": "server",
       "path": "server.py",
       "layer": "other",
-      "loc": 710,
+      "loc": 734,
       "functions": 29,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 28,
+      "fan_out": 29,
       "external_deps": [
         "app",
         "flask",
@@ -2734,6 +2734,11 @@
     },
     {
       "source": "server",
+      "target": "app.ai.router",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
       "target": "app.core.event_queue",
       "kind": "runtime"
     },
@@ -2880,8 +2885,8 @@
   ],
   "stats": {
     "modules": 91,
-    "edges": 274,
-    "total_loc": 19841,
+    "edges": 275,
+    "total_loc": 20027,
     "layers": [
       "ai",
       "core",
@@ -2902,8 +2907,8 @@
       },
       {
         "id": "app.ai.router",
-        "loc": 535,
-        "fan_in": 11,
+        "loc": 578,
+        "fan_in": 12,
         "fan_out": 12
       },
       {
@@ -2949,10 +2954,10 @@
         "fan_out": 2
       },
       {
-        "id": "app.core.guardrails",
+        "id": "app.ai.providers.base",
         "loc": 227,
         "fan_in": 7,
-        "fan_out": 1
+        "fan_out": 0
       }
     ],
     "orphans": []

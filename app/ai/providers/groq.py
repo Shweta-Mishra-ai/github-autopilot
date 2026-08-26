@@ -16,7 +16,7 @@ import os
 import requests as http_requests
 
 import app.ai.circuit_breaker as cb
-from app.ai.providers.base import LLMProvider, LLMResponse
+from app.ai.providers.base import LLMProvider, LLMResponse, client_error_detail
 from app.core.redis_client import get_redis
 from app.core.retry_after import parse_retry_after
 
@@ -114,6 +114,33 @@ class GroqProvider(LLMProvider):
                     provider="groq",
                     model=self._model,
                     error=f"Server error {_status}",
+                )
+
+            # A 4xx here is CONFIGURATION, not an outage, and the difference
+            # decides whether retrying can ever work.
+            #
+            # A retired model id returns 404. That used to fall through to
+            # raise_for_status() and be recorded as a breaker failure, so three
+            # requests opened the circuit on groq_70b, five more opened it on
+            # groq_8b, and the router reported "all providers down" — sending a
+            # maintainer to check provider status when the fix was one
+            # environment variable. It happened: the nightly evals scored 0.0
+            # and filed an issue blaming review quality.
+            #
+            # A breaker exists to stop hammering a service that might recover.
+            # A model that does not exist, or a key that is not valid, will not
+            # recover on its own, so opening the breaker only replaces a precise
+            # error with a vague one. Report these and leave the breaker alone.
+            if _status in (401, 403, 404):
+                detail = client_error_detail(
+                    r, _status, self._model, "GROQ_API_KEY", "LLM_PRIMARY_MODEL"
+                )
+                log.error(f"groq.configuration_error status={_status} model={self._model}")
+                return LLMResponse(
+                    text="",
+                    provider="groq",
+                    model=self._model,
+                    error=detail,
                 )
 
             r.raise_for_status()

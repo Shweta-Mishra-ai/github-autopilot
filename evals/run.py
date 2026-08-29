@@ -238,6 +238,10 @@ def run_review_cases() -> tuple[list, list]:
             # anything. It was read as a rate limit, then as a quality
             # regression -- the failure mode this file's own comments warn
             # about, in the file that warns about it.
+            # Cleared per attempt: _attempt retries a case that came back
+            # empty, and a list shared across attempts would score the second
+            # try's review joined to the first try's.
+            captured.clear()
             with patch("app.handlers.pull_request.review.gh_post", side_effect=_capture):
                 markdown, inline = _review_code(
                     pr, "eval/repo", 1, files, "tok", cfg, MagicMock(), "", MagicMock()

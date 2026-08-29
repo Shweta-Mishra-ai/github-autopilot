@@ -311,3 +311,95 @@ class TestTheBadgeCannotAdvertiseARedRun:
             "the count must be refused when the output reports failures, not "
             "merely when the pass count is missing"
         )
+
+
+class TestAThrottledRunIsNotAQualityResult:
+    """
+    The 2026-08-29 run passed all six /fix cases at 1.0, then tripped the
+    provider's rate limit. Both circuit breakers opened, the five review cases
+    received empty output, and every one was scored as a QUALITY failure:
+    `pass_rate=0.545` on a run that never scored a single review case.
+
+    Same defect as reporting a retired model id as a regression — an
+    infrastructure fault written into a number people read as a statement
+    about the prompts.
+    """
+
+    @pytest.mark.parametrize(
+        "output",
+        [
+            "",
+            "   ",
+            "x" * 39,
+            "Providers are busy, try again shortly.",
+            "## ⚠️ Provider error",
+            "AI providers down — try again",
+        ],
+    )
+    def test_an_unanswered_case_is_detected(self, output):
+        from evals.run import looks_blocked
+
+        assert looks_blocked(output)
+
+    @pytest.mark.parametrize(
+        "output",
+        [
+            "x" * 200,
+            "## Fix\n\nThe slice is off by one: `size - 1` drops the final element. "
+            "Use `start + size`, and add a boundary test so it cannot regress again.",
+        ],
+    )
+    def test_a_real_answer_is_not_treated_as_blocked(self, output):
+        from evals.run import looks_blocked
+
+        assert not looks_blocked(output), (
+            "marking a genuine answer as blocked would hide a real quality drop, "
+            "which is the opposite failure and the more dangerous one"
+        )
+
+    def test_the_runner_documents_a_distinct_code_for_a_throttled_run(self):
+        import evals.run as run
+
+        assert "4  the provider throttled us" in run.__doc__
+
+    def test_the_workflow_branches_on_that_code(self):
+        from pathlib import Path
+
+        wf = Path(__file__).resolve().parent.parent / ".github/workflows/evals.yml"
+        text = wf.read_text(encoding="utf-8")
+        assert 'outputs.exit_code }}" = "4"' in text, (
+            "without its own branch a throttled run files 'quality regressed'"
+        )
+
+    def test_the_suite_paces_itself_between_cases(self):
+        from evals.run import CASE_DELAY_SECONDS
+
+        assert CASE_DELAY_SECONDS > 0, (
+            "firing every case back to back is what tripped the rate limit; "
+            "pacing prevents the condition rather than only reporting it"
+        )
+
+    def test_a_case_that_raises_is_printed_not_only_counted(self):
+        # Both handlers used to `continue` before _print_case, so a raising
+        # case was counted in the summary and invisible in the output: two
+        # FAIL lines above a summary listing five failed cases.
+        import inspect
+
+        from evals.run import _attempt
+
+        source = inspect.getsource(_attempt)
+        assert "_print_case(result)" in source, (
+            "an exception case must reach the printer, or the visible output "
+            "disagrees with the summary and hides the real cause"
+        )
+
+    def test_a_blocked_case_is_reported_separately_from_failures(self):
+        import inspect
+
+        import evals.run as run
+
+        source = inspect.getsource(run.main)
+        assert "return 4" in source
+        assert "NOT a quality result" in source, (
+            "the message must say plainly that these cases were never scored"
+        )

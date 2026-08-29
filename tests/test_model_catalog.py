@@ -343,3 +343,38 @@ class TestTheProvidersActuallyRepairThemselves:
         ]
         assert result == {"ok": True}
         assert meta.error is None
+
+
+class TestTheSuiteNeverReachesAProvider:
+    """
+    OpenRouter's catalogue needs no API key, so the moment providers learned to
+    repair a retired model id, any test feeding a 404 reached openrouter.ai for
+    real. CI caught it; locally it passed only because the sandbox blocks that
+    host. A test whose result depends on the network is not a test.
+    """
+
+    def test_the_catalogue_is_stubbed_by_default(self):
+        """The autouse guard in conftest, asserted rather than assumed."""
+        assert mc.available_models("openrouter") == []
+        assert mc.available_models("groq") == []
+
+    def test_no_http_call_escapes_during_a_provider_404(self, monkeypatch):
+        import app.ai.circuit_breaker as cb
+        from app.ai.providers.groq import GroqProvider
+
+        monkeypatch.setenv("GROQ_API_KEY", "k")
+        breaker = MagicMock()
+        breaker.is_available.return_value = True
+        gone = MagicMock()
+        gone.status_code = 404
+        gone.headers = {}
+        gone.json.return_value = {"error": {"code": "model_not_found"}}
+
+        with (
+            patch("requests.get") as outbound,
+            patch.object(cb, "get_breaker", return_value=breaker),
+            patch("app.ai.providers.groq.http_requests.post", return_value=gone),
+        ):
+            GroqProvider("retired", provider_key="groq_70b").call_raw("s", "u", 10, 0.2, 5)
+
+        assert not outbound.called, "a unit test reached out to a provider catalogue"

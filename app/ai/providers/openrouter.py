@@ -22,6 +22,7 @@ from app.ai.providers.base import (
     LLMResponse,
     client_error_detail,
     redact_secrets,
+    substituted_model,
     throttle_pause,
 )
 
@@ -30,8 +31,21 @@ log = logging.getLogger(__name__)
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# Free model — no cost, decent quality for fallback
-DEFAULT_MODEL = "mistralai/mistral-7b-instruct:free"
+# Free — this provider is the emergency fallback, so reaching it must never
+# start a bill.
+#
+# Was `mistralai/mistral-7b-instruct:free`, which the provider no longer serves:
+# it appears nowhere in the 394 models OpenRouter currently lists, and there is
+# no free Mistral variant at all. Every emergency fallback would have 404'd —
+# the failure was invisible precisely because this path is only reached when
+# things are already going wrong.
+#
+# Read off the provider's own catalogue, not from memory. `a12b` is the active
+# parameter count of a mixture-of-experts model: 120B of knowledge at roughly
+# 12B of latency, which is the right shape for a last resort. If this id is
+# retired too, model_catalog substitutes the best served free model and says so
+# rather than going down again.
+DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
 
 
 class OpenRouterProvider(LLMProvider):
@@ -40,7 +54,9 @@ class OpenRouterProvider(LLMProvider):
     provider_key = "openrouter"
 
     def __init__(self, model: str = DEFAULT_MODEL):
-        self._model = model
+        from app.ai.model_catalog import effective_model
+
+        self._model = effective_model("openrouter", model)
 
     @property
     def api_key(self) -> str:
@@ -106,6 +122,18 @@ class OpenRouterProvider(LLMProvider):
                     model=self._model,
                     error=f"RATE_LIMIT:{retry_after}",
                 )
+
+        if status in (400, 401, 402, 403, 404):
+            # The emergency fallback pointed at a model OpenRouter had already
+            # retired, so every last resort 404'd -- invisible, because this
+            # path is only reached when things are going wrong already.
+            replacement = substituted_model(
+                "openrouter", "openrouter", "quality", self._model, resp, status
+            )
+            if replacement:
+                self._model = replacement
+                resp = repost()
+                status = getattr(resp, "status_code", 0)
 
         if status in (400, 401, 402, 403, 404):
             detail = client_error_detail(resp, status, self._model, "OPENROUTER_API_KEY")
@@ -178,7 +206,9 @@ class OpenRouterProvider(LLMProvider):
         start = time.time()
         try:
             resp = self._post(body, timeout)
-            resp, stop = self._throttle_or_fault(resp, breaker, lambda: self._post(body, timeout))
+            resp, stop = self._throttle_or_fault(
+                resp, breaker, lambda: self._post({**body, "model": self._model}, timeout)
+            )
             if stop is not None:
                 stop.latency_ms = int((time.time() - start) * 1000)
                 return {}, stop
@@ -246,7 +276,9 @@ class OpenRouterProvider(LLMProvider):
         start = time.time()
         try:
             resp = self._post(body, timeout)
-            resp, stop = self._throttle_or_fault(resp, breaker, lambda: self._post(body, timeout))
+            resp, stop = self._throttle_or_fault(
+                resp, breaker, lambda: self._post({**body, "model": self._model}, timeout)
+            )
             if stop is not None:
                 stop.latency_ms = int((time.time() - start) * 1000)
                 return "", stop

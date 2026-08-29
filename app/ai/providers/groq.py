@@ -17,10 +17,12 @@ import time
 import requests as http_requests
 
 import app.ai.circuit_breaker as cb
+from app.ai.model_catalog import effective_model
 from app.ai.providers.base import (
     LLMProvider,
     LLMResponse,
     client_error_detail,
+    substituted_model,
     throttle_pause,
 )
 from app.core.redis_client import get_redis
@@ -80,6 +82,11 @@ class GroqProvider(LLMProvider):
         self._provider_key = provider_key or _infer_provider_key(self._model)
 
     @property
+    def _tier(self) -> str:
+        """Which tier a replacement must match: the fallback must stay cheap."""
+        return "speed" if self._provider_key == "groq_8b" else "quality"
+
+    @property
     def provider_key(self) -> str:
         """
         Which budget, circuit breaker and quality tier this instance uses.
@@ -107,14 +114,19 @@ class GroqProvider(LLMProvider):
         temperature: float,
         timeout: int,
     ) -> LLMResponse:
+        # Resolved once. `effective_model` returns a substitution when a
+        # previous call found the configured id retired, so every path below --
+        # including the error paths -- names the model actually asked for.
+        model = effective_model(self.provider_key, self._model)
+
         # ── STEP 1: Circuit breaker check — MUST be first ─────────────────────
         breaker = cb.get_breaker(self.provider_key)
         if not breaker.is_available():
             return LLMResponse(
                 text="",
                 provider="groq",
-                model=self._model,
-                error=f"Circuit OPEN for {self._model}",
+                model=model,
+                error=f"Circuit OPEN for {model}",
             )
 
         # ── STEP 2: API key check ─────────────────────────────────────────────
@@ -123,7 +135,7 @@ class GroqProvider(LLMProvider):
             return LLMResponse(
                 text="",
                 provider="groq",
-                model=self._model,
+                model=model,
                 error="GROQ_API_KEY not set",
             )
 
@@ -133,7 +145,7 @@ class GroqProvider(LLMProvider):
             "Content-Type": "application/json",
         }
         body = {
-            "model": self._model,
+            "model": model,
             "max_tokens": max_tokens,
             "temperature": temperature,
             "messages": [
@@ -154,9 +166,7 @@ class GroqProvider(LLMProvider):
                 # holding the thread for. A throttle we successfully waited out
                 # is not a failure and must not count toward the breaker.
                 if pause:
-                    log.info(
-                        f"groq.throttled model={self._model} waiting={pause:g}s then retrying once"
-                    )
+                    log.info(f"groq.throttled model={model} waiting={pause:g}s then retrying once")
                     time.sleep(pause)
                     r = http_requests.post(GROQ_URL, headers=headers, json=body, timeout=timeout)
 
@@ -168,7 +178,7 @@ class GroqProvider(LLMProvider):
                     return LLMResponse(
                         text="",
                         provider="groq",
-                        model=self._model,
+                        model=model,
                         error=f"RATE_LIMIT:{retry_after}",
                     )
 
@@ -181,7 +191,7 @@ class GroqProvider(LLMProvider):
                 return LLMResponse(
                     text="",
                     provider="groq",
-                    model=self._model,
+                    model=model,
                     error=f"Server error {_status}",
                 )
 
@@ -201,14 +211,28 @@ class GroqProvider(LLMProvider):
             # recover on its own, so opening the breaker only replaces a precise
             # error with a vague one. Report these and leave the breaker alone.
             if _status in (401, 403, 404):
-                detail = client_error_detail(
-                    r, _status, self._model, "GROQ_API_KEY", "LLM_PRIMARY_MODEL"
+                # A retired model id is the one 4xx the provider can answer for
+                # us: ask what it serves, take the best in this tier, retry
+                # once. Six days of 404s is what this replaces.
+                replacement = substituted_model(
+                    self.provider_key, "groq", self._tier, model, r, _status
                 )
-                log.error(f"groq.configuration_error status={_status} model={self._model}")
+                if replacement:
+                    model = replacement
+                    body["model"] = model
+                    r = http_requests.post(GROQ_URL, headers=headers, json=body, timeout=timeout)
+                    try:
+                        _status = int(r.status_code)
+                    except (TypeError, ValueError):
+                        _status = 0
+
+            if _status in (401, 403, 404):
+                detail = client_error_detail(r, _status, model, "GROQ_API_KEY", "LLM_PRIMARY_MODEL")
+                log.error(f"groq.configuration_error status={_status} model={model}")
                 return LLMResponse(
                     text="",
                     provider="groq",
-                    model=self._model,
+                    model=model,
                     error=detail,
                 )
 
@@ -227,7 +251,7 @@ class GroqProvider(LLMProvider):
             return LLMResponse(
                 text=text,
                 provider="groq",
-                model=self._model,
+                model=model,
                 prompt_tokens=p_tok,
                 completion_tokens=c_tok,
                 total_tokens=t_tok,
@@ -239,7 +263,7 @@ class GroqProvider(LLMProvider):
             return LLMResponse(
                 text="",
                 provider="groq",
-                model=self._model,
+                model=model,
                 error="Request timed out",
             )
         except Exception as e:
@@ -249,7 +273,7 @@ class GroqProvider(LLMProvider):
             return LLMResponse(
                 text="",
                 provider="groq",
-                model=self._model,
+                model=model,
                 error=err[:200],
             )
 

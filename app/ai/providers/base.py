@@ -14,6 +14,7 @@ That's it. Zero changes to handlers or commands.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import os
+import re
 import time
 
 
@@ -287,7 +288,60 @@ __all__ = [
     "CONFIG_ERROR_PREFIX",
     "MAX_THROTTLE_WAIT_SECONDS",
     "client_error_detail",
+    "is_model_missing",
+    "substituted_model",
     "is_configuration_error",
     "redact_secrets",
     "throttle_pause",
 ]
+
+
+# ── A model that no longer exists ─────────────────────────────────────────────
+#
+# Distinct from every other 4xx: a rejected key needs a human, but a retired
+# model id has an answer the provider itself will give us. The last time one
+# was retired here, every AI command returned 404 for six days.
+_MODEL_GONE = re.compile(
+    r"(model_not_found|does not exist|decommissioned|deprecated|no endpoints found"
+    r"|not found|unknown model|invalid model)",
+    re.IGNORECASE,
+)
+
+
+def is_model_missing(response, status: int) -> bool:
+    """
+    True when this 4xx says the MODEL is the problem, not the credential.
+
+    Deliberately narrow. Substituting a model for a rejected key would swap a
+    precise "your key is invalid" for a confusing "we quietly changed model and
+    it still did not work", so 401/403 never reach here.
+    """
+    if status in (401, 403):
+        return False
+    body = ""
+    try:
+        err = (response.json().get("error") or {}) if response is not None else {}
+        body = f"{err.get('code', '')} {err.get('message', '')} {err.get('status', '')}"
+    except Exception:
+        body = ""
+    return status == 404 or bool(_MODEL_GONE.search(body))
+
+
+def substituted_model(
+    provider_key: str, provider: str, tier: str, failed_model: str, response, status: int
+) -> str:
+    """
+    A replacement for a model the provider says it does not serve, or "".
+
+    "" means "carry on and report the configuration error exactly as before",
+    so this can only turn a hard failure into a working request or leave the
+    behaviour unchanged. It never makes a working call worse.
+    """
+    if not is_model_missing(response, status):
+        return ""
+    try:
+        from app.ai.model_catalog import substitute
+
+        return substitute(provider_key, provider, tier, failed_model)
+    except Exception:  # pragma: no cover - the repair path must never raise
+        return ""

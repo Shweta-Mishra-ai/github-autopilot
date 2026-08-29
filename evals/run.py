@@ -65,6 +65,18 @@ def configured_models() -> list[str]:
     ]
 
 
+def _inventory_block() -> str:
+    """What every configured provider serves, and what this deployment would
+    pick from it. Never raises: a preflight that dies reporting is worse than
+    one that reports nothing."""
+    try:
+        from app.ai.model_catalog import format_inventory
+
+        return "\n-- provider catalogue --\n" + format_inventory()
+    except Exception as exc:  # pragma: no cover - diagnostic only
+        return f"\n-- provider catalogue unavailable: {type(exc).__name__} --"
+
+
 def check_configured_models(key: str) -> tuple[bool, str]:
     """
     (ok, human-readable detail) — does the provider still serve our models?
@@ -100,7 +112,11 @@ def check_configured_models(key: str) -> tuple[bool, str]:
 
     missing = [m for m in wanted if m not in available]
     if not missing:
-        return True, f"Model check: {', '.join(wanted)} — all available."
+        # The inventory is printed on success too. Only printing it on failure
+        # meant the one moment an operator could see what to switch TO was the
+        # moment everything was already broken -- and choosing a replacement is
+        # exactly what you want to do calmly, before the id you use is retired.
+        return True, f"Model check: {', '.join(wanted)} — all available.\n{_inventory_block()}"
 
     listing = "\n".join(f"    {m}" for m in available if m)
     if len(missing) == len(wanted):

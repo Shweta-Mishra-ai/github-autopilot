@@ -350,14 +350,25 @@ def health():
 
     llm_config_error = ""
     llm_models = {}
+    llm_substitutions = {}
     try:
         ai_status = LLMRouter().status()
         llm_config_error = ai_status.get("configuration_error", "")
         llm_models = ai_status.get("models", {})
+
+        # A model swapped in because the configured one was retired. The bot
+        # keeps working, which is the point -- but a bot answering on a model
+        # nobody chose is its own incident, so it is never silent.
+        from app.ai.model_catalog import active_substitutions
+
+        llm_substitutions = {k: v.get("to", "") for k, v in active_substitutions().items()}
     except Exception as exc:  # health must not fail on its own reporting
         log.debug(f"health.llm_status_failed: {exc}")
 
     overall = "ok" if (gh_ok and any_llm_ok and not llm_config_error) else "degraded"
+    if llm_substitutions:
+        # Answering, but on a model nobody configured. Not "ok", not an outage.
+        overall = "degraded" if overall == "ok" else overall
     if llm_config_error:
         overall = "misconfigured"
 
@@ -380,6 +391,10 @@ def health():
                 # Retrying cannot fix either, so this is reported separately
                 # from the breakers rather than folded into "degraded".
                 "llm_configuration_error": llm_config_error,
+                # Empty in a healthy deployment. Non-empty means the configured
+                # model id is gone and one from the provider's own catalogue is
+                # being used instead -- working, but not what was asked for.
+                "llm_model_substitutions": llm_substitutions,
                 "thread_pool": "saturated" if pool_saturated else "ok",
             },
             "thread_pool": pool,

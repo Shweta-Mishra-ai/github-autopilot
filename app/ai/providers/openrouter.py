@@ -48,15 +48,30 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
 
 
+OPENROUTER_MODEL_ENV = "LLM_OPENROUTER_MODEL"
+
+
+def openrouter_model() -> str:
+    """
+    Overridable, and read per call -- parity with the other two providers.
+
+    It was the only one of the three with no override at all, so pinning it
+    took a code change and a deploy. That is the same trap as the model id
+    itself: the setting an operator would reach for did not exist, and the
+    doctor would have reported a value nothing read.
+    """
+    return os.environ.get(OPENROUTER_MODEL_ENV, "").strip() or DEFAULT_MODEL
+
+
 class OpenRouterProvider(LLMProvider):
     """OpenRouter LLM provider — emergency fallback."""
 
     provider_key = "openrouter"
 
-    def __init__(self, model: str = DEFAULT_MODEL):
+    def __init__(self, model: str = ""):
         from app.ai.model_catalog import effective_model
 
-        self._model = effective_model("openrouter", model)
+        self._model = effective_model("openrouter", model or openrouter_model())
 
     @property
     def api_key(self) -> str:

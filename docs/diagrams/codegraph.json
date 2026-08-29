@@ -20,7 +20,7 @@
       "functions": 0,
       "classes": 0,
       "is_package": true,
-      "fan_in": 0,
+      "fan_in": 1,
       "fan_out": 0,
       "external_deps": []
     },
@@ -118,7 +118,7 @@
       "functions": 12,
       "classes": 0,
       "is_package": false,
-      "fan_in": 5,
+      "fan_in": 6,
       "fan_out": 1,
       "external_deps": [
         "app",
@@ -221,8 +221,8 @@
       "id": "app.ai.providers.openrouter",
       "path": "app/ai/providers/openrouter.py",
       "layer": "ai",
-      "loc": 312,
-      "functions": 0,
+      "loc": 327,
+      "functions": 1,
       "classes": 1,
       "is_package": false,
       "fan_in": 1,
@@ -239,12 +239,12 @@
       "id": "app.ai.router",
       "path": "app/ai/router.py",
       "layer": "ai",
-      "loc": 600,
-      "functions": 3,
+      "loc": 689,
+      "functions": 5,
       "classes": 1,
       "is_package": false,
       "fan_in": 13,
-      "fan_out": 12,
+      "fan_out": 14,
       "external_deps": [
         "app",
         "datetime",
@@ -1492,7 +1492,7 @@
       "id": "server",
       "path": "server.py",
       "layer": "other",
-      "loc": 749,
+      "loc": 775,
       "functions": 29,
       "classes": 0,
       "is_package": false,
@@ -1688,12 +1688,22 @@
     },
     {
       "source": "app.ai.router",
+      "target": "app.ai",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.router",
       "target": "app.ai.circuit_breaker",
       "kind": "import"
     },
     {
       "source": "app.ai.router",
       "target": "app.ai.circuit_breaker",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.router",
+      "target": "app.ai.model_catalog",
       "kind": "runtime"
     },
     {
@@ -2954,8 +2964,8 @@
   ],
   "stats": {
     "modules": 92,
-    "edges": 284,
-    "total_loc": 20847,
+    "edges": 286,
+    "total_loc": 20977,
     "layers": [
       "ai",
       "core",
@@ -2976,9 +2986,9 @@
       },
       {
         "id": "app.ai.router",
-        "loc": 600,
+        "loc": 689,
         "fan_in": 13,
-        "fan_out": 12
+        "fan_out": 14
       },
       {
         "id": "app.github.client",
@@ -3011,15 +3021,15 @@
         "fan_out": 3
       },
       {
-        "id": "app.core.webhook_security",
-        "loc": 474,
-        "fan_in": 4,
+        "id": "app.ai.model_catalog",
+        "loc": 356,
+        "fan_in": 6,
         "fan_out": 1
       },
       {
-        "id": "app.ai.model_catalog",
-        "loc": 356,
-        "fan_in": 5,
+        "id": "app.core.webhook_security",
+        "loc": 474,
+        "fan_in": 4,
         "fan_out": 1
       },
       {

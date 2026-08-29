@@ -17,9 +17,13 @@ import time
 import requests as http_requests
 
 import app.ai.circuit_breaker as cb
-from app.ai.providers.base import LLMProvider, LLMResponse, client_error_detail
+from app.ai.providers.base import (
+    LLMProvider,
+    LLMResponse,
+    client_error_detail,
+    throttle_pause,
+)
 from app.core.redis_client import get_redis
-from app.core.retry_after import parse_retry_after
 
 log = logging.getLogger(__name__)
 
@@ -64,7 +68,6 @@ def _infer_provider_key(model: str) -> str:
 #
 # Bounded on purpose: a long delay is not worth holding a worker thread for, so
 # it is reported instead. Set to 0 to never wait.
-MAX_THROTTLE_WAIT_SECONDS = float(os.environ.get("LLM_MAX_THROTTLE_WAIT_SECONDS", "10"))
 
 
 class GroqProvider(LLMProvider):
@@ -145,23 +148,23 @@ class GroqProvider(LLMProvider):
             if r.status_code == 429:
                 # Groq sends fractional delays (e.g. "7.66"), which int()
                 # cannot parse; parse_retry_after rounds them up instead.
-                retry_after = parse_retry_after(r.headers.get("Retry-After"), 30)
+                retry_after, pause = throttle_pause(r, default=30)
 
                 # Wait the delay out ONCE, if it is short enough to be worth
                 # holding the thread for. A throttle we successfully waited out
                 # is not a failure and must not count toward the breaker.
-                if 0 < retry_after <= MAX_THROTTLE_WAIT_SECONDS:
+                if pause:
                     log.info(
                         f"groq.throttled model={self._model} "
-                        f"waiting={retry_after}s then retrying once"
+                        f"waiting={pause:g}s then retrying once"
                     )
-                    time.sleep(retry_after)
+                    time.sleep(pause)
                     r = http_requests.post(GROQ_URL, headers=headers, json=body, timeout=timeout)
 
                 if r.status_code == 429:
                     # Still throttled after waiting: the account really is
                     # saturated, so back off properly and let the breaker see it.
-                    retry_after = parse_retry_after(r.headers.get("Retry-After"), retry_after)
+                    retry_after, _ = throttle_pause(r, default=retry_after)
                     breaker.record_failure(f"rate_limit retry_after={retry_after}s")
                     return LLMResponse(
                         text="",

@@ -378,3 +378,119 @@ class TestTheSuiteNeverReachesAProvider:
             GroqProvider("retired", provider_key="groq_70b").call_raw("s", "u", 10, 0.2, 5)
 
         assert not outbound.called, "a unit test reached out to a provider catalogue"
+
+
+class TestTheDeploymentCanAnswerWhatCiCannot:
+    """
+    Whether a configured model id is still served depends on an API key, and
+    the key is a deployment secret. CI could not check Gemini for exactly that
+    reason — the catalogue came back "GEMINI_API_KEY not set".
+
+    The running service holds the key, so the doctor asks on its behalf. These
+    tests pin the states, because the dangerous one is reporting a model as
+    RETIRED when the truth is that we could not look.
+    """
+
+    GEMINI_SERVED = ["gemini-flash-latest", "gemini-pro-latest", "text-embedding-004"]
+
+    def _served(self, gemini=None):
+        table = {
+            "groq": GROQ_LIVE,
+            "openrouter": OPENROUTER_FREE_LIVE,
+            "gemini": GEMINI_SERVED_DEFAULT if gemini is None else gemini,
+        }
+        return lambda p, **k: table.get(p, [])
+
+    def test_a_served_id_reads_ok(self):
+        from app.ai.router import model_configuration_report
+
+        with patch.object(mc, "available_models", self._served()):
+            report = model_configuration_report()
+        groq = {s["slot"]: s for s in report["providers"]["groq"]["slots"]}
+        assert groq["groq_70b"]["state"] == "ok"
+        assert groq["groq_8b"]["state"] == "ok"
+
+    def test_a_retired_id_is_named_with_a_replacement(self, monkeypatch):
+        from app.ai.router import model_configuration_report
+
+        monkeypatch.setenv("LLM_GEMINI_MODEL", "gemini-1.5-flash")
+        with patch.object(mc, "available_models", self._served()):
+            report = model_configuration_report()
+        slot = report["providers"]["gemini"]["slots"][0]
+        assert slot["state"] == "retired"
+        assert slot["configured"] == "gemini-1.5-flash"
+        assert slot["suggested"] in self.GEMINI_SERVED
+
+    def test_an_unreadable_catalogue_is_unknown_not_retired(self):
+        """
+        The mistake that matters. Reporting "your model id is wrong" when the
+        truth is "we have no key for that provider" sends an operator to
+        change a setting that was never broken.
+        """
+        from app.ai.router import model_configuration_report
+
+        with patch.object(mc, "available_models", lambda p, **k: []):
+            report = model_configuration_report()
+        for provider in report["providers"].values():
+            assert provider["catalogue_readable"] is False
+            for slot in provider["slots"]:
+                assert slot["state"] == "unknown", slot
+
+    def test_the_prose_marks_each_state_distinctly(self, monkeypatch):
+        from app.ai.router import format_model_configuration, model_configuration_report
+
+        monkeypatch.setenv("LLM_GEMINI_MODEL", "gemini-1.5-flash")
+        with patch.object(mc, "available_models", self._served()):
+            text = format_model_configuration(model_configuration_report())
+        assert "NOT served" in text
+        assert "gemini-1.5-flash" in text
+        assert "openai/gpt-oss-120b" in text
+
+    def test_it_never_raises(self):
+        from app.ai.router import format_model_configuration, model_configuration_report
+
+        with patch.object(mc, "available_models", side_effect=RuntimeError("boom")):
+            report = model_configuration_report()
+        assert format_model_configuration(report)
+
+
+GEMINI_SERVED_DEFAULT = TestTheDeploymentCanAnswerWhatCiCannot.GEMINI_SERVED
+
+
+class TestEveryProviderCanBePinned:
+    """
+    OpenRouter was the only one of the three with no model override, so
+    pinning it took a code change and a deploy — the same trap as the model id
+    itself. Worse, the doctor was about to report a value the code never read,
+    which is how this repository previously shipped a config section nothing
+    consumed.
+    """
+
+    def test_the_override_is_honoured(self, monkeypatch):
+        from app.ai.providers.openrouter import DEFAULT_MODEL, openrouter_model
+
+        assert openrouter_model() == DEFAULT_MODEL
+        monkeypatch.setenv("LLM_OPENROUTER_MODEL", "some/other:free")
+        assert openrouter_model() == "some/other:free"
+
+    def test_the_provider_uses_it(self, monkeypatch):
+        from app.ai.providers.openrouter import OpenRouterProvider
+
+        monkeypatch.setenv("LLM_OPENROUTER_MODEL", "some/other:free")
+        assert OpenRouterProvider().model_name == "some/other:free"
+
+    def test_the_doctor_reports_what_the_code_reads(self, monkeypatch):
+        """The bug this guards: a diagnostic naming a setting nothing honours."""
+        from app.ai.router import model_configuration_report
+
+        monkeypatch.setenv("LLM_OPENROUTER_MODEL", "pinned/model:free")
+        with patch.object(mc, "available_models", lambda p, **k: []):
+            report = model_configuration_report()
+        assert report["providers"]["openrouter"]["slots"][0]["configured"] == "pinned/model:free"
+
+    def test_all_three_overrides_are_documented(self):
+        """An undocumented setting is one only its author can use."""
+        env_example = (Path(__file__).parent.parent / ".env.example").read_text(encoding="utf-8")
+        for var in ("LLM_PRIMARY_MODEL", "LLM_FALLBACK_MODEL", "LLM_GEMINI_MODEL",
+                    "LLM_OPENROUTER_MODEL"):
+            assert var in env_example, f"{var} is not documented"

@@ -124,6 +124,39 @@ else
   fi
 fi
 
+# ── Are the configured model ids ones the providers still serve? ─────────────
+#
+# Asked HERE, of the running service, because the answer needs an API key and
+# the key is a deployment secret. CI cannot check a provider it has no
+# credential for -- the Gemini catalogue is unreadable in CI for exactly that
+# reason -- but this deployment holds the key, so it can simply ask.
+step "Model ids the providers still serve"
+if [ -z "$TOKEN" ]; then
+  note "METRICS_AUTH_TOKEN not set — /setup/doctor is auth-gated, skipping"
+else
+  MODELS=$(curl -sS --max-time 45 "${auth[@]}" "$BASE_URL/setup/doctor" \
+    | jq -c '.models // empty' 2>/dev/null || echo "")
+  if [ -z "$MODELS" ]; then
+    note "this deployment predates the model report — redeploy to enable it"
+  else
+    printf '%s' "$MODELS" | jq -r '
+      .providers | to_entries[] |
+      (if .value.catalogue_readable
+         then "   \(.key): \(.value.models_served) models served"
+         else "   \(.key): catalogue unreadable (no API key set for it?)" end),
+      (.value.slots[] |
+        "     \(if .state == "ok" then "✓" elif .state == "retired" then "✗" else "?" end) " +
+        "\(.slot) → \(.configured)" +
+        (if .state == "retired" then "  RETIRED — best available: \(.suggested // "none")" else "" end) +
+        (if (.substituted_to // "") != "" then "  (answering on \(.substituted_to))" else "" end))'
+    if printf '%s' "$MODELS" | jq -e '[.providers[].slots[] | select(.state == "retired")] | length > 0' >/dev/null 2>&1; then
+      bad "a configured model id is no longer served — see the rows marked ✗"
+    else
+      ok "every checkable model id is still served"
+    fi
+  fi
+fi
+
 # ── Verdict ──────────────────────────────────────────────────────────────────
 printf '\n'
 if [ ${#FAILED[@]} -eq 0 ]; then

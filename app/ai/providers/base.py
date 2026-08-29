@@ -14,6 +14,7 @@ That's it. Zero changes to handlers or commands.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import os
+import re
 import time
 
 
@@ -209,6 +210,12 @@ def client_error_detail(
 
     where = f" Set {model_env} to a model id the provider currently serves." if model_env else ""
 
+    if status == 402 or "insufficient" in code or "credit" in code:
+        return (
+            f"{CONFIG_ERROR_PREFIX} the provider refused the request for `{model}` "
+            f"({status}) because the account is out of credit. Retrying will not "
+            f"help until it is topped up."
+        )
     if status == 404 or "model_not_found" in code or "not found" in code:
         return (
             f"{CONFIG_ERROR_PREFIX} the provider does not serve the model "
@@ -265,3 +272,27 @@ def _header(response, name: str):
         return response.headers.get(name)
     except Exception:
         return None
+
+
+# ── Never let a credential into an error string ──────────────────────────────
+#
+# A provider that takes its key as a URL query parameter puts that key into
+# every exception `requests` raises, because those messages quote the URL:
+#
+#   HTTPSConnectionPool(host='...'): Max retries exceeded with url:
+#   /v1beta/models/gemini-1.5-flash:generateContent?key=AIzaSy...
+#
+# That string was assigned to LLMResponse.error and logged by the router as
+# `router.primary_failed ... error=...`, so one network blip wrote the API key
+# into the deployment's logs in plaintext. The key is sent as a header now, so
+# nothing should reach here carrying one; this is the net under that, because
+# the cost of it being wrong once is a rotated credential.
+_SECRET_QUERY_PARAMS = ("key", "api_key", "apikey", "access_token", "token")
+_SECRET_QUERY_RE = re.compile(r"(?i)\b(" + "|".join(_SECRET_QUERY_PARAMS) + r")=([^&\s\"'`]+)")
+
+
+def redact_secrets(text: "str | None") -> str:
+    """Replace `key=<value>` style query parameters with `key=REDACTED`."""
+    if not text:
+        return ""
+    return _SECRET_QUERY_RE.sub(lambda m: f"{m.group(1)}=REDACTED", str(text))

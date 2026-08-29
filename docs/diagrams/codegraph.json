@@ -1402,7 +1402,7 @@
       "id": "app.security.enhanced_secrets",
       "path": "app/security/enhanced_secrets.py",
       "layer": "security",
-      "loc": 803,
+      "loc": 813,
       "functions": 18,
       "classes": 1,
       "is_package": false,
@@ -2905,7 +2905,7 @@
   "stats": {
     "modules": 91,
     "edges": 278,
-    "total_loc": 20343,
+    "total_loc": 20353,
     "layers": [
       "ai",
       "core",
@@ -2944,7 +2944,7 @@
       },
       {
         "id": "app.security.enhanced_secrets",
-        "loc": 803,
+        "loc": 813,
         "fan_in": 4,
         "fan_out": 0
       },

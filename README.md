@@ -142,11 +142,11 @@ Done. ✈️
 <!-- autopilot:stats:start -->
 | | |
 |---|---|
-| Modules | 91 |
-| Lines of code | 20,353 |
+| Modules | 92 |
+| Lines of code | 20,847 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 278 |
+| Internal imports | 284 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>
@@ -224,7 +224,7 @@ code. Explore it interactively at [`/graph`](#codebase-map), or regenerate with
 <!-- autopilot:architecture:start -->
 ```mermaid
 graph LR
-    ai["ai<br/>15 modules"]
+    ai["ai<br/>16 modules"]
     core["core<br/>24 modules"]
     github["github<br/>8 modules"]
     handlers["handlers<br/>23 modules"]

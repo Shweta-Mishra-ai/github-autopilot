@@ -143,32 +143,84 @@ def clear_cache() -> None:
 
 # ── Preference, by family rather than by exact id ─────────────────────────────
 #
-# Ordered most-preferred first. Each entry is a regex matched against the
-# served id, so a provider bumping a version inside a family is picked up with
-# no code change — which is the whole point. An id matching nothing here is
-# still usable; it just sorts last.
+# Ordered most-preferred first, each entry a regex matched against the served
+# id. Families, not exact ids: a provider bumping a version inside a family
+# (qwen3.6 -> qwen3.8, gpt-oss-120b -> a larger successor) is picked up with no
+# code change, which is the entire point of this module.
 #
-# "quality" is the tier the router reaches for on code review and fixes;
-# "speed" is the cheaper fallback tier. Ordering within a provider reflects
-# what that provider's free tier actually serves, read off its own catalogue —
-# see `python -m app.ai.model_catalog`.
-_PREFERENCES: dict[tuple[str, str], tuple[str, ...]] = {}
+# Derived from each provider's own catalogue as printed by
+# `python -m app.ai.model_catalog` — not from memory. An id matching nothing
+# here is still selectable; it just sorts last, so a provider shipping a family
+# nobody anticipated degrades to "some served model" rather than to nothing.
+#
+# The gemini patterns are the one unverified set: no GEMINI_API_KEY is
+# configured in CI, so its catalogue could not be read. That costs nothing —
+# a pattern that matches no served id simply never fires, and selection falls
+# through to the generic ordering below.
+_PREFERENCES: dict[tuple[str, str], tuple[str, ...]] = {
+    ("groq", "quality"): (
+        r"^openai/gpt-oss-\d{3,}b$",  # 120b, and any larger successor
+        r"^qwen/qwen[\d.]+-\d+b$",
+        r"^groq/compound$",
+        r"^openai/gpt-oss-\d{1,2}b$",  # 20b
+        r"^groq/compound-mini$",
+    ),
+    ("groq", "speed"): (
+        r"^openai/gpt-oss-\d{1,2}b$",
+        r"^groq/compound-mini$",
+        r"^qwen/qwen[\d.]+-\d+b$",
+        r"^groq/compound$",
+        r"^openai/gpt-oss-\d{3,}b$",
+    ),
+    ("openrouter", "quality"): (
+        # `super` before `ultra` on purpose. This provider is the EMERGENCY
+        # fallback, reached only when the other two are already failing, so the
+        # job is to answer at all. The largest free model on a free tier is
+        # also the most contended one, and a 550B that queues is worth less
+        # here than a 120B that replies.
+        r"nemotron-[\d.]+-super",
+        r"nemotron-[\d.]+-ultra",
+        r"^minimax/",
+        r"^z-ai/glm-",
+        r"^thinkingmachines/inkling(:|$)",
+        r"^google/gemma-",
+        r"^poolside/laguna-s",
+    ),
+    ("openrouter", "speed"): (
+        r"nemotron-[\d.]+-lightning",
+        r"^google/gemma-",
+        r"^liquid/lfm",
+        r"^poolside/laguna-xs",
+        r"^thinkingmachines/inkling-small",
+        r"^minimax/",
+    ),
+    ("gemini", "quality"): (r"flash-latest", r"pro-latest", r"flash", r"pro"),
+    ("gemini", "speed"): (r"flash-lite", r"flash-latest", r"flash", r"pro"),
+}
 
-# Ids that exist but must never be auto-selected: not chat models, or
-# deliberately not general-purpose. Guarded because picking one produces a 400
-# that reads like an outage rather than a bad choice.
+# Served here, but never a sane automatic choice: not chat models at all
+# (speech, embeddings, rerankers) or classifiers that answer a different
+# question. Picking one produces a 400 that reads like an outage rather than
+# like a bad choice, which is the worst way to fail.
 _EXCLUDE = re.compile(
-    r"(whisper|tts|guard|embed|aqa|vision-only|moderation|distil-whisper|prompt-guard)",
+    r"(whisper|/tts|-tts|text-to-speech|orpheus|guard|embed|rerank|aqa|moderation"
+    r"|content-safety|speech|transcri)",
     re.IGNORECASE,
 )
 
+# Usable, but narrow: tuned for one language, one domain, or one modality. Fine
+# as a last resort, wrong as a default for reviewing code in English.
+_NARROW = re.compile(
+    r"(allam|arabic|saudi|-fin\b|-fin[:-]|omni|vision|note-preview)", re.IGNORECASE
+)
 
-def _rank(provider: str, tier: str, model_id: str) -> tuple[int, str]:
+
+def _rank(provider: str, tier: str, model_id: str) -> tuple[int, int]:
     prefs = _PREFERENCES.get((provider, tier), ())
     for index, pattern in enumerate(prefs):
         if re.search(pattern, model_id, re.IGNORECASE):
-            return index, model_id
-    return len(prefs), model_id
+            return (1 if _NARROW.search(model_id) else 0), index
+    return (1 if _NARROW.search(model_id) else 0), len(prefs)
 
 
 def best_model(provider: str, tier: str = "quality", *, exclude: tuple[str, ...] = ()) -> str:
@@ -190,6 +242,11 @@ def best_model(provider: str, tier: str = "quality", *, exclude: tuple[str, ...]
         # emergency fallback — reaching it should never start a bill.
         free = [m for m in candidates if m.endswith(":free")]
         candidates = free or candidates
+
+    # Descending, so that within one preference bucket the later version wins
+    # (qwen3.8 over qwen3.6). `min` is stable and returns the first of equals,
+    # so iteration order IS the tie-break.
+    candidates.sort(reverse=True)
     return min(candidates, key=lambda m: _rank(provider, tier, m))
 
 
@@ -222,3 +279,77 @@ def format_inventory() -> str:
 
 if __name__ == "__main__":  # pragma: no cover - operator tool
     print(format_inventory())
+
+
+# ── Substitution: what to do when the configured model is gone ────────────────
+#
+# A retired model id is unusable however it was chosen, so this applies to an
+# operator-pinned id as much as to the built-in default. Refusing to work does
+# not honour the operator's intent; it just goes down, which is precisely the
+# six-day outage this module exists to prevent.
+#
+# The substitution is loud, in-process only, and lasts until the process
+# restarts or the configuration is corrected. It is never silent: it logs at
+# ERROR and is reported by /health and the doctor, because a bot quietly
+# answering on a model nobody chose is its own kind of incident.
+_substitutions: dict[str, dict] = {}
+_sub_lock = threading.Lock()
+
+
+def autoheal_enabled() -> bool:
+    return os.environ.get("LLM_MODEL_AUTOHEAL", "1").strip() not in ("0", "false", "no")
+
+
+def effective_model(provider_key: str, configured: str) -> str:
+    """The model to actually ask for: a substitution if one is active."""
+    with _sub_lock:
+        entry = _substitutions.get(provider_key)
+    return entry["to"] if entry else configured
+
+
+def substitute(provider_key: str, provider: str, tier: str, failed_model: str) -> str:
+    """
+    Pick a replacement for a model the provider says it does not serve.
+
+    Returns "" when there is nothing better to do — no catalogue, autoheal
+    disabled, or the catalogue offers nothing but the model that just failed.
+    "" means the caller reports the configuration error exactly as before, so
+    this can only ever turn a hard failure into a working request or leave it
+    unchanged.
+    """
+    if not autoheal_enabled():
+        return ""
+
+    with _sub_lock:
+        active = _substitutions.get(provider_key)
+    if active and active["to"] != failed_model:
+        # Something already substituted; use it rather than re-deriving.
+        return active["to"]
+
+    replacement = best_model(provider, tier, exclude=(failed_model,))
+    if not replacement or replacement == failed_model:
+        return ""
+
+    with _sub_lock:
+        _substitutions[provider_key] = {
+            "from": failed_model,
+            "to": replacement,
+            "provider": provider,
+            "at": time.time(),
+        }
+    log.error(
+        f"model_catalog.substituted provider_key={provider_key} "
+        f"from={failed_model} to={replacement} — the configured model is not "
+        f"served any more; set it to a current id to silence this."
+    )
+    return replacement
+
+
+def active_substitutions() -> dict[str, dict]:
+    with _sub_lock:
+        return {k: dict(v) for k, v in _substitutions.items()}
+
+
+def clear_substitutions() -> None:
+    with _sub_lock:
+        _substitutions.clear()

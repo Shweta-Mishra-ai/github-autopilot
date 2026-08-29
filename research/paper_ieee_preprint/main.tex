@@ -91,7 +91,7 @@ We apply the method to three independent scanners to test \emph{transferability 
 
 \textbf{Input generation and grammar-based testing.} Generating inputs from a formal description relates to grammar-based fuzzing~\cite{godefroid2008} and property-based testing~\cite{claessen2000}, where a generator produces values satisfying a specification. Our generator consumes the detector's own regular expressions, which makes the positive corpus definitionally in-scope for the rule being tested --- a miss cannot be dismissed as outside the rule's syntactic specification, though, as Section~\ref{sec:validity} sets out, syntactic scope is not the same as provider-semantic validity. Work on regular-expression correctness and behaviour~\cite{chapman2016,michael2019} documents that developers frequently misunderstand anchoring and character-class semantics; both defects we report are instances of exactly that, in security-critical rules.
 
-\textbf{Benchmark design as a confound.} Evidence continues to accumulate that benchmark construction, not only technique quality, drives measured outcomes~\cite{liem2020,herbold2022}. Sections~\ref{sec:rq4}--\ref{sec:rq5} contribute three instances in which construction alone reorders tools.
+\textbf{Benchmark design as a confound.} Evidence continues to accumulate that benchmark construction, not only technique quality, drives measured outcomes~\cite{liem2020,herbold2020}. Sections~\ref{sec:rq4}--\ref{sec:rq5} contribute three instances in which construction alone reorders tools.
 
 \textbf{Evaluating security scanners.} A recurring finding in the evaluation of static security tools is that measured effectiveness is highly sensitive to the benchmark rather than to the tool: reported detection rates vary widely across corpora, and tools tuned to one benchmark generalise poorly to another. Our Sections~\ref{sec:rq4}--\ref{sec:rq5} are three instances of the same phenomenon in the secret-detection setting, with the additional observation that the sensitivity is large enough to reverse the ordering. Where that literature typically compares tools, we use the sensitivity itself as the object of study and decline to produce a ranking.
 
@@ -849,7 +849,7 @@ Fig.~\ref{fig:quality} shows coverage by package and the cyclomatic-complexity d
 
 \bibitem{liem2020} C.~C.~S. Liem and A.~Panichella, ``Run, forest, run? On randomization and reproducibility in ML and SE research,'' \emph{arXiv:2012.08387}, 2020.
 
-\bibitem{herbold2022} S.~Herbold, A.~Trautsch, and F.~Trautsch, ``On the feasibility of automated issue type prediction,'' \emph{Empirical Softw. Eng.}, vol.~27, 2022.
+\bibitem{herbold2020} S.~Herbold, A.~Trautsch, and F.~Trautsch, ``On the feasibility of automated issue type prediction,'' \emph{Empirical Softw. Eng.}, vol.~27, 2022.
 
 \bibitem{wessel2018bots} M.~Wessel et al., ``The power of bots: Characterizing and understanding bots in OSS projects,'' \emph{Proc. ACM Hum.-Comput. Interact.}, vol.~2, no.~CSCW, pp. 1--19, 2018.
 

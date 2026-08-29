@@ -58,3 +58,58 @@ def redact(text: str | None) -> str:
         pass  # structural strip above already ran
 
     return text
+
+
+# ── Credentials carried in a URL ─────────────────────────────────────────────
+#
+# A different job from redact() above, in the same place because it is the
+# same idea at a different boundary: that one scrubs text on its way INTO
+# memory, this one scrubs text on its way into a LOG.
+#
+# `requests` quotes the URL in every exception it raises, so any credential
+# carried in a URL ends up in the exception message — and those messages get
+# logged, and returned to callers:
+#
+#     HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443):
+#     Max retries exceeded with url:
+#     /v1beta/models/gemini-1.5-flash:generateContent?key=AIzaSy...
+#
+#     notification.slack_error: ... with url:
+#     https://hooks.slack.com/services/T0.../B1.../SeCrEt...
+#
+# One ordinary connection error was enough to write a provider API key, and a
+# Slack or Discord webhook URL, into the deployment's logs in plaintext. A
+# webhook URL is itself a credential: anyone holding it can post into the
+# channel as the bot.
+#
+# Where the protocol allows it, the real fix is to move the secret out of the
+# URL, and that was done. Where it does not — Slack and Discord webhooks ARE
+# the secret — this is the fix.
+
+# Credentials passed as query parameters.
+_SECRET_QUERY_PARAMS = ("key", "api_key", "apikey", "access_token", "token")
+_SECRET_QUERY_RE = re.compile(r"(?i)\b(" + "|".join(_SECRET_QUERY_PARAMS) + r")=([^&\s\"'`]+)")
+
+# Credentials that ARE the URL path. The bearer of the URL can post as the
+# bot, so the whole tail is secret — but the host is kept, because knowing
+# WHICH integration failed is the entire value of the log line.
+_WEBHOOK_PATH_RES = (
+    re.compile(r"(?i)(https?://hooks\.slack\.com/services/)\S+"),
+    re.compile(r"(?i)(https?://(?:ptb\.|canary\.)?discord(?:app)?\.com/api/webhooks/)\S+"),
+    re.compile(r"(?i)(https?://[\w.-]*webhook\.office\.com/webhookb2/)\S+"),
+)
+
+
+def redact_secrets(text: str | None) -> str:
+    """
+    Return `text` with URL-borne credentials replaced by REDACTED.
+
+    Never raises and never returns None: it is called on error paths, where a
+    redaction that throws would replace a logged failure with a new one.
+    """
+    if not text:
+        return ""
+    out = str(text)
+    for pattern in _WEBHOOK_PATH_RES:
+        out = pattern.sub(lambda m: f"{m.group(1)}REDACTED", out)
+    return _SECRET_QUERY_RE.sub(lambda m: f"{m.group(1)}=REDACTED", out)

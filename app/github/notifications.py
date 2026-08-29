@@ -14,6 +14,8 @@ import requests
 
 from app import __version__
 
+from app.core.redaction import redact_secrets
+
 log = logging.getLogger(__name__)
 
 # Read at call time, not import time.
@@ -214,7 +216,9 @@ def _send_slack(title: str, message: str, severity: str):
             )
     except Exception as e:
         _count("notifications.slack.failed")
-        log.error(f"notification.slack_error: {e}")
+        # Redacted: the webhook URL IS the credential, and requests quotes the
+        # URL it failed on. One connection error wrote it into the logs.
+        log.error(f"notification.slack_error: {redact_secrets(str(e))}")
 
 
 def _send_discord(
@@ -262,7 +266,7 @@ def _send_discord(
             )
     except Exception as e:
         _count("notifications.discord.failed")
-        log.error(f"notification.discord_error: {e}")
+        log.error(f"notification.discord_error: {redact_secrets(str(e))}")
 
 
 def notify_secret_detected(repo: str, findings_count: int, config=None):

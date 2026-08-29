@@ -38,6 +38,19 @@ See [docs/MIGRATING.md](docs/MIGRATING.md).
 - The lookup now matches on the title prefix that all three failure causes share, so it needs no label and no search index. The label is still created, best-effort, so the reports stay filterable — but the reuse no longer depends on that succeeding. The existing issue is retitled to the current cause as well, since an issue still reading "are failing" when the run now fails for a missing model points the reader at the wrong thing.
 - Tests assert all of it, including that every title the step can set shares the prefix the lookup matches on — otherwise adding a fourth cause silently reopens the same hole.
 
+**Root cause: the provider told us how long to wait, and the code threw it away**
+- Everything above this entry treated the rate limit as something to *report* better. It was something to *avoid*. On a 429 the provider sends `Retry-After` — the code parsed it, recorded a **circuit-breaker failure**, and returned without ever waiting. The router then fell back to the other Groq tier, **which shares the same account limit**, so that failed too: three failures opened the breaker on `groq_70b`, five more on `groq_8b`, and the router reported "all providers down".
+- A 429 is the provider working correctly and asking us to slow down. It is not the provider being unhealthy, and conflating the two is what turned a two-second pause into a total outage — in the eval run, and in production for any burst of webhooks.
+- A short delay is now waited out and the request retried once, and **a throttle we waited out is not counted against the breaker**. Still throttled after waiting means the account really is saturated, so that does count. Delays beyond `LLM_MAX_THROTTLE_WAIT_SECONDS` (default 10s) are reported rather than waited for, because holding a shared worker thread for a minute is worse than failing one request.
+- Demonstrated on the exact sequence that broke the eval — provider says "retry after 6s", then answers:
+
+  | | breaker failures | result |
+  |---|---|---|
+  | before | 1 | `RATE_LIMIT:6` |
+  | after | 0 | the answer |
+
+- This makes the eval pacing added above a second line of defence rather than the fix.
+
 **A rate-limited run reported a pass rate it had not measured**
 - With working models the suite finally ran: **all six `/fix` cases scored 1.0**. Then it tripped the provider's rate limit, both circuit breakers opened, and the five review cases received empty output — each scored **0.0 as a quality failure**. `pass_rate=0.545` on a run that never scored a single review case.
 - Same defect as reporting a retired model id as a regression: an infrastructure fault written into a number people read as a statement about the prompts. The suite fires every case back to back, which fitted under the old small model's allowance and does not under a larger one.

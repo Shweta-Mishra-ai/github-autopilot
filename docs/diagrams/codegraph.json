@@ -162,7 +162,7 @@
       "id": "app.ai.providers.groq",
       "path": "app/ai/providers/groq.py",
       "layer": "ai",
-      "loc": 244,
+      "loc": 282,
       "functions": 1,
       "classes": 1,
       "is_package": false,
@@ -173,7 +173,8 @@
         "datetime",
         "logging",
         "os",
-        "requests"
+        "requests",
+        "time"
       ]
     },
     {
@@ -2891,7 +2892,7 @@
   "stats": {
     "modules": 91,
     "edges": 276,
-    "total_loc": 20078,
+    "total_loc": 20116,
     "layers": [
       "ai",
       "core",

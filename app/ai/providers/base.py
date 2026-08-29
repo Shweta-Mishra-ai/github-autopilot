@@ -14,7 +14,6 @@ That's it. Zero changes to handlers or commands.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import os
-import re
 import time
 
 
@@ -276,23 +275,19 @@ def _header(response, name: str):
 
 # ── Never let a credential into an error string ──────────────────────────────
 #
-# A provider that takes its key as a URL query parameter puts that key into
-# every exception `requests` raises, because those messages quote the URL:
-#
-#   HTTPSConnectionPool(host='...'): Max retries exceeded with url:
-#   /v1beta/models/gemini-1.5-flash:generateContent?key=AIzaSy...
-#
-# That string was assigned to LLMResponse.error and logged by the router as
-# `router.primary_failed ... error=...`, so one network blip wrote the API key
-# into the deployment's logs in plaintext. The key is sent as a header now, so
-# nothing should reach here carrying one; this is the net under that, because
-# the cost of it being wrong once is a rotated credential.
-_SECRET_QUERY_PARAMS = ("key", "api_key", "apikey", "access_token", "token")
-_SECRET_QUERY_RE = re.compile(r"(?i)\b(" + "|".join(_SECRET_QUERY_PARAMS) + r")=([^&\s\"'`]+)")
+# Re-exported from core so the providers and the notification senders share
+# one implementation. Both leaked a credential the same way: a URL carrying
+# it, quoted back by requests in an exception, assigned to an error string
+# and logged. See app/core/redaction.py.
+from app.core.redaction import redact_secrets  # noqa: E402  (re-export)
 
-
-def redact_secrets(text: "str | None") -> str:
-    """Replace `key=<value>` style query parameters with `key=REDACTED`."""
-    if not text:
-        return ""
-    return _SECRET_QUERY_RE.sub(lambda m: f"{m.group(1)}=REDACTED", str(text))
+__all__ = [
+    "LLMProvider",
+    "LLMResponse",
+    "CONFIG_ERROR_PREFIX",
+    "MAX_THROTTLE_WAIT_SECONDS",
+    "client_error_detail",
+    "is_configuration_error",
+    "redact_secrets",
+    "throttle_pause",
+]

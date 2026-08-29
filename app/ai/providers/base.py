@@ -210,6 +210,12 @@ def client_error_detail(
 
     where = f" Set {model_env} to a model id the provider currently serves." if model_env else ""
 
+    if status == 402 or "insufficient" in code or "credit" in code:
+        return (
+            f"{CONFIG_ERROR_PREFIX} the provider refused the request for `{model}` "
+            f"({status}) because the account is out of credit. Retrying will not "
+            f"help until it is topped up."
+        )
     if status == 404 or "model_not_found" in code or "not found" in code:
         return (
             f"{CONFIG_ERROR_PREFIX} the provider does not serve the model "

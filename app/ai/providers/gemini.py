@@ -17,6 +17,7 @@ from app.ai.providers.base import (
     LLMProvider,
     LLMResponse,
     client_error_detail,
+    redact_secrets,
     throttle_pause,
 )
 
@@ -92,13 +93,19 @@ class GeminiProvider(LLMProvider):
                 "temperature": temperature,
             },
         }
-        url = f"{_gemini_url(model)}?key={api_key}"
+        # The key goes in a header, not the query string. As `?key=...` it
+        # ended up in every exception message `requests` raises -- those quote
+        # the URL -- and that message was assigned to LLMResponse.error and
+        # logged by the router, so a single connection error wrote the API key
+        # into the deployment's logs in plaintext. The API accepts either.
+        url = _gemini_url(model)
+        headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
 
         try:
             r = http_requests.post(
                 url,
                 json=body,
-                headers={"Content-Type": "application/json"},
+                headers=headers,
                 timeout=timeout,
             )
 
@@ -114,7 +121,7 @@ class GeminiProvider(LLMProvider):
                     r = http_requests.post(
                         url,
                         json=body,
-                        headers={"Content-Type": "application/json"},
+                        headers=headers,
                         timeout=timeout,
                     )
 
@@ -197,12 +204,16 @@ class GeminiProvider(LLMProvider):
                 error="Request timed out",
             )
         except Exception as e:
-            breaker.record_failure(str(e)[:60])
+            # Redacted rather than trusted: this string is logged and returned,
+            # and a redirect or a future change could put a credential back
+            # into it. Cheap here, a rotated key if it is missing.
+            safe = redact_secrets(str(e))
+            breaker.record_failure(safe[:60])
             return LLMResponse(
                 text="",
                 provider="gemini",
                 model=model,
-                error=str(e)[:200],
+                error=safe[:200],
             )
 
     def _track(self, total_tokens: int):

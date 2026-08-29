@@ -593,3 +593,125 @@ class TestTheFallbackProviderThrottlesTheSameWay:
             assert "MAX_THROTTLE_WAIT_SECONDS = " not in source, (
                 f"{module.__name__} defines its own bound — they will drift"
             )
+
+
+class TestTheEmergencyFallbackHadItToo:
+    """
+    The third copy of the same bug, in the provider the router reaches for
+    last. Every non-2xx went through `raise_for_status` into one `except`
+    that recorded a circuit-breaker failure and returned the raw urllib
+    message — so a rejected key, a retired model, an empty account and a
+    throttle were indistinguishable, all four opened the breaker, and none of
+    the first three can recover by waiting.
+
+    Opening this breaker on a fault that will not heal is precisely how one
+    misconfiguration becomes "all providers down".
+    """
+
+    @staticmethod
+    def _resp(status, retry_after=None, payload=None, text='{"ok": true}'):
+        r = MagicMock()
+        r.status_code = status
+        r.headers = {"Retry-After": str(retry_after)} if retry_after is not None else {}
+        r.json.return_value = payload or {
+            "choices": [{"message": {"content": text}}],
+            "usage": {},
+        }
+
+        def _raise():
+            if status >= 400:
+                import requests
+
+                raise requests.exceptions.HTTPError(f"{status} Client Error", response=r)
+
+        r.raise_for_status.side_effect = _raise
+        return r
+
+    def _call(self, responses, monkeypatch, max_wait=10):
+        from app.ai.providers import base as base_mod
+        from app.ai.providers import openrouter as orx
+
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-or-key")
+        monkeypatch.setattr(base_mod, "MAX_THROTTLE_WAIT_SECONDS", max_wait)
+        breaker = MagicMock()
+        breaker.is_available.return_value = True
+        slept = []
+        with (
+            patch.object(orx, "get_breaker", return_value=breaker),
+            patch.object(orx.http_requests, "post", side_effect=responses),
+            patch.object(orx.time, "sleep", side_effect=slept.append),
+        ):
+            result, meta = orx.OpenRouterProvider().ask("sys", "user")
+        return result, meta, breaker, slept
+
+    @pytest.mark.parametrize("status", [400, 401, 402, 403, 404])
+    def test_a_permanent_fault_does_not_open_the_breaker(self, status, monkeypatch):
+        _r, meta, breaker, _s = self._call([self._resp(status, payload={})], monkeypatch)
+        assert not breaker.record_failure.called, f"{status} must not count as an outage"
+        assert is_configuration_error(meta.error), f"got {meta.error!r}"
+
+    def test_out_of_credit_says_so(self, monkeypatch):
+        _r, meta, _b, _s = self._call(
+            [self._resp(402, payload={"error": {"code": 402, "message": "Insufficient credits"}})],
+            monkeypatch,
+        )
+        assert "credit" in meta.error.lower(), f"got {meta.error!r}"
+
+    def test_a_short_throttle_is_waited_out_and_not_counted(self, monkeypatch):
+        result, meta, breaker, slept = self._call(
+            [self._resp(429, retry_after=5), self._resp(200)], monkeypatch
+        )
+        assert slept == [5.0]
+        assert not breaker.record_failure.called, "a throttle we waited out is not a failure"
+        assert meta.error is None
+        assert result == {"ok": True}
+
+    def test_a_persistent_throttle_does_count(self, monkeypatch):
+        _r, meta, breaker, slept = self._call(
+            [self._resp(429, retry_after=4), self._resp(429, retry_after=9)], monkeypatch
+        )
+        assert slept == [4.0]
+        assert meta.error == "RATE_LIMIT:9", f"got {meta.error!r}"
+        assert breaker.record_failure.called
+
+    def test_a_long_delay_is_reported_rather_than_waited_for(self, monkeypatch):
+        _r, meta, _b, slept = self._call([self._resp(429, retry_after=900)], monkeypatch)
+        assert slept == []
+        assert meta.error == "RATE_LIMIT:900"
+
+    def test_waiting_can_be_disabled(self, monkeypatch):
+        _r, meta, _b, slept = self._call(
+            [self._resp(429, retry_after=5)], monkeypatch, max_wait=0
+        )
+        assert slept == []
+        assert meta.error == "RATE_LIMIT:5"
+
+    def test_a_real_outage_still_counts(self, monkeypatch):
+        _r, meta, breaker, _s = self._call([self._resp(500, payload={})], monkeypatch)
+        assert breaker.record_failure.called, "5xx is a genuine outage — the breaker exists for it"
+        assert not is_configuration_error(meta.error)
+
+    def test_the_key_is_read_per_call(self, monkeypatch):
+        """
+        It was captured in __init__ from a constant read at import. The router
+        builds this provider lazily and gates it on a live os.environ read, so
+        a key set after import produced a provider the router believed was
+        configured and that answered `no_api_key` for the rest of the process.
+        """
+        from app.ai.providers.openrouter import OpenRouterProvider
+
+        provider = OpenRouterProvider()
+        monkeypatch.setenv("OPENROUTER_API_KEY", "set-after-construction")
+        assert provider.api_key == "set-after-construction"
+
+    def test_all_three_providers_share_one_throttle_bound(self):
+        import inspect
+
+        from app.ai.providers import gemini, groq, openrouter
+
+        for module in (groq, gemini, openrouter):
+            source = inspect.getsource(module)
+            assert "throttle_pause" in source, f"{module.__name__} must use the shared helper"
+            assert "MAX_THROTTLE_WAIT_SECONDS = " not in source, (
+                f"{module.__name__} defines its own bound — they will drift"
+            )

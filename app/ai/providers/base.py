@@ -22,7 +22,7 @@ class LLMResponse:
 
     text: str  # Raw text output
     provider: str  # "groq" | "gemini" | "openrouter"
-    model: str  # e.g. "llama-3.3-70b-versatile"
+    model: str  # e.g. "openai/gpt-oss-120b"
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0

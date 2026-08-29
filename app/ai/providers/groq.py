@@ -31,15 +31,44 @@ GROQ_COST = {
 }
 
 
+def _infer_provider_key(model: str) -> str:
+    """
+    Best-effort tier for a provider constructed without an explicit key.
+
+    Only a fallback for callers that do not say which tier they mean; the
+    router always says. Sniffing a model id cannot keep working across a
+    provider's naming changes, which is exactly how this broke.
+    """
+    lowered = model.lower()
+    if any(marker in lowered for marker in ("70b", "120b", "versatile")):
+        return "groq_70b"
+    return "groq_8b"
+
+
 class GroqProvider(LLMProvider):
-    def __init__(self, model: str = "llama-3.3-70b-versatile"):
-        self._model = model
+    def __init__(self, model: str = "", provider_key: str = ""):
+        # Import here: router imports this module, so a module-level import of
+        # the router's constants would be circular.
+        from app.ai.router import DEFAULT_PRIMARY_MODEL
+
+        self._model = model or DEFAULT_PRIMARY_MODEL
+        self._provider_key = provider_key or _infer_provider_key(self._model)
 
     @property
     def provider_key(self) -> str:
-        if "70b" in self._model or "versatile" in self._model:
-            return "groq_70b"
-        return "groq_8b"
+        """
+        Which budget, circuit breaker and quality tier this instance uses.
+
+        Passed in by the router rather than guessed from the model id. It used
+        to be inferred by looking for "70b" or "versatile" in the name, which
+        worked only while both models happened to be Llama: the moment the
+        provider retired those and the ids became `openai/gpt-oss-120b` and
+        `openai/gpt-oss-20b`, neither matched, BOTH providers collapsed onto
+        `groq_8b`, and primary and fallback would have shared one circuit
+        breaker — so a primary failure would open the breaker on the fallback
+        that exists to cover it.
+        """
+        return self._provider_key
 
     @property
     def model_name(self) -> str:

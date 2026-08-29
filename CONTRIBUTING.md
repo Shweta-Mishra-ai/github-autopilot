@@ -223,10 +223,14 @@ security(secrets): add Groq API key pattern
 
 1. **Branch** from `main` with a descriptive name
 2. **Write tests** for new functionality
-3. **Run tests** locally before pushing
+3. **Run every gate** locally before pushing — not just the tests
    ```bash
-   pytest
+   ./scripts/verify.sh
    ```
+   `pytest` alone passes while the build is red: CI also lints with a specific
+   rule set, and two committed files are generated from the source, so a stale
+   README region or codebase map fails for a reason that is invisible in your
+   diff. This script runs all of it with CI's exact flags.
 4. **Fill out** the PR description template
 5. **Request review** — the bot will automatically review your PR!
 
@@ -253,9 +257,32 @@ pytest tests/test_idempotency.py -v
 
 # Run with coverage
 pytest --cov=app tests/
+
+# Everything CI checks, with CI's flags — run this before pushing
+./scripts/verify.sh
+./scripts/verify.sh fast      # lint + one test run, skips regeneration
 ```
 
 Tests run in full isolation — no network access required.
+
+The suite is run **twice** by `verify.sh` on purpose. Test ordering is
+randomised and several suites generate their inputs, so a single green run is
+weaker evidence than it looks: a 1-in-30,000 scanner miss and an
+ordering-dependent failure both reached CI after passing locally once.
+
+### Checking a deployment
+
+Tests prove the code is correct. They cannot tell you a running deployment is
+answering, that its provider still serves the model ids it asks for, or that
+the GitHub App can read what the commands need — those fail silently and
+independently of any green build.
+
+```bash
+BASE_URL=https://your-app.onrender.com METRICS_AUTH_TOKEN=... \
+  ./scripts/verify-deployment.sh owner/repo <installation_id>
+```
+
+Every request it makes is a read.
 
 ### AI output evals
 

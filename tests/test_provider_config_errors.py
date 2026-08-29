@@ -325,3 +325,100 @@ class TestGeminiHasTheSameProtection:
         with patch("app.ai.providers.gemini.get_breaker", return_value=breaker):
             resp = GeminiProvider().call_raw("sys", "user", 100, 0.2, 10)
         assert resp.model == "gemini-9-future", "the open-circuit path must too"
+
+
+class TestTheTierIsNotGuessedFromTheModelName:
+    """
+    provider_key decided the budget, the circuit breaker and the quality tier
+    by looking for "70b" or "versatile" in the model id.
+
+    That worked only while both models happened to be Llama. The provider
+    retired every Llama chat model, and the replacements are
+    `openai/gpt-oss-120b` and `openai/gpt-oss-20b` — neither string matches, so
+    BOTH providers would have returned `groq_8b`. Primary and fallback would
+    have shared one circuit breaker, meaning a primary failure opens the
+    breaker on the fallback that exists to cover it, and both would draw on the
+    small model's token budget.
+
+    The router knows which tier it is constructing. It says so now.
+    """
+
+    def test_the_router_gives_each_provider_its_own_tier(self):
+        from app.ai.router import LLMRouter
+
+        router = LLMRouter()
+        assert router._groq_70b.provider_key == "groq_70b"
+        assert router._groq_8b.provider_key == "groq_8b"
+        assert router._groq_70b.provider_key != router._groq_8b.provider_key, (
+            "sharing a provider_key means sharing a circuit breaker, so the "
+            "fallback is opened by the failure it exists to survive"
+        )
+
+    def test_the_tier_survives_a_model_id_with_no_size_marker(self):
+        from app.ai.providers.groq import GroqProvider
+
+        # The exact shape that broke it: no "70b", no "versatile".
+        primary = GroqProvider("openai/gpt-oss-120b", provider_key="groq_70b")
+        fallback = GroqProvider("openai/gpt-oss-20b", provider_key="groq_8b")
+        assert primary.provider_key == "groq_70b"
+        assert fallback.provider_key == "groq_8b"
+
+    def test_an_explicit_key_is_not_overridden_by_the_name(self):
+        from app.ai.providers.groq import GroqProvider
+
+        # A name that WOULD infer the other tier must not win over the caller.
+        assert GroqProvider("llama-3.3-70b-versatile", provider_key="groq_8b").provider_key == (
+            "groq_8b"
+        )
+
+    def test_inference_remains_only_for_callers_that_do_not_say(self):
+        from app.ai.providers.groq import GroqProvider
+
+        assert GroqProvider("some-70b-model").provider_key == "groq_70b"
+        assert GroqProvider("some-small-model").provider_key == "groq_8b"
+
+    def test_the_defaults_are_ids_the_provider_actually_serves(self):
+        # Not a live check — this environment cannot reach the provider. It
+        # pins the ids to the list the eval preflight printed from the
+        # provider's own API on 2026-08-28 using this deployment's key, so a
+        # future edit back to a retired id fails here rather than in production.
+        from app.ai.router import DEFAULT_FALLBACK_MODEL, DEFAULT_PRIMARY_MODEL
+
+        served_2026_08_28 = {
+            "allam-2-7b",
+            "groq/compound",
+            "groq/compound-mini",
+            "openai/gpt-oss-120b",
+            "openai/gpt-oss-20b",
+            "openai/gpt-oss-safeguard-20b",
+            "qwen/qwen3.6-27b",
+            "qwen/qwen3.8-27b",
+        }
+        for model in (DEFAULT_PRIMARY_MODEL, DEFAULT_FALLBACK_MODEL):
+            assert model in served_2026_08_28, (
+                f"{model!r} was not in the provider's model list. Every AI command "
+                f"fails on a model id the provider does not serve."
+            )
+        assert DEFAULT_PRIMARY_MODEL != DEFAULT_FALLBACK_MODEL, (
+            "a fallback identical to the primary is not a fallback"
+        )
+
+
+class TestTheShippedConfigDoesNotAdvertiseDeadSettings:
+    def test_there_is_no_ai_section(self):
+        """
+        `.ai-repo-manager.yml` carried primary_model and fallback_model that
+        nothing read — app/core/config.py says so explicitly. When the provider
+        retired the models, that file is the first place someone would edit to
+        fix it, and editing it would have done nothing.
+        """
+        from pathlib import Path
+
+        import yaml
+
+        root = Path(__file__).resolve().parent.parent
+        config = yaml.safe_load((root / ".ai-repo-manager.yml").read_text(encoding="utf-8"))
+        assert "ai" not in config, (
+            "the ai: section is not read by any code path; shipping it invites "
+            "an operator to change a setting that has no effect"
+        )

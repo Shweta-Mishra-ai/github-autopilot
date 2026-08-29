@@ -43,12 +43,21 @@ auto_merge:
   allowed_risk_levels:
     - low
 
-ai:
-  primary_model: "llama-3.3-70b-versatile"
-  fallback_model: "llama-3.1-8b-instant"
-  max_tokens: 1500
-  temperature: 0.2
-  timeout_seconds: 45
+# NOTE: there is deliberately no `ai:` section.
+#
+# It used to carry primary_model, fallback_model, max_tokens, temperature and
+# timeout_seconds, and NOTHING read any of them -- app/core/config.py says so
+# in as many words. The LLM router is a process-wide singleton shared by every
+# installation, so a per-repo model override would let one tenant drain
+# another's quota tier.
+#
+# They are deployment settings, set by the operator:
+#
+#   LLM_PRIMARY_MODEL   LLM_FALLBACK_MODEL   LLM_GEMINI_MODEL
+#
+# Leaving them here was worse than omitting them: when the provider retired
+# the models and every AI command started failing, this file is the first
+# place someone would edit, and editing it would have done nothing.
 
 confidence:
   thresholds:

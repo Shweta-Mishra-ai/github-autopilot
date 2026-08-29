@@ -43,8 +43,23 @@ log = logging.getLogger(__name__)
 # than inline so the eval preflight and /health report the same values the
 # router actually calls — a check that validates a different model than the one
 # in use is worse than no check.
-DEFAULT_PRIMARY_MODEL = "llama-3.3-70b-versatile"
-DEFAULT_FALLBACK_MODEL = "llama-3.1-8b-instant"
+#
+# These were llama-3.3-70b-versatile and llama-3.1-8b-instant. The provider
+# retired every Llama chat model, so both returned 404 and every AI command
+# failed for six days. The replacements below are not a guess: they are from
+# the provider's own model list, printed by the eval preflight on the
+# 2026-08-28 run using this deployment's key. That list contained no Llama chat
+# model at all; the remaining general-purpose ones are the gpt-oss and qwen
+# families, plus Groq's compound systems.
+#
+# The pairing keeps the shape the router expects — a larger model for work that
+# needs quality, a smaller one to fall back to and to carry cheap traffic.
+#
+# A provider will retire these too. LLM_PRIMARY_MODEL and LLM_FALLBACK_MODEL
+# override them without a deploy, /health reports which are in use, and the
+# nightly eval names what is available when they stop existing.
+DEFAULT_PRIMARY_MODEL = "openai/gpt-oss-120b"
+DEFAULT_FALLBACK_MODEL = "openai/gpt-oss-20b"
 
 
 __all__ = [
@@ -76,8 +91,15 @@ class LLMRouter:
         # repo-level override would let one tenant pick a model that drains
         # another's quota tier. It was previously declared in repo config
         # (ai.primary_model) where nothing could read it.
-        self._groq_70b = GroqProvider(os.environ.get("LLM_PRIMARY_MODEL", DEFAULT_PRIMARY_MODEL))
-        self._groq_8b = GroqProvider(os.environ.get("LLM_FALLBACK_MODEL", DEFAULT_FALLBACK_MODEL))
+        # The tier is passed explicitly. Inferring it from the model id tied
+        # the budget and the circuit breaker to a naming convention the
+        # provider was free to change -- and did.
+        self._groq_70b = GroqProvider(
+            os.environ.get("LLM_PRIMARY_MODEL", DEFAULT_PRIMARY_MODEL), provider_key="groq_70b"
+        )
+        self._groq_8b = GroqProvider(
+            os.environ.get("LLM_FALLBACK_MODEL", DEFAULT_FALLBACK_MODEL), provider_key="groq_8b"
+        )
         self._gemini = None
         self._openrouter = None
         self._ollama = None

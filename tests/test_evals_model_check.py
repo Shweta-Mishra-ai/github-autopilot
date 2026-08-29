@@ -20,7 +20,22 @@ import pytest
 from evals.run import check_configured_models, configured_models
 
 
-def _models_response(status=200, ids=("llama-3.3-70b-versatile", "llama-3.1-8b-instant")):
+def _default_ids():
+    """
+    The ids the router actually asks for.
+
+    Hardcoding them here meant this fixture claimed "all models present" while
+    listing models the router no longer requests — the check would pass for a
+    configuration that cannot work, which is the exact failure the preflight
+    exists to catch.
+    """
+    from app.ai.router import DEFAULT_FALLBACK_MODEL, DEFAULT_PRIMARY_MODEL
+
+    return (DEFAULT_PRIMARY_MODEL, DEFAULT_FALLBACK_MODEL)
+
+
+def _models_response(status=200, ids=None):
+    ids = _default_ids() if ids is None else ids
     r = MagicMock()
     r.status_code = status
     r.json.return_value = {"data": [{"id": i} for i in ids]}

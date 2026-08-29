@@ -124,3 +124,60 @@ class TestRedactSecrets:
     def test_none_and_empty_are_safe(self):
         assert redact_secrets(None) == ""
         assert redact_secrets("") == ""
+
+
+class TestWebhookUrlsAreCredentialsToo:
+    """
+    A Slack or Discord webhook URL is not an address, it is a bearer token:
+    whoever holds it can post into the channel as the bot. Both senders
+    logged the exception verbatim, and requests quotes the URL it failed on —
+    so one connection error published the webhook into the deployment's logs.
+    """
+
+    # Assembled rather than written out: as a single literal the Slack one
+    # matches GitHub's push protection, which blocks the push. It is a made-up
+    # value, but a fixture that trips a real secret scanner is a fixture that
+    # will be silenced or exempted one day, and an exemption on this file is
+    # the last thing this repository needs.
+    _SLACK_HOST = "https://hooks." + "slack.com/services"
+    SLACK = f"{_SLACK_HOST}/T00000000/B11111111/" + "SeCrEt" + "WebhookToken123456"
+    DISCORD = "https://discord.com/api/webhooks/123456789/" + "DiScOrD" + "hOoKtOkEn-abcdefg"
+    TEAMS = "https://acme.webhook.office.com/webhookb2/aaaa-bbbb/IncomingWebhook/ccc/ddd"
+
+    @pytest.mark.parametrize("url_attr", ["SLACK", "DISCORD", "TEAMS"])
+    def test_the_token_is_redacted(self, url_attr):
+        url = getattr(self, url_attr)
+        out = redact_secrets(f"Max retries exceeded with url: {url}")
+        secret_tail = url.split("/", 4)[-1]
+        assert secret_tail not in out, out
+
+    def test_the_host_survives_so_the_log_still_says_which_one_failed(self):
+        out = redact_secrets(f"failed: {self.SLACK}")
+        assert "hooks.slack.com" in out
+        assert "REDACTED" in out
+
+    @pytest.mark.parametrize("channel", ["slack", "discord"])
+    def test_a_send_failure_does_not_log_the_webhook(self, channel, monkeypatch, caplog):
+        import logging
+
+        import app.github.notifications as n
+
+        url = self.SLACK if channel == "slack" else self.DISCORD
+        monkeypatch.setenv("SLACK_WEBHOOK_URL", self.SLACK)
+        monkeypatch.setenv("DISCORD_WEBHOOK_URL", self.DISCORD)
+        exc = requests.exceptions.ConnectionError(
+            f"HTTPSConnectionPool(host='x', port=443): Max retries exceeded with url: {url}"
+        )
+
+        send, args = (
+            (n._send_slack, ("t", "m", "critical"))
+            if channel == "slack"
+            else (n._send_discord, ("t", "m", "critical", [], "http://x"))
+        )
+
+        with caplog.at_level(logging.ERROR), patch.object(n.requests, "post", side_effect=exc):
+            send(*args)
+
+        logged = caplog.text
+        assert logged, "the failure must still be logged — redaction is not silencing"
+        assert url.rsplit("/", 1)[-1] not in logged, logged

@@ -126,12 +126,12 @@
       "id": "app.ai.providers.base",
       "path": "app/ai/providers/base.py",
       "layer": "ai",
-      "loc": 299,
-      "functions": 6,
+      "loc": 294,
+      "functions": 5,
       "classes": 2,
       "is_package": false,
       "fan_in": 7,
-      "fan_out": 1,
+      "fan_out": 2,
       "external_deps": [
         "abc",
         "app",
@@ -565,11 +565,11 @@
       "id": "app.core.redaction",
       "path": "app/core/redaction.py",
       "layer": "core",
-      "loc": 61,
-      "functions": 1,
+      "loc": 116,
+      "functions": 2,
       "classes": 0,
       "is_package": false,
-      "fan_in": 1,
+      "fan_in": 3,
       "fan_out": 1,
       "external_deps": [
         "__future__",
@@ -765,12 +765,12 @@
       "id": "app.github.notifications",
       "path": "app/github/notifications.py",
       "layer": "github",
-      "loc": 523,
+      "loc": 527,
       "functions": 20,
       "classes": 0,
       "is_package": false,
       "fan_in": 8,
-      "fan_out": 3,
+      "fan_out": 4,
       "external_deps": [
         "app",
         "datetime",
@@ -1573,6 +1573,11 @@
     },
     {
       "source": "app.ai.providers.base",
+      "target": "app.core.redaction",
+      "kind": "import"
+    },
+    {
+      "source": "app.ai.providers.base",
       "target": "app.core.retry_after",
       "kind": "runtime"
     },
@@ -1885,6 +1890,11 @@
       "source": "app.github.notifications",
       "target": "app.core.metrics",
       "kind": "runtime"
+    },
+    {
+      "source": "app.github.notifications",
+      "target": "app.core.redaction",
+      "kind": "import"
     },
     {
       "source": "app.github.rate_limit",
@@ -2894,8 +2904,8 @@
   ],
   "stats": {
     "modules": 91,
-    "edges": 276,
-    "total_loc": 20289,
+    "edges": 278,
+    "total_loc": 20343,
     "layers": [
       "ai",
       "core",
@@ -2928,9 +2938,9 @@
       },
       {
         "id": "app.github.notifications",
-        "loc": 523,
+        "loc": 527,
         "fan_in": 8,
-        "fan_out": 3
+        "fan_out": 4
       },
       {
         "id": "app.security.enhanced_secrets",
@@ -2945,16 +2955,16 @@
         "fan_out": 1
       },
       {
-        "id": "app.ai.providers.base",
-        "loc": 299,
-        "fan_in": 7,
-        "fan_out": 1
-      },
-      {
         "id": "app.core.webhook_security",
         "loc": 474,
         "fan_in": 4,
         "fan_out": 1
+      },
+      {
+        "id": "app.ai.providers.base",
+        "loc": 294,
+        "fan_in": 7,
+        "fan_out": 2
       },
       {
         "id": "app.ai.circuit_breaker",

@@ -43,9 +43,10 @@ Godefroid P, Kiezun A, Levin MY (2008) Grammar-based whitebox fuzzing. In:
 Hardt D (2012) The {OAuth} 2.0 authorization framework. Tech. Rep. RFC 6749,
   IETF
 
-\bibitem[{Herbold et~al.(2022)Herbold, Trautsch, and Trautsch}]{herbold2022}
-Herbold S, Trautsch A, Trautsch F (2022) On the feasibility of automated issue
-  type prediction. Empirical Softw Eng 27
+\bibitem[{Herbold et~al.(2020)Herbold, Trautsch, and Trautsch}]{herbold2020}
+Herbold S, Trautsch A, Trautsch F (2020) On the feasibility of automated
+  prediction of bug and non-bug issues. Empirical Software Engineering
+  25:5333--5369. \doi{10.1007/s10664-020-09885-w}
 
 \bibitem[{Jia and Harman(2011)}]{jia2011}
 Jia Y, Harman M (2011) An analysis and survey of the development of mutation

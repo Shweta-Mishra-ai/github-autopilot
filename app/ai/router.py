@@ -597,3 +597,92 @@ def last_model_disclosure() -> str:
 
 # Module-level singleton — thread-safe via instance locks above
 router = LLMRouter()
+
+
+def model_configuration_report() -> dict:
+    """
+    For every provider: is the configured model id one it actually serves?
+
+    Deliberately NOT part of status(), which /health calls on every probe:
+    this reads each provider's catalogue over the network, and a health check
+    that makes three outbound calls is a health check that reports the
+    network. The doctor is an explicit diagnostic, so paying for it there is
+    the right trade.
+
+    This exists because the answer depends on a key, and the key is a
+    deployment secret. CI cannot check a provider it has no credential for --
+    the Gemini catalogue was unreadable in CI for exactly that reason -- but
+    the running service holds the key and can simply ask. So the deployment
+    answers the question its own environment is the only place to answer.
+
+    Never raises: a diagnostic that fails while diagnosing is worse than one
+    that says "unknown".
+    """
+    from app.ai import model_catalog as catalog
+    from app.ai.providers.gemini import gemini_model
+    from app.ai.providers.openrouter import openrouter_model
+
+    configured = {
+        "groq": [
+            ("groq_70b", os.environ.get("LLM_PRIMARY_MODEL", DEFAULT_PRIMARY_MODEL), "quality"),
+            ("groq_8b", os.environ.get("LLM_FALLBACK_MODEL", DEFAULT_FALLBACK_MODEL), "speed"),
+        ],
+        "gemini": [("gemini", gemini_model(), "speed")],
+        "openrouter": [("openrouter", openrouter_model(), "quality")],
+    }
+
+    substitutions = catalog.active_substitutions()
+    out: dict = {"autoheal": catalog.autoheal_enabled(), "providers": {}}
+
+    for provider, entries in configured.items():
+        try:
+            served = catalog.available_models(provider)
+        except Exception:  # pragma: no cover - the report must not fail
+            served = []
+        info: dict = {
+            "catalogue_readable": bool(served),
+            "models_served": len(served),
+            "slots": [],
+        }
+        for key, model, tier in entries:
+            # "unknown" is not "missing". Reporting an unreadable catalogue as
+            # a broken model id would send an operator to change a setting
+            # that was never wrong.
+            state = "unknown" if not served else ("ok" if model in served else "retired")
+            slot = {
+                "slot": key,
+                "configured": model,
+                "state": state,
+                "substituted_to": (substitutions.get(key) or {}).get("to", ""),
+            }
+            if state == "retired":
+                slot["suggested"] = catalog.best_model(provider, tier, exclude=(model,))
+            info["slots"].append(slot)
+        out["providers"][provider] = info
+    return out
+
+
+def format_model_configuration(report: dict) -> str:
+    """The same thing as prose, for someone reading a terminal."""
+    lines = ["## Model configuration", ""]
+    if not report.get("autoheal", True):
+        lines.append("Auto-substitution is OFF (LLM_MODEL_AUTOHEAL=0). A retired id will fail.")
+        lines.append("")
+    for provider, info in (report.get("providers") or {}).items():
+        if not info.get("catalogue_readable"):
+            lines.append(
+                f"- **{provider}** — catalogue unreadable. Usually no API key set for it; "
+                f"the models below cannot be checked from here."
+            )
+        else:
+            lines.append(f"- **{provider}** — {info['models_served']} models served")
+        for slot in info.get("slots") or []:
+            mark = {"ok": "✅", "retired": "❌", "unknown": "❔"}.get(slot["state"], "❔")
+            line = f"    {mark} `{slot['slot']}` → `{slot['configured']}`"
+            if slot["state"] == "retired":
+                suggestion = slot.get("suggested") or "(nothing suitable served)"
+                line += f" — NOT served. Best available: `{suggestion}`"
+            if slot.get("substituted_to"):
+                line += f" — currently answering on `{slot['substituted_to']}`"
+            lines.append(line)
+    return "\n".join(lines)

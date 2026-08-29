@@ -138,6 +138,15 @@ THROTTLE_BACKOFF_SECONDS = float(os.environ.get("EVAL_THROTTLE_BACKOFF_SECONDS",
 # string when the circuit is open or the request was refused, and the router's
 # degraded reply is a short sentence.
 _BLOCKED_OUTPUT_CHARS = 40
+
+# The markers below are only evidence of a degraded reply in a SHORT output.
+# A real review is long, and one that happens to discuss rate limiting or
+# retrying would otherwise be thrown away as "the provider never answered" --
+# scoring nothing and reporting infrastructure, which is the exact mistake
+# this function exists to prevent. None of the current cases trip it; the
+# bound is here so adding a case about retry logic cannot silently blind the
+# suite again.
+_DEGRADED_REPLY_CHARS = 200
 _BLOCKED_MARKERS = (
     "providers down",
     "provider error",
@@ -160,6 +169,10 @@ def looks_blocked(output: str) -> bool:
     text = (output or "").strip()
     if len(text) < _BLOCKED_OUTPUT_CHARS:
         return True
+    if len(text) > _DEGRADED_REPLY_CHARS:
+        # Long enough to be a real review. The router's degraded reply is a
+        # short sentence, so a marker this far in is the reviewer's own words.
+        return False
     lowered = text.lower()
     return any(marker in lowered for marker in _BLOCKED_MARKERS)
 

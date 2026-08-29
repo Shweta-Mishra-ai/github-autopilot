@@ -229,3 +229,45 @@ class TestTheReviewHarnessActuallySeesTheReview:
             )
 
         assert posted == [], "_review_code posts nothing — the harness must read its return value"
+
+
+class TestLooksBlocked:
+    """
+    The blocked check decides whether a case counts as a quality measurement
+    at all, so a false positive here throws away a real review and reports
+    infrastructure — the exact mistake it exists to prevent.
+    """
+
+    def test_empty_and_stub_outputs_are_blocked(self):
+        from evals.run import looks_blocked
+
+        assert looks_blocked("")
+        assert looks_blocked(None)
+        assert looks_blocked("   ")
+        assert looks_blocked("too short")
+
+    def test_the_routers_degraded_reply_is_blocked(self):
+        from evals.run import looks_blocked
+
+        assert looks_blocked("AI providers are temporarily unavailable — please try again shortly.")
+        assert looks_blocked("Provider error: rate limit reached, try again in 60s.")
+
+    def test_a_real_review_that_mentions_rate_limits_is_not_blocked(self):
+        """
+        A long review is a review. Matching a marker anywhere in it would
+        discard a genuine measurement for using an ordinary phrase — and the
+        markers include "rate limit" and "try again", which any review of
+        retry or throttling code will contain.
+        """
+        from evals.run import looks_blocked
+
+        review = (
+            "### `app/api/client.py` — Score: 4/10\n"
+            "This handler retries on failure without honouring the rate limit "
+            "response, so a throttled request will try again immediately and "
+            "make the problem worse. Read Retry-After and sleep for the delay "
+            "the provider asked for before the next attempt. The surrounding "
+            "error handling is otherwise sound and the tests cover the happy path."
+        )
+        assert len(review) > 200
+        assert not looks_blocked(review)

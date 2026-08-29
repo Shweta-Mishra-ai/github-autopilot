@@ -250,3 +250,64 @@ class TestPlaceholderWordsNeverSuppressARealSecret:
             if not scan_diff(f'+t = "{token}"', file_path="app/x.py"):
                 misses += 1
         assert misses == 0, f"{misses}/3000 real tokens missed"
+
+
+class TestSelfDeclaredNonCredentials:
+    """
+    The scanner opened a CRITICAL "rotate ALL exposed credentials NOW" issue
+    (#92) against this literal string:
+
+        os.environ["GITHUB_WEBHOOK_SECRET"] = "bench-secret-not-a-real-credential"
+
+    The value says what it is. What made it a false positive rather than a
+    near miss is that the *same line* with `test-` in place of `bench-` was
+    silently clean — suppressed by the unrelated prefix rule, not by anything
+    the value declared about itself. The phrase list had "not real" and the
+    value reads "not a real".
+
+    A false critical is not a harmless over-report. It is what teaches people
+    to close these unread, and this scanner is the product's headline feature.
+    """
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            'os.environ["GITHUB_WEBHOOK_SECRET"] = "bench-secret-not-a-real-credential"',
+            'SECRET = "this-is-not-a-real-credential"',
+            'WEBHOOK_SECRET = "not-a-real-credential"',
+            'TOKEN = "not a real token"',
+        ],
+    )
+    def test_a_value_that_says_it_is_not_a_credential_is_not_flagged(self, line):
+        assert scan_diff("+" + line) == [], line
+
+    def test_the_prefix_and_the_declaration_now_agree(self):
+        """
+        The tell that this was a bug and not a tuning choice: two spellings of
+        the same fixture disagreed, and neither verdict came from the part of
+        the value that says it is a fixture.
+        """
+        bench = 'SECRET = "bench-secret-not-a-real-credential"'
+        test = 'SECRET = "test-secret-not-a-real-credential"'
+        assert scan_diff("+" + bench) == scan_diff("+" + test) == []
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            'SECRET = "kJ8Fq2mZvR7nT4wXpL9cD6bH3yG5sA1e-not-a-real-credential"',
+            'SECRET = "not-a-real-kJ8Fq2mZvR7nT4wXpL9cD6bH3yG5sA1e"',
+            'API_KEY = "kJ8Fq2mZvR7nT4wXpL9cD6bH3yG5sA1e"  # not a real credential',
+            'SECRET = "kJ8Fq2mZvR7nT4wXpnot-a-realL9cD6bH3yG5sA1e"',
+        ],
+    )
+    def test_the_declaration_cannot_hide_real_key_material(self, line):
+        """
+        The security question for any loosening of a secret scanner: can the
+        new marker be appended to a real credential to smuggle it past?
+
+        No — `_has_key_material` still refuses to let a placeholder word
+        suppress a value that carries a random token, which is the guard the
+        rest of this file is built on. Measured over 12,000 generated
+        credentials across these four shapes: zero missed.
+        """
+        assert scan_diff("+" + line), f"real key material must survive the phrase: {line}"

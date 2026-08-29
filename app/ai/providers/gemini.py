@@ -13,11 +13,13 @@ import time
 import requests as http_requests
 
 from app.ai.circuit_breaker import get_breaker
+from app.ai.model_catalog import effective_model
 from app.ai.providers.base import (
     LLMProvider,
     LLMResponse,
     client_error_detail,
     redact_secrets,
+    substituted_model,
     throttle_pause,
 )
 
@@ -62,7 +64,7 @@ class GeminiProvider(LLMProvider):
     ) -> LLMResponse:
         # Resolved once so every return path below names the model actually
         # asked for, including the ones that return before the HTTP call.
-        model = gemini_model()
+        model = effective_model("gemini", gemini_model())
 
         # ── STEP 1: Circuit breaker check — MUST be first ─────────────────────
         breaker = get_breaker("gemini")
@@ -142,6 +144,17 @@ class GeminiProvider(LLMProvider):
             # These used to record a breaker failure, which opened the circuit
             # on a fault that cannot recover and reported it as a provider
             # outage. The breaker is left alone now.
+            if r.status_code in (400, 401, 403, 404):
+                # Same repair as the primary: a model the provider no longer
+                # serves is a question the provider itself can answer.
+                replacement = substituted_model(
+                    "gemini", "gemini", "speed", model, r, r.status_code
+                )
+                if replacement:
+                    model = replacement
+                    url = _gemini_url(model)
+                    r = http_requests.post(url, json=body, headers=headers, timeout=timeout)
+
             if r.status_code in (400, 401, 403, 404):
                 detail = client_error_detail(
                     r, r.status_code, model, "GEMINI_API_KEY", GEMINI_MODEL_ENV

@@ -46,7 +46,7 @@ Hardt D (2012) The {OAuth} 2.0 authorization framework. Tech. Rep. RFC 6749,
 \bibitem[{Herbold et~al.(2020)Herbold, Trautsch, and Trautsch}]{herbold2020}
 Herbold S, Trautsch A, Trautsch F (2020) On the feasibility of automated
   prediction of bug and non-bug issues. Empirical Software Engineering
-  25:5333--5369. \doi{10.1007/s10664-020-09885-w}
+  25(6):5333--5369. \doi{10.1007/s10664-020-09885-w}
 
 \bibitem[{Jia and Harman(2011)}]{jia2011}
 Jia Y, Harman M (2011) An analysis and survey of the development of mutation
@@ -62,7 +62,7 @@ Krawczyk H, Bellare M, Canetti R (1997) {HMAC}: Keyed-hashing for message
 
 \bibitem[{Liem and Panichella(2020)}]{liem2020}
 Liem CCS, Panichella A (2020) Run, forest, run? {O}n randomization and
-  reproducibility in {ML} and {SE} research. ArXiv:2012.08387
+  reproducibility in predictive software engineering. ArXiv:2012.08387
 
 \bibitem[{McCabe(1976)}]{mccabe1976}
 McCabe TJ (1976) A complexity measure. IEEE Trans Softw Eng SE-2(4):308--320
@@ -79,8 +79,7 @@ Michael LG, Donohue J, Davis JC, et~al (2019) Regexes are hard:
 
 \bibitem[{Mishra(2026)}]{mishra2026zenodo}
 Mishra S (2026) Replication package: Boundary-mutation testing for
-  pattern-based secret detection. \doi{10.5281/zenodo.22114221},
-  \url{https://doi.org/10.5281/zenodo.22114221}
+  pattern-based secret detection. \doi{10.5281/zenodo.22114221}
 
 \bibitem[{Nygard(2018)}]{nygard2018release}
 Nygard MT (2018) Release It!, 2nd edn. Pragmatic Bookshelf
@@ -108,9 +107,11 @@ Vasilescu B, Yu Y, Wang H, et~al (2015) Quality and productivity outcomes
   relating to continuous integration in {GitHub}. In: Proc. ESEC/FSE, pp
   805--816
 
-\bibitem[{Wessel et~al.(2018)}]{wessel2018bots}
-Wessel M, et~al (2018) The power of bots: Characterizing and understanding bots
-  in {OSS} projects. Proc ACM Hum-Comput Interact 2(CSCW):1--19
+\bibitem[{Wessel et~al.(2018)Wessel, de~Souza, Steinmacher, Wiese, Polato,
+  Chaves, and Gerosa}]{wessel2018bots}
+Wessel M, de~Souza BM, Steinmacher I, et~al (2018) The power of bots:
+  Characterizing and understanding bots in {OSS} projects. Proc ACM Hum-Comput
+  Interact 2(CSCW):182:1--182:19
 
 \bibitem[{Zhu et~al.(1997)Zhu, Hall, and May}]{zhu1997coverage}
 Zhu H, Hall PAV, May JHR (1997) Software unit test coverage and adequacy. ACM

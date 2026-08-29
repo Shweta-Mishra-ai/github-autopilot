@@ -15,9 +15,10 @@ Exit codes, and they are distinct on purpose:
     1  the bot answered, and answered worse than the threshold allows
     2  unrunnable — no provider key
     3  the configured model does not exist at the provider
+    4  the provider throttled us, so quality was never measured
 
-3 is separate from 1 because they send a maintainer to opposite ends of the
-codebase. The first scheduled run of this suite returned a 0.0 pass rate and
+3 and 4 are separate from 1 because they send a maintainer to opposite ends
+of the codebase. The first scheduled run of this suite returned a 0.0 pass rate and
 filed an issue saying review quality had regressed; the actual cause was a
 404 from Groq for a retired model id, so every case scored zero on "no code
 fence" because there was no output at all. Eleven failing cases described a
@@ -35,6 +36,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -122,37 +124,96 @@ def check_configured_models(key: str) -> tuple[bool, str]:
     )
 
 
+# The suite fires every case back to back. On a small model that fitted under
+# the provider's rate limit; on a larger one it does not — the 2026-08-29 run
+# passed all six /fix cases at 1.0, then tripped the limit, opened both circuit
+# breakers, and the five review cases received empty output and were scored as
+# QUALITY failures. pass_rate 0.545 on a run that never measured review quality
+# at all.
+#
+# Pacing prevents it; the retry survives a burst; and a case still empty after
+# that is reported as blocked rather than counted against the score.
+CASE_DELAY_SECONDS = float(os.environ.get("EVAL_CASE_DELAY_SECONDS", "3"))
+THROTTLE_BACKOFF_SECONDS = float(os.environ.get("EVAL_THROTTLE_BACKOFF_SECONDS", "20"))
+
+# Anything shorter than this is not an answer. The providers return an empty
+# string when the circuit is open or the request was refused, and the router's
+# degraded reply is a short sentence.
+_BLOCKED_OUTPUT_CHARS = 40
+_BLOCKED_MARKERS = (
+    "providers down",
+    "provider error",
+    "rate limit",
+    "circuit open",
+    "try again",
+    "temporarily unavailable",
+)
+
+
+def looks_blocked(output: str) -> bool:
+    """
+    True when the provider never gave us an answer to score.
+
+    A blocked case says nothing about review quality. Scoring it as a failure
+    is the same mistake as reporting a retired model id as a quality
+    regression: it puts an infrastructure fault into a number that people read
+    as a statement about the prompts.
+    """
+    text = (output or "").strip()
+    if len(text) < _BLOCKED_OUTPUT_CHARS:
+        return True
+    lowered = text.lower()
+    return any(marker in lowered for marker in _BLOCKED_MARKERS)
+
+
+def _pace() -> None:
+    if CASE_DELAY_SECONDS > 0:
+        time.sleep(CASE_DELAY_SECONDS)
+
+
 def _load(name: str) -> list[dict]:
     return json.loads((CASES_DIR / name).read_text(encoding="utf-8"))
 
 
-def run_fix_cases() -> list:
+def run_fix_cases() -> tuple[list, list]:
     """Push each case through the real /fix command path."""
     from evals.scorers import score_output
     from app.handlers.comments.generator import cmd_fix
 
     results = []
-    for case in _load("fix_cases.json"):
-        try:
-            output = cmd_fix(case["title"], case["context"], repo="")
-        except Exception as e:
-            from evals.scorers import CaseResult
+    blocked = []
+    for index, case in enumerate(_load("fix_cases.json")):
+        if index:
+            _pace()
+        # Bound explicitly rather than captured: these are called inside the
+        # loop today, but a closure over a loop variable silently reads the
+        # LAST case the moment anyone defers the call.
+        def _run(case=case):
+            return cmd_fix(case["title"], case["context"], repo="")
 
-            results.append(CaseResult(case["id"], 0.0, False, [f"exception: {e}"]))
+        output = _attempt(_run, case, results)
+        if output is None:
+            continue
+        if looks_blocked(output):
+            blocked.append(case["id"])
+            _print_blocked(case["id"])
             continue
         result = score_output(output, case)
         results.append(result)
         _print_case(result)
-    return results
+    return results, blocked
 
 
-def run_review_cases() -> list:
+def run_review_cases() -> tuple[list, list]:
     """Push each case through the real PR-review path, capturing the post."""
-    from evals.scorers import score_output, CaseResult
+    from evals.scorers import score_output
     from app.handlers.pull_request import _review_code
 
     results = []
-    for case in _load("review_cases.json"):
+    blocked = []
+    for index, case in enumerate(_load("review_cases.json")):
+        if index:
+            _pace()
         captured: list[str] = []
 
         def _capture(path, token, payload, _sink=captured):
@@ -168,18 +229,60 @@ def run_review_cases() -> list:
         files = [{"filename": case["filename"], "patch": case["patch"]}]
         pr = {"head": {"sha": "eval0000"}}
 
-        try:
+        def _run(pr=pr, files=files, cfg=cfg, captured=captured):
             with patch("app.handlers.pull_request.review.gh_post", side_effect=_capture):
                 _review_code(pr, "eval/repo", 1, files, "tok", cfg, MagicMock(), "", MagicMock())
-        except Exception as e:
-            results.append(CaseResult(case["id"], 0.0, False, [f"exception: {e}"]))
+            return "\n".join(captured)
+
+        output = _attempt(_run, case, results)
+        if output is None:
+            continue
+        if looks_blocked(output):
+            blocked.append(case["id"])
+            _print_blocked(case["id"])
             continue
 
-        output = "\n".join(captured)
         result = score_output(output, case)
         results.append(result)
         _print_case(result)
-    return results
+    return results, blocked
+
+
+def _attempt(call, case: dict, results: list):
+    """
+    Run one case, retrying once when the provider gave us nothing.
+
+    Returns the output, or None when the case was recorded as an exception —
+    which is now PRINTED. Both handlers used to `continue` before _print_case,
+    so a raising case was counted in the summary and invisible in the output:
+    the 2026-08-29 run showed two FAIL lines above a summary listing five
+    failed cases, and the three silent ones were the actual story.
+    """
+    from evals.scorers import CaseResult
+
+    for attempt in (1, 2):
+        try:
+            output = call()
+        except Exception as exc:
+            if attempt == 1:
+                print(f"  [RETRY] {case['id']}  after {type(exc).__name__}")
+                time.sleep(THROTTLE_BACKOFF_SECONDS)
+                continue
+            result = CaseResult(case["id"], 0.0, False, [f"exception: {exc}"])
+            results.append(result)
+            _print_case(result)
+            return None
+
+        if attempt == 1 and looks_blocked(output):
+            print(f"  [RETRY] {case['id']}  no answer from the provider")
+            time.sleep(THROTTLE_BACKOFF_SECONDS)
+            continue
+        return output
+    return output
+
+
+def _print_blocked(case_id: str) -> None:
+    print(f"  [BLOCKED] {case_id}  provider returned nothing — not scored")
 
 
 def _print_case(result) -> None:
@@ -208,16 +311,39 @@ def main() -> int:
     from evals.scorers import summarize
 
     results = []
+    blocked: list[str] = []
     if args.task in ("all", "fix"):
         print("== /fix cases ==")
-        results += run_fix_cases()
+        fix_results, fix_blocked = run_fix_cases()
+        results += fix_results
+        blocked += fix_blocked
     if args.task in ("all", "review"):
         print("== PR review cases ==")
-        results += run_review_cases()
+        review_results, review_blocked = run_review_cases()
+        results += review_results
+        blocked += review_blocked
 
     stats = summarize(results)
+    stats["blocked_cases"] = blocked
     print("\n== summary ==")
     print(json.dumps(stats, indent=2))
+
+    # A throttled case is not a quality signal, and averaging it into the
+    # pass-rate turns a provider limit into a statement about the prompts.
+    # The 2026-08-29 run reported 0.545 having never scored a single review
+    # case: all five were empty because both breakers had opened on rate
+    # limits, and every one counted as a failure.
+    if blocked:
+        print(
+            f"\nBLOCKED: {len(blocked)} of {len(blocked) + len(results)} cases got no "
+            f"answer from the provider, after a retry each.\n"
+            f"  {', '.join(blocked)}\n\n"
+            f"This is NOT a quality result — those cases were never scored. The\n"
+            f"usual cause is the provider's rate limit: the suite runs cases back\n"
+            f"to back, and a larger model has a smaller allowance. Raise\n"
+            f"EVAL_CASE_DELAY_SECONDS (currently {CASE_DELAY_SECONDS:g}s between cases) and re-run."
+        )
+        return 4
 
     ok = stats["pass_rate"] >= args.min_pass_rate
     print(f"\n{'PASS' if ok else 'FAIL'}: pass_rate={stats['pass_rate']} "

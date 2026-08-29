@@ -38,7 +38,7 @@ jobs:
   evals:
     name: AI output evals
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: read
       issues: write # only used to report a scheduled regression
@@ -139,7 +139,22 @@ jobs:
           # one costs real time: "quality regressed" sends a maintainer to read
           # prompts and diff model versions, when the actual fix is one
           # repository secret. Report what actually happened.
-          if [ "${{ steps.run.outputs.exit_code }}" = "3" ]; then
+          if [ "${{ steps.run.outputs.exit_code }}" = "4" ]; then
+            TITLE="Nightly AI evals could not measure — the provider throttled the run"
+            BODY=$(printf '%s\n' \
+              "The suite did not produce a quality result. It is NOT a regression:" \
+              "the provider rate-limited some cases, so they were never scored." \
+              "" \
+              "Run: $RUN_URL" \
+              "" \
+              "The run log names the blocked cases. The suite runs cases back to" \
+              "back and a larger model has a smaller allowance, so the usual fix is" \
+              "to raise \`EVAL_CASE_DELAY_SECONDS\` in the workflow." \
+              "" \
+              "Cases that DID get an answer were scored normally and are in the" \
+              "summary; the pass-rate is withheld because averaging unscored cases" \
+              "into it would report a provider limit as a drop in review quality." )
+          elif [ "${{ steps.run.outputs.exit_code }}" = "3" ]; then
             TITLE="Nightly AI evals cannot run — the configured model no longer exists"
             BODY=$(printf '%s\n' \
               "The eval suite did not measure anything. It is NOT a quality regression:" \

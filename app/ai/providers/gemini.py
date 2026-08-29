@@ -8,11 +8,17 @@ before GEMINI_API_KEY check, before any HTTP call.
 
 import logging
 import os
+import time
 
 import requests as http_requests
 
 from app.ai.circuit_breaker import get_breaker
-from app.ai.providers.base import LLMProvider, LLMResponse, client_error_detail
+from app.ai.providers.base import (
+    LLMProvider,
+    LLMResponse,
+    client_error_detail,
+    throttle_pause,
+)
 
 log = logging.getLogger(__name__)
 
@@ -97,13 +103,30 @@ class GeminiProvider(LLMProvider):
             )
 
             if r.status_code == 429:
-                breaker.record_failure("rate_limit_429")
-                return LLMResponse(
-                    text="",
-                    provider="gemini",
-                    model=model,
-                    error="RATE_LIMIT:60",
-                )
+                # This never read Retry-After at all: it recorded a breaker
+                # failure and reported a fabricated 60 seconds whatever the
+                # provider had actually said. Same root cause as the primary
+                # provider, in the fallback that exists to cover it.
+                retry_after, pause = throttle_pause(r, default=60)
+                if pause:
+                    log.info(f"gemini.throttled waiting={pause:g}s then retrying once")
+                    time.sleep(pause)
+                    r = http_requests.post(
+                        url,
+                        json=body,
+                        headers={"Content-Type": "application/json"},
+                        timeout=timeout,
+                    )
+
+                if r.status_code == 429:
+                    retry_after, _ = throttle_pause(r, default=retry_after)
+                    breaker.record_failure(f"rate_limit retry_after={retry_after}s")
+                    return LLMResponse(
+                        text="",
+                        provider="gemini",
+                        model=model,
+                        error=f"RATE_LIMIT:{retry_after}",
+                    )
 
             # 400/401/403/404 are configuration, not an outage: an invalid
             # key, or a model this account cannot use. Google answers an

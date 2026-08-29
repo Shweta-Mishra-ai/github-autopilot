@@ -422,3 +422,174 @@ class TestTheShippedConfigDoesNotAdvertiseDeadSettings:
             "the ai: section is not read by any code path; shipping it invites "
             "an operator to change a setting that has no effect"
         )
+
+
+class TestAThrottleIsNotAnOutage:
+    """
+    The root cause under the eval failure, and under any burst in production.
+
+    A 429 is the provider working correctly and asking us to slow down. The
+    code parsed the Retry-After it sent, recorded a circuit-breaker failure,
+    and returned — never waiting. The router then fell back to the other Groq
+    tier, which shares the same account limit, so that failed too: three
+    failures opened the breaker on groq_70b, five more on groq_8b, and the
+    router reported "all providers down".
+
+    The provider had said how long to wait. Waiting is single-digit seconds
+    against an LLM call that already takes tens.
+    """
+
+    @staticmethod
+    def _resp(status, retry_after=None, text="ok"):
+        r = MagicMock()
+        r.status_code = status
+        r.headers = {"Retry-After": str(retry_after)} if retry_after is not None else {}
+        r.content = b"{}"
+        r.text = "{}"
+        r.json.return_value = {
+            "choices": [{"message": {"content": text}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+        }
+        return r
+
+    def _call(self, responses, monkeypatch, max_wait=10):
+        from app.ai.providers import groq as groq_mod
+
+        from app.ai.providers import base as base_mod
+
+        monkeypatch.setenv("GROQ_API_KEY", "gsk_test_key_value")
+        # Patch where the value is READ, not where it used to live. The bound
+        # moved to base when both providers started sharing it; patching the
+        # groq module would leave the test asserting against the default and
+        # passing for the wrong reason.
+        monkeypatch.setattr(base_mod, "MAX_THROTTLE_WAIT_SECONDS", max_wait)
+        breaker = MagicMock()
+        breaker.is_available.return_value = True
+        slept = []
+        with patch.object(groq_mod.cb, "get_breaker", return_value=breaker), patch.object(
+            groq_mod.http_requests, "post", side_effect=responses
+        ), patch.object(groq_mod.time, "sleep", side_effect=slept.append):
+            result = groq_mod.GroqProvider("m", provider_key="groq_70b").call_raw(
+                "sys", "user", 100, 0.2, 30
+            )
+        return result, breaker, slept
+
+    def test_a_short_throttle_is_waited_out_and_succeeds(self, monkeypatch):
+        result, breaker, slept = self._call(
+            [self._resp(429, retry_after=6), self._resp(200, text="the answer")], monkeypatch
+        )
+        assert result.text == "the answer", "the retry after waiting must be used"
+        assert slept == [6], f"must wait the delay the provider asked for, slept={slept}"
+        assert breaker.record_failure.call_count == 0, (
+            "a throttle we waited out is not a failure — counting it is what "
+            "opened both breakers and produced 'all providers down'"
+        )
+
+    def test_still_throttled_after_waiting_is_a_real_failure(self, monkeypatch):
+        result, breaker, slept = self._call(
+            [self._resp(429, retry_after=5), self._resp(429, retry_after=30)], monkeypatch
+        )
+        assert result.error.startswith("RATE_LIMIT:")
+        assert slept == [5]
+        assert breaker.record_failure.called, (
+            "if it is still throttled after waiting, the account is saturated "
+            "and the breaker should back off"
+        )
+
+    def test_a_long_delay_is_reported_rather_than_waited_for(self, monkeypatch):
+        # Holding a shared worker thread for a minute is worse than failing.
+        result, breaker, slept = self._call([self._resp(429, retry_after=300)], monkeypatch)
+        assert slept == [], "must not sleep for a delay beyond the bound"
+        assert result.error == "RATE_LIMIT:300"
+        assert breaker.record_failure.called
+
+    def test_waiting_can_be_disabled(self, monkeypatch):
+        result, breaker, slept = self._call(
+            [self._resp(429, retry_after=2)], monkeypatch, max_wait=0
+        )
+        assert slept == []
+        assert result.error.startswith("RATE_LIMIT:")
+
+    def test_the_bound_is_configurable(self):
+        import importlib
+
+        from app.ai.providers import groq as groq_mod
+
+        from app.ai.providers import base as base_mod
+
+        assert base_mod.MAX_THROTTLE_WAIT_SECONDS > 0
+        assert "LLM_MAX_THROTTLE_WAIT_SECONDS" in importlib.import_module(
+            "inspect"
+        ).getsource(base_mod)
+
+
+class TestTheFallbackProviderThrottlesTheSameWay:
+    """
+    Gemini had the same root cause, worse: it never read Retry-After at all.
+    It recorded a breaker failure and reported a fabricated `RATE_LIMIT:60`
+    whatever the provider had actually said — so the number in the log and in
+    the degraded reply was not the provider's.
+
+    The fallback is what the router reaches for when the primary is throttled,
+    so it throttling too is how a burst becomes "all providers down".
+    """
+
+    @staticmethod
+    def _resp(status, retry_after=None, text="the answer"):
+        r = MagicMock()
+        r.status_code = status
+        r.headers = {"Retry-After": str(retry_after)} if retry_after is not None else {}
+        r.text = "{}"
+        r.json.return_value = {"candidates": [{"content": {"parts": [{"text": text}]}}]}
+        return r
+
+    def _call(self, responses, monkeypatch, max_wait=10):
+        from app.ai.providers import base as base_mod
+        from app.ai.providers import gemini as gem
+
+        monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
+        monkeypatch.setattr(base_mod, "MAX_THROTTLE_WAIT_SECONDS", max_wait)
+        breaker = MagicMock()
+        breaker.is_available.return_value = True
+        slept = []
+        with patch.object(gem, "get_breaker", return_value=breaker), patch.object(
+            gem.http_requests, "post", side_effect=responses
+        ), patch.object(gem.time, "sleep", side_effect=slept.append):
+            result = gem.GeminiProvider().call_raw("sys", "user", 100, 0.2, 30)
+        return result, breaker, slept
+
+    def test_a_short_throttle_is_waited_out_and_not_counted(self, monkeypatch):
+        result, breaker, slept = self._call(
+            [self._resp(429, retry_after=4), self._resp(200)], monkeypatch
+        )
+        assert result.text == "the answer"
+        assert slept == [4]
+        assert breaker.record_failure.call_count == 0
+
+    def test_still_throttled_reports_the_providers_own_delay(self, monkeypatch):
+        # Not a hardcoded 60: the number must be what the provider said.
+        result, breaker, slept = self._call(
+            [self._resp(429, retry_after=3), self._resp(429, retry_after=17)], monkeypatch
+        )
+        assert result.error == "RATE_LIMIT:17", f"got {result.error!r}"
+        assert breaker.record_failure.called
+
+    def test_a_long_delay_is_reported_rather_than_waited_for(self, monkeypatch):
+        result, breaker, slept = self._call([self._resp(429, retry_after=600)], monkeypatch)
+        assert slept == []
+        assert result.error == "RATE_LIMIT:600"
+
+    def test_both_providers_share_one_bound(self):
+        # Two copies of this logic is how the fallback kept the bug after the
+        # primary was fixed.
+        import inspect
+
+        from app.ai.providers import base, gemini, groq
+
+        assert "MAX_THROTTLE_WAIT_SECONDS" in inspect.getsource(base)
+        for module in (groq, gemini):
+            source = inspect.getsource(module)
+            assert "throttle_pause" in source, f"{module.__name__} must use the shared helper"
+            assert "MAX_THROTTLE_WAIT_SECONDS = " not in source, (
+                f"{module.__name__} defines its own bound — they will drift"
+            )

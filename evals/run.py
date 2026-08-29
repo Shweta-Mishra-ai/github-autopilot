@@ -79,9 +79,7 @@ def check_configured_models(key: str) -> tuple[bool, str]:
 
     wanted = configured_models()
     try:
-        r = requests.get(
-            GROQ_MODELS_URL, headers={"Authorization": f"Bearer {key}"}, timeout=15
-        )
+        r = requests.get(GROQ_MODELS_URL, headers={"Authorization": f"Bearer {key}"}, timeout=15)
     except Exception as exc:
         return True, f"NOTE: could not check model ids ({type(exc).__name__}); running anyway."
 
@@ -185,6 +183,7 @@ def run_fix_cases() -> tuple[list, list]:
     for index, case in enumerate(_load("fix_cases.json")):
         if index:
             _pace()
+
         # Bound explicitly rather than captured: these are called inside the
         # loop today, but a closure over a loop variable silently reads the
         # LAST case the moment anyone defers the call.
@@ -230,9 +229,25 @@ def run_review_cases() -> tuple[list, list]:
         pr = {"head": {"sha": "eval0000"}}
 
         def _run(pr=pr, files=files, cfg=cfg, captured=captured):
+            # _review_code RETURNS the review; its own docstring says "This
+            # function posts nothing itself." The harness captured gh_post and
+            # threw the return value away, so `captured` was always empty and
+            # every review case scored "".
+            #
+            # That is why the review half of this suite has never measured
+            # anything. It was read as a rate limit, then as a quality
+            # regression -- the failure mode this file's own comments warn
+            # about, in the file that warns about it.
             with patch("app.handlers.pull_request.review.gh_post", side_effect=_capture):
-                _review_code(pr, "eval/repo", 1, files, "tok", cfg, MagicMock(), "", MagicMock())
-            return "\n".join(captured)
+                markdown, inline = _review_code(
+                    pr, "eval/repo", 1, files, "tok", cfg, MagicMock(), "", MagicMock()
+                )
+            # Everything the reviewer produced: the body, the line-anchored
+            # comments, and anything the fallback path did post.
+            parts = [markdown]
+            parts += [c.get("body", "") for c in inline or []]
+            parts += captured
+            return "\n".join(p for p in parts if p)
 
         output = _attempt(_run, case, results)
         if output is None:
@@ -346,8 +361,10 @@ def main() -> int:
         return 4
 
     ok = stats["pass_rate"] >= args.min_pass_rate
-    print(f"\n{'PASS' if ok else 'FAIL'}: pass_rate={stats['pass_rate']} "
-          f"(threshold {args.min_pass_rate})")
+    print(
+        f"\n{'PASS' if ok else 'FAIL'}: pass_rate={stats['pass_rate']} "
+        f"(threshold {args.min_pass_rate})"
+    )
     return 0 if ok else 1
 
 

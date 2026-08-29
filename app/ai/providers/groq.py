@@ -155,8 +155,7 @@ class GroqProvider(LLMProvider):
                 # is not a failure and must not count toward the breaker.
                 if pause:
                     log.info(
-                        f"groq.throttled model={self._model} "
-                        f"waiting={pause:g}s then retrying once"
+                        f"groq.throttled model={self._model} waiting={pause:g}s then retrying once"
                     )
                     time.sleep(pause)
                     r = http_requests.post(GROQ_URL, headers=headers, json=body, timeout=timeout)

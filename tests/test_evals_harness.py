@@ -78,3 +78,154 @@ class TestCaseFiles:
 
         for c in self._cases("review_cases.json"):
             assert commentable_lines(c["patch"]), f"{c['id']}: patch parses to no lines"
+
+
+class TestTheReviewHarnessActuallySeesTheReview:
+    """
+    The review half of this suite measured nothing at all.
+
+    `_review_code` returns (markdown, inline_comments) and its own docstring
+    says "This function posts nothing itself." The harness patched `gh_post`,
+    collected what it caught, and threw the return value away — so the scored
+    output was always the empty string. Five review cases came back empty
+    every night and were read first as a rate limit, then as a quality
+    regression.
+
+    These tests fail if the harness ever goes blind again: they stub the
+    router with a believable answer and assert the harness comes back with the
+    reviewer's own words in it.
+    """
+
+    _ANSWER = {
+        "confidence": 0.9,
+        "files": [],
+    }
+
+    def _stub_router(self, cases):
+        from unittest.mock import MagicMock
+
+        def fake_ask(_self, _system, user, *a, **k):
+            files = [
+                {
+                    "file": c["filename"],
+                    "score": 3,
+                    "summary": f"SQL injection risk in {c['filename']}.",
+                    "issues": [
+                        {
+                            "severity": "critical",
+                            "line": "3",
+                            "issue": "user input is interpolated into the query",
+                            "fix": "use parameterized queries",
+                        }
+                    ],
+                }
+                for c in cases
+                if f"FILE: {c['filename']}" in user
+            ]
+            meta = MagicMock(provider="groq", model="m", total_tokens=10, cost_usd=0.0)
+            return {"files": files, "confidence": 0.9}, meta
+
+        return fake_ask
+
+    def test_review_cases_produce_scorable_output(self, monkeypatch):
+        from unittest.mock import patch
+
+        import app.ai.router as router_mod
+        import evals.run as ev
+
+        monkeypatch.setenv("EVAL_CASE_DELAY_SECONDS", "0")
+        monkeypatch.setattr(ev, "CASE_DELAY_SECONDS", 0.0)
+
+        cases = json.loads(
+            (_ROOT / "evals" / "cases" / "review_cases.json").read_text(encoding="utf-8")
+        )
+        fake = self._stub_router(cases)
+
+        with patch.object(router_mod.LLMRouter, "ask", fake):
+            results, blocked = ev.run_review_cases()
+
+        # The point of the test: with a provider that answered, nothing is
+        # blocked and every case got a real score.
+        assert blocked == [], f"harness saw no output for {blocked}"
+        assert len(results) == len(cases)
+
+    def test_the_reviewers_own_words_reach_the_scorer(self, monkeypatch):
+        """
+        Not just "non-empty" — the text the reviewer produced. An empty string
+        joined with an empty list is also non-empty once you add a separator,
+        so assert on content the stub uniquely produced.
+        """
+        from unittest.mock import MagicMock, patch
+
+        import app.ai.router as router_mod
+        from app.handlers.pull_request import _review_code
+
+        cases = json.loads(
+            (_ROOT / "evals" / "cases" / "review_cases.json").read_text(encoding="utf-8")
+        )
+        case = cases[0]
+        fake = self._stub_router(cases)
+
+        cfg = MagicMock()
+        cfg.get.side_effect = lambda *a, **kw: kw.get("default", True)
+        cfg.footer = ""
+        files = [{"filename": case["filename"], "patch": case["patch"]}]
+
+        with patch.object(router_mod.LLMRouter, "ask", fake):
+            markdown, inline = _review_code(
+                {"head": {"sha": "eval0000"}},
+                "eval/repo",
+                1,
+                files,
+                "tok",
+                cfg,
+                MagicMock(),
+                "",
+                MagicMock(),
+            )
+
+        combined = "\n".join([markdown] + [c.get("body", "") for c in inline or []])
+        assert "parameterized queries" in combined
+        assert case["filename"] in combined
+
+    def test_gh_post_alone_is_empty(self):
+        """
+        The bug, pinned. Capturing only gh_post yields nothing, so a harness
+        built on it can never score a review — regardless of the provider.
+        """
+        from unittest.mock import MagicMock, patch
+
+        import app.ai.router as router_mod
+        from app.handlers.pull_request import _review_code
+
+        cases = json.loads(
+            (_ROOT / "evals" / "cases" / "review_cases.json").read_text(encoding="utf-8")
+        )
+        case = cases[0]
+        fake = self._stub_router(cases)
+
+        cfg = MagicMock()
+        cfg.get.side_effect = lambda *a, **kw: kw.get("default", True)
+        cfg.footer = ""
+        posted = []
+
+        with (
+            patch.object(router_mod.LLMRouter, "ask", fake),
+            patch(
+                "app.handlers.pull_request.review.gh_post",
+                side_effect=lambda *a, **k: posted.append(a) or {"id": 1},
+            ),
+        ):
+            _review_code(
+                {"head": {"sha": "eval0000"}},
+                "eval/repo",
+                1,
+                [{"filename": case["filename"], "patch": case["patch"]}],
+                "tok",
+                cfg,
+                MagicMock(),
+                "",
+                MagicMock(),
+            )
+
+        assert posted == [], "_review_code posts nothing — the harness must read its return value"

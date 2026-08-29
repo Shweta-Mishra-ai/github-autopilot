@@ -126,8 +126,8 @@
       "id": "app.ai.providers.base",
       "path": "app/ai/providers/base.py",
       "layer": "ai",
-      "loc": 268,
-      "functions": 5,
+      "loc": 299,
+      "functions": 6,
       "classes": 2,
       "is_package": false,
       "fan_in": 7,
@@ -146,7 +146,7 @@
       "id": "app.ai.providers.gemini",
       "path": "app/ai/providers/gemini.py",
       "layer": "ai",
-      "loc": 233,
+      "loc": 244,
       "functions": 2,
       "classes": 1,
       "is_package": false,
@@ -165,7 +165,7 @@
       "id": "app.ai.providers.groq",
       "path": "app/ai/providers/groq.py",
       "layer": "ai",
-      "loc": 285,
+      "loc": 284,
       "functions": 1,
       "classes": 1,
       "is_package": false,
@@ -201,7 +201,7 @@
       "id": "app.ai.providers.openrouter",
       "path": "app/ai/providers/openrouter.py",
       "layer": "ai",
-      "loc": 215,
+      "loc": 280,
       "functions": 0,
       "classes": 1,
       "is_package": false,
@@ -2895,7 +2895,7 @@
   "stats": {
     "modules": 91,
     "edges": 276,
-    "total_loc": 20183,
+    "total_loc": 20289,
     "layers": [
       "ai",
       "core",
@@ -2945,15 +2945,15 @@
         "fan_out": 1
       },
       {
-        "id": "app.core.webhook_security",
-        "loc": 474,
-        "fan_in": 4,
+        "id": "app.ai.providers.base",
+        "loc": 299,
+        "fan_in": 7,
         "fan_out": 1
       },
       {
-        "id": "app.ai.providers.base",
-        "loc": 268,
-        "fan_in": 7,
+        "id": "app.core.webhook_security",
+        "loc": 474,
+        "fan_in": 4,
         "fan_out": 1
       },
       {

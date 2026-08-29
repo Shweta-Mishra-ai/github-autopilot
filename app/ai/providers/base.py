@@ -13,6 +13,7 @@ That's it. Zero changes to handlers or commands.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+import os
 import time
 
 
@@ -224,3 +225,43 @@ def client_error_detail(
         f"{CONFIG_ERROR_PREFIX} the provider refused the request for `{model}` "
         f"({status}). The key may lack access to this model.{where}"
     )
+
+
+# ── Throttling ───────────────────────────────────────────────────────────────
+#
+# A 429 is the provider working correctly and asking us to slow down. It is not
+# the provider being unhealthy, and conflating the two is what turned a
+# six-second pause into a total outage: the delay was parsed, a circuit-breaker
+# failure was recorded, and the router fell back to the same provider's other
+# tier — which shares the account limit — so that failed too. Three failures
+# opened one breaker, five more opened the other, and the router reported "all
+# providers down".
+#
+# Shared because both providers had it. Gemini was worse: it never read the
+# header at all and reported a fabricated 60-second delay whatever the provider
+# had actually said.
+MAX_THROTTLE_WAIT_SECONDS = float(os.environ.get("LLM_MAX_THROTTLE_WAIT_SECONDS", "10"))
+
+
+def throttle_pause(response, default: int = 30) -> tuple[int, float]:
+    """
+    (retry_after, seconds_to_sleep) for a 429.
+
+    `seconds_to_sleep` is 0 when the delay is longer than we are willing to
+    hold a shared worker thread for — a minute-long wait blocks other webhooks,
+    so it is reported instead. `retry_after` is always the provider's own
+    number, so callers report what it said rather than a guess.
+    """
+    from app.core.retry_after import parse_retry_after
+
+    retry_after = parse_retry_after(_header(response, "Retry-After"), default)
+    if 0 < retry_after <= MAX_THROTTLE_WAIT_SECONDS:
+        return retry_after, float(retry_after)
+    return retry_after, 0.0
+
+
+def _header(response, name: str):
+    try:
+        return response.headers.get(name)
+    except Exception:
+        return None

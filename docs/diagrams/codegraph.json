@@ -126,16 +126,18 @@
       "id": "app.ai.providers.base",
       "path": "app/ai/providers/base.py",
       "layer": "ai",
-      "loc": 227,
-      "functions": 3,
+      "loc": 268,
+      "functions": 5,
       "classes": 2,
       "is_package": false,
       "fan_in": 7,
-      "fan_out": 0,
+      "fan_out": 1,
       "external_deps": [
         "abc",
+        "app",
         "dataclasses",
         "json",
+        "os",
         "re",
         "time"
       ]
@@ -144,7 +146,7 @@
       "id": "app.ai.providers.gemini",
       "path": "app/ai/providers/gemini.py",
       "layer": "ai",
-      "loc": 210,
+      "loc": 233,
       "functions": 2,
       "classes": 1,
       "is_package": false,
@@ -155,25 +157,27 @@
         "datetime",
         "logging",
         "os",
-        "requests"
+        "requests",
+        "time"
       ]
     },
     {
       "id": "app.ai.providers.groq",
       "path": "app/ai/providers/groq.py",
       "layer": "ai",
-      "loc": 244,
+      "loc": 285,
       "functions": 1,
       "classes": 1,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 5,
+      "fan_out": 4,
       "external_deps": [
         "app",
         "datetime",
         "logging",
         "os",
-        "requests"
+        "requests",
+        "time"
       ]
     },
     {
@@ -1568,6 +1572,11 @@
       "kind": "runtime"
     },
     {
+      "source": "app.ai.providers.base",
+      "target": "app.core.retry_after",
+      "kind": "runtime"
+    },
+    {
       "source": "app.ai.providers.gemini",
       "target": "app.ai.circuit_breaker",
       "kind": "import"
@@ -1600,11 +1609,6 @@
     {
       "source": "app.ai.providers.groq",
       "target": "app.core.redis_client",
-      "kind": "import"
-    },
-    {
-      "source": "app.ai.providers.groq",
-      "target": "app.core.retry_after",
       "kind": "import"
     },
     {
@@ -2891,7 +2895,7 @@
   "stats": {
     "modules": 91,
     "edges": 276,
-    "total_loc": 20078,
+    "total_loc": 20183,
     "layers": [
       "ai",
       "core",
@@ -2947,6 +2951,12 @@
         "fan_out": 1
       },
       {
+        "id": "app.ai.providers.base",
+        "loc": 268,
+        "fan_in": 7,
+        "fan_out": 1
+      },
+      {
         "id": "app.ai.circuit_breaker",
         "loc": 144,
         "fan_in": 13,
@@ -2957,12 +2967,6 @@
         "loc": 328,
         "fan_in": 5,
         "fan_out": 2
-      },
-      {
-        "id": "app.ai.providers.base",
-        "loc": 227,
-        "fan_in": 7,
-        "fan_out": 0
       }
     ],
     "orphans": []

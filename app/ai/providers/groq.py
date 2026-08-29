@@ -12,13 +12,18 @@ FIXES vs V4:
 
 import logging
 import os
+import time
 
 import requests as http_requests
 
 import app.ai.circuit_breaker as cb
-from app.ai.providers.base import LLMProvider, LLMResponse, client_error_detail
+from app.ai.providers.base import (
+    LLMProvider,
+    LLMResponse,
+    client_error_detail,
+    throttle_pause,
+)
 from app.core.redis_client import get_redis
-from app.core.retry_after import parse_retry_after
 
 log = logging.getLogger(__name__)
 
@@ -43,6 +48,26 @@ def _infer_provider_key(model: str) -> str:
     if any(marker in lowered for marker in ("70b", "120b", "versatile")):
         return "groq_70b"
     return "groq_8b"
+
+
+# A 429 is the provider working correctly and asking us to slow down. It is
+# not the provider being unhealthy, and the difference decides whether the
+# circuit breaker should fire.
+#
+# It used to parse the Retry-After the provider sent, record a breaker failure,
+# and return -- never waiting. The router then fell back to the OTHER Groq
+# tier, which shares the same account limit, so that failed too. Three
+# failures opened the breaker on groq_70b, five more on groq_8b, and the router
+# reported "all providers down". The 2026-08-29 eval run did exactly this:
+# six /fix cases scored 1.0, then the limit was reached and the five review
+# cases got nothing.
+#
+# The provider had told us how long to wait. Waiting is cheap -- these are
+# single-digit seconds against an LLM call that already takes tens -- and it
+# turns a cascade into a pause.
+#
+# Bounded on purpose: a long delay is not worth holding a worker thread for, so
+# it is reported instead. Set to 0 to never wait.
 
 
 class GroqProvider(LLMProvider):
@@ -123,14 +148,30 @@ class GroqProvider(LLMProvider):
             if r.status_code == 429:
                 # Groq sends fractional delays (e.g. "7.66"), which int()
                 # cannot parse; parse_retry_after rounds them up instead.
-                retry_after = parse_retry_after(r.headers.get("Retry-After"), 30)
-                breaker.record_failure(f"rate_limit retry_after={retry_after}s")
-                return LLMResponse(
-                    text="",
-                    provider="groq",
-                    model=self._model,
-                    error=f"RATE_LIMIT:{retry_after}",
-                )
+                retry_after, pause = throttle_pause(r, default=30)
+
+                # Wait the delay out ONCE, if it is short enough to be worth
+                # holding the thread for. A throttle we successfully waited out
+                # is not a failure and must not count toward the breaker.
+                if pause:
+                    log.info(
+                        f"groq.throttled model={self._model} "
+                        f"waiting={pause:g}s then retrying once"
+                    )
+                    time.sleep(pause)
+                    r = http_requests.post(GROQ_URL, headers=headers, json=body, timeout=timeout)
+
+                if r.status_code == 429:
+                    # Still throttled after waiting: the account really is
+                    # saturated, so back off properly and let the breaker see it.
+                    retry_after, _ = throttle_pause(r, default=retry_after)
+                    breaker.record_failure(f"rate_limit retry_after={retry_after}s")
+                    return LLMResponse(
+                        text="",
+                        provider="groq",
+                        model=self._model,
+                        error=f"RATE_LIMIT:{retry_after}",
+                    )
 
             try:
                 _status = int(r.status_code)

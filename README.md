@@ -142,11 +142,11 @@ Done. ✈️
 <!-- autopilot:stats:start -->
 | | |
 |---|---|
-| Modules | 91 |
-| Lines of code | 19,841 |
+| Modules | 92 |
+| Lines of code | 20,977 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 274 |
+| Internal imports | 286 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>
@@ -224,7 +224,7 @@ code. Explore it interactively at [`/graph`](#codebase-map), or regenerate with
 <!-- autopilot:architecture:start -->
 ```mermaid
 graph LR
-    ai["ai<br/>15 modules"]
+    ai["ai<br/>16 modules"]
     core["core<br/>24 modules"]
     github["github<br/>8 modules"]
     handlers["handlers<br/>23 modules"]
@@ -461,6 +461,30 @@ python server.py
 pytest tests/ -v              # full suite; the tests badge above is the live count
 ruff check app/               # lint
 ```
+
+**Before you push**, run every gate CI runs, with CI's exact flags:
+
+```bash
+./scripts/verify.sh           # lint, tests twice, generated files
+./scripts/verify.sh fast      # lint + one test run, skips regeneration
+```
+
+The gates are spread across five CI jobs and each has flags that matter — ruff
+lints `app/` only, the suite is run twice because parts of it are randomised,
+and two files are generated, so a stale README region or codebase map fails
+the build for a reason invisible in the diff.
+
+**After you deploy**, check the running service rather than the code:
+
+```bash
+BASE_URL=https://your-app.onrender.com METRICS_AUTH_TOKEN=... \
+  ./scripts/verify-deployment.sh owner/repo <installation_id>
+```
+
+It reports whether the deployment answers, whether the provider still serves
+the model ids it asks for, and which App capabilities are missing. All reads —
+nothing it does changes anything. A green test suite cannot tell you any of
+it: a retired model id took every AI command down while CI stayed green.
 
 ---
 

@@ -12,13 +12,20 @@ FIXES vs V4:
 
 import logging
 import os
+import time
 
 import requests as http_requests
 
 import app.ai.circuit_breaker as cb
-from app.ai.providers.base import LLMProvider, LLMResponse
+from app.ai.model_catalog import effective_model
+from app.ai.providers.base import (
+    LLMProvider,
+    LLMResponse,
+    client_error_detail,
+    substituted_model,
+    throttle_pause,
+)
 from app.core.redis_client import get_redis
-from app.core.retry_after import parse_retry_after
 
 log = logging.getLogger(__name__)
 
@@ -31,15 +38,69 @@ GROQ_COST = {
 }
 
 
+def _infer_provider_key(model: str) -> str:
+    """
+    Best-effort tier for a provider constructed without an explicit key.
+
+    Only a fallback for callers that do not say which tier they mean; the
+    router always says. Sniffing a model id cannot keep working across a
+    provider's naming changes, which is exactly how this broke.
+    """
+    lowered = model.lower()
+    if any(marker in lowered for marker in ("70b", "120b", "versatile")):
+        return "groq_70b"
+    return "groq_8b"
+
+
+# A 429 is the provider working correctly and asking us to slow down. It is
+# not the provider being unhealthy, and the difference decides whether the
+# circuit breaker should fire.
+#
+# It used to parse the Retry-After the provider sent, record a breaker failure,
+# and return -- never waiting. The router then fell back to the OTHER Groq
+# tier, which shares the same account limit, so that failed too. Three
+# failures opened the breaker on groq_70b, five more on groq_8b, and the router
+# reported "all providers down". The 2026-08-29 eval run did exactly this:
+# six /fix cases scored 1.0, then the limit was reached and the five review
+# cases got nothing.
+#
+# The provider had told us how long to wait. Waiting is cheap -- these are
+# single-digit seconds against an LLM call that already takes tens -- and it
+# turns a cascade into a pause.
+#
+# Bounded on purpose: a long delay is not worth holding a worker thread for, so
+# it is reported instead. Set to 0 to never wait.
+
+
 class GroqProvider(LLMProvider):
-    def __init__(self, model: str = "llama-3.3-70b-versatile"):
-        self._model = model
+    def __init__(self, model: str = "", provider_key: str = ""):
+        # Import here: router imports this module, so a module-level import of
+        # the router's constants would be circular.
+        from app.ai.router import DEFAULT_PRIMARY_MODEL
+
+        self._model = model or DEFAULT_PRIMARY_MODEL
+        self._provider_key = provider_key or _infer_provider_key(self._model)
+
+    @property
+    def _tier(self) -> str:
+        """Which tier a replacement must match: the fallback must stay cheap."""
+        return "speed" if self._provider_key == "groq_8b" else "quality"
 
     @property
     def provider_key(self) -> str:
-        if "70b" in self._model or "versatile" in self._model:
-            return "groq_70b"
-        return "groq_8b"
+        """
+        Which budget, circuit breaker and quality tier this instance uses.
+
+        Passed in by the router rather than guessed from the model id. It used
+        to be inferred by looking for "70b" or "versatile" in the name, which
+        worked only while both models happened to be Llama: the moment the
+        provider retired those and the ids became `openai/gpt-oss-120b` and
+        `openai/gpt-oss-20b`, neither matched, BOTH providers collapsed onto
+        `groq_8b`, and primary and fallback would have shared one circuit
+        breaker — so a primary failure would open the breaker on the fallback
+        that exists to cover it.
+        """
+        return self._provider_key
 
     @property
     def model_name(self) -> str:
@@ -53,14 +114,19 @@ class GroqProvider(LLMProvider):
         temperature: float,
         timeout: int,
     ) -> LLMResponse:
+        # Resolved once. `effective_model` returns a substitution when a
+        # previous call found the configured id retired, so every path below --
+        # including the error paths -- names the model actually asked for.
+        model = effective_model(self.provider_key, self._model)
+
         # ── STEP 1: Circuit breaker check — MUST be first ─────────────────────
         breaker = cb.get_breaker(self.provider_key)
         if not breaker.is_available():
             return LLMResponse(
                 text="",
                 provider="groq",
-                model=self._model,
-                error=f"Circuit OPEN for {self._model}",
+                model=model,
+                error=f"Circuit OPEN for {model}",
             )
 
         # ── STEP 2: API key check ─────────────────────────────────────────────
@@ -69,7 +135,7 @@ class GroqProvider(LLMProvider):
             return LLMResponse(
                 text="",
                 provider="groq",
-                model=self._model,
+                model=model,
                 error="GROQ_API_KEY not set",
             )
 
@@ -79,7 +145,7 @@ class GroqProvider(LLMProvider):
             "Content-Type": "application/json",
         }
         body = {
-            "model": self._model,
+            "model": model,
             "max_tokens": max_tokens,
             "temperature": temperature,
             "messages": [
@@ -94,14 +160,27 @@ class GroqProvider(LLMProvider):
             if r.status_code == 429:
                 # Groq sends fractional delays (e.g. "7.66"), which int()
                 # cannot parse; parse_retry_after rounds them up instead.
-                retry_after = parse_retry_after(r.headers.get("Retry-After"), 30)
-                breaker.record_failure(f"rate_limit retry_after={retry_after}s")
-                return LLMResponse(
-                    text="",
-                    provider="groq",
-                    model=self._model,
-                    error=f"RATE_LIMIT:{retry_after}",
-                )
+                retry_after, pause = throttle_pause(r, default=30)
+
+                # Wait the delay out ONCE, if it is short enough to be worth
+                # holding the thread for. A throttle we successfully waited out
+                # is not a failure and must not count toward the breaker.
+                if pause:
+                    log.info(f"groq.throttled model={model} waiting={pause:g}s then retrying once")
+                    time.sleep(pause)
+                    r = http_requests.post(GROQ_URL, headers=headers, json=body, timeout=timeout)
+
+                if r.status_code == 429:
+                    # Still throttled after waiting: the account really is
+                    # saturated, so back off properly and let the breaker see it.
+                    retry_after, _ = throttle_pause(r, default=retry_after)
+                    breaker.record_failure(f"rate_limit retry_after={retry_after}s")
+                    return LLMResponse(
+                        text="",
+                        provider="groq",
+                        model=model,
+                        error=f"RATE_LIMIT:{retry_after}",
+                    )
 
             try:
                 _status = int(r.status_code)
@@ -112,8 +191,49 @@ class GroqProvider(LLMProvider):
                 return LLMResponse(
                     text="",
                     provider="groq",
-                    model=self._model,
+                    model=model,
                     error=f"Server error {_status}",
+                )
+
+            # A 4xx here is CONFIGURATION, not an outage, and the difference
+            # decides whether retrying can ever work.
+            #
+            # A retired model id returns 404. That used to fall through to
+            # raise_for_status() and be recorded as a breaker failure, so three
+            # requests opened the circuit on groq_70b, five more opened it on
+            # groq_8b, and the router reported "all providers down" — sending a
+            # maintainer to check provider status when the fix was one
+            # environment variable. It happened: the nightly evals scored 0.0
+            # and filed an issue blaming review quality.
+            #
+            # A breaker exists to stop hammering a service that might recover.
+            # A model that does not exist, or a key that is not valid, will not
+            # recover on its own, so opening the breaker only replaces a precise
+            # error with a vague one. Report these and leave the breaker alone.
+            if _status in (401, 403, 404):
+                # A retired model id is the one 4xx the provider can answer for
+                # us: ask what it serves, take the best in this tier, retry
+                # once. Six days of 404s is what this replaces.
+                replacement = substituted_model(
+                    self.provider_key, "groq", self._tier, model, r, _status
+                )
+                if replacement:
+                    model = replacement
+                    body["model"] = model
+                    r = http_requests.post(GROQ_URL, headers=headers, json=body, timeout=timeout)
+                    try:
+                        _status = int(r.status_code)
+                    except (TypeError, ValueError):
+                        _status = 0
+
+            if _status in (401, 403, 404):
+                detail = client_error_detail(r, _status, model, "GROQ_API_KEY", "LLM_PRIMARY_MODEL")
+                log.error(f"groq.configuration_error status={_status} model={model}")
+                return LLMResponse(
+                    text="",
+                    provider="groq",
+                    model=model,
+                    error=detail,
                 )
 
             r.raise_for_status()
@@ -131,7 +251,7 @@ class GroqProvider(LLMProvider):
             return LLMResponse(
                 text=text,
                 provider="groq",
-                model=self._model,
+                model=model,
                 prompt_tokens=p_tok,
                 completion_tokens=c_tok,
                 total_tokens=t_tok,
@@ -143,7 +263,7 @@ class GroqProvider(LLMProvider):
             return LLMResponse(
                 text="",
                 provider="groq",
-                model=self._model,
+                model=model,
                 error="Request timed out",
             )
         except Exception as e:
@@ -153,7 +273,7 @@ class GroqProvider(LLMProvider):
             return LLMResponse(
                 text="",
                 provider="groq",
-                model=self._model,
+                model=model,
                 error=err[:200],
             )
 

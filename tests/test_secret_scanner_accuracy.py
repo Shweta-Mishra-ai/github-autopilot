@@ -186,17 +186,19 @@ def test_real_secret_is_always_reported(name):
 # Built by construction instead. Each case is a real, high-entropy secret
 # that happens to contain one placeholder word, and every one of them must
 # be reported.
-#
-# The head and tail are drawn WITHOUT replacement. Drawing with replacement
-# left this test asserting a deterministic outcome on a probabilistic input:
-# a repeated character pushed roughly 3.8% of generated values below the
-# detector's entropy-ratio floor, so the value genuinely was not reportable
-# and the test failed on about one CI run in twelve, on a random Python
-# version. Distinct characters keep every generated value unambiguously
-# high-entropy, which is the premise the assertion actually depends on.
-def _secret_carrying_placeholder_word(word: str) -> str:
-    head = _rand_distinct(ALNUM, 14)
-    tail = _rand_distinct(ALNUM, 12)
+# Long enough that the value clears the Docker Hub pattern's {32,} floor for
+# every word in the list. The first version used a 14-char head and a 12-char
+# tail, which for a three-letter word produced 31 characters — one short — and
+# the test then reported a false negative that had not happened. A test whose
+# failure message names the wrong cause is the same defect it exists to catch.
+_HEAD_CHARS = 20
+_TAIL_CHARS = 16
+_CONTROL_WORD = "qzmrvk"  # not a placeholder, same length class as the shortest
+
+
+def _secret_carrying(word: str) -> str:
+    head = _rand(ALNUM, _HEAD_CHARS)
+    tail = _rand(ALNUM, _TAIL_CHARS)
     return f'+dockerhub_pat = "{head}_{word}-{tail}"'
 
 
@@ -209,14 +211,28 @@ def test_placeholder_word_inside_real_key_material_is_still_reported(word):
     Whole-word matching fixed words buried inside a token, but a generated
     credential contains separators of its own, and the fragments between them
     are whole words in exactly that sense. A human writing a stand-in writes
-    only stand-in text — never a 14-character random string with one
+    only stand-in text — never a 20-character random string with one
     placeholder-shaped fragment in it.
+
+    The control is what makes a failure here mean what it says. A value of the
+    same shape carrying a NON-placeholder word must be reported; if it is not,
+    the sample was malformed and the placeholder word had nothing to do with
+    it. Without that, any change to the pattern's length floor turns this into
+    a test that reports a false negative that never happened.
     """
-    diff = _secret_carrying_placeholder_word(word)
+    control = _secret_carrying(_CONTROL_WORD)
+    assert scan_diff(control, file_path=SCANNED_FILE), (
+        f"The control sample was not reported either: {control}. This test's "
+        f"sample shape no longer matches any pattern, so it cannot say anything "
+        f"about placeholder words — fix the generator, not the scanner."
+    )
+
+    diff = _secret_carrying(word)
     assert scan_diff(diff, file_path=SCANNED_FILE), (
         f"MISSED a real credential because it contained the placeholder word "
-        f"{word!r} as a token: {diff}. A false negative in a secret scanner is "
-        f"the one failure that cannot be noticed in production."
+        f"{word!r} as a token: {diff}. The control of the same shape WAS "
+        f"reported, so the word is the only difference. A false negative in a "
+        f"secret scanner is the one failure that cannot be noticed in production."
     )
 
 

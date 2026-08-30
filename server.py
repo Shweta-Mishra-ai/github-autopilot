@@ -279,12 +279,33 @@ def setup_doctor():
         findings = inspect_environment()
         return [{"name": f.name, "state": f.state, "detail": f.detail} for f in findings], findings
 
+    def _models_payload():
+        """
+        Whether each configured model id is one the provider still serves.
+
+        Answered HERE rather than in CI because the answer needs a key, and
+        the key is a deployment secret. CI could not check Gemini for exactly
+        that reason. The running service holds the key, so it can just ask.
+
+        Never raises: a diagnostic that dies while diagnosing is worse than
+        one that says "unknown".
+        """
+        try:
+            from app.ai.router import format_model_configuration, model_configuration_report
+
+            report = model_configuration_report()
+            return report, format_model_configuration(report)
+        except Exception as exc:
+            log.debug(f"doctor.model_report_failed: {exc}")
+            return {"error": type(exc).__name__}, ""
+
     # The deployment settings need neither a repo nor a token, and they are
     # most useful precisely when those are wrong. So answer with them rather
     # than refusing outright — a diagnostic that requires you to already have
     # the working configuration is not much of a diagnostic.
     if not repo or "/" not in repo or not raw_id.isdigit():
         env_json, findings = _env_payload()
+        models_json, models_md = _models_payload()
         return jsonify(
             {
                 "error": "repo and installation_id are required to probe permissions",
@@ -295,11 +316,15 @@ def setup_doctor():
                     "webhook delivery."
                 ),
                 "environment": env_json,
-                "report_markdown": format_environment_report(findings),
+                "models": models_json,
+                "report_markdown": format_environment_report(findings)
+                + ("\n\n" + models_md if models_md else ""),
             }
         ), 400
 
     result = diagnose(repo, int(raw_id), actor=(request.args.get("actor") or "").strip())
+    # Once: each call reads three provider catalogues over the network.
+    models_json, models_md = _models_payload()
     payload = {
         "repo": result.repo,
         "installation_id": result.installation_id,
@@ -318,7 +343,8 @@ def setup_doctor():
             for p in result.probes
         ],
         "environment": _env_payload()[0],
-        "report_markdown": format_report(result),
+        "models": models_json,
+        "report_markdown": format_report(result) + ("\n\n" + models_md if models_md else ""),
     }
     return jsonify(payload), 200 if result.healthy else 207
 
@@ -341,7 +367,36 @@ def health():
     gh_ok = gh_rl_status().get("remaining", 5000) > 50
     breaker_status = status_all()
     any_llm_ok = any(s["state"] == "closed" for s in breaker_status.values())
-    overall = "ok" if (gh_ok and any_llm_ok) else "degraded"
+
+    # A provider misconfiguration is worse than a degraded provider: it cannot
+    # recover on its own and every AI command fails until someone changes an
+    # environment variable. Open breakers alone cannot express that — they look
+    # identical to a bad hour at the provider, which is worth waiting out.
+    from app.ai.router import LLMRouter
+
+    llm_config_error = ""
+    llm_models = {}
+    llm_substitutions = {}
+    try:
+        ai_status = LLMRouter().status()
+        llm_config_error = ai_status.get("configuration_error", "")
+        llm_models = ai_status.get("models", {})
+
+        # A model swapped in because the configured one was retired. The bot
+        # keeps working, which is the point -- but a bot answering on a model
+        # nobody chose is its own incident, so it is never silent.
+        from app.ai.model_catalog import active_substitutions
+
+        llm_substitutions = {k: v.get("to", "") for k, v in active_substitutions().items()}
+    except Exception as exc:  # health must not fail on its own reporting
+        log.debug(f"health.llm_status_failed: {exc}")
+
+    overall = "ok" if (gh_ok and any_llm_ok and not llm_config_error) else "degraded"
+    if llm_substitutions:
+        # Answering, but on a model nobody configured. Not "ok", not an outage.
+        overall = "degraded" if overall == "ok" else overall
+    if llm_config_error:
+        overall = "misconfigured"
 
     pool = pool_stats()
     pool_saturated = pool.get("saturation_pct", 0) > 80
@@ -356,6 +411,16 @@ def health():
                 "redis_memory": redis_mem,
                 "github_api": "ok" if gh_ok else "rate_limited",
                 "llm_providers": breaker_status,
+                "llm_models": llm_models,
+                # Non-empty means the provider is answering, and refusing:
+                # a model id it does not serve, or a key it will not accept.
+                # Retrying cannot fix either, so this is reported separately
+                # from the breakers rather than folded into "degraded".
+                "llm_configuration_error": llm_config_error,
+                # Empty in a healthy deployment. Non-empty means the configured
+                # model id is gone and one from the provider's own catalogue is
+                # being used instead -- working, but not what was asked for.
+                "llm_model_substitutions": llm_substitutions,
                 "thread_pool": "saturated" if pool_saturated else "ok",
             },
             "thread_pool": pool,

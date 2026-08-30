@@ -48,6 +48,17 @@ def _rand(alphabet: str, n: int) -> str:
     return "".join(_secrets.choice(alphabet) for _ in range(n))
 
 
+def _rand_distinct(alphabet: str, n: int) -> str:
+    """Draw n characters WITHOUT replacement, so entropy is maximal.
+
+    Sampling with replacement lets a repeated character drag a short value
+    below the detector's entropy-ratio floor, which turns any test that
+    asserts "this value must be reported" into a coin flip.
+    """
+    pool = list(alphabet)
+    return "".join(pool.pop(_secrets.randbelow(len(pool))) for _ in range(n))
+
+
 @pytest.fixture(autouse=True)
 def _quiet():
     """scan_diff logs a warning per detection; silence it for readable output."""

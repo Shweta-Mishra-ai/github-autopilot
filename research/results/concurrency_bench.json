@@ -1,0 +1,76 @@
+{
+  "redis_backend": "real redis-server v7.0.15 (127.0.0.1:6399), not FakeRedis",
+  "event_queue": {
+    "enqueue": {
+      "n": 2000,
+      "wall_s": 0.5829,
+      "throughput_per_sec": 3431.2,
+      "latency": {
+        "n": 2000,
+        "mean_ms": 0.2908,
+        "p50_ms": 0.2812,
+        "p95_ms": 0.3576,
+        "p99_ms": 0.4432,
+        "max_ms": 0.7925
+      }
+    },
+    "consume_single_threaded": {
+      "n": 2000,
+      "wall_s": 5.5033,
+      "throughput_per_sec": 363.4,
+      "latency": {
+        "n": 2000,
+        "mean_ms": 0.2055,
+        "p50_ms": 0.1924,
+        "p95_ms": 0.2677,
+        "p99_ms": 0.3215,
+        "max_ms": 1.7155
+      },
+      "all_events_delivered_exactly_once": true
+    },
+    "retry_storm": {
+      "attempts": 500,
+      "accepted": 200,
+      "rejected_full": 300,
+      "configured_cap": 200,
+      "cap_enforced_correctly": true
+    }
+  },
+  "thread_pool": {
+    "burst_size": 400,
+    "accepted": 50,
+    "saturated_rejected": 350,
+    "configured_queue_cap": 50,
+    "configured_workers": 6,
+    "synthetic_work_s": 0.04,
+    "submit_wall_s": 0.0073,
+    "full_drain_wall_s": 0.3728,
+    "theoretical_min_drain_s": 0.3333,
+    "all_accepted_completed": true,
+    "final_pool_stats": {
+      "max_workers": 6,
+      "pending_tasks": 0,
+      "queue_capacity": 50,
+      "saturation_pct": 0.0
+    }
+  },
+  "circuit_breaker": {
+    "sequential_state_machine_correct": true,
+    "concurrency_test": {
+      "threads": 50,
+      "ops_per_thread": 2000,
+      "total_ops": 100000,
+      "wall_s": 5.2844,
+      "throughput_ops_per_sec": 18923.5,
+      "exceptions_raised": 0,
+      "latency": {
+        "n": 100000,
+        "mean_ms": 1.4066,
+        "p50_ms": 0.0027,
+        "p95_ms": 11.4628,
+        "p99_ms": 16.1644,
+        "max_ms": 78.7304
+      }
+    }
+  }
+}

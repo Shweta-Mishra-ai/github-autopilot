@@ -1,0 +1,2050 @@
+{
+  "n_samples_per_cell": 120,
+  "n_patterns_tested": 24,
+  "n_patterns_total": 43,
+  "n_structural_excluded": 7,
+  "n_keyword_anchored_excluded": 12,
+  "elapsed_s": 6.81,
+  "aggregate_by_mutation": {
+    "canonical": {
+      "n": 2880,
+      "rule_match_rate": 0.999,
+      "other_rule_rate": 0.0,
+      "fallback_rate": 0.0003,
+      "missed_rate": 0.0007
+    },
+    "single_quoted": {
+      "n": 2880,
+      "rule_match_rate": 0.9997,
+      "other_rule_rate": 0.0,
+      "fallback_rate": 0.0003,
+      "missed_rate": 0.0
+    },
+    "unquoted": {
+      "n": 2880,
+      "rule_match_rate": 0.9986,
+      "other_rule_rate": 0.0,
+      "fallback_rate": 0.0,
+      "missed_rate": 0.0014
+    },
+    "yaml_value": {
+      "n": 2880,
+      "rule_match_rate": 0.9983,
+      "other_rule_rate": 0.0,
+      "fallback_rate": 0.0,
+      "missed_rate": 0.0017
+    },
+    "json_value": {
+      "n": 2880,
+      "rule_match_rate": 0.9986,
+      "other_rule_rate": 0.0,
+      "fallback_rate": 0.0014,
+      "missed_rate": 0.0
+    },
+    "env_file": {
+      "n": 2880,
+      "rule_match_rate": 0.9976,
+      "other_rule_rate": 0.0,
+      "fallback_rate": 0.0,
+      "missed_rate": 0.0024
+    },
+    "url_query": {
+      "n": 2880,
+      "rule_match_rate": 0.9979,
+      "other_rule_rate": 0.0,
+      "fallback_rate": 0.0,
+      "missed_rate": 0.0021
+    },
+    "trailing_comma": {
+      "n": 2880,
+      "rule_match_rate": 0.999,
+      "other_rule_rate": 0.0,
+      "fallback_rate": 0.0,
+      "missed_rate": 0.001
+    },
+    "in_parens": {
+      "n": 2880,
+      "rule_match_rate": 0.9993,
+      "other_rule_rate": 0.0,
+      "fallback_rate": 0.0,
+      "missed_rate": 0.0007
+    },
+    "leading_space": {
+      "n": 2880,
+      "rule_match_rate": 0.9986,
+      "other_rule_rate": 0.0,
+      "fallback_rate": 0.0003,
+      "missed_rate": 0.001
+    },
+    "trailing_hyphen": {
+      "n": 600,
+      "rule_match_rate": 0.5233,
+      "other_rule_rate": 0.0,
+      "fallback_rate": 0.2317,
+      "missed_rate": 0.245
+    },
+    "trailing_under": {
+      "n": 720,
+      "rule_match_rate": 1.0,
+      "other_rule_rate": 0.0,
+      "fallback_rate": 0.0,
+      "missed_rate": 0.0
+    }
+  },
+  "n_boundary_fragile_patterns": 5,
+  "boundary_fragile_patterns": {
+    "OpenAI API Key (new)": {
+      "severity": "critical",
+      "canonical_rule_match_rate": 1.0,
+      "fragile_contexts": {
+        "trailing_hyphen": {
+          "rule_match_rate": 0.8417,
+          "fallback_rate": 0.1583,
+          "missed_rate": 0.0
+        }
+      },
+      "worst_missed_rate": 0.0083,
+      "final_char_class": "a-zA-Z0-9_-"
+    },
+    "GCP API Key": {
+      "severity": "high",
+      "canonical_rule_match_rate": 0.9917,
+      "fragile_contexts": {
+        "trailing_hyphen": {
+          "rule_match_rate": 0.0,
+          "fallback_rate": 1.0,
+          "missed_rate": 0.0
+        }
+      },
+      "worst_missed_rate": 0.0417,
+      "final_char_class": "0-9A-Za-z_\\-"
+    },
+    "Google OAuth Token": {
+      "severity": "high",
+      "canonical_rule_match_rate": 1.0,
+      "fragile_contexts": {
+        "trailing_hyphen": {
+          "rule_match_rate": 0.8917,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.1083
+        }
+      },
+      "worst_missed_rate": 0.1083,
+      "final_char_class": "0-9A-Za-z_\\-"
+    },
+    "SendGrid API Key": {
+      "severity": "critical",
+      "canonical_rule_match_rate": 0.9917,
+      "fragile_contexts": {
+        "trailing_hyphen": {
+          "rule_match_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 1.0
+        }
+      },
+      "worst_missed_rate": 1.0,
+      "final_char_class": "a-zA-Z0-9_-"
+    },
+    "JWT Token": {
+      "severity": "high",
+      "canonical_rule_match_rate": 0.9917,
+      "fragile_contexts": {
+        "trailing_hyphen": {
+          "rule_match_rate": 0.8833,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.1167
+        }
+      },
+      "worst_missed_rate": 0.1167,
+      "final_char_class": "a-zA-Z0-9_-"
+    }
+  },
+  "per_pattern": {
+    "AWS Access Key ID": {
+      "severity": "critical",
+      "entropy_gated": false,
+      "ends_with_word_boundary": true,
+      "final_char_class": "0-9A-Z",
+      "canonical_rule_match_rate": 1.0,
+      "cells": {
+        "canonical": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "single_quoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "yaml_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "json_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "url_query": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_comma": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "in_parens": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "leading_space": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": null,
+        "trailing_under": null
+      },
+      "boundary_fragile_contexts": {},
+      "is_boundary_fragile": false,
+      "worst_rule_match_rate": 1.0,
+      "worst_missed_rate": 0.0
+    },
+    "GitHub PAT (classic)": {
+      "severity": "critical",
+      "entropy_gated": false,
+      "ends_with_word_boundary": true,
+      "final_char_class": "0-9a-zA-Z",
+      "canonical_rule_match_rate": 1.0,
+      "cells": {
+        "canonical": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "single_quoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "yaml_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "json_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "url_query": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_comma": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "in_parens": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "leading_space": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": null,
+        "trailing_under": null
+      },
+      "boundary_fragile_contexts": {},
+      "is_boundary_fragile": false,
+      "worst_rule_match_rate": 1.0,
+      "worst_missed_rate": 0.0
+    },
+    "GitHub OAuth Token": {
+      "severity": "critical",
+      "entropy_gated": false,
+      "ends_with_word_boundary": true,
+      "final_char_class": "0-9a-zA-Z",
+      "canonical_rule_match_rate": 1.0,
+      "cells": {
+        "canonical": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "single_quoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "yaml_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "json_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "url_query": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_comma": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "in_parens": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "leading_space": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": null,
+        "trailing_under": null
+      },
+      "boundary_fragile_contexts": {},
+      "is_boundary_fragile": false,
+      "worst_rule_match_rate": 1.0,
+      "worst_missed_rate": 0.0
+    },
+    "GitHub App Token": {
+      "severity": "critical",
+      "entropy_gated": false,
+      "ends_with_word_boundary": true,
+      "final_char_class": "0-9a-zA-Z",
+      "canonical_rule_match_rate": 1.0,
+      "cells": {
+        "canonical": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "single_quoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "yaml_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "json_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "url_query": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_comma": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "in_parens": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "leading_space": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": null,
+        "trailing_under": null
+      },
+      "boundary_fragile_contexts": {},
+      "is_boundary_fragile": false,
+      "worst_rule_match_rate": 1.0,
+      "worst_missed_rate": 0.0
+    },
+    "GitHub Refresh Token": {
+      "severity": "critical",
+      "entropy_gated": false,
+      "ends_with_word_boundary": true,
+      "final_char_class": "0-9a-zA-Z",
+      "canonical_rule_match_rate": 1.0,
+      "cells": {
+        "canonical": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "single_quoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "yaml_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "json_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "url_query": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_comma": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "in_parens": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "leading_space": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": null,
+        "trailing_under": null
+      },
+      "boundary_fragile_contexts": {},
+      "is_boundary_fragile": false,
+      "worst_rule_match_rate": 1.0,
+      "worst_missed_rate": 0.0
+    },
+    "GitHub Fine-Grained PAT": {
+      "severity": "critical",
+      "entropy_gated": false,
+      "ends_with_word_boundary": true,
+      "final_char_class": "0-9a-zA-Z_",
+      "canonical_rule_match_rate": 1.0,
+      "cells": {
+        "canonical": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "single_quoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "yaml_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "json_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "url_query": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_comma": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "in_parens": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "leading_space": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": null,
+        "trailing_under": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        }
+      },
+      "boundary_fragile_contexts": {},
+      "is_boundary_fragile": false,
+      "worst_rule_match_rate": 1.0,
+      "worst_missed_rate": 0.0
+    },
+    "OpenAI API Key": {
+      "severity": "critical",
+      "entropy_gated": false,
+      "ends_with_word_boundary": true,
+      "final_char_class": "a-zA-Z0-9",
+      "canonical_rule_match_rate": 1.0,
+      "cells": {
+        "canonical": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "single_quoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "yaml_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "json_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "url_query": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_comma": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "in_parens": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "leading_space": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": null,
+        "trailing_under": null
+      },
+      "boundary_fragile_contexts": {},
+      "is_boundary_fragile": false,
+      "worst_rule_match_rate": 1.0,
+      "worst_missed_rate": 0.0
+    },
+    "OpenAI API Key (new)": {
+      "severity": "critical",
+      "entropy_gated": false,
+      "ends_with_word_boundary": true,
+      "final_char_class": "a-zA-Z0-9_-",
+      "canonical_rule_match_rate": 1.0,
+      "cells": {
+        "canonical": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "single_quoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "yaml_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "json_value": {
+          "rule_match_rate": 0.9917,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0083,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "rule_match_rate": 0.9917,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0083
+        },
+        "url_query": {
+          "rule_match_rate": 0.9917,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0083
+        },
+        "trailing_comma": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "in_parens": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "leading_space": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": {
+          "rule_match_rate": 0.8417,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.1583,
+          "missed_rate": 0.0
+        },
+        "trailing_under": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        }
+      },
+      "boundary_fragile_contexts": {
+        "trailing_hyphen": {
+          "rule_match_rate": 0.8417,
+          "fallback_rate": 0.1583,
+          "missed_rate": 0.0
+        }
+      },
+      "is_boundary_fragile": true,
+      "worst_rule_match_rate": 0.8417,
+      "worst_missed_rate": 0.0083
+    },
+    "Anthropic API Key": {
+      "severity": "critical",
+      "entropy_gated": false,
+      "ends_with_word_boundary": true,
+      "final_char_class": null,
+      "canonical_rule_match_rate": 1.0,
+      "cells": {
+        "canonical": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "single_quoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "yaml_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "json_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "url_query": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_comma": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "in_parens": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "leading_space": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": null,
+        "trailing_under": null
+      },
+      "boundary_fragile_contexts": {},
+      "is_boundary_fragile": false,
+      "worst_rule_match_rate": 1.0,
+      "worst_missed_rate": 0.0
+    },
+    "GCP API Key": {
+      "severity": "high",
+      "entropy_gated": false,
+      "ends_with_word_boundary": true,
+      "final_char_class": "0-9A-Za-z_\\-",
+      "canonical_rule_match_rate": 0.9917,
+      "cells": {
+        "canonical": {
+          "rule_match_rate": 0.9917,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0083,
+          "missed_rate": 0.0
+        },
+        "single_quoted": {
+          "rule_match_rate": 0.9917,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0083,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "rule_match_rate": 0.975,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.025
+        },
+        "yaml_value": {
+          "rule_match_rate": 0.975,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.025
+        },
+        "json_value": {
+          "rule_match_rate": 0.975,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.025,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "rule_match_rate": 0.975,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.025
+        },
+        "url_query": {
+          "rule_match_rate": 0.9583,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0417
+        },
+        "trailing_comma": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "in_parens": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "leading_space": {
+          "rule_match_rate": 0.9917,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0083,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": {
+          "rule_match_rate": 0.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 1.0,
+          "missed_rate": 0.0
+        },
+        "trailing_under": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        }
+      },
+      "boundary_fragile_contexts": {
+        "trailing_hyphen": {
+          "rule_match_rate": 0.0,
+          "fallback_rate": 1.0,
+          "missed_rate": 0.0
+        }
+      },
+      "is_boundary_fragile": true,
+      "worst_rule_match_rate": 0.0,
+      "worst_missed_rate": 0.0417
+    },
+    "Google OAuth Token": {
+      "severity": "high",
+      "entropy_gated": false,
+      "ends_with_word_boundary": true,
+      "final_char_class": "0-9A-Za-z_\\-",
+      "canonical_rule_match_rate": 1.0,
+      "cells": {
+        "canonical": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "single_quoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "yaml_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "json_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "url_query": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_comma": {
+          "rule_match_rate": 0.9917,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0083
+        },
+        "in_parens": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "leading_space": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": {
+          "rule_match_rate": 0.8917,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.1083
+        },
+        "trailing_under": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        }
+      },
+      "boundary_fragile_contexts": {
+        "trailing_hyphen": {
+          "rule_match_rate": 0.8917,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.1083
+        }
+      },
+      "is_boundary_fragile": true,
+      "worst_rule_match_rate": 0.8917,
+      "worst_missed_rate": 0.1083
+    },
+    "Stripe Secret Key": {
+      "severity": "critical",
+      "entropy_gated": false,
+      "ends_with_word_boundary": true,
+      "final_char_class": "0-9a-zA-Z",
+      "canonical_rule_match_rate": 1.0,
+      "cells": {
+        "canonical": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "single_quoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "yaml_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "json_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "url_query": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_comma": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "in_parens": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "leading_space": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": null,
+        "trailing_under": null
+      },
+      "boundary_fragile_contexts": {},
+      "is_boundary_fragile": false,
+      "worst_rule_match_rate": 1.0,
+      "worst_missed_rate": 0.0
+    },
+    "Stripe Restricted Key": {
+      "severity": "critical",
+      "entropy_gated": false,
+      "ends_with_word_boundary": true,
+      "final_char_class": "0-9a-zA-Z",
+      "canonical_rule_match_rate": 1.0,
+      "cells": {
+        "canonical": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "single_quoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "yaml_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "json_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "url_query": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_comma": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "in_parens": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "leading_space": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": null,
+        "trailing_under": null
+      },
+      "boundary_fragile_contexts": {},
+      "is_boundary_fragile": false,
+      "worst_rule_match_rate": 1.0,
+      "worst_missed_rate": 0.0
+    },
+    "Stripe Publishable Key": {
+      "severity": "medium",
+      "entropy_gated": false,
+      "ends_with_word_boundary": true,
+      "final_char_class": "0-9a-zA-Z",
+      "canonical_rule_match_rate": 1.0,
+      "cells": {
+        "canonical": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "single_quoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "yaml_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "json_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "url_query": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_comma": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "in_parens": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "leading_space": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": null,
+        "trailing_under": null
+      },
+      "boundary_fragile_contexts": {},
+      "is_boundary_fragile": false,
+      "worst_rule_match_rate": 1.0,
+      "worst_missed_rate": 0.0
+    },
+    "Slack Bot Token": {
+      "severity": "critical",
+      "entropy_gated": false,
+      "ends_with_word_boundary": true,
+      "final_char_class": "0-9a-zA-Z",
+      "canonical_rule_match_rate": 1.0,
+      "cells": {
+        "canonical": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "single_quoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "yaml_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "json_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "url_query": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_comma": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "in_parens": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "leading_space": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": null,
+        "trailing_under": null
+      },
+      "boundary_fragile_contexts": {},
+      "is_boundary_fragile": false,
+      "worst_rule_match_rate": 1.0,
+      "worst_missed_rate": 0.0
+    },
+    "Slack User Token": {
+      "severity": "critical",
+      "entropy_gated": false,
+      "ends_with_word_boundary": true,
+      "final_char_class": "0-9a-f",
+      "canonical_rule_match_rate": 1.0,
+      "cells": {
+        "canonical": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "single_quoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "yaml_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "json_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "url_query": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_comma": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "in_parens": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "leading_space": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": null,
+        "trailing_under": null
+      },
+      "boundary_fragile_contexts": {},
+      "is_boundary_fragile": false,
+      "worst_rule_match_rate": 1.0,
+      "worst_missed_rate": 0.0
+    },
+    "Slack App Token": {
+      "severity": "critical",
+      "entropy_gated": false,
+      "ends_with_word_boundary": true,
+      "final_char_class": "a-z0-9",
+      "canonical_rule_match_rate": 1.0,
+      "cells": {
+        "canonical": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "single_quoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "yaml_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "json_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "url_query": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_comma": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "in_parens": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "leading_space": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": null,
+        "trailing_under": null
+      },
+      "boundary_fragile_contexts": {},
+      "is_boundary_fragile": false,
+      "worst_rule_match_rate": 1.0,
+      "worst_missed_rate": 0.0
+    },
+    "Twilio Account SID": {
+      "severity": "high",
+      "entropy_gated": false,
+      "ends_with_word_boundary": true,
+      "final_char_class": "a-z0-9",
+      "canonical_rule_match_rate": 1.0,
+      "cells": {
+        "canonical": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "single_quoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "yaml_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "json_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "url_query": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_comma": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "in_parens": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "leading_space": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": null,
+        "trailing_under": null
+      },
+      "boundary_fragile_contexts": {},
+      "is_boundary_fragile": false,
+      "worst_rule_match_rate": 1.0,
+      "worst_missed_rate": 0.0
+    },
+    "SendGrid API Key": {
+      "severity": "critical",
+      "entropy_gated": false,
+      "ends_with_word_boundary": true,
+      "final_char_class": "a-zA-Z0-9_-",
+      "canonical_rule_match_rate": 0.9917,
+      "cells": {
+        "canonical": {
+          "rule_match_rate": 0.9917,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0083
+        },
+        "single_quoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "rule_match_rate": 0.9917,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0083
+        },
+        "yaml_value": {
+          "rule_match_rate": 0.9833,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0167
+        },
+        "json_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "rule_match_rate": 0.9833,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0167
+        },
+        "url_query": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_comma": {
+          "rule_match_rate": 0.9833,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0167
+        },
+        "in_parens": {
+          "rule_match_rate": 0.9917,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0083
+        },
+        "leading_space": {
+          "rule_match_rate": 0.975,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.025
+        },
+        "trailing_hyphen": {
+          "rule_match_rate": 0.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 1.0
+        },
+        "trailing_under": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        }
+      },
+      "boundary_fragile_contexts": {
+        "trailing_hyphen": {
+          "rule_match_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 1.0
+        }
+      },
+      "is_boundary_fragile": true,
+      "worst_rule_match_rate": 0.0,
+      "worst_missed_rate": 1.0
+    },
+    "Cloudflare API Key": {
+      "severity": "medium",
+      "entropy_gated": true,
+      "ends_with_word_boundary": true,
+      "final_char_class": "0-9a-f",
+      "canonical_rule_match_rate": 1.0,
+      "cells": {
+        "canonical": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "single_quoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "yaml_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "json_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "url_query": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_comma": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "in_parens": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "leading_space": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": null,
+        "trailing_under": null
+      },
+      "boundary_fragile_contexts": {},
+      "is_boundary_fragile": false,
+      "worst_rule_match_rate": 1.0,
+      "worst_missed_rate": 0.0
+    },
+    "npm Auth Token": {
+      "severity": "high",
+      "entropy_gated": false,
+      "ends_with_word_boundary": true,
+      "final_char_class": "A-Za-z0-9",
+      "canonical_rule_match_rate": 1.0,
+      "cells": {
+        "canonical": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "single_quoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "yaml_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "json_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "url_query": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_comma": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "in_parens": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "leading_space": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": null,
+        "trailing_under": null
+      },
+      "boundary_fragile_contexts": {},
+      "is_boundary_fragile": false,
+      "worst_rule_match_rate": 1.0,
+      "worst_missed_rate": 0.0
+    },
+    "PagerDuty Integration Key": {
+      "severity": "medium",
+      "entropy_gated": true,
+      "ends_with_word_boundary": true,
+      "final_char_class": "a-z0-9",
+      "canonical_rule_match_rate": 1.0,
+      "cells": {
+        "canonical": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "single_quoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "yaml_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "json_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "url_query": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_comma": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "in_parens": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "leading_space": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": null,
+        "trailing_under": null
+      },
+      "boundary_fragile_contexts": {},
+      "is_boundary_fragile": false,
+      "worst_rule_match_rate": 1.0,
+      "worst_missed_rate": 0.0
+    },
+    "Groq API Key": {
+      "severity": "critical",
+      "entropy_gated": false,
+      "ends_with_word_boundary": true,
+      "final_char_class": "0-9a-zA-Z",
+      "canonical_rule_match_rate": 1.0,
+      "cells": {
+        "canonical": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "single_quoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "yaml_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "json_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "url_query": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_comma": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "in_parens": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "leading_space": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": null,
+        "trailing_under": null
+      },
+      "boundary_fragile_contexts": {},
+      "is_boundary_fragile": false,
+      "worst_rule_match_rate": 1.0,
+      "worst_missed_rate": 0.0
+    },
+    "JWT Token": {
+      "severity": "high",
+      "entropy_gated": false,
+      "ends_with_word_boundary": true,
+      "final_char_class": "a-zA-Z0-9_-",
+      "canonical_rule_match_rate": 0.9917,
+      "cells": {
+        "canonical": {
+          "rule_match_rate": 0.9917,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0083
+        },
+        "single_quoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "unquoted": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "yaml_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "json_value": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "env_file": {
+          "rule_match_rate": 0.9917,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0083
+        },
+        "url_query": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_comma": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "in_parens": {
+          "rule_match_rate": 0.9917,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0083
+        },
+        "leading_space": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        },
+        "trailing_hyphen": {
+          "rule_match_rate": 0.8833,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.1167
+        },
+        "trailing_under": {
+          "rule_match_rate": 1.0,
+          "other_rule_rate": 0.0,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.0
+        }
+      },
+      "boundary_fragile_contexts": {
+        "trailing_hyphen": {
+          "rule_match_rate": 0.8833,
+          "fallback_rate": 0.0,
+          "missed_rate": 0.1167
+        }
+      },
+      "is_boundary_fragile": true,
+      "worst_rule_match_rate": 0.8833,
+      "worst_missed_rate": 0.1167
+    }
+  },
+  "seed": 20260823
+}

@@ -1,0 +1,5 @@
+# Real-code corpora (RQ5), pinned at the commits actually scanned.
+# reproduce.sh checks out these exact commits and aborts on mismatch.
+psf/requests        8f8b212de8c2129d7954c6cd373762880375620a
+pallets/flask       d318b683471101618febed18996405ad26462110
+redis/redis-py      081923b8a202f9481e8f46357c8bbf99cc322cae

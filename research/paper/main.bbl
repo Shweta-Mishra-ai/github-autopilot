@@ -1,4 +1,4 @@
-\begin{thebibliography}{26}
+\begin{thebibliography}{29}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{{#1}}
 \providecommand{\urlprefix}{URL }
@@ -10,6 +10,20 @@
 Basak SK, Neil L, Reaves B, et~al (2022) What are the practices for secret
   management in software artifacts? In: Proc. IEEE SecDev, pp 69--76
 
+\bibitem[{Basak et~al.(2023{\natexlab{a}})Basak, Cox, Reaves, and
+  Williams}]{basak2023comparative}
+Basak SK, Cox J, Reaves B, et~al (2023{\natexlab{a}}) A comparative study of
+  software secrets reporting by secret detection tools. In: Proc. ACM/IEEE Int.
+  Symp. Empirical Software Engineering and Measurement (ESEM), pp 1--12,
+  arXiv:2307.00714
+
+\bibitem[{Basak et~al.(2023{\natexlab{b}})Basak, Neil, Reaves, and
+  Williams}]{basak2023secretbench}
+Basak SK, Neil L, Reaves B, et~al (2023{\natexlab{b}}) {SecretBench}: A dataset
+  of software secrets. In: Proc. IEEE/ACM Int. Conf. Mining Software
+  Repositories (MSR), Data and Tool Showcase Track, pp 347--351,
+  \doi{10.1109/MSR59073.2023.00053}
+
 \bibitem[{Chapman and Stolee(2016)}]{chapman2016}
 Chapman C, Stolee KT (2016) Exploring regular expression usage and context in
   {P}ython. In: Proc. ISSTA, pp 282--293
@@ -17,15 +31,18 @@ Chapman C, Stolee KT (2016) Exploring regular expression usage and context in
 \bibitem[{Chen et~al.(2018)Chen, Kuo, Liu, Poon, Towey, Tse, and
   Zhou}]{chen2018metamorphic}
 Chen TY, Kuo FC, Liu H, et~al (2018) Metamorphic testing: A review of
-  challenges and opportunities. ACM Comput Surv 51(1):1--27
+  challenges and opportunities. ACM Comput Surv 51(1):1--27.
+  \doi{10.1145/3143561}
 
 \bibitem[{Claessen and Hughes(2000)}]{claessen2000}
 Claessen K, Hughes J (2000) {QuickCheck}: A lightweight tool for random testing
-  of {H}askell programs. In: Proc. ICFP, pp 268--279
+  of {H}askell programs. In: Proc. ICFP, pp 268--279,
+  \doi{10.1145/351240.351266}
 
 \bibitem[{DeMillo et~al.(1978)DeMillo, Lipton, and Sayward}]{demillo1978}
 DeMillo RA, Lipton RJ, Sayward FG (1978) Hints on test data selection: Help for
-  the practicing programmer. Computer 11(4):34--41
+  the practicing programmer. Computer 11(4):34--41.
+  \doi{10.1109/C-M.1978.218136}
 
 \bibitem[{Fowler(2014)}]{fowler2014circuitbreaker}
 Fowler M (2014) {CircuitBreaker}.
@@ -50,7 +67,7 @@ Herbold S, Trautsch A, Trautsch F (2020) On the feasibility of automated
 
 \bibitem[{Jia and Harman(2011)}]{jia2011}
 Jia Y, Harman M (2011) An analysis and survey of the development of mutation
-  testing. IEEE Trans Softw Eng 37(5):649--678
+  testing. IEEE Trans Softw Eng 37(5):649--678. \doi{10.1109/TSE.2010.62}
 
 \bibitem[{Jones et~al.(2015)Jones, Bradley, and Sakimura}]{rfc7519}
 Jones M, Bradley J, Sakimura N (2015) {JSON} {W}eb {T}oken ({JWT}). Tech. Rep.
@@ -60,12 +77,18 @@ Jones M, Bradley J, Sakimura N (2015) {JSON} {W}eb {T}oken ({JWT}). Tech. Rep.
 Krawczyk H, Bellare M, Canetti R (1997) {HMAC}: Keyed-hashing for message
   authentication. Tech. Rep. RFC 2104, IETF
 
+\bibitem[{Li et~al.(2025)Li, Ling, Yang, and Wei}]{li2025android}
+Li K, Ling L, Yang J, et~al (2025) Automatically detecting checked-in secrets
+  in {A}ndroid apps: How far are we? Empirical Software Engineering
+  \doi{10.1007/s10664-025-10772-5}
+
 \bibitem[{Liem and Panichella(2020)}]{liem2020}
 Liem CCS, Panichella A (2020) Run, forest, run? {O}n randomization and
   reproducibility in predictive software engineering. ArXiv:2012.08387
 
 \bibitem[{McCabe(1976)}]{mccabe1976}
-McCabe TJ (1976) A complexity measure. IEEE Trans Softw Eng SE-2(4):308--320
+McCabe TJ (1976) A complexity measure. IEEE Trans Softw Eng SE-2(4):308--320.
+  \doi{10.1109/TSE.1976.233837}
 
 \bibitem[{Meli et~al.(2019)Meli, McNiece, and Reaves}]{meli2019}
 Meli M, McNiece MR, Reaves B (2019) How bad can it git? {C}haracterizing secret
@@ -75,11 +98,11 @@ Meli M, McNiece MR, Reaves B (2019) How bad can it git? {C}haracterizing secret
   Servant}]{michael2019}
 Michael LG, Donohue J, Davis JC, et~al (2019) Regexes are hard:
   Decision-making, difficulties, and risks in programming regular expressions.
-  In: Proc. ASE, pp 415--426
+  In: Proc. ASE, pp 415--426, \doi{10.1109/ASE.2019.00047}
 
 \bibitem[{Mishra(2026)}]{mishra2026zenodo}
-Mishra S (2026) Replication package: Boundary-mutation testing for
-  pattern-based secret detection. \doi{10.5281/zenodo.22114221}
+Mishra S (2026) Boundary-mutation testing for pattern-based secret detection:
+  Replication package. \doi{10.5281/zenodo.22114221}
 
 \bibitem[{Nygard(2018)}]{nygard2018release}
 Nygard MT (2018) Release It!, 2nd edn. Pragmatic Bookshelf

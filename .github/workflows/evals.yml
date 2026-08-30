@@ -38,7 +38,7 @@ jobs:
   evals:
     name: AI output evals
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: read
       issues: write # only used to report a scheduled regression
@@ -92,8 +92,17 @@ jobs:
           MIN_PASS_RATE: ${{ inputs.min_pass_rate || '0.7' }}
         run: |
           set -o pipefail
+          # Exit 3 means the configured model no longer exists at the provider.
+          # That is an infrastructure failure, not a quality one, and the two
+          # send a maintainer to opposite ends of the codebase — so record which
+          # it was rather than letting the report guess.
+          set +e
           python -m evals.run --task "$TASK" --min-pass-rate "$MIN_PASS_RATE" \
             | tee eval-output.txt
+          code=${PIPESTATUS[0]}
+          set -e
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit "$code"
 
       - name: Summarise on the run page
         if: always()
@@ -130,7 +139,37 @@ jobs:
           # one costs real time: "quality regressed" sends a maintainer to read
           # prompts and diff model versions, when the actual fix is one
           # repository secret. Report what actually happened.
-          if [ "${{ steps.preflight.outputs.unconfigured }}" = "true" ]; then
+          if [ "${{ steps.run.outputs.exit_code }}" = "4" ]; then
+            TITLE="Nightly AI evals could not measure — the provider throttled the run"
+            BODY=$(printf '%s\n' \
+              "The suite did not produce a quality result. It is NOT a regression:" \
+              "the provider rate-limited some cases, so they were never scored." \
+              "" \
+              "Run: $RUN_URL" \
+              "" \
+              "The run log names the blocked cases. The suite runs cases back to" \
+              "back and a larger model has a smaller allowance, so the usual fix is" \
+              "to raise \`EVAL_CASE_DELAY_SECONDS\` in the workflow." \
+              "" \
+              "Cases that DID get an answer were scored normally and are in the" \
+              "summary; the pass-rate is withheld because averaging unscored cases" \
+              "into it would report a provider limit as a drop in review quality." )
+          elif [ "${{ steps.run.outputs.exit_code }}" = "3" ]; then
+            TITLE="Nightly AI evals cannot run — the configured model no longer exists"
+            BODY=$(printf '%s\n' \
+              "The eval suite did not measure anything. It is NOT a quality regression:" \
+              "the provider returned 404 for the model this deployment asks for, so every" \
+              "request failed and every case scored zero on empty output." \
+              "" \
+              "Run: $RUN_URL" \
+              "" \
+              "**The live bot is failing the same way.** Every AI command -- /fix," \
+              "/explain, /review and the rest -- calls the same model id, so they are" \
+              "all returning provider errors right now, not just this suite." \
+              "" \
+              "Fix: set \`LLM_PRIMARY_MODEL\` and \`LLM_FALLBACK_MODEL\` to ids the" \
+              "provider still serves. The run log lists what is currently available." )
+          elif [ "${{ steps.preflight.outputs.unconfigured }}" = "true" ]; then
             TITLE="Nightly AI evals cannot run — GROQ_API_KEY is not set"
             BODY=$(printf '%s\n' \
               "The nightly eval suite did not run. It is not a quality regression:" \
@@ -156,9 +195,32 @@ jobs:
               "\`evals/cases/\` — a drop usually means a prompt, model, or provider" \
               "change degraded review quality." )
           fi
-          EXISTING=$(gh issue list --state open --label evals --json number \
-            --jq '.[0].number' 2>/dev/null || echo "")
+          # Find the existing report by TITLE, not by label.
+          #
+          # This filtered on `--label evals`, and that label had never been
+          # created -- `gh issue create --label evals` fails with "not found"
+          # and falls back to the unlabelled create, so no issue ever carried
+          # it. A filter on a label nothing has matches nothing, so EXISTING
+          # was always empty and every night opened a NEW issue: #86, #88, #89
+          # and #90 in four nights, which is precisely what reusing one issue
+          # was written to prevent.
+          #
+          # Titles are ours and all three start with the same words, so this
+          # needs no search index and no label to keep working.
+          EXISTING=$(gh issue list --state open --limit 100 --json number,title \
+            --jq '[.[] | select(.title | startswith("Nightly AI evals"))]
+                  | .[0].number // empty' 2>/dev/null || echo "")
+
+          # Created best-effort so the reports are filterable in the UI. The
+          # lookup above deliberately does NOT depend on this succeeding.
+          gh label create evals --color B60205 \
+            --description "Nightly AI output eval failures" >/dev/null 2>&1 || true
+
           if [ -n "$EXISTING" ]; then
+            # Retitle as well: the cause can change between nights, and an
+            # issue that still says "are failing" when the run now fails for a
+            # missing model sends the reader to the wrong place.
+            gh issue edit "$EXISTING" --title "$TITLE" >/dev/null 2>&1 || true
             gh issue comment "$EXISTING" --body "$BODY"
           else
             gh issue create --title "$TITLE" --body "$BODY" --label evals \

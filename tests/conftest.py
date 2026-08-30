@@ -16,6 +16,7 @@ import types
 import threading
 import time
 import pytest
+from unittest.mock import patch
 
 # ── Ensure project root is on sys.path ────────────────────────────────────────
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -198,6 +199,32 @@ if "structlog" not in sys.modules:
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
+@pytest.fixture(autouse=True)
+def no_provider_catalogue_calls():
+    """
+    The unit suite must never ask a provider what it serves.
+
+    OpenRouter's catalogue needs no API key, so the moment providers learned to
+    repair a retired model id, any test feeding a 404 would reach out to
+    openrouter.ai for real. It did: CI went red on a test that passes locally
+    only because the sandbox blocks that host — a test whose result depends on
+    the network is not a test.
+
+    Off by default here, so a catalogue is something a test opts INTO by
+    patching this function (see tests/test_model_catalog.py). Substitutions are
+    process-global, so they are cleared too: one test healing a model must not
+    change the model the next test sees.
+    """
+    import app.ai.model_catalog as mc
+
+    mc.clear_cache()
+    mc.clear_substitutions()
+    with patch.object(mc, "available_models", lambda *a, **k: []):
+        yield
+    mc.clear_cache()
+    mc.clear_substitutions()
+
 
 @pytest.fixture(autouse=True)
 def clean_redis_singleton():

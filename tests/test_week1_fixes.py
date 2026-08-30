@@ -57,21 +57,24 @@ class TestOpenRouterProvider:
         from app.ai.providers.openrouter import DEFAULT_MODEL
         assert ":free" in DEFAULT_MODEL
 
-    def test_no_api_key_returns_error(self):
+    def test_no_api_key_returns_error(self, monkeypatch):
         from app.ai.providers.openrouter import OpenRouterProvider
+        monkeypatch.setenv("OPENROUTER_API_KEY", "")
+        monkeypatch.setattr(
+            "app.ai.providers.openrouter.OPENROUTER_API_KEY", "", raising=False
+        )
         p = OpenRouterProvider.__new__(OpenRouterProvider)
         p._model = "mistralai/mistral-7b-instruct:free"
-        p._api_key = ""
         with patch('app.ai.providers.openrouter.get_breaker') as mb:
             mb.return_value.is_available.return_value = True
             result, meta = p.ask("sys", "user")
         assert meta.error == "no_api_key"
 
-    def test_circuit_open_returns_error(self):
+    def test_circuit_open_returns_error(self, monkeypatch):
         from app.ai.providers.openrouter import OpenRouterProvider
         p = OpenRouterProvider.__new__(OpenRouterProvider)
         p._model = "mistralai/mistral-7b-instruct:free"
-        p._api_key = "sk-test"
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
         with patch('app.ai.providers.openrouter.get_breaker') as mb:
             mb.return_value.is_available.return_value = False
             result, meta = p.ask("sys", "user")
@@ -93,11 +96,11 @@ class TestOpenRouterProvider:
             src = f.read()
         assert 'LLMProvider._extract_json' not in src
 
-    def test_api_failure_records_failure(self):
+    def test_api_failure_records_failure(self, monkeypatch):
         from app.ai.providers.openrouter import OpenRouterProvider
         p = OpenRouterProvider.__new__(OpenRouterProvider)
         p._model = "mistralai/mistral-7b-instruct:free"
-        p._api_key = "sk-test"
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
         with patch('app.ai.providers.openrouter.get_breaker') as mb:
             mb.return_value.is_available.return_value = True
             mb.return_value.record_failure = MagicMock()

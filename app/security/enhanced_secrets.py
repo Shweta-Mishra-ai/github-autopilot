@@ -392,6 +392,16 @@ _PLACEHOLDER_WORDS = frozenset(
 # words rather than one.
 _PLACEHOLDER_PHRASES = (
     "not real",
+    # "not a real credential" is how people actually write it, and the phrase
+    # above misses it for the one word in between. This scanner opened a
+    # CRITICAL "rotate ALL exposed credentials NOW" issue against the literal
+    # string `bench-secret-not-a-real-credential`, while the same line with
+    # `test-` instead of `bench-` was silently clean -- suppressed by the
+    # unrelated prefix rule, not by anything the value said about itself.
+    #
+    # A false critical is not a harmless over-report: it is what teaches
+    # people to close these unread.
+    "not a real",
     "change me",
     "replace with",
     "insert key",

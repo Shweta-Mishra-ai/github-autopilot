@@ -39,6 +39,29 @@ from app.ai.routing_policy import (
 
 log = logging.getLogger(__name__)
 
+# Model ids the deployment asks for when nothing overrides them. Named rather
+# than inline so the eval preflight and /health report the same values the
+# router actually calls — a check that validates a different model than the one
+# in use is worse than no check.
+#
+# These were llama-3.3-70b-versatile and llama-3.1-8b-instant. The provider
+# retired every Llama chat model, so both returned 404 and every AI command
+# failed for six days. The replacements below are not a guess: they are from
+# the provider's own model list, printed by the eval preflight on the
+# 2026-08-28 run using this deployment's key. That list contained no Llama chat
+# model at all; the remaining general-purpose ones are the gpt-oss and qwen
+# families, plus Groq's compound systems.
+#
+# The pairing keeps the shape the router expects — a larger model for work that
+# needs quality, a smaller one to fall back to and to carry cheap traffic.
+#
+# A provider will retire these too. LLM_PRIMARY_MODEL and LLM_FALLBACK_MODEL
+# override them without a deploy, /health reports which are in use, and the
+# nightly eval names what is available when they stop existing.
+DEFAULT_PRIMARY_MODEL = "openai/gpt-oss-120b"
+DEFAULT_FALLBACK_MODEL = "openai/gpt-oss-20b"
+
+
 __all__ = [
     "LLMRouter",
     "router",
@@ -68,10 +91,15 @@ class LLMRouter:
         # repo-level override would let one tenant pick a model that drains
         # another's quota tier. It was previously declared in repo config
         # (ai.primary_model) where nothing could read it.
+        # The tier is passed explicitly. Inferring it from the model id tied
+        # the budget and the circuit breaker to a naming convention the
+        # provider was free to change -- and did.
         self._groq_70b = GroqProvider(
-            os.environ.get("LLM_PRIMARY_MODEL", "llama-3.3-70b-versatile")
+            os.environ.get("LLM_PRIMARY_MODEL", DEFAULT_PRIMARY_MODEL), provider_key="groq_70b"
         )
-        self._groq_8b = GroqProvider(os.environ.get("LLM_FALLBACK_MODEL", "llama-3.1-8b-instant"))
+        self._groq_8b = GroqProvider(
+            os.environ.get("LLM_FALLBACK_MODEL", DEFAULT_FALLBACK_MODEL), provider_key="groq_8b"
+        )
         self._gemini = None
         self._openrouter = None
         self._ollama = None
@@ -294,6 +322,7 @@ class LLMRouter:
 
         if meta.error:
             log.warning(f"router.primary_failed provider={meta.provider} error={meta.error}")
+            self._note_configuration_error(meta.error)
             fallback = self._try_fallback(
                 system, user, max_tokens, temperature, timeout, meta.provider, task
             )
@@ -320,6 +349,7 @@ class LLMRouter:
         text, meta = provider.ask_text(system, user, max_tokens, timeout)
 
         if meta.error:
+            self._note_configuration_error(meta.error)
             fallback = self._try_fallback_text(
                 system, user, max_tokens, timeout, meta.provider, task
             )
@@ -464,14 +494,40 @@ class LLMRouter:
             return self.ask(system, user, task, max_tokens, temperature, timeout, context_tokens)
         except AllProvidersDown as e:
             log.error(f"router.all_providers_down task={task} retry_in={e.retry_in_seconds}s")
+            config_fault = self.configuration_error()
+            if config_fault:
+                # "Providers are down, try again shortly" is wrong and costly
+                # here: nothing is down and waiting will not help. Say what is
+                # actually misconfigured so the reader fixes it instead of
+                # retrying for a day.
+                log.error(f"router.configuration_fault {config_fault}")
             return (
                 {
                     "_providers_down": True,
                     "retry_in": e.retry_in_seconds,
-                    "message": degraded_message,
+                    "message": config_fault or degraded_message,
+                    "_configuration_error": bool(config_fault),
                 },
                 None,
             )
+
+    # A configuration fault is remembered, not just logged: it is discovered on
+    # a webhook thread and needs to be readable from /health and the doctor,
+    # which run on a different request entirely.
+    _config_error: str = ""
+
+    def _note_configuration_error(self, error: str) -> None:
+        from app.ai.providers.base import is_configuration_error
+
+        if is_configuration_error(error):
+            LLMRouter._config_error = str(error)
+
+    def configuration_error(self) -> str:
+        """The last permanent provider misconfiguration seen, or ""."""
+        return LLMRouter._config_error
+
+    def clear_configuration_error(self) -> None:
+        LLMRouter._config_error = ""
 
     def status(self) -> dict:
         from app.ai.circuit_breaker import status_all
@@ -504,6 +560,15 @@ class LLMRouter:
                 "gemini": bool(os.environ.get("GEMINI_API_KEY")),
                 "openrouter": bool(os.environ.get("OPENROUTER_API_KEY")),
             },
+            "models": {
+                "primary": os.environ.get("LLM_PRIMARY_MODEL", DEFAULT_PRIMARY_MODEL),
+                "fallback": os.environ.get("LLM_FALLBACK_MODEL", DEFAULT_FALLBACK_MODEL),
+            },
+            # Surfaced here because the fault is discovered on a webhook thread
+            # and read from /health on a different request. Open breakers alone
+            # cannot distinguish "the provider is having a bad hour" from "the
+            # model id is wrong", and only one of those is worth waiting out.
+            "configuration_error": self.configuration_error(),
         }
 
 
@@ -532,3 +597,92 @@ def last_model_disclosure() -> str:
 
 # Module-level singleton — thread-safe via instance locks above
 router = LLMRouter()
+
+
+def model_configuration_report() -> dict:
+    """
+    For every provider: is the configured model id one it actually serves?
+
+    Deliberately NOT part of status(), which /health calls on every probe:
+    this reads each provider's catalogue over the network, and a health check
+    that makes three outbound calls is a health check that reports the
+    network. The doctor is an explicit diagnostic, so paying for it there is
+    the right trade.
+
+    This exists because the answer depends on a key, and the key is a
+    deployment secret. CI cannot check a provider it has no credential for --
+    the Gemini catalogue was unreadable in CI for exactly that reason -- but
+    the running service holds the key and can simply ask. So the deployment
+    answers the question its own environment is the only place to answer.
+
+    Never raises: a diagnostic that fails while diagnosing is worse than one
+    that says "unknown".
+    """
+    from app.ai import model_catalog as catalog
+    from app.ai.providers.gemini import gemini_model
+    from app.ai.providers.openrouter import openrouter_model
+
+    configured = {
+        "groq": [
+            ("groq_70b", os.environ.get("LLM_PRIMARY_MODEL", DEFAULT_PRIMARY_MODEL), "quality"),
+            ("groq_8b", os.environ.get("LLM_FALLBACK_MODEL", DEFAULT_FALLBACK_MODEL), "speed"),
+        ],
+        "gemini": [("gemini", gemini_model(), "speed")],
+        "openrouter": [("openrouter", openrouter_model(), "quality")],
+    }
+
+    substitutions = catalog.active_substitutions()
+    out: dict = {"autoheal": catalog.autoheal_enabled(), "providers": {}}
+
+    for provider, entries in configured.items():
+        try:
+            served = catalog.available_models(provider)
+        except Exception:  # pragma: no cover - the report must not fail
+            served = []
+        info: dict = {
+            "catalogue_readable": bool(served),
+            "models_served": len(served),
+            "slots": [],
+        }
+        for key, model, tier in entries:
+            # "unknown" is not "missing". Reporting an unreadable catalogue as
+            # a broken model id would send an operator to change a setting
+            # that was never wrong.
+            state = "unknown" if not served else ("ok" if model in served else "retired")
+            slot = {
+                "slot": key,
+                "configured": model,
+                "state": state,
+                "substituted_to": (substitutions.get(key) or {}).get("to", ""),
+            }
+            if state == "retired":
+                slot["suggested"] = catalog.best_model(provider, tier, exclude=(model,))
+            info["slots"].append(slot)
+        out["providers"][provider] = info
+    return out
+
+
+def format_model_configuration(report: dict) -> str:
+    """The same thing as prose, for someone reading a terminal."""
+    lines = ["## Model configuration", ""]
+    if not report.get("autoheal", True):
+        lines.append("Auto-substitution is OFF (LLM_MODEL_AUTOHEAL=0). A retired id will fail.")
+        lines.append("")
+    for provider, info in (report.get("providers") or {}).items():
+        if not info.get("catalogue_readable"):
+            lines.append(
+                f"- **{provider}** — catalogue unreadable. Usually no API key set for it; "
+                f"the models below cannot be checked from here."
+            )
+        else:
+            lines.append(f"- **{provider}** — {info['models_served']} models served")
+        for slot in info.get("slots") or []:
+            mark = {"ok": "✅", "retired": "❌", "unknown": "❔"}.get(slot["state"], "❔")
+            line = f"    {mark} `{slot['slot']}` → `{slot['configured']}`"
+            if slot["state"] == "retired":
+                suggestion = slot.get("suggested") or "(nothing suitable served)"
+                line += f" — NOT served. Best available: `{suggestion}`"
+            if slot.get("substituted_to"):
+                line += f" — currently answering on `{slot['substituted_to']}`"
+            lines.append(line)
+    return "\n".join(lines)

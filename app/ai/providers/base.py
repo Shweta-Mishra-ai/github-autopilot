@@ -13,6 +13,8 @@ That's it. Zero changes to handlers or commands.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+import os
+import re
 import time
 
 
@@ -22,7 +24,7 @@ class LLMResponse:
 
     text: str  # Raw text output
     provider: str  # "groq" | "gemini" | "openrouter"
-    model: str  # e.g. "llama-3.3-70b-versatile"
+    model: str  # e.g. "openai/gpt-oss-120b"
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
@@ -159,3 +161,187 @@ def _extract_json(text: str) -> dict:
                     break
 
     return {"raw": text}
+
+
+# ── Permanent provider faults ────────────────────────────────────────────────
+#
+# A 4xx from a model provider is CONFIGURATION, not an outage, and the
+# difference decides whether retrying can ever work. A retired model id, a
+# rejected key and a model the account cannot reach all return 4xx and none of
+# them recover on their own.
+#
+# Recording them as circuit-breaker failures is what hid the Groq outage: three
+# requests opened the breaker on the primary, five more on the fallback, and
+# the router reported "all providers down" — sending a maintainer to check
+# provider status when the fix was one environment variable.
+#
+# A breaker exists to stop hammering a service that MIGHT recover. These will
+# not, so opening it only replaces a precise error with a vague one.
+CONFIG_ERROR_PREFIX = "CONFIG_ERROR:"
+
+
+def is_configuration_error(error: "str | None") -> bool:
+    """True when an LLMResponse.error describes a fault retrying cannot fix."""
+    return bool(error) and str(error).startswith(CONFIG_ERROR_PREFIX)
+
+
+def client_error_detail(
+    response,
+    status: int,
+    model: str,
+    key_env: str,
+    model_env: str = "",
+) -> str:
+    """
+    An actionable message for a 4xx that will never fix itself.
+
+    Reads the provider's own error code where it gives one rather than
+    inferring from the status alone — `model_not_found` and `API_KEY_INVALID`
+    are more specific than "404" and "400", and providers disagree about which
+    status they use for which fault.
+    """
+    code = ""
+    try:
+        body = response.json()
+        err = body.get("error") or {}
+        code = f"{err.get('code', '')} {err.get('status', '')} {err.get('message', '')}".lower()
+    except Exception:
+        code = ""
+
+    where = f" Set {model_env} to a model id the provider currently serves." if model_env else ""
+
+    if status == 402 or "insufficient" in code or "credit" in code:
+        return (
+            f"{CONFIG_ERROR_PREFIX} the provider refused the request for `{model}` "
+            f"({status}) because the account is out of credit. Retrying will not "
+            f"help until it is topped up."
+        )
+    if status == 404 or "model_not_found" in code or "not found" in code:
+        return (
+            f"{CONFIG_ERROR_PREFIX} the provider does not serve the model "
+            f"`{model}`. This is configuration, not an outage — every AI command "
+            f"fails until it is fixed.{where}"
+        )
+    if status in (401, 403) or "api_key_invalid" in code or "permission" in code:
+        return (
+            f"{CONFIG_ERROR_PREFIX} the provider rejected {key_env} ({status}). "
+            f"The key is set but not valid, or lacks access to `{model}` — "
+            f"regenerate it and update the deployment's environment."
+        )
+    return (
+        f"{CONFIG_ERROR_PREFIX} the provider refused the request for `{model}` "
+        f"({status}). The key may lack access to this model.{where}"
+    )
+
+
+# ── Throttling ───────────────────────────────────────────────────────────────
+#
+# A 429 is the provider working correctly and asking us to slow down. It is not
+# the provider being unhealthy, and conflating the two is what turned a
+# six-second pause into a total outage: the delay was parsed, a circuit-breaker
+# failure was recorded, and the router fell back to the same provider's other
+# tier — which shares the account limit — so that failed too. Three failures
+# opened one breaker, five more opened the other, and the router reported "all
+# providers down".
+#
+# Shared because both providers had it. Gemini was worse: it never read the
+# header at all and reported a fabricated 60-second delay whatever the provider
+# had actually said.
+MAX_THROTTLE_WAIT_SECONDS = float(os.environ.get("LLM_MAX_THROTTLE_WAIT_SECONDS", "10"))
+
+
+def throttle_pause(response, default: int = 30) -> tuple[int, float]:
+    """
+    (retry_after, seconds_to_sleep) for a 429.
+
+    `seconds_to_sleep` is 0 when the delay is longer than we are willing to
+    hold a shared worker thread for — a minute-long wait blocks other webhooks,
+    so it is reported instead. `retry_after` is always the provider's own
+    number, so callers report what it said rather than a guess.
+    """
+    from app.core.retry_after import parse_retry_after
+
+    retry_after = parse_retry_after(_header(response, "Retry-After"), default)
+    if 0 < retry_after <= MAX_THROTTLE_WAIT_SECONDS:
+        return retry_after, float(retry_after)
+    return retry_after, 0.0
+
+
+def _header(response, name: str):
+    try:
+        return response.headers.get(name)
+    except Exception:
+        return None
+
+
+# ── Never let a credential into an error string ──────────────────────────────
+#
+# Re-exported from core so the providers and the notification senders share
+# one implementation. Both leaked a credential the same way: a URL carrying
+# it, quoted back by requests in an exception, assigned to an error string
+# and logged. See app/core/redaction.py.
+from app.core.redaction import redact_secrets  # noqa: E402  (re-export)
+
+__all__ = [
+    "LLMProvider",
+    "LLMResponse",
+    "CONFIG_ERROR_PREFIX",
+    "MAX_THROTTLE_WAIT_SECONDS",
+    "client_error_detail",
+    "is_model_missing",
+    "substituted_model",
+    "is_configuration_error",
+    "redact_secrets",
+    "throttle_pause",
+]
+
+
+# ── A model that no longer exists ─────────────────────────────────────────────
+#
+# Distinct from every other 4xx: a rejected key needs a human, but a retired
+# model id has an answer the provider itself will give us. The last time one
+# was retired here, every AI command returned 404 for six days.
+_MODEL_GONE = re.compile(
+    r"(model_not_found|does not exist|decommissioned|deprecated|no endpoints found"
+    r"|not found|unknown model|invalid model)",
+    re.IGNORECASE,
+)
+
+
+def is_model_missing(response, status: int) -> bool:
+    """
+    True when this 4xx says the MODEL is the problem, not the credential.
+
+    Deliberately narrow. Substituting a model for a rejected key would swap a
+    precise "your key is invalid" for a confusing "we quietly changed model and
+    it still did not work", so 401/403 never reach here.
+    """
+    if status in (401, 403):
+        return False
+    body = ""
+    try:
+        err = (response.json().get("error") or {}) if response is not None else {}
+        body = f"{err.get('code', '')} {err.get('message', '')} {err.get('status', '')}"
+    except Exception:
+        body = ""
+    return status == 404 or bool(_MODEL_GONE.search(body))
+
+
+def substituted_model(
+    provider_key: str, provider: str, tier: str, failed_model: str, response, status: int
+) -> str:
+    """
+    A replacement for a model the provider says it does not serve, or "".
+
+    "" means "carry on and report the configuration error exactly as before",
+    so this can only turn a hard failure into a working request or leave the
+    behaviour unchanged. It never makes a working call worse.
+    """
+    if not is_model_missing(response, status):
+        return ""
+    try:
+        from app.ai.model_catalog import substitute
+
+        return substitute(provider_key, provider, tier, failed_model)
+    except Exception:  # pragma: no cover - the repair path must never raise
+        return ""

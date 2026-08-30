@@ -6,6 +6,13 @@ from the data in `results/`. Nothing is estimated or extrapolated.
 
 Archived on Zenodo: [10.5281/zenodo.22114221](https://doi.org/10.5281/zenodo.22114221)
 
+This package lives in the `research/` directory of the subject repository:
+<https://github.com/Shweta-Mishra-ai/github-autopilot/tree/main/research>
+
+The manuscript is prepared for *Empirical Software Engineering* (Springer)
+using the `sn-jnl` document class. `paper/` is the single, canonical
+manuscript; no other journal format is maintained in this package.
+
 ## Quick start
 
 ```bash
@@ -78,8 +85,6 @@ paper/                 canonical manuscript: Springer/EMSE submission
   main.tex               main manuscript source (sn-jnl class, author-year refs)
   online_resource_1.tex  supplementary operational characterisation
   sn-jnl.cls, sn-basic.bst, sn-bibliography.bib   Springer Nature template + bibliography
-paper_ieee_preprint/   non-canonical IEEEtran-format preprint (arXiv/GitHub use only;
-                       not the submitted manuscript, not covered by verify_paper.py)
 metadata/              subject commit, corpus commits, tool versions + digests
 environment/           interpreter and service versions, checksums
 ```

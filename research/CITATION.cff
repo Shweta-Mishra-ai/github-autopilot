@@ -24,6 +24,7 @@ keywords:
   - regular expressions
   - empirical software engineering
 license: MIT
+repository-code: "https://github.com/Shweta-Mishra-ai/github-autopilot/tree/main/research"
 version: "3.1.0"
 date-released: 2026-08-26
 doi: 10.5281/zenodo.22114221

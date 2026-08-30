@@ -1,0 +1,33 @@
+cff-version: 1.2.0
+title: "Boundary-Mutation Testing for Pattern-Based Secret Detection"
+message: "If you use this method or replication package, please cite it."
+type: software
+authors:
+  - family-names: Mishra
+    given-names: Shweta
+    email: shweta.mishra.research@gmail.com
+abstract: >-
+  Replication package for boundary-mutation testing of pattern-based secret
+  detection: a rule-level method that generates credentials from a detector
+  rule's own regular expression, embeds them in a battery of realistic source
+  contexts, and classifies outcomes at the rule level. Includes all harnesses,
+  unmodified raw results, figure generation, a validated repair for the
+  primary subject's defect (with a documented regression in a naive
+  first-attempt fix), and a verified one-command reproduction for three
+  scanners: GitHub Autopilot (commit 38b2013), Gitleaks 8.21.2, and
+  TruffleHog 3.82.13.
+keywords:
+  - secret detection
+  - credential leakage
+  - mutation testing
+  - metamorphic testing
+  - regular expressions
+  - empirical software engineering
+license: MIT
+version: "3.1.0"
+date-released: 2026-08-26
+doi: 10.5281/zenodo.22114221
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.22114221
+    description: Archived snapshot of this replication package on Zenodo

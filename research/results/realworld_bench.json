@@ -1,0 +1,943 @@
+{
+  "design": "False-positive rate on unmodified real source from widely used OSS projects. Every line treated as an added diff line, mirroring the production push handler. Findings are reported redacted for manual inspection; ground truth assumes released public code contains no live credentials.",
+  "projects": {
+    "requests": {
+      "root_exists": true,
+      "autopilot": {
+        "n_files": 64,
+        "n_lines": 15169,
+        "n_findings": 1,
+        "findings_per_kloc": 0.0659,
+        "elapsed_s": 0.243,
+        "findings": [
+          {
+            "project_relative_path": "src/requests/utils.py",
+            "line": 676,
+            "rule": "High Entropy String (unclassified)",
+            "severity": "medium",
+            "confidence": "medium",
+            "redacted": "ABCD********************wxyz"
+          }
+        ],
+        "findings_by_rule": {
+          "High Entropy String (unclassified)": 1
+        },
+        "findings_by_severity": {
+          "medium": 1
+        }
+      },
+      "gitleaks": {
+        "n_findings": 4,
+        "elapsed_s": 0.238,
+        "findings_by_rule": {
+          "private-key": 4
+        },
+        "findings": [
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/tests/certs/expired/ca/ca-private.key",
+            "line": 1,
+            "rule": "private-key",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/tests/certs/expired/server/server.key",
+            "line": 1,
+            "rule": "private-key",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/tests/certs/mtls/client/client.key",
+            "line": 1,
+            "rule": "private-key",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/tests/certs/valid/server/server.key",
+            "line": 1,
+            "rule": "private-key",
+            "redacted": "----***"
+          }
+        ]
+      },
+      "trufflehog": {
+        "n_findings": 27,
+        "elapsed_s": 2.356,
+        "findings_by_rule": {
+          "URI": 23,
+          "PrivateKey": 4
+        },
+        "findings": [
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/tests/certs/expired/ca/ca-private.key",
+            "rule": "PrivateKey",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/HISTORY.md",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/docs/user/advanced.rst",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/docs/user/advanced.rst",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/docs/user/advanced.rst",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/tests/certs/valid/server/server.key",
+            "rule": "PrivateKey",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/docs/user/advanced.rst",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/docs/user/advanced.rst",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/tests/certs/expired/server/server.key",
+            "rule": "PrivateKey",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/tests/test_requests.py",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/tests/test_requests.py",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/docs/user/advanced.rst",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/tests/certs/mtls/client/client.key",
+            "rule": "PrivateKey",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/tests/test_utils.py",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/tests/test_utils.py",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/tests/test_utils.py",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/tests/test_utils.py",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/tests/test_utils.py",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/tests/test_utils.py",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/tests/test_utils.py",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/tests/test_utils.py",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/tests/test_utils.py",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/tests/test_utils.py",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/tests/test_utils.py",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/tests/test_utils.py",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/tests/test_utils.py",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/requests/tests/test_utils.py",
+            "rule": "URI",
+            "redacted": "http***"
+          }
+        ]
+      }
+    },
+    "flask": {
+      "root_exists": true,
+      "autopilot": {
+        "n_files": 105,
+        "n_lines": 19160,
+        "n_findings": 0,
+        "findings_per_kloc": 0.0,
+        "elapsed_s": 0.359,
+        "findings": [],
+        "findings_by_rule": {},
+        "findings_by_severity": {}
+      },
+      "gitleaks": {
+        "n_findings": 6,
+        "elapsed_s": 0.287,
+        "findings_by_rule": {
+          "generic-api-key": 6
+        },
+        "findings": [
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/flask/docs/config.rst",
+            "line": 41,
+            "rule": "generic-api-key",
+            "redacted": "192b***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/flask/docs/config.rst",
+            "line": 513,
+            "rule": "generic-api-key",
+            "redacted": "192b***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/flask/docs/config.rst",
+            "line": 560,
+            "rule": "generic-api-key",
+            "redacted": "5f35***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/flask/docs/config.rst",
+            "line": 578,
+            "rule": "generic-api-key",
+            "redacted": "5f35***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/flask/docs/config.rst",
+            "line": 587,
+            "rule": "generic-api-key",
+            "redacted": "5f35***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/flask/docs/tutorial/deploy.rst",
+            "line": 73,
+            "rule": "generic-api-key",
+            "redacted": "192b***"
+          }
+        ]
+      },
+      "trufflehog": {
+        "n_findings": 0,
+        "elapsed_s": 2.278,
+        "findings_by_rule": {},
+        "findings": []
+      }
+    },
+    "redis-py": {
+      "root_exists": true,
+      "autopilot": {
+        "n_files": 378,
+        "n_lines": 201822,
+        "n_findings": 9,
+        "findings_per_kloc": 0.0446,
+        "elapsed_s": 2.657,
+        "findings": [
+          {
+            "project_relative_path": "redis/client.py",
+            "line": 182,
+            "rule": "Connection String",
+            "severity": "critical",
+            "confidence": "high",
+            "redacted": "redi********************d]]@"
+          },
+          {
+            "project_relative_path": "redis/cluster.py",
+            "line": 666,
+            "rule": "Connection String",
+            "severity": "critical",
+            "confidence": "high",
+            "redacted": "redi********************d]]@"
+          },
+          {
+            "project_relative_path": "redis/connection.py",
+            "line": 2959,
+            "rule": "Connection String",
+            "severity": "critical",
+            "confidence": "high",
+            "redacted": "redi********************d]]@"
+          },
+          {
+            "project_relative_path": "redis/asyncio/client.py",
+            "line": 169,
+            "rule": "Connection String",
+            "severity": "critical",
+            "confidence": "high",
+            "redacted": "redi********************d]]@"
+          },
+          {
+            "project_relative_path": "redis/asyncio/cluster.py",
+            "line": 347,
+            "rule": "Connection String",
+            "severity": "critical",
+            "confidence": "high",
+            "redacted": "redi********************d]]@"
+          },
+          {
+            "project_relative_path": "redis/asyncio/connection.py",
+            "line": 2580,
+            "rule": "Connection String",
+            "severity": "critical",
+            "confidence": "high",
+            "redacted": "redi********************d]]@"
+          },
+          {
+            "project_relative_path": "doctests/cmds_cnxmgmt.py",
+            "line": 12,
+            "rule": "Generic Password",
+            "severity": "medium",
+            "confidence": "high",
+            "redacted": "pass************ass\""
+          },
+          {
+            "project_relative_path": "doctests/cmds_cnxmgmt.py",
+            "line": 27,
+            "rule": "Generic Password",
+            "severity": "medium",
+            "confidence": "high",
+            "redacted": "pass********************ord\""
+          },
+          {
+            "project_relative_path": "doctests/cmds_cnxmgmt.py",
+            "line": 29,
+            "rule": "Generic Password",
+            "severity": "medium",
+            "confidence": "high",
+            "redacted": "pass******************ord\""
+          }
+        ],
+        "findings_by_rule": {
+          "Connection String": 6,
+          "Generic Password": 3
+        },
+        "findings_by_severity": {
+          "critical": 6,
+          "medium": 3
+        }
+      },
+      "gitleaks": {
+        "n_findings": 2,
+        "elapsed_s": 1.29,
+        "findings_by_rule": {
+          "generic-api-key": 2
+        },
+        "findings": [
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/redis-py/docs/examples/opentelemetry/uptrace.yml",
+            "line": 129,
+            "rule": "generic-api-key",
+            "redacted": "ogbh***"
+          },
+          {
+            "project_relative_path": "/tmp/claude-0/-home-user-github-autopilot/d62ecf35-1fef-51bc-81b7-fded3b6910dd/scratchpad/realcorpus/redis-py/docs/examples/opentelemetry/uptrace.yml",
+            "line": 294,
+            "rule": "generic-api-key",
+            "redacted": "102c***"
+          }
+        ]
+      },
+      "trufflehog": {
+        "n_findings": 0,
+        "elapsed_s": 3.89,
+        "findings_by_rule": {},
+        "findings": []
+      }
+    },
+    "github-autopilot (system under test)": {
+      "root_exists": true,
+      "autopilot": {
+        "n_files": 230,
+        "n_lines": 56376,
+        "n_findings": 0,
+        "findings_per_kloc": 0.0,
+        "elapsed_s": 0.759,
+        "findings": [],
+        "findings_by_rule": {},
+        "findings_by_severity": {}
+      },
+      "gitleaks": {
+        "n_findings": 49,
+        "elapsed_s": 2.216,
+        "findings_by_rule": {
+          "private-key": 21,
+          "aws-access-token": 16,
+          "slack-bot-token": 5,
+          "github-pat": 5,
+          "curl-auth-header": 2
+        },
+        "findings": [
+          {
+            "project_relative_path": "/home/user/github-autopilot/app/security/__pycache__/enhanced_secrets.cpython-311.pyc",
+            "line": 25,
+            "rule": "private-key",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/app/security/__pycache__/enhanced_secrets.cpython-311.pyc",
+            "line": 25,
+            "rule": "private-key",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/docs/mcp-setup.md",
+            "line": 87,
+            "rule": "curl-auth-header",
+            "redacted": "YOUR***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/docs/mcp-setup.md",
+            "line": 96,
+            "rule": "curl-auth-header",
+            "redacted": "YOUR***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/docs/guides/user-setup.md",
+            "line": 190,
+            "rule": "private-key",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/docs/guides/user-setup.md",
+            "line": 198,
+            "rule": "private-key",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/docs/superpowers/plans/2026-07-27-v7-reliability-and-noise.md",
+            "line": 1496,
+            "rule": "aws-access-token",
+            "redacted": "AKIA***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/docs/superpowers/plans/2026-07-27-v7-reliability-and-noise.md",
+            "line": 1497,
+            "rule": "aws-access-token",
+            "redacted": "AKIA***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/docs/superpowers/plans/2026-07-27-v7-reliability-and-noise.md",
+            "line": 1622,
+            "rule": "aws-access-token",
+            "redacted": "AKIA***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/docs/superpowers/plans/2026-07-27-v7-reliability-and-noise.md",
+            "line": 1624,
+            "rule": "aws-access-token",
+            "redacted": "AKIA***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/conftest.cpython-311-pytest-8.3.4.pyc",
+            "line": 43,
+            "rule": "private-key",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_enhanced_secrets.cpython-311-pytest-8.3.4.pyc",
+            "line": 25,
+            "rule": "slack-bot-token",
+            "redacted": "xoxb***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_enhanced_secrets.cpython-311-pytest-8.3.4.pyc",
+            "line": 19,
+            "rule": "github-pat",
+            "redacted": "ghp_***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_enhanced_secrets.cpython-311-pytest-8.3.4.pyc",
+            "line": 83,
+            "rule": "private-key",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_integration_privacy_and_brain.cpython-311-pytest-8.3.4.pyc",
+            "line": 99,
+            "rule": "aws-access-token",
+            "redacted": "AKIA***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_placeholder_secrets.cpython-311-pytest-8.3.4.pyc",
+            "line": 151,
+            "rule": "private-key",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_placeholder_secrets.cpython-311-pytest-8.3.4.pyc",
+            "line": 158,
+            "rule": "private-key",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_placeholder_secrets.cpython-311-pytest-8.3.4.pyc",
+            "line": 192,
+            "rule": "github-pat",
+            "redacted": "ghp_***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_placeholder_secrets.cpython-311-pytest-8.3.4.pyc",
+            "line": 198,
+            "rule": "github-pat",
+            "redacted": "ghp_***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_redaction.cpython-311-pytest-8.3.4.pyc",
+            "line": 5,
+            "rule": "aws-access-token",
+            "redacted": "AKIA***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_secret_scanner_accuracy.cpython-311-pytest-8.3.4.pyc",
+            "line": 42,
+            "rule": "slack-bot-token",
+            "redacted": "xoxb***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_secret_scanner_accuracy.cpython-311-pytest-8.3.4.pyc",
+            "line": 42,
+            "rule": "slack-bot-token",
+            "redacted": "xoxb***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_secret_scanner_accuracy.cpython-311-pytest-8.3.4.pyc",
+            "line": 42,
+            "rule": "private-key",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_secret_scanner_accuracy.cpython-311-pytest-8.3.4.pyc",
+            "line": 39,
+            "rule": "aws-access-token",
+            "redacted": "AKIA***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_setup_flow.cpython-311-pytest-8.3.4.pyc",
+            "line": 111,
+            "rule": "private-key",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_v7_brain.cpython-311-pytest-8.3.4.pyc",
+            "line": 39,
+            "rule": "aws-access-token",
+            "redacted": "AKIA***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/conftest.py",
+            "line": 230,
+            "rule": "private-key",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_webhook_security.cpython-311-pytest-8.3.4.pyc",
+            "line": 227,
+            "rule": "private-key",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_enhanced_secrets.py",
+            "line": 116,
+            "rule": "private-key",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_integration_privacy_and_brain.py",
+            "line": 187,
+            "rule": "aws-access-token",
+            "redacted": "AKIA***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_integration_privacy_and_brain.py",
+            "line": 189,
+            "rule": "aws-access-token",
+            "redacted": "AKIA***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_placeholder_secrets.py",
+            "line": 161,
+            "rule": "private-key",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_placeholder_secrets.py",
+            "line": 168,
+            "rule": "private-key",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_placeholder_secrets.py",
+            "line": 194,
+            "rule": "github-pat",
+            "redacted": "ghp_***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_placeholder_secrets.py",
+            "line": 202,
+            "rule": "github-pat",
+            "redacted": "ghp_***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_redaction.py",
+            "line": 8,
+            "rule": "aws-access-token",
+            "redacted": "AKIA***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_redaction.py",
+            "line": 9,
+            "rule": "aws-access-token",
+            "redacted": "AKIA***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_setup_flow.py",
+            "line": 151,
+            "rule": "private-key",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_webhook_security.py",
+            "line": 280,
+            "rule": "private-key",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_webhook_security.py",
+            "line": 288,
+            "rule": "private-key",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_webhook_security.py",
+            "line": 297,
+            "rule": "private-key",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_webhook_security.py",
+            "line": 304,
+            "rule": "private-key",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_secret_scanner_accuracy.py",
+            "line": 138,
+            "rule": "private-key",
+            "redacted": "----***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_secret_scanner_accuracy.py",
+            "line": 116,
+            "rule": "aws-access-token",
+            "redacted": "AKIA***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_secret_scanner_accuracy.py",
+            "line": 129,
+            "rule": "slack-bot-token",
+            "redacted": "xoxb***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_secret_scanner_accuracy.py",
+            "line": 132,
+            "rule": "slack-bot-token",
+            "redacted": "xoxb***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_secret_scanner_accuracy.py",
+            "line": 305,
+            "rule": "aws-access-token",
+            "redacted": "AKIA***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_v7_brain.py",
+            "line": 55,
+            "rule": "aws-access-token",
+            "redacted": "AKIA***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_v7_brain.py",
+            "line": 57,
+            "rule": "aws-access-token",
+            "redacted": "AKIA***"
+          }
+        ]
+      },
+      "trufflehog": {
+        "n_findings": 41,
+        "elapsed_s": 6.991,
+        "findings_by_rule": {
+          "Github": 14,
+          "URI": 14,
+          "AWS": 6,
+          "Slack": 4,
+          "Postgres": 3
+        },
+        "findings": [
+          {
+            "project_relative_path": "/home/user/github-autopilot/.pytest_cache/v/cache/nodeids",
+            "rule": "Github",
+            "redacted": "ghp_***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/.pytest_cache/v/cache/nodeids",
+            "rule": "Github",
+            "redacted": "ghp_***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/.pytest_cache/v/cache/nodeids",
+            "rule": "AWS",
+            "redacted": "AKIA***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/.venv-research/lib/python3.11/site-packages/httpx/_urls.py",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/.venv-research/lib/python3.11/site-packages/httpx/__pycache__/_urls.cpython-311.pyc",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/.venv-research/lib/python3.11/site-packages/httpx/__pycache__/_urls.cpython-311.pyc",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/.venv-research/lib/python3.11/site-packages/httpx/_urls.py",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/.venv-research/lib/python3.11/site-packages/httpx/_urls.py",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/.venv-research/lib/python3.11/site-packages/httpx/__pycache__/_urls.cpython-311.pyc",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/.venv-research/lib/python3.11/site-packages/pip/_vendor/urllib3/util/url.py",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/.venv-research/lib/python3.11/site-packages/pip/_vendor/urllib3/util/__pycache__/url.cpython-311.pyc",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/.venv-research/lib/python3.11/site-packages/pydantic/__pycache__/networks.cpython-311.pyc",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/.venv-research/lib/python3.11/site-packages/pydantic/networks.py",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/.venv-research/lib/python3.11/site-packages/pydantic/networks.py",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/.venv-research/lib/python3.11/site-packages/pydantic/__pycache__/networks.cpython-311.pyc",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/.venv-research/lib/python3.11/site-packages/urllib3/util/__pycache__/url.cpython-311.pyc",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/.venv-research/lib/python3.11/site-packages/urllib3/util/url.py",
+            "rule": "URI",
+            "redacted": "http***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_redaction.cpython-311-pytest-8.3.4.pyc",
+            "rule": "AWS",
+            "redacted": "AKIA***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_secret_scanner_accuracy.cpython-311-pytest-8.3.4.pyc",
+            "rule": "Postgres",
+            "redacted": "post***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_secret_scanner_accuracy.cpython-311-pytest-8.3.4.pyc",
+            "rule": "AWS",
+            "redacted": "AKIA***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_secret_scanner_accuracy.cpython-311-pytest-8.3.4.pyc",
+            "rule": "Slack",
+            "redacted": "xoxb***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_secret_scanner_accuracy.cpython-311-pytest-8.3.4.pyc",
+            "rule": "Slack",
+            "redacted": "xoxb***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_enhanced_secrets.py",
+            "rule": "Postgres",
+            "redacted": "post***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_placeholder_secrets.py",
+            "rule": "Github",
+            "redacted": "ghp_***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_placeholder_secrets.py",
+            "rule": "Github",
+            "redacted": "ghp_***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_placeholder_secrets.py",
+            "rule": "Github",
+            "redacted": "ghp_***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_placeholder_secrets.py",
+            "rule": "Github",
+            "redacted": "ghp_***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_placeholder_secrets.py",
+            "rule": "Github",
+            "redacted": "ghp_***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_secret_scanner_accuracy.py",
+            "rule": "Slack",
+            "redacted": "xoxb***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_secret_scanner_accuracy.py",
+            "rule": "Slack",
+            "redacted": "xoxb***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_secret_scanner_accuracy.py",
+            "rule": "AWS",
+            "redacted": "AKIA***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_secret_scanner_accuracy.py",
+            "rule": "Postgres",
+            "redacted": "post***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_placeholder_secrets.cpython-311-pytest-8.3.4.pyc",
+            "rule": "Github",
+            "redacted": "ghp_***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_placeholder_secrets.cpython-311-pytest-8.3.4.pyc",
+            "rule": "Github",
+            "redacted": "ghp_***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/test_secret_scanner_accuracy.py",
+            "rule": "AWS",
+            "redacted": "AKIA***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_integration_privacy_and_brain.cpython-311-pytest-8.3.4.pyc",
+            "rule": "AWS",
+            "redacted": "AKIA***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_placeholder_secrets.cpython-311-pytest-8.3.4.pyc",
+            "rule": "Github",
+            "redacted": "ghp_***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_placeholder_secrets.cpython-311-pytest-8.3.4.pyc",
+            "rule": "Github",
+            "redacted": "ghp_***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_placeholder_secrets.cpython-311-pytest-8.3.4.pyc",
+            "rule": "Github",
+            "redacted": "ghp_***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_placeholder_secrets.cpython-311-pytest-8.3.4.pyc",
+            "rule": "Github",
+            "redacted": "ghp_***"
+          },
+          {
+            "project_relative_path": "/home/user/github-autopilot/tests/__pycache__/test_placeholder_secrets.cpython-311-pytest-8.3.4.pyc",
+            "rule": "Github",
+            "redacted": "ghp_***"
+          }
+        ]
+      }
+    }
+  },
+  "totals": {
+    "total_lines_scanned": 292527,
+    "total_findings": {
+      "autopilot": 10,
+      "gitleaks": 61,
+      "trufflehog": 68
+    },
+    "findings_per_kloc": {
+      "autopilot": 0.0342,
+      "gitleaks": 0.2085,
+      "trufflehog": 0.2325
+    }
+  }
+}

@@ -1,0 +1,179 @@
+{
+  "issue_comment": {
+    "payload_bytes": 373,
+    "hmac_verify_valid_sig": {
+      "throughput_per_sec": 195634.4,
+      "latency": {
+        "n": 3000,
+        "mean_us": 4.924,
+        "p50_us": 4.491,
+        "p95_us": 7.12,
+        "p99_us": 10.06,
+        "max_us": 41.067
+      }
+    },
+    "hmac_verify_invalid_sig": {
+      "throughput_per_sec": 51668.4,
+      "latency": {
+        "n": 3000,
+        "mean_us": 19.171,
+        "p50_us": 16.616,
+        "p95_us": 30.538,
+        "p99_us": 54.426,
+        "max_us": 273.196
+      }
+    },
+    "idempotency_dedup": {
+      "throughput_per_sec": 4741.7,
+      "latency": {
+        "n": 3000,
+        "mean_us": 210.341,
+        "p50_us": 201.414,
+        "p95_us": 276.51,
+        "p99_us": 331.276,
+        "max_us": 635.245
+      }
+    },
+    "ip_rate_limit_redis": {
+      "throughput_per_sec": 3384.1,
+      "latency": {
+        "n": 3000,
+        "mean_us": 294.986,
+        "p50_us": 285.638,
+        "p95_us": 376.502,
+        "p99_us": 445.971,
+        "max_us": 881.467
+      }
+    },
+    "end_to_end_3_stage": {
+      "n": 2000,
+      "throughput_per_sec": 1871.3,
+      "latency": {
+        "n": 2000,
+        "mean_us": 533.746,
+        "p50_us": 520.275,
+        "p95_us": 664.917,
+        "p99_us": 793.278,
+        "max_us": 1541.31
+      }
+    }
+  },
+  "pull_request": {
+    "payload_bytes": 1470,
+    "hmac_verify_valid_sig": {
+      "throughput_per_sec": 127662.3,
+      "latency": {
+        "n": 3000,
+        "mean_us": 7.677,
+        "p50_us": 7.097,
+        "p95_us": 10.713,
+        "p99_us": 15.526,
+        "max_us": 82.903
+      }
+    },
+    "hmac_verify_invalid_sig": {
+      "throughput_per_sec": 46254.9,
+      "latency": {
+        "n": 3000,
+        "mean_us": 21.444,
+        "p50_us": 19.148,
+        "p95_us": 32.014,
+        "p99_us": 57.98,
+        "max_us": 159.403
+      }
+    },
+    "idempotency_dedup": {
+      "throughput_per_sec": 4838.0,
+      "latency": {
+        "n": 3000,
+        "mean_us": 206.129,
+        "p50_us": 196.639,
+        "p95_us": 271.208,
+        "p99_us": 320.532,
+        "max_us": 678.134
+      }
+    },
+    "ip_rate_limit_redis": {
+      "throughput_per_sec": 3471.8,
+      "latency": {
+        "n": 3000,
+        "mean_us": 287.537,
+        "p50_us": 277.88,
+        "p95_us": 363.883,
+        "p99_us": 420.432,
+        "max_us": 642.426
+      }
+    },
+    "end_to_end_3_stage": {
+      "n": 2000,
+      "throughput_per_sec": 1956.6,
+      "latency": {
+        "n": 2000,
+        "mean_us": 510.445,
+        "p50_us": 492.963,
+        "p95_us": 631.491,
+        "p99_us": 752.952,
+        "max_us": 1468.852
+      }
+    }
+  },
+  "push": {
+    "payload_bytes": 7213,
+    "hmac_verify_valid_sig": {
+      "throughput_per_sec": 45484.7,
+      "latency": {
+        "n": 3000,
+        "mean_us": 21.815,
+        "p50_us": 20.273,
+        "p95_us": 26.928,
+        "p99_us": 44.564,
+        "max_us": 85.32
+      }
+    },
+    "hmac_verify_invalid_sig": {
+      "throughput_per_sec": 27434.1,
+      "latency": {
+        "n": 3000,
+        "mean_us": 36.252,
+        "p50_us": 33.031,
+        "p95_us": 55.908,
+        "p99_us": 75.69,
+        "max_us": 219.159
+      }
+    },
+    "idempotency_dedup": {
+      "throughput_per_sec": 4967.6,
+      "latency": {
+        "n": 3000,
+        "mean_us": 200.772,
+        "p50_us": 190.441,
+        "p95_us": 255.908,
+        "p99_us": 323.069,
+        "max_us": 1358.858
+      }
+    },
+    "ip_rate_limit_redis": {
+      "throughput_per_sec": 3393.5,
+      "latency": {
+        "n": 3000,
+        "mean_us": 294.155,
+        "p50_us": 282.617,
+        "p95_us": 386.721,
+        "p99_us": 455.717,
+        "max_us": 618.573
+      }
+    },
+    "end_to_end_3_stage": {
+      "n": 2000,
+      "throughput_per_sec": 1831.3,
+      "latency": {
+        "n": 2000,
+        "mean_us": 545.444,
+        "p50_us": 528.472,
+        "p95_us": 697.321,
+        "p99_us": 796.715,
+        "max_us": 1521.886
+      }
+    }
+  }
+}

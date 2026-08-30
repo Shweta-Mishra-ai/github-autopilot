@@ -1,0 +1,1118 @@
+{
+  "environment": {
+    "redis": "real redis-server 7.0.15 on 127.0.0.1:6399, persistence disabled",
+    "note": "all measurements use unmodified production modules"
+  },
+  "S1_concurrency_scaling": {
+    "repetitions_per_level": 5,
+    "curve": [
+      {
+        "threads": 1,
+        "ops_total": 48000,
+        "throughput_ops_per_s": {
+          "n_repetitions": 5,
+          "mean": 8797.2242,
+          "ci95_mean": [
+            8332.1536,
+            9262.2947
+          ],
+          "median": 8664.0742,
+          "iqr": [
+            8382.6068,
+            9256.5716
+          ],
+          "stdev": 530.5762,
+          "min": 8240.81,
+          "max": 9442.0583
+        },
+        "p50_ms": {
+          "n_repetitions": 5,
+          "mean": 0.0029,
+          "ci95_mean": [
+            0.0028,
+            0.0031
+          ],
+          "median": 0.003,
+          "iqr": [
+            0.0027,
+            0.003
+          ],
+          "stdev": 0.0002,
+          "min": 0.0027,
+          "max": 0.0031
+        },
+        "p95_ms": {
+          "n_repetitions": 5,
+          "mean": 0.3918,
+          "ci95_mean": [
+            0.3651,
+            0.4185
+          ],
+          "median": 0.4033,
+          "iqr": [
+            0.3685,
+            0.4126
+          ],
+          "stdev": 0.0305,
+          "min": 0.3514,
+          "max": 0.4231
+        },
+        "p99_ms": {
+          "n_repetitions": 5,
+          "mean": 0.5208,
+          "ci95_mean": [
+            0.4844,
+            0.5571
+          ],
+          "median": 0.5406,
+          "iqr": [
+            0.4877,
+            0.5414
+          ],
+          "stdev": 0.0415,
+          "min": 0.4673,
+          "max": 0.5667
+        }
+      },
+      {
+        "threads": 2,
+        "ops_total": 48000,
+        "throughput_ops_per_s": {
+          "n_repetitions": 5,
+          "mean": 7904.3866,
+          "ci95_mean": [
+            7709.8243,
+            8098.9488
+          ],
+          "median": 7847.7587,
+          "iqr": [
+            7735.0079,
+            8034.4992
+          ],
+          "stdev": 221.9665,
+          "min": 7684.3283,
+          "max": 8220.3387
+        },
+        "p50_ms": {
+          "n_repetitions": 5,
+          "mean": 0.0033,
+          "ci95_mean": [
+            0.0033,
+            0.0034
+          ],
+          "median": 0.0034,
+          "iqr": [
+            0.0033,
+            0.0034
+          ],
+          "stdev": 0.0001,
+          "min": 0.0032,
+          "max": 0.0034
+        },
+        "p95_ms": {
+          "n_repetitions": 5,
+          "mean": 0.9311,
+          "ci95_mean": [
+            0.8974,
+            0.9649
+          ],
+          "median": 0.934,
+          "iqr": [
+            0.9042,
+            0.9572
+          ],
+          "stdev": 0.0385,
+          "min": 0.8826,
+          "max": 0.9777
+        },
+        "p99_ms": {
+          "n_repetitions": 5,
+          "mean": 1.2414,
+          "ci95_mean": [
+            1.1997,
+            1.2831
+          ],
+          "median": 1.2529,
+          "iqr": [
+            1.2129,
+            1.2542
+          ],
+          "stdev": 0.0476,
+          "min": 1.1804,
+          "max": 1.3064
+        }
+      },
+      {
+        "threads": 4,
+        "ops_total": 48000,
+        "throughput_ops_per_s": {
+          "n_repetitions": 5,
+          "mean": 4456.192,
+          "ci95_mean": [
+            4325.1899,
+            4587.1941
+          ],
+          "median": 4395.128,
+          "iqr": [
+            4334.4615,
+            4553.289
+          ],
+          "stdev": 149.4539,
+          "min": 4329.1895,
+          "max": 4668.892
+        },
+        "p50_ms": {
+          "n_repetitions": 5,
+          "mean": 0.004,
+          "ci95_mean": [
+            0.0039,
+            0.004
+          ],
+          "median": 0.004,
+          "iqr": [
+            0.0039,
+            0.004
+          ],
+          "stdev": 0.0,
+          "min": 0.0039,
+          "max": 0.004
+        },
+        "p95_ms": {
+          "n_repetitions": 5,
+          "mean": 3.5586,
+          "ci95_mean": [
+            3.4441,
+            3.6732
+          ],
+          "median": 3.587,
+          "iqr": [
+            3.4525,
+            3.6687
+          ],
+          "stdev": 0.1307,
+          "min": 3.3949,
+          "max": 3.6902
+        },
+        "p99_ms": {
+          "n_repetitions": 5,
+          "mean": 4.7957,
+          "ci95_mean": [
+            4.6005,
+            4.9909
+          ],
+          "median": 4.8833,
+          "iqr": [
+            4.5677,
+            4.9807
+          ],
+          "stdev": 0.2227,
+          "min": 4.5459,
+          "max": 5.0009
+        }
+      },
+      {
+        "threads": 8,
+        "ops_total": 48000,
+        "throughput_ops_per_s": {
+          "n_repetitions": 5,
+          "mean": 4669.4208,
+          "ci95_mean": [
+            4469.483,
+            4869.3586
+          ],
+          "median": 4616.4543,
+          "iqr": [
+            4498.9147,
+            4686.9405
+          ],
+          "stdev": 228.0992,
+          "min": 4494.2571,
+          "max": 5050.5376
+        },
+        "p50_ms": {
+          "n_repetitions": 5,
+          "mean": 0.0039,
+          "ci95_mean": [
+            0.0038,
+            0.004
+          ],
+          "median": 0.0039,
+          "iqr": [
+            0.0039,
+            0.004
+          ],
+          "stdev": 0.0001,
+          "min": 0.0037,
+          "max": 0.004
+        },
+        "p95_ms": {
+          "n_repetitions": 5,
+          "mean": 6.9322,
+          "ci95_mean": [
+            6.619,
+            7.2454
+          ],
+          "median": 6.9987,
+          "iqr": [
+            6.9031,
+            7.1739
+          ],
+          "stdev": 0.3573,
+          "min": 6.341,
+          "max": 7.2445
+        },
+        "p99_ms": {
+          "n_repetitions": 5,
+          "mean": 9.283,
+          "ci95_mean": [
+            8.7563,
+            9.8098
+          ],
+          "median": 9.2776,
+          "iqr": [
+            9.2417,
+            9.7273
+          ],
+          "stdev": 0.6009,
+          "min": 8.3206,
+          "max": 9.8479
+        }
+      },
+      {
+        "threads": 16,
+        "ops_total": 48000,
+        "throughput_ops_per_s": {
+          "n_repetitions": 5,
+          "mean": 6145.4679,
+          "ci95_mean": [
+            5013.5992,
+            7277.3366
+          ],
+          "median": 5964.145,
+          "iqr": [
+            5037.2682,
+            7159.667
+          ],
+          "stdev": 1291.2936,
+          "min": 4809.6524,
+          "max": 7756.6068
+        },
+        "p50_ms": {
+          "n_repetitions": 5,
+          "mean": 0.0041,
+          "ci95_mean": [
+            0.0036,
+            0.0045
+          ],
+          "median": 0.0043,
+          "iqr": [
+            0.0036,
+            0.0045
+          ],
+          "stdev": 0.0005,
+          "min": 0.0034,
+          "max": 0.0046
+        },
+        "p95_ms": {
+          "n_repetitions": 5,
+          "mean": 9.5712,
+          "ci95_mean": [
+            7.7634,
+            11.379
+          ],
+          "median": 8.8575,
+          "iqr": [
+            8.1412,
+            11.3885
+          ],
+          "stdev": 2.0624,
+          "min": 7.3781,
+          "max": 12.0907
+        },
+        "p99_ms": {
+          "n_repetitions": 5,
+          "mean": 12.0329,
+          "ci95_mean": [
+            10.4081,
+            13.6577
+          ],
+          "median": 11.3958,
+          "iqr": [
+            10.7055,
+            13.2119
+          ],
+          "stdev": 1.8537,
+          "min": 10.2034,
+          "max": 14.648
+        }
+      },
+      {
+        "threads": 32,
+        "ops_total": 48000,
+        "throughput_ops_per_s": {
+          "n_repetitions": 5,
+          "mean": 12005.0917,
+          "ci95_mean": [
+            9724.1098,
+            14286.0737
+          ],
+          "median": 10927.2444,
+          "iqr": [
+            9792.2188,
+            14543.5625
+          ],
+          "stdev": 2602.2605,
+          "min": 9707.1087,
+          "max": 15055.3243
+        },
+        "p50_ms": {
+          "n_repetitions": 5,
+          "mean": 0.0032,
+          "ci95_mean": [
+            0.0024,
+            0.0041
+          ],
+          "median": 0.0039,
+          "iqr": [
+            0.0022,
+            0.0039
+          ],
+          "stdev": 0.001,
+          "min": 0.0021,
+          "max": 0.0041
+        },
+        "p95_ms": {
+          "n_repetitions": 5,
+          "mean": 11.0694,
+          "ci95_mean": [
+            6.9961,
+            15.1428
+          ],
+          "median": 13.78,
+          "iqr": [
+            6.1237,
+            13.9715
+          ],
+          "stdev": 4.6471,
+          "min": 5.9438,
+          "max": 15.5283
+        },
+        "p99_ms": {
+          "n_repetitions": 5,
+          "mean": 14.6686,
+          "ci95_mean": [
+            10.432,
+            18.9053
+          ],
+          "median": 17.3333,
+          "iqr": [
+            9.6381,
+            17.8905
+          ],
+          "stdev": 4.8334,
+          "min": 9.2261,
+          "max": 19.2552
+        }
+      },
+      {
+        "threads": 64,
+        "ops_total": 48000,
+        "throughput_ops_per_s": {
+          "n_repetitions": 5,
+          "mean": 27421.9409,
+          "ci95_mean": [
+            25750.9675,
+            29092.9144
+          ],
+          "median": 28377.6689,
+          "iqr": [
+            25769.0643,
+            28492.8548
+          ],
+          "stdev": 1906.3317,
+          "min": 25035.7086,
+          "max": 29434.4082
+        },
+        "p50_ms": {
+          "n_repetitions": 5,
+          "mean": 0.0012,
+          "ci95_mean": [
+            0.0011,
+            0.0013
+          ],
+          "median": 0.0012,
+          "iqr": [
+            0.0011,
+            0.0012
+          ],
+          "stdev": 0.0002,
+          "min": 0.001,
+          "max": 0.0014
+        },
+        "p95_ms": {
+          "n_repetitions": 5,
+          "mean": 2.937,
+          "ci95_mean": [
+            2.8155,
+            3.0585
+          ],
+          "median": 3.0108,
+          "iqr": [
+            2.8468,
+            3.0126
+          ],
+          "stdev": 0.1386,
+          "min": 2.7403,
+          "max": 3.0745
+        },
+        "p99_ms": {
+          "n_repetitions": 5,
+          "mean": 8.7068,
+          "ci95_mean": [
+            8.1681,
+            9.2456
+          ],
+          "median": 8.4191,
+          "iqr": [
+            8.3486,
+            9.2219
+          ],
+          "stdev": 0.6147,
+          "min": 8.0559,
+          "max": 9.4886
+        }
+      },
+      {
+        "threads": 128,
+        "ops_total": 48000,
+        "throughput_ops_per_s": {
+          "n_repetitions": 5,
+          "mean": 51945.1763,
+          "ci95_mean": [
+            50530.1979,
+            53360.1548
+          ],
+          "median": 52407.5176,
+          "iqr": [
+            51702.2203,
+            52726.367
+          ],
+          "stdev": 1614.2796,
+          "min": 49318.8624,
+          "max": 53570.9143
+        },
+        "p50_ms": {
+          "n_repetitions": 5,
+          "mean": 0.001,
+          "ci95_mean": [
+            0.0009,
+            0.0012
+          ],
+          "median": 0.0009,
+          "iqr": [
+            0.0009,
+            0.001
+          ],
+          "stdev": 0.0002,
+          "min": 0.0009,
+          "max": 0.0013
+        },
+        "p95_ms": {
+          "n_repetitions": 5,
+          "mean": 0.0104,
+          "ci95_mean": [
+            0.0097,
+            0.011
+          ],
+          "median": 0.0107,
+          "iqr": [
+            0.01,
+            0.0109
+          ],
+          "stdev": 0.0007,
+          "min": 0.0093,
+          "max": 0.0109
+        },
+        "p99_ms": {
+          "n_repetitions": 5,
+          "mean": 7.2462,
+          "ci95_mean": [
+            7.0805,
+            7.412
+          ],
+          "median": 7.261,
+          "iqr": [
+            7.0722,
+            7.3192
+          ],
+          "stdev": 0.1891,
+          "min": 7.0619,
+          "max": 7.5168
+        }
+      }
+    ]
+  },
+  "S2_circuit_breaker_correctness_oracle": [
+    {
+      "threads": 8,
+      "calls_per_thread": 5000,
+      "expected_failure_count": 40000,
+      "observed_failure_count": 40000,
+      "lost_updates": 0,
+      "no_lost_updates": true,
+      "state_still_closed": "CBState.CLOSED"
+    },
+    {
+      "threads": 32,
+      "calls_per_thread": 2000,
+      "expected_failure_count": 64000,
+      "observed_failure_count": 64000,
+      "lost_updates": 0,
+      "no_lost_updates": true,
+      "state_still_closed": "CBState.CLOSED"
+    },
+    {
+      "threads": 128,
+      "calls_per_thread": 500,
+      "expected_failure_count": 64000,
+      "observed_failure_count": 64000,
+      "lost_updates": 0,
+      "no_lost_updates": true,
+      "state_still_closed": "CBState.CLOSED"
+    }
+  ],
+  "S3_payload_sweep": {
+    "trials_per_rep": 400,
+    "repetitions": 5,
+    "stage_order": "HMAC -> idempotency -> rate limit (matches documented order)",
+    "sweep": [
+      {
+        "target_bytes": 1000,
+        "actual_bytes": 1162,
+        "hmac_p50_us": {
+          "n_repetitions": 5,
+          "mean": 15.5429,
+          "ci95_mean": [
+            15.0238,
+            16.062
+          ],
+          "median": 15.456,
+          "iqr": [
+            15.0555,
+            15.7015
+          ],
+          "stdev": 0.5922,
+          "min": 15.0275,
+          "max": 16.474
+        },
+        "idempotency_p50_us": {
+          "n_repetitions": 5,
+          "mean": 194.7229,
+          "ci95_mean": [
+            188.1052,
+            201.3406
+          ],
+          "median": 196.408,
+          "iqr": [
+            189.0895,
+            199.6775
+          ],
+          "stdev": 7.5498,
+          "min": 185.0445,
+          "max": 203.395
+        },
+        "rate_limit_p50_us": {
+          "n_repetitions": 5,
+          "mean": 270.2212,
+          "ci95_mean": [
+            261.287,
+            279.1554
+          ],
+          "median": 271.7045,
+          "iqr": [
+            261.225,
+            276.874
+          ],
+          "stdev": 10.1926,
+          "min": 258.6555,
+          "max": 282.647
+        },
+        "end_to_end_p99_us": {
+          "n_repetitions": 5,
+          "mean": 744.9441,
+          "ci95_mean": [
+            650.5906,
+            839.2975
+          ],
+          "median": 721.9611,
+          "iqr": [
+            686.5511,
+            764.2881
+          ],
+          "stdev": 107.6432,
+          "min": 634.3406,
+          "max": 917.5795
+        }
+      },
+      {
+        "target_bytes": 5000,
+        "actual_bytes": 5160,
+        "hmac_p50_us": {
+          "n_repetitions": 5,
+          "mean": 25.2072,
+          "ci95_mean": [
+            24.172,
+            26.2424
+          ],
+          "median": 24.952,
+          "iqr": [
+            24.3165,
+            25.434
+          ],
+          "stdev": 1.181,
+          "min": 24.2095,
+          "max": 27.124
+        },
+        "idempotency_p50_us": {
+          "n_repetitions": 5,
+          "mean": 207.2946,
+          "ci95_mean": [
+            197.4862,
+            217.103
+          ],
+          "median": 205.576,
+          "iqr": [
+            199.719,
+            208.177
+          ],
+          "stdev": 11.19,
+          "min": 197.2815,
+          "max": 225.7195
+        },
+        "rate_limit_p50_us": {
+          "n_repetitions": 5,
+          "mean": 291.6295,
+          "ci95_mean": [
+            279.2012,
+            304.0578
+          ],
+          "median": 286.627,
+          "iqr": [
+            283.2525,
+            295.6465
+          ],
+          "stdev": 14.1788,
+          "min": 278.297,
+          "max": 314.3245
+        },
+        "end_to_end_p99_us": {
+          "n_repetitions": 5,
+          "mean": 763.7322,
+          "ci95_mean": [
+            700.6935,
+            826.7708
+          ],
+          "median": 779.2384,
+          "iqr": [
+            701.3604,
+            801.1921
+          ],
+          "stdev": 71.9177,
+          "min": 681.5141,
+          "max": 855.3558
+        }
+      },
+      {
+        "target_bytes": 10000,
+        "actual_bytes": 10032,
+        "hmac_p50_us": {
+          "n_repetitions": 5,
+          "mean": 37.5068,
+          "ci95_mean": [
+            36.6034,
+            38.4102
+          ],
+          "median": 36.9025,
+          "iqr": [
+            36.895,
+            38.286
+          ],
+          "stdev": 1.0307,
+          "min": 36.5405,
+          "max": 38.91
+        },
+        "idempotency_p50_us": {
+          "n_repetitions": 5,
+          "mean": 216.7302,
+          "ci95_mean": [
+            205.4327,
+            228.0277
+          ],
+          "median": 216.7365,
+          "iqr": [
+            214.423,
+            222.9995
+          ],
+          "stdev": 12.8887,
+          "min": 197.2535,
+          "max": 232.2385
+        },
+        "rate_limit_p50_us": {
+          "n_repetitions": 5,
+          "mean": 302.5084,
+          "ci95_mean": [
+            288.0004,
+            317.0164
+          ],
+          "median": 307.504,
+          "iqr": [
+            292.235,
+            311.332
+          ],
+          "stdev": 16.5514,
+          "min": 279.7455,
+          "max": 321.7255
+        },
+        "end_to_end_p99_us": {
+          "n_repetitions": 5,
+          "mean": 821.8765,
+          "ci95_mean": [
+            756.3387,
+            887.4142
+          ],
+          "median": 819.4418,
+          "iqr": [
+            776.5819,
+            822.137
+          ],
+          "stdev": 74.7688,
+          "min": 747.6893,
+          "max": 943.5324
+        }
+      },
+      {
+        "target_bytes": 50000,
+        "actual_bytes": 50064,
+        "hmac_p50_us": {
+          "n_repetitions": 5,
+          "mean": 131.9613,
+          "ci95_mean": [
+            129.3942,
+            134.5284
+          ],
+          "median": 130.634,
+          "iqr": [
+            130.215,
+            132.5405
+          ],
+          "stdev": 2.9286,
+          "min": 129.5995,
+          "max": 136.8175
+        },
+        "idempotency_p50_us": {
+          "n_repetitions": 5,
+          "mean": 233.5895,
+          "ci95_mean": [
+            227.3677,
+            239.8113
+          ],
+          "median": 232.452,
+          "iqr": [
+            229.577,
+            239.2525
+          ],
+          "stdev": 7.0981,
+          "min": 224.617,
+          "max": 242.049
+        },
+        "rate_limit_p50_us": {
+          "n_repetitions": 5,
+          "mean": 302.3219,
+          "ci95_mean": [
+            293.9193,
+            310.7245
+          ],
+          "median": 299.678,
+          "iqr": [
+            296.547,
+            304.4885
+          ],
+          "stdev": 9.5862,
+          "min": 293.1395,
+          "max": 317.7565
+        },
+        "end_to_end_p99_us": {
+          "n_repetitions": 5,
+          "mean": 1075.6429,
+          "ci95_mean": [
+            987.3657,
+            1163.92
+          ],
+          "median": 1111.7322,
+          "iqr": [
+            980.1567,
+            1113.9187
+          ],
+          "stdev": 100.7111,
+          "min": 966.9079,
+          "max": 1205.4986
+        }
+      },
+      {
+        "target_bytes": 100000,
+        "actual_bytes": 100114,
+        "hmac_p50_us": {
+          "n_repetitions": 5,
+          "mean": 250.3934,
+          "ci95_mean": [
+            249.7028,
+            251.084
+          ],
+          "median": 250.5005,
+          "iqr": [
+            249.686,
+            250.6035
+          ],
+          "stdev": 0.7879,
+          "min": 249.6265,
+          "max": 251.5505
+        },
+        "idempotency_p50_us": {
+          "n_repetitions": 5,
+          "mean": 259.1963,
+          "ci95_mean": [
+            253.9811,
+            264.4115
+          ],
+          "median": 259.557,
+          "iqr": [
+            257.1775,
+            261.5065
+          ],
+          "stdev": 5.9498,
+          "min": 250.751,
+          "max": 266.9895
+        },
+        "rate_limit_p50_us": {
+          "n_repetitions": 5,
+          "mean": 307.0868,
+          "ci95_mean": [
+            299.611,
+            314.5626
+          ],
+          "median": 306.824,
+          "iqr": [
+            301.994,
+            310.351
+          ],
+          "stdev": 8.5288,
+          "min": 296.905,
+          "max": 319.36
+        },
+        "end_to_end_p99_us": {
+          "n_repetitions": 5,
+          "mean": 1292.8795,
+          "ci95_mean": [
+            1167.3538,
+            1418.4052
+          ],
+          "median": 1216.5201,
+          "iqr": [
+            1209.9511,
+            1290.6961
+          ],
+          "stdev": 143.2061,
+          "min": 1205.861,
+          "max": 1541.3691
+        }
+      },
+      {
+        "target_bytes": 500000,
+        "actual_bytes": 500086,
+        "hmac_p50_us": {
+          "n_repetitions": 5,
+          "mean": 1212.8599,
+          "ci95_mean": [
+            1206.4531,
+            1219.2667
+          ],
+          "median": 1212.697,
+          "iqr": [
+            1209.865,
+            1218.929
+          ],
+          "stdev": 7.3093,
+          "min": 1202.359,
+          "max": 1220.4495
+        },
+        "idempotency_p50_us": {
+          "n_repetitions": 5,
+          "mean": 296.728,
+          "ci95_mean": [
+            289.9882,
+            303.4678
+          ],
+          "median": 295.638,
+          "iqr": [
+            293.205,
+            296.9035
+          ],
+          "stdev": 7.6891,
+          "min": 288.6265,
+          "max": 309.267
+        },
+        "rate_limit_p50_us": {
+          "n_repetitions": 5,
+          "mean": 314.9619,
+          "ci95_mean": [
+            302.7587,
+            327.1651
+          ],
+          "median": 309.0305,
+          "iqr": [
+            308.0755,
+            313.4575
+          ],
+          "stdev": 13.9221,
+          "min": 304.9785,
+          "max": 339.2675
+        },
+        "end_to_end_p99_us": {
+          "n_repetitions": 5,
+          "mean": 2754.781,
+          "ci95_mean": [
+            2429.0937,
+            3080.4683
+          ],
+          "median": 2666.5665,
+          "iqr": [
+            2480.5306,
+            3129.3397
+          ],
+          "stdev": 371.5606,
+          "min": 2343.2302,
+          "max": 3154.238
+        }
+      },
+      {
+        "target_bytes": 1000000,
+        "actual_bytes": 1000102,
+        "hmac_p50_us": {
+          "n_repetitions": 5,
+          "mean": 2434.3168,
+          "ci95_mean": [
+            2421.3419,
+            2447.2917
+          ],
+          "median": 2429.0595,
+          "iqr": [
+            2428.6355,
+            2437.5255
+          ],
+          "stdev": 14.8024,
+          "min": 2418.4795,
+          "max": 2457.884
+        },
+        "idempotency_p50_us": {
+          "n_repetitions": 5,
+          "mean": 331.1381,
+          "ci95_mean": [
+            315.2407,
+            347.0355
+          ],
+          "median": 327.9925,
+          "iqr": [
+            322.8515,
+            331.618
+          ],
+          "stdev": 18.1366,
+          "min": 312.3555,
+          "max": 360.873
+        },
+        "rate_limit_p50_us": {
+          "n_repetitions": 5,
+          "mean": 329.1827,
+          "ci95_mean": [
+            315.617,
+            342.7484
+          ],
+          "median": 325.779,
+          "iqr": [
+            320.364,
+            330.578
+          ],
+          "stdev": 15.4764,
+          "min": 314.4945,
+          "max": 354.698
+        },
+        "end_to_end_p99_us": {
+          "n_repetitions": 5,
+          "mean": 4496.2335,
+          "ci95_mean": [
+            4160.5217,
+            4831.9453
+          ],
+          "median": 4467.8125,
+          "iqr": [
+            4380.4782,
+            4711.4267
+          ],
+          "stdev": 382.9971,
+          "min": 3949.0072,
+          "max": 4972.4428
+        }
+      }
+    ]
+  },
+  "S4_scanner_throughput_repeated": {
+    "scans_per_s": {
+      "n_repetitions": 30,
+      "mean": 11104.2721,
+      "ci95_mean": [
+        11060.2903,
+        11148.2539
+      ],
+      "median": 11113.6771,
+      "iqr": [
+        11037.599,
+        11209.0674
+      ],
+      "stdev": 122.9072,
+      "min": 10843.801,
+      "max": 11329.6235
+    },
+    "n_per_rep": 2000
+  },
+  "S5_fault_injection": {
+    "redis_killed_midrun": {
+      "total_attempts": 300,
+      "killed_after": 120,
+      "accepted_before_failure": 120,
+      "degraded_gracefully": 180,
+      "uncaught_exceptions": 0,
+      "survived_without_exception": true,
+      "note": "enqueue() must never raise: it returns a sentinel so the caller can fall back to direct dispatch"
+    },
+    "idempotency_without_redis": {
+      "first_call_is_duplicate": false,
+      "second_call_is_duplicate": true,
+      "in_memory_fallback_preserves_dedup": true
+    },
+    "recovery_after_redis_restart": {
+      "enqueue_succeeds_again": true
+    },
+    "duplicate_delivery_suppression": {
+      "deliveries": 10,
+      "processed": 1,
+      "suppressed_as_duplicate": 9,
+      "exactly_once": true
+    },
+    "sustained_storm": {
+      "arrivals": 1000,
+      "accepted": 200,
+      "rejected_full": 800,
+      "configured_cap": 200,
+      "cap_never_exceeded": true
+    }
+  }
+}

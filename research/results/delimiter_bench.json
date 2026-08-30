@@ -1,0 +1,518 @@
+{
+  "design": "Only the character immediately following the credential varies between cells, so any difference is attributable to the rule's boundary handling.",
+  "n_samples_per_cell": 20,
+  "n_types": 6,
+  "n_terminators": 16,
+  "n_files": 1920,
+  "terminator_templates": {
+    "end_of_line": "cfg = {V}",
+    "double_quote": "cfg = \"{V}\"",
+    "single_quote": "cfg = '{V}'",
+    "whitespace": "cfg = {V} next",
+    "semicolon": "cfg = {V};",
+    "backtick": "cfg = `{V}`",
+    "colon": "cfg:{V}",
+    "comma": "vals = [{V}, 1]",
+    "close_paren": "client = Client({V})",
+    "close_bracket": "vals = a[{V}]",
+    "close_brace": "vals = {{{V}}}",
+    "ampersand": "url = https://h/p?k={V}&z=1",
+    "slash": "url = https://h/{V}/x",
+    "angle_bracket": "tag = <{V}>",
+    "pipe": "cmd = echo {V}|cat",
+    "question_mark": "url = https://h/{V}?x=1"
+  },
+  "results": {
+    "GitHub Autopilot": {
+      "tool": "GitHub Autopilot",
+      "types_covered": [
+        "aws_access_key_id",
+        "github_pat",
+        "gcp_api_key",
+        "npm_token",
+        "stripe_secret_key",
+        "sendgrid_api_key"
+      ],
+      "per_type": {
+        "aws_access_key_id": {
+          "expected_rule": "AWS Access Key ID",
+          "by_terminator": {
+            "end_of_line": 1.0,
+            "double_quote": 1.0,
+            "single_quote": 1.0,
+            "whitespace": 1.0,
+            "semicolon": 1.0,
+            "backtick": 1.0,
+            "colon": 1.0,
+            "comma": 1.0,
+            "close_paren": 1.0,
+            "close_bracket": 1.0,
+            "close_brace": 1.0,
+            "ampersand": 1.0,
+            "slash": 1.0,
+            "angle_bracket": 1.0,
+            "pipe": 1.0,
+            "question_mark": 1.0
+          }
+        },
+        "github_pat": {
+          "expected_rule": "GitHub PAT (classic)",
+          "by_terminator": {
+            "end_of_line": 1.0,
+            "double_quote": 1.0,
+            "single_quote": 1.0,
+            "whitespace": 1.0,
+            "semicolon": 1.0,
+            "backtick": 1.0,
+            "colon": 1.0,
+            "comma": 1.0,
+            "close_paren": 1.0,
+            "close_bracket": 1.0,
+            "close_brace": 1.0,
+            "ampersand": 1.0,
+            "slash": 1.0,
+            "angle_bracket": 1.0,
+            "pipe": 1.0,
+            "question_mark": 1.0
+          }
+        },
+        "gcp_api_key": {
+          "expected_rule": "GCP API Key",
+          "by_terminator": {
+            "end_of_line": 1.0,
+            "double_quote": 1.0,
+            "single_quote": 1.0,
+            "whitespace": 1.0,
+            "semicolon": 0.95,
+            "backtick": 1.0,
+            "colon": 0.95,
+            "comma": 1.0,
+            "close_paren": 1.0,
+            "close_bracket": 1.0,
+            "close_brace": 1.0,
+            "ampersand": 1.0,
+            "slash": 0.95,
+            "angle_bracket": 1.0,
+            "pipe": 0.95,
+            "question_mark": 1.0
+          }
+        },
+        "npm_token": {
+          "expected_rule": "npm Auth Token",
+          "by_terminator": {
+            "end_of_line": 1.0,
+            "double_quote": 1.0,
+            "single_quote": 1.0,
+            "whitespace": 1.0,
+            "semicolon": 1.0,
+            "backtick": 1.0,
+            "colon": 1.0,
+            "comma": 1.0,
+            "close_paren": 1.0,
+            "close_bracket": 1.0,
+            "close_brace": 1.0,
+            "ampersand": 1.0,
+            "slash": 1.0,
+            "angle_bracket": 1.0,
+            "pipe": 1.0,
+            "question_mark": 1.0
+          }
+        },
+        "stripe_secret_key": {
+          "expected_rule": "Stripe Secret Key",
+          "by_terminator": {
+            "end_of_line": 1.0,
+            "double_quote": 1.0,
+            "single_quote": 1.0,
+            "whitespace": 1.0,
+            "semicolon": 1.0,
+            "backtick": 1.0,
+            "colon": 1.0,
+            "comma": 1.0,
+            "close_paren": 1.0,
+            "close_bracket": 1.0,
+            "close_brace": 1.0,
+            "ampersand": 1.0,
+            "slash": 1.0,
+            "angle_bracket": 1.0,
+            "pipe": 1.0,
+            "question_mark": 1.0
+          }
+        },
+        "sendgrid_api_key": {
+          "expected_rule": "SendGrid API Key",
+          "by_terminator": {
+            "end_of_line": 1.0,
+            "double_quote": 1.0,
+            "single_quote": 1.0,
+            "whitespace": 1.0,
+            "semicolon": 0.95,
+            "backtick": 1.0,
+            "colon": 1.0,
+            "comma": 0.95,
+            "close_paren": 1.0,
+            "close_bracket": 1.0,
+            "close_brace": 1.0,
+            "ampersand": 1.0,
+            "slash": 1.0,
+            "angle_bracket": 1.0,
+            "pipe": 1.0,
+            "question_mark": 1.0
+          }
+        }
+      },
+      "aggregate_by_terminator": {
+        "end_of_line": 1.0,
+        "double_quote": 1.0,
+        "single_quote": 1.0,
+        "whitespace": 1.0,
+        "semicolon": 0.9833,
+        "backtick": 1.0,
+        "colon": 0.9917,
+        "comma": 0.9917,
+        "close_paren": 1.0,
+        "close_bracket": 1.0,
+        "close_brace": 1.0,
+        "ampersand": 1.0,
+        "slash": 0.9917,
+        "angle_bracket": 1.0,
+        "pipe": 0.9917,
+        "question_mark": 1.0
+      },
+      "terminators_accepted": [
+        "end_of_line",
+        "double_quote",
+        "single_quote",
+        "whitespace",
+        "semicolon",
+        "backtick",
+        "colon",
+        "comma",
+        "close_paren",
+        "close_bracket",
+        "close_brace",
+        "ampersand",
+        "slash",
+        "angle_bracket",
+        "pipe",
+        "question_mark"
+      ],
+      "terminators_rejected": [],
+      "terminators_partial": [],
+      "n_terminators_rejected": 0
+    },
+    "Gitleaks 8.21.2": {
+      "tool": "Gitleaks 8.21.2",
+      "types_covered": [
+        "aws_access_key_id",
+        "github_pat",
+        "gcp_api_key",
+        "npm_token",
+        "stripe_secret_key",
+        "sendgrid_api_key"
+      ],
+      "per_type": {
+        "aws_access_key_id": {
+          "expected_rule": "aws-access-token",
+          "by_terminator": {
+            "end_of_line": 1.0,
+            "double_quote": 1.0,
+            "single_quote": 1.0,
+            "whitespace": 1.0,
+            "semicolon": 1.0,
+            "backtick": 1.0,
+            "colon": 1.0,
+            "comma": 0.0,
+            "close_paren": 0.0,
+            "close_bracket": 0.0,
+            "close_brace": 0.0,
+            "ampersand": 0.0,
+            "slash": 0.0,
+            "angle_bracket": 0.0,
+            "pipe": 1.0,
+            "question_mark": 0.0
+          }
+        },
+        "github_pat": {
+          "expected_rule": "github-pat",
+          "by_terminator": {
+            "end_of_line": 1.0,
+            "double_quote": 1.0,
+            "single_quote": 1.0,
+            "whitespace": 1.0,
+            "semicolon": 1.0,
+            "backtick": 1.0,
+            "colon": 1.0,
+            "comma": 1.0,
+            "close_paren": 1.0,
+            "close_bracket": 1.0,
+            "close_brace": 1.0,
+            "ampersand": 1.0,
+            "slash": 1.0,
+            "angle_bracket": 1.0,
+            "pipe": 1.0,
+            "question_mark": 1.0
+          }
+        },
+        "gcp_api_key": {
+          "expected_rule": "gcp-api-key",
+          "by_terminator": {
+            "end_of_line": 1.0,
+            "double_quote": 1.0,
+            "single_quote": 1.0,
+            "whitespace": 1.0,
+            "semicolon": 1.0,
+            "backtick": 1.0,
+            "colon": 1.0,
+            "comma": 0.0,
+            "close_paren": 0.0,
+            "close_bracket": 0.0,
+            "close_brace": 0.0,
+            "ampersand": 0.0,
+            "slash": 0.0,
+            "angle_bracket": 0.0,
+            "pipe": 1.0,
+            "question_mark": 0.0
+          }
+        },
+        "npm_token": {
+          "expected_rule": "npm-access-token",
+          "by_terminator": {
+            "end_of_line": 1.0,
+            "double_quote": 1.0,
+            "single_quote": 1.0,
+            "whitespace": 1.0,
+            "semicolon": 1.0,
+            "backtick": 1.0,
+            "colon": 1.0,
+            "comma": 0.0,
+            "close_paren": 0.0,
+            "close_bracket": 0.0,
+            "close_brace": 0.0,
+            "ampersand": 0.0,
+            "slash": 0.0,
+            "angle_bracket": 0.0,
+            "pipe": 1.0,
+            "question_mark": 0.0
+          }
+        },
+        "stripe_secret_key": {
+          "expected_rule": "stripe-access-token",
+          "by_terminator": {
+            "end_of_line": 1.0,
+            "double_quote": 1.0,
+            "single_quote": 1.0,
+            "whitespace": 1.0,
+            "semicolon": 1.0,
+            "backtick": 1.0,
+            "colon": 1.0,
+            "comma": 0.0,
+            "close_paren": 0.0,
+            "close_bracket": 0.0,
+            "close_brace": 0.0,
+            "ampersand": 0.0,
+            "slash": 0.0,
+            "angle_bracket": 0.0,
+            "pipe": 1.0,
+            "question_mark": 0.0
+          }
+        },
+        "sendgrid_api_key": {
+          "expected_rule": "sendgrid-api-token",
+          "by_terminator": {
+            "end_of_line": 1.0,
+            "double_quote": 1.0,
+            "single_quote": 1.0,
+            "whitespace": 1.0,
+            "semicolon": 1.0,
+            "backtick": 1.0,
+            "colon": 1.0,
+            "comma": 0.0,
+            "close_paren": 0.0,
+            "close_bracket": 0.0,
+            "close_brace": 0.0,
+            "ampersand": 0.0,
+            "slash": 0.0,
+            "angle_bracket": 0.0,
+            "pipe": 1.0,
+            "question_mark": 0.0
+          }
+        }
+      },
+      "aggregate_by_terminator": {
+        "end_of_line": 1.0,
+        "double_quote": 1.0,
+        "single_quote": 1.0,
+        "whitespace": 1.0,
+        "semicolon": 1.0,
+        "backtick": 1.0,
+        "colon": 1.0,
+        "comma": 0.1667,
+        "close_paren": 0.1667,
+        "close_bracket": 0.1667,
+        "close_brace": 0.1667,
+        "ampersand": 0.1667,
+        "slash": 0.1667,
+        "angle_bracket": 0.1667,
+        "pipe": 1.0,
+        "question_mark": 0.1667
+      },
+      "terminators_accepted": [
+        "end_of_line",
+        "double_quote",
+        "single_quote",
+        "whitespace",
+        "semicolon",
+        "backtick",
+        "colon",
+        "pipe"
+      ],
+      "terminators_rejected": [],
+      "terminators_partial": [
+        "comma",
+        "close_paren",
+        "close_bracket",
+        "close_brace",
+        "ampersand",
+        "slash",
+        "angle_bracket",
+        "question_mark"
+      ],
+      "n_terminators_rejected": 0
+    },
+    "TruffleHog 3.82.13": {
+      "tool": "TruffleHog 3.82.13",
+      "types_covered": [
+        "github_pat",
+        "npm_token",
+        "stripe_secret_key",
+        "sendgrid_api_key"
+      ],
+      "per_type": {
+        "github_pat": {
+          "expected_rule": "Github",
+          "by_terminator": {
+            "end_of_line": 1.0,
+            "double_quote": 1.0,
+            "single_quote": 1.0,
+            "whitespace": 0.95,
+            "semicolon": 1.0,
+            "backtick": 1.0,
+            "colon": 1.0,
+            "comma": 1.0,
+            "close_paren": 1.0,
+            "close_bracket": 1.0,
+            "close_brace": 1.0,
+            "ampersand": 1.0,
+            "slash": 1.0,
+            "angle_bracket": 1.0,
+            "pipe": 1.0,
+            "question_mark": 1.0
+          }
+        },
+        "npm_token": {
+          "expected_rule": "NpmToken",
+          "by_terminator": {
+            "end_of_line": 1.0,
+            "double_quote": 1.0,
+            "single_quote": 1.0,
+            "whitespace": 1.0,
+            "semicolon": 1.0,
+            "backtick": 1.0,
+            "colon": 1.0,
+            "comma": 1.0,
+            "close_paren": 0.95,
+            "close_bracket": 1.0,
+            "close_brace": 1.0,
+            "ampersand": 1.0,
+            "slash": 1.0,
+            "angle_bracket": 1.0,
+            "pipe": 1.0,
+            "question_mark": 1.0
+          }
+        },
+        "stripe_secret_key": {
+          "expected_rule": "Stripe",
+          "by_terminator": {
+            "end_of_line": 1.0,
+            "double_quote": 1.0,
+            "single_quote": 1.0,
+            "whitespace": 1.0,
+            "semicolon": 1.0,
+            "backtick": 1.0,
+            "colon": 1.0,
+            "comma": 1.0,
+            "close_paren": 1.0,
+            "close_bracket": 1.0,
+            "close_brace": 1.0,
+            "ampersand": 1.0,
+            "slash": 1.0,
+            "angle_bracket": 1.0,
+            "pipe": 1.0,
+            "question_mark": 1.0
+          }
+        },
+        "sendgrid_api_key": {
+          "expected_rule": "SendGrid",
+          "by_terminator": {
+            "end_of_line": 1.0,
+            "double_quote": 1.0,
+            "single_quote": 1.0,
+            "whitespace": 1.0,
+            "semicolon": 1.0,
+            "backtick": 1.0,
+            "colon": 1.0,
+            "comma": 1.0,
+            "close_paren": 1.0,
+            "close_bracket": 0.95,
+            "close_brace": 1.0,
+            "ampersand": 1.0,
+            "slash": 1.0,
+            "angle_bracket": 1.0,
+            "pipe": 1.0,
+            "question_mark": 1.0
+          }
+        }
+      },
+      "aggregate_by_terminator": {
+        "end_of_line": 1.0,
+        "double_quote": 1.0,
+        "single_quote": 1.0,
+        "whitespace": 0.9875,
+        "semicolon": 1.0,
+        "backtick": 1.0,
+        "colon": 1.0,
+        "comma": 1.0,
+        "close_paren": 0.9875,
+        "close_bracket": 0.9875,
+        "close_brace": 1.0,
+        "ampersand": 1.0,
+        "slash": 1.0,
+        "angle_bracket": 1.0,
+        "pipe": 1.0,
+        "question_mark": 1.0
+      },
+      "terminators_accepted": [
+        "end_of_line",
+        "double_quote",
+        "single_quote",
+        "whitespace",
+        "semicolon",
+        "backtick",
+        "colon",
+        "comma",
+        "close_paren",
+        "close_bracket",
+        "close_brace",
+        "ampersand",
+        "slash",
+        "angle_bracket",
+        "pipe",
+        "question_mark"
+      ],
+      "terminators_rejected": [],
+      "terminators_partial": [],
+      "n_terminators_rejected": 0
+    }
+  }
+}

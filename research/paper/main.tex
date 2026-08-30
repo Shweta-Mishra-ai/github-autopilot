@@ -302,7 +302,7 @@ We also do not treat the subject's operational behaviour as a result of this stu
 \subsection{Researcher bias and evaluation controls}
 \label{sec:bias}
 
-The author wrote the primary subject. That is a competing interest with a specific and predictable direction: it would bias the study toward flattering the subject's scanner. We state the controls used against it, and the evidence that they bit.
+The author wrote the primary subject. That is a competing interest with a specific and predictable direction: it would bias the study toward flattering the subject's scanner. We state the controls used against it, and the evidence that they took effect.
 
 Procedurally: the subject was frozen at commit \texttt{38b2013} before any benchmark was run and never modified in response to a result; the external tools are unmodified official release binaries at pinned versions, verified by SHA-256; all three tools receive byte-identical corpora and identical execution conditions; every raw output is retained in the replication package, including the runs that contradict the subject; no finding was excluded after inspection; and no defect found in the subject was fixed before measurement.
 
@@ -730,6 +730,10 @@ For practice, the implication is twofold: a rule table can be tested against its
 \textbf{Author contributions.} Shweta Mishra is the sole author and is responsible for the study design, implementation, execution, analysis, and manuscript.
 
 \textbf{Ethical approval.} Not applicable. This study involved no human participants and no personal data. All credentials used are synthetic, generated from published format specifications; no live or leaked credential was collected, tested, or redistributed.
+
+\textbf{Consent to participate.} Not applicable. This study involved no human participants.
+
+\textbf{Consent to publish.} Not applicable. This study contains no data, images, or details relating to an individual person.
 
 \bmhead{Replication Package}
 The package contains all harnesses, raw JSON results, redacted finding logs, figure code, a pinned environment, and a one-command \texttt{reproduce.sh}, together with the complete raw data behind the operational characterisation of Online Resource~1. The subject is pinned at commit \texttt{38b2013} of \url{https://github.com/Shweta-Mishra-ai/github-autopilot}, the real-code corpora at their scanned commits, and the comparison tools at Gitleaks 8.21.2 and TruffleHog 3.82.13 with recorded SHA-256 digests. An archived, versioned snapshot of the package is deposited on Zenodo at \url{https://doi.org/10.5281/zenodo.22114221} \citep{mishra2026zenodo}. No number in this paper was estimated or extrapolated; each traces to a recorded script output.

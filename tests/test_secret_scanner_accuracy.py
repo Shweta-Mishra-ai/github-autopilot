@@ -48,6 +48,17 @@ def _rand(alphabet: str, n: int) -> str:
     return "".join(_secrets.choice(alphabet) for _ in range(n))
 
 
+def _rand_distinct(alphabet: str, n: int) -> str:
+    """Draw n characters WITHOUT replacement, so entropy is maximal.
+
+    Sampling with replacement lets a repeated character drag a short value
+    below the detector's entropy-ratio floor, which turns any test that
+    asserts "this value must be reported" into a coin flip.
+    """
+    pool = list(alphabet)
+    return "".join(pool.pop(_secrets.randbelow(len(pool))) for _ in range(n))
+
+
 @pytest.fixture(autouse=True)
 def _quiet():
     """scan_diff logs a warning per detection; silence it for readable output."""
@@ -175,9 +186,17 @@ def test_real_secret_is_always_reported(name):
 # Built by construction instead. Each case is a real, high-entropy secret
 # that happens to contain one placeholder word, and every one of them must
 # be reported.
+#
+# The head and tail are drawn WITHOUT replacement. Drawing with replacement
+# left this test asserting a deterministic outcome on a probabilistic input:
+# a repeated character pushed roughly 3.8% of generated values below the
+# detector's entropy-ratio floor, so the value genuinely was not reportable
+# and the test failed on about one CI run in twelve, on a random Python
+# version. Distinct characters keep every generated value unambiguously
+# high-entropy, which is the premise the assertion actually depends on.
 def _secret_carrying_placeholder_word(word: str) -> str:
-    head = _rand(ALNUM, 14)
-    tail = _rand(ALNUM, 12)
+    head = _rand_distinct(ALNUM, 14)
+    tail = _rand_distinct(ALNUM, 12)
     return f'+dockerhub_pat = "{head}_{word}-{tail}"'
 
 

@@ -47,8 +47,8 @@
           "real_code": 0.0,
           "structural_nonsecret": 0.085
         },
-        "wall_s": 0.09,
-        "samples_per_s": 12204.6
+        "wall_s": 0.07,
+        "samples_per_s": 15796.9
       },
       {
         "tool": "Gitleaks 8.21.2",
@@ -86,29 +86,29 @@
           "real_code": 0.0,
           "structural_nonsecret": 0.0
         },
-        "wall_s": 0.086,
-        "samples_per_s": 12723.0
+        "wall_s": 0.073,
+        "samples_per_s": 15071.8
       },
       {
         "tool": "TruffleHog 3.82.13",
         "confusion": {
-          "tp": 240,
+          "tp": 239,
           "fp": 0,
           "tn": 700,
-          "fn": 160
+          "fn": 161
         },
         "precision": 1.0,
         "precision_ci95": [
           0.9842,
           1.0
         ],
-        "recall": 0.6,
+        "recall": 0.5975,
         "recall_ci95": [
-          0.5513,
-          0.6468
+          0.5487,
+          0.6444
         ],
-        "f1": 0.75,
-        "macro_recall": 0.6,
+        "f1": 0.748,
+        "macro_recall": 0.5975,
         "per_type_recall": {
           "aws_access_key_id": 0.0,
           "gcp_api_key": 0.0,
@@ -118,15 +118,15 @@
           "npm_token": 1.0,
           "openai_project_key": 0.0,
           "sendgrid_api_key": 1.0,
-          "slack_bot_token": 1.0,
+          "slack_bot_token": 0.975,
           "stripe_secret_key": 1.0
         },
         "per_negative_type_fp_rate": {
           "real_code": 0.0,
           "structural_nonsecret": 0.0
         },
-        "wall_s": 2.446,
-        "samples_per_s": 449.6
+        "wall_s": 1.984,
+        "samples_per_s": 554.4
       }
     ]
   },
@@ -139,23 +139,23 @@
       {
         "tool": "GitHub Autopilot",
         "confusion": {
-          "tp": 400,
+          "tp": 399,
           "fp": 17,
           "tn": 683,
-          "fn": 0
+          "fn": 1
         },
-        "precision": 0.9592,
+        "precision": 0.9591,
         "precision_ci95": [
-          0.9357,
-          0.9744
+          0.9355,
+          0.9743
         ],
-        "recall": 1.0,
+        "recall": 0.9975,
         "recall_ci95": [
-          0.9905,
-          1.0
+          0.986,
+          0.9996
         ],
-        "f1": 0.9792,
-        "macro_recall": 1.0,
+        "f1": 0.9779,
+        "macro_recall": 0.9975,
         "per_type_recall": {
           "aws_access_key_id": 1.0,
           "gcp_api_key": 1.0,
@@ -164,7 +164,7 @@
           "jwt": 1.0,
           "npm_token": 1.0,
           "openai_project_key": 1.0,
-          "sendgrid_api_key": 1.0,
+          "sendgrid_api_key": 0.975,
           "slack_bot_token": 1.0,
           "stripe_secret_key": 1.0
         },
@@ -172,8 +172,8 @@
           "real_code": 0.0,
           "structural_nonsecret": 0.085
         },
-        "wall_s": 0.083,
-        "samples_per_s": 13332.9
+        "wall_s": 0.084,
+        "samples_per_s": 13154.9
       },
       {
         "tool": "Gitleaks 8.21.2",
@@ -211,8 +211,8 @@
           "real_code": 0.0,
           "structural_nonsecret": 0.0
         },
-        "wall_s": 0.112,
-        "samples_per_s": 9782.2
+        "wall_s": 0.085,
+        "samples_per_s": 12972.5
       },
       {
         "tool": "TruffleHog 3.82.13",
@@ -250,18 +250,18 @@
           "real_code": 0.0,
           "structural_nonsecret": 0.0
         },
-        "wall_s": 2.321,
-        "samples_per_s": 473.9
+        "wall_s": 1.858,
+        "samples_per_s": 592.0
       }
     ]
   },
   "corpus_sensitivity": {
     "GitHub Autopilot": {
       "recall_A_format_spec": 1.0,
-      "recall_B_structural": 1.0,
-      "delta_recall": 0.0,
+      "recall_B_structural": 0.9975,
+      "delta_recall": -0.0025,
       "f1_A": 0.9792,
-      "f1_B": 0.9792
+      "f1_B": 0.9779
     },
     "Gitleaks 8.21.2": {
       "recall_A_format_spec": 0.8,
@@ -271,10 +271,10 @@
       "f1_B": 0.9474
     },
     "TruffleHog 3.82.13": {
-      "recall_A_format_spec": 0.6,
+      "recall_A_format_spec": 0.5975,
       "recall_B_structural": 0.6,
-      "delta_recall": 0.0,
-      "f1_A": 0.75,
+      "delta_recall": 0.0025,
+      "f1_A": 0.748,
       "f1_B": 0.75
     }
   },

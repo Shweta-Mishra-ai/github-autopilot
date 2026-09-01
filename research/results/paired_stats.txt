@@ -1,0 +1,30 @@
+===== A_format_spec =====
+distinct per-type recall values observed: [0.0, 0.975, 1.0]
+per-type detection deterministic: False
+  GitHub Autopilot     P=0.959 [0.936,0.974]  R=1.000 [0.991,1.000]  F1=0.979  tp=400 fp=17 fn=0
+  Gitleaks 8.21.2      P=1.000 [0.988,1.000]  R=0.800 [0.758,0.836]  F1=0.889  tp=320 fp=0 fn=80
+  TruffleHog 3.82.13   P=1.000 [0.984,1.000]  R=0.598 [0.549,0.644]  F1=0.748  tp=239 fp=0 fn=161
+  paired sign test over n=10 credential types:
+    GitHub Autopilot     vs Gitleaks 8.21.2      discordant 2/0  exact p=0.5000
+        only GitHub Autopilot: jwt, openai_project_key
+    GitHub Autopilot     vs TruffleHog 3.82.13   discordant 5/0  exact p=0.0625
+        only GitHub Autopilot: aws_access_key_id, gcp_api_key, jwt, openai_project_key, slack_bot_token
+    Gitleaks 8.21.2      vs TruffleHog 3.82.13   discordant 3/0  exact p=0.2500
+        only Gitleaks 8.21.2: aws_access_key_id, gcp_api_key, slack_bot_token
+
+===== B_structural =====
+distinct per-type recall values observed: [0.0, 0.975, 1.0]
+per-type detection deterministic: False
+  GitHub Autopilot     P=0.959 [0.935,0.974]  R=0.998 [0.986,1.000]  F1=0.978  tp=399 fp=17 fn=1
+  Gitleaks 8.21.2      P=1.000 [0.989,1.000]  R=0.900 [0.867,0.926]  F1=0.947  tp=360 fp=0 fn=40
+  TruffleHog 3.82.13   P=1.000 [0.984,1.000]  R=0.600 [0.551,0.647]  F1=0.750  tp=240 fp=0 fn=160
+  paired sign test over n=10 credential types:
+    GitHub Autopilot     vs Gitleaks 8.21.2      discordant 1/1  exact p=1.0000
+        only GitHub Autopilot: openai_project_key
+        only Gitleaks 8.21.2: sendgrid_api_key
+    GitHub Autopilot     vs TruffleHog 3.82.13   discordant 4/1  exact p=0.3750
+        only GitHub Autopilot: aws_access_key_id, gcp_api_key, jwt, openai_project_key
+        only TruffleHog 3.82.13: sendgrid_api_key
+    Gitleaks 8.21.2      vs TruffleHog 3.82.13   discordant 3/0  exact p=0.2500
+        only Gitleaks 8.21.2: aws_access_key_id, gcp_api_key, jwt
+

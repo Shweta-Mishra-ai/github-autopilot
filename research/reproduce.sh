@@ -127,12 +127,6 @@ cd "$HERE/paper" \
   && pdflatex -interaction=nonstopmode online_resource_1.tex >/dev/null \
   && pdflatex -interaction=nonstopmode online_resource_1.tex >/dev/null
 
-log "IEEE preprint (non-canonical, kept for arXiv/GitHub use only)"
-cd "$HERE/paper_ieee_preprint" \
-  && pdflatex -interaction=nonstopmode main.tex >/dev/null \
-  && pdflatex -interaction=nonstopmode main.tex >/dev/null \
-  && pdflatex -interaction=nonstopmode main.tex >/dev/null
-
 log "verification"
 # Re-derives every headline number in the manuscript from the raw JSON and
 # diffs it against paper/main.tex + paper/online_resource_1.tex, the

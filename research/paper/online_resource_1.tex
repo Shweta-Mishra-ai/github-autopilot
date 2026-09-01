@@ -19,10 +19,14 @@
 \title{Online Resource 1: Operational Characterisation of the Primary Subject}
 
 \author*[1]{\fnm{Shweta} \sur{Mishra}}\email{shweta.mishra.research@gmail.com}
+\equalcont{ORCID: 0009-0002-8443-1678}
 
 \affil*[1]{\orgname{Independent Researcher}, \orgaddress{\city{Moradabad}, \country{India}}}
 
-\abstract{Supplementary material accompanying ``Boundary-Mutation Testing for Pattern-Based Secret Detection: A Rule-Level Method and Cross-Scanner Evaluation.'' This resource reports the operational behaviour of the primary subject's ingress pipeline, event queue, worker pool and fault tolerance. None of it is evidence for or against any claim in the main paper.}
+\abstract{\textbf{Journal:} Empirical Software Engineering.\\
+\textbf{Article title:} Boundary-Mutation Testing for Pattern-Based Secret Detection: A Rule-Level Method and Cross-Scanner Evaluation.\\
+\textbf{Corresponding author:} Shweta Mishra, Independent Researcher, Moradabad, India, \texttt{shweta.mishra.research@gmail.com}.\\[4pt]
+Supplementary material accompanying ``Boundary-Mutation Testing for Pattern-Based Secret Detection: A Rule-Level Method and Cross-Scanner Evaluation.'' This resource reports the operational behaviour of the primary subject's ingress pipeline, event queue, worker pool and fault tolerance. None of it is evidence for or against any claim in the main paper.}
 
 \maketitle
 
@@ -36,7 +40,7 @@ Fig.~\ref{fig:scaling} gives throughput and tail latency for the circuit breaker
 
 The barrier matters, and its absence is the second harness defect we disclose. An earlier version started threads without synchronisation; at high thread counts the first threads finished before the last had started, and the resulting curve showed throughput \emph{rising} with contention. That curve was an artefact of the harness, not a property of the system. We report it because it is the more instructive of our two mistakes: it produced a plausible, publishable-looking result that was entirely wrong.
 
-Scanner throughput over 30 repetitions of 2{,}000 scans has a median of 11{,}114 scans/s (mean 11{,}104, sd 123), which is the basis for the claim in the main paper that the mutation battery is cheap to run.
+Scanner throughput over 30 repetitions of 2{,}000 scans has a median of 11{,}114 scans/s (mean 11{,}104, sd 123), which is the basis for the claim in the main paper that the mutation battery is cheap to run. This figure, unlike every other number we report, is hardware-dependent: it is a wall-clock rate measured on the reference machine recorded in \texttt{environment/}, and a reproduction on other hardware should be expected to differ. It is quoted to establish an order of magnitude --- the battery costs seconds, not hours --- and no claim in this work depends on its exact value.
 
 \begin{figure}[t]
 \centering

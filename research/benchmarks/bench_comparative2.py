@@ -37,7 +37,6 @@ import math
 import os
 import random
 import re
-import secrets as _secrets
 import shutil
 import string
 import subprocess
@@ -72,7 +71,14 @@ N_NEG_STRUCT = 200
 
 
 def r(alphabet, n):
-    return "".join(_secrets.choice(alphabet) for _ in range(n))
+    # Draws from the seeded module RNG, NOT from `secrets`. An earlier version
+    # of this harness recorded "seed": 20260823 in its output while generating
+    # every credential with secrets.choice, which is a CSPRNG and cannot be
+    # seeded. The corpus therefore differed on every run and the reported
+    # recall moved between 1.000 and 0.990 depending on whether one of the 400
+    # generated positives happened to be unmatchable. The seed is now actually
+    # used, so the corpus is byte-identical across runs.
+    return "".join(rng.choice(alphabet) for _ in range(n))
 
 
 def b64url(obj: bytes) -> str:
@@ -102,7 +108,7 @@ def realistic_jwt():
         {"sub": r(string.digits, 10), "name": "Service Account",
          "iat": 1716239022, "exp": 1716242622},
         separators=(",", ":")).encode())
-    sig = b64url(_secrets.token_bytes(32))
+    sig = b64url(bytes(rng.getrandbits(8) for _ in range(32)))
     return f"{header}.{payload}.{sig}"
 
 

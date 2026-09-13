@@ -306,7 +306,13 @@ class TestFileSize:
         rate limit and authorization guards, and whose response text lives in
         dispatcher.py so only the guard itself is here.
         (cross-cutting, belongs in orchestration). Raise consciously, never
-        casually."""
+        casually.
+
+        +6 for the empty-response reply. Same shape as the entries above and
+        raised for the same reason: deciding that every accepted command gets
+        an answer is an orchestration decision, it belongs beside the other
+        guards, and the text it posts lives in dispatcher.py so only the branch
+        is here. Four of the six lines are the comment explaining it."""
         import os
         fpath = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -314,6 +320,6 @@ class TestFileSize:
         )
         with open(fpath, encoding='utf-8') as f:
             lines = f.readlines()
-        assert len(lines) <= 276, (
-            f"service.py has {len(lines)} lines — should stay under 276 lines as an orchestration layer."
+        assert len(lines) <= 282, (
+            f"service.py has {len(lines)} lines — should stay under 282 lines as an orchestration layer."
         )

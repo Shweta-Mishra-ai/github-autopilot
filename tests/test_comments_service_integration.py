@@ -176,10 +176,29 @@ class TestCommandArgs:
 
 
 class TestDispatchOutcomes:
-    def test_empty_response_is_not_posted(self, common_mocks):
+    def test_empty_response_is_answered_rather_than_swallowed(self, common_mocks):
+        """
+        This assertion was inverted deliberately. It used to require that an
+        empty handler result posted *nothing*.
+
+        That is the wrong contract for this branch. It is reached only after
+        the comment carried a real command, the author was permitted to run
+        it, and the command was enabled — so the user is waiting for an
+        answer. Posting nothing is indistinguishable from the deployment being
+        down, the webhook never arriving, or the command not existing, and all
+        three send the reader somewhere useless.
+
+        Silence is correct elsewhere in this codebase — a re-pushed PR with a
+        clean review says nothing, because nobody asked it a question. Here
+        somebody did.
+        """
         with patch("app.handlers.comments.service._dispatch", return_value=None):
             handle_comment_event(_payload())
-        common_mocks["post"].assert_not_called()
+
+        common_mocks["post"].assert_called_once()
+        _, _, body = common_mocks["post"].call_args[0]
+        assert "No Output" in body["body"]
+        assert "/fix" in body["body"]
 
     def test_providers_down_sentinel_becomes_degraded_message(self, common_mocks):
         sentinel = {"_providers_down": True, "_retry_in": 42}
@@ -312,3 +331,78 @@ class TestDispatchRoutingTable:
             log_ctx=MagicMock(),
         )
         assert result is None
+
+
+class TestNoCommandEverAnswersWithSilence:
+    """
+    A user typed a documented command they were permitted to run. Every path
+    out of handle_comment_event() must end in a comment.
+
+    Silence is the worst available answer: it is indistinguishable from the
+    service being down, from the webhook never arriving, and from the command
+    not existing — so the reader retries, then files an issue, then stops
+    using the bot. The dispatcher used to `return` on a log line when a
+    handler produced nothing.
+    """
+
+    @staticmethod
+    def _payload(body="/explain this"):
+        return {
+            "action": "created",
+            "comment": {"body": body},
+            "issue": {"number": 7, "title": "t", "body": "b"},
+            "repository": {"full_name": "o/r"},
+            "installation": {"id": 1},
+            "sender": {"login": "someone"},
+        }
+
+    def test_an_empty_handler_result_still_posts_a_comment(self, monkeypatch):
+        from app.handlers.comments import service
+
+        posted = []
+        monkeypatch.setattr(service, "get_installation_token", lambda _id: "tok")
+        monkeypatch.setattr(service, "load_config", lambda *a, **k: _PermissiveConfig())
+        monkeypatch.setattr(service, "check_user_rate_limit", lambda *a: True)
+        monkeypatch.setattr(service, "check_command_permission", lambda *a: (True, ""))
+        monkeypatch.setattr(service, "augment_with_memory", lambda ctx, *a: ctx)
+        monkeypatch.setattr(service, "_dispatch", lambda **kw: "")
+        monkeypatch.setattr(
+            service, "gh_post", lambda path, token, body: posted.append(body["body"])
+        )
+
+        service.handle_comment_event(self._payload())
+
+        assert posted, "a command that produced nothing posted no comment at all"
+        assert "/explain" in posted[0]
+        assert "No Output" in posted[0]
+
+    def test_the_reply_tells_the_reader_it_is_not_their_fault(self):
+        from app.handlers.comments.dispatcher import empty_response_comment
+
+        text = empty_response_comment("/fix")
+        assert "/fix" in text
+        assert "not something you did wrong" in text
+        assert "/health" in text  # points at where the cause would show
+
+    def test_every_dispatcher_arm_returns_something(self):
+        """The guard above is the safety net. This is the actual contract:
+        no `case` in the dispatcher may fall through to an implicit None."""
+        import re
+        from pathlib import Path
+
+        src = Path("app/handlers/comments/service.py").read_text(encoding="utf-8")
+        body = src.split("match cmd:", 1)[1].split("except Exception", 1)[0]
+        arms = re.findall(r'case "(/[a-z]+)":\n((?:.*\n)*?)(?=\s{12}case |\Z)', body)
+        assert arms, "could not parse the dispatcher"
+        for cmd, block in arms:
+            assert "return " in block, f"{cmd} can fall through without returning"
+
+
+class _PermissiveConfig:
+    footer = ""
+
+    def command_enabled(self, _cmd):
+        return True
+
+    def get(self, *a, **kw):
+        return kw.get("default")

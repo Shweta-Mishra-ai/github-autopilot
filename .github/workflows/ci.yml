@@ -279,7 +279,7 @@ jobs:
               print(f"| `{h['id']}` | {h['loc']} | {h['fan_in']} |")
           PY
 
-      - name: Fail on import cycles or unreachable modules
+      - name: Fail on import cycles, unreachable modules, or shadowed files
         # Reporting these in the job summary was not enough — a summary nobody
         # opens is the same as no check. A cycle is a design defect and an
         # unreachable module is either dead code to delete or an entrypoint to
@@ -295,6 +295,18 @@ jobs:
               bad = True
           for o in s.get("orphans") or []:
               print(f"::error::nothing imports {o} — delete it, or declare it with --entrypoint")
+              bad = True
+          # Two files resolving to one import path. Python picks one and the
+          # other can never be imported, so its tests pass while its code is
+          # dead. It also made the map itself wrong: the node kept whichever
+          # file happened to be scanned last, so a module that does run was
+          # missing from the picture and one that cannot was drawn in its place.
+          for module_id, files in (s.get("collisions") or {}).items():
+              print(
+                  f"::error::{module_id} is claimed by {len(files)} files "
+                  f"({', '.join(files)}) — Python imports only one of them; "
+                  f"delete or rename the others"
+              )
               bad = True
           sys.exit(1 if bad else 0)
           PY

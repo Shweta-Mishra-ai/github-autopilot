@@ -337,9 +337,15 @@ def _panel(payload: dict, nodes: list[dict]) -> list[str]:
     # is a design defect and an unreferenced module is dead code or an
     # undeclared entrypoint. Both block CI, so if they appear in this picture
     # something is already failing.
+    collisions = stats.get("collisions") or {}
     for title, items, colour in (
         ("IMPORT CYCLES", [" → ".join(c) for c in cycles], BAD),
         ("NOTHING IMPORTS THESE", list(orphans), BAD),
+        (
+            "TWO FILES, ONE IMPORT PATH",
+            [f"{k}: {', '.join(v)}" for k, v in collisions.items()],
+            BAD,
+        ),
     ):
         if not items:
             continue

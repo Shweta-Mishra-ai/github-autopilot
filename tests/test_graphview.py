@@ -162,6 +162,121 @@ class TestGraphHtmlContent:
         assert "function esc(" in graph_html()
 
 
+class TestTheTokenIsAskedForOnlyWhenItIsNeeded:
+    """
+    The page used to open a native `prompt()` before its first request. That
+    was wrong in both directions:
+
+      - with METRICS_AUTH_TOKEN unset, /graph.json is open, and the page still
+        interrogated the visitor for a secret that does not exist;
+      - with it set, a modal appeared with no context and no way to correct a
+        typo. Dismissing it stored an empty string, the fetch came back 401,
+        and the page rendered "Unauthorized" — indistinguishable from broken.
+
+    Both were verified against a real browser before this was changed. These
+    tests hold the shape of the fix.
+    """
+
+    @staticmethod
+    def _html():
+        from app.graphview import graph_html
+
+        return graph_html()
+
+    def test_it_never_opens_a_native_prompt(self):
+        assert "prompt(" not in self._html(), (
+            "a native prompt() asks for the token before knowing whether one is "
+            "required, and gives no way to retry a typo"
+        )
+
+    def test_it_asks_only_after_a_request_was_refused(self):
+        html = self._html()
+        assert "res.status===401" in html
+        assert "showGate(" in html
+
+    def test_the_token_form_lives_in_the_page(self):
+        html = self._html()
+        assert 'id="gate"' in html and 'id="tok"' in html and 'id="gate-go"' in html
+
+    def test_a_rejected_token_is_cleared_so_a_retry_is_possible(self):
+        assert "clearToken()" in self._html()
+
+    def test_storage_access_is_guarded(self):
+        """sessionStorage throws outright in a private window with site data
+        blocked. An unguarded read there takes the whole page down before the
+        first fetch."""
+        html = self._html()
+        assert html.count("try {") >= 2 or html.count("try{") >= 2
+
+    def test_a_reader_without_a_token_is_pointed_somewhere_real(self):
+        """A 401 with no way forward is what makes a gated page read as a
+        broken one. The committed SVG needs no server and no sign-in."""
+        assert "docs/diagrams/codegraph.svg" in self._html()
+
+    def test_every_failure_state_explains_itself(self):
+        html = self._html()
+        for status in ("404", "401"):
+            assert status in html
+        assert "has been generated yet" in html
+
+
+class TestItWorksOnATouchScreen:
+    """
+    The page bound mousedown/mousemove/wheel only. On a phone or tablet it
+    rendered and then ignored every gesture — no pan, no zoom, no selection —
+    and below 820px the sidebar is hidden too, so there was nothing left that
+    responded to anything.
+    """
+
+    @staticmethod
+    def _html():
+        from app.graphview import graph_html
+
+        return graph_html()
+
+    def test_it_binds_pointer_events_not_mouse_events(self):
+        html = self._html()
+        for ev in ("pointerdown", "pointermove", "pointerup", "pointercancel"):
+            assert ev in html, f"{ev} not bound"
+
+    def test_pinch_to_zoom_is_handled(self):
+        assert "touches.size===2" in self._html()
+
+    def test_the_canvas_does_not_let_the_browser_eat_the_gestures(self):
+        """Without `touch-action:none` the browser scrolls and zooms the page
+        instead of delivering the moves, so a drag does nothing at all."""
+        assert "touch-action:none" in self._html()
+
+    def test_touch_gets_a_larger_hit_radius_than_a_cursor(self):
+        assert "pointerType==='touch'?14:6" in self._html()
+
+
+class TestTheLayoutSurvivesASmallScreen:
+    def test_the_canvas_height_is_not_a_hardcoded_header_offset(self):
+        """The header wraps when narrow. `calc(100% - 53px)` assumed it never
+        does, so on a phone the canvas overflowed the viewport by exactly the
+        amount the header had grown — measured at 44px on a 390px-wide screen."""
+        html = TestItWorksOnATouchScreen._html()
+        assert "calc(100% - 53px)" not in html
+        assert "flex-direction:column" in html
+
+    def test_the_stage_can_shrink(self):
+        """A flex item defaults to min-height:auto, which refuses to shrink
+        below its content and pushes the sibling off-screen."""
+        html = TestItWorksOnATouchScreen._html()
+        assert "min-height:0" in html
+
+
+class TestItStopsDrawingWhenNothingMoves:
+    def test_the_animation_loop_ends_once_the_layout_settles(self):
+        """requestAnimationFrame was called unconditionally, so the page
+        redrew an unchanging picture at 60fps for as long as the tab stayed
+        open."""
+        html = TestItWorksOnATouchScreen._html()
+        assert "running=false" in html
+        assert "function reheat(" in html
+
+
 # ── The contract between the generator and the renderer ───────────────────────
 
 

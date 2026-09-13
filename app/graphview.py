@@ -14,6 +14,20 @@ public on a private deployment.
 Why a force layout and not a tree: import structure is a general graph, not a
 hierarchy. Modules that clump together on screen are modules that actually
 depend on each other, which is the thing a folder tree cannot show you.
+
+AUTH
+  The page asks for a token only after /graph.json has actually refused one.
+  It used to open a `prompt()` before the first request, which was wrong in
+  both directions: a deployment with no METRICS_AUTH_TOKEN interrogated the
+  visitor for a secret that does not exist, and a deployment with one showed a
+  modal dialog with no context, no way to recover from a typo, and no hint as
+  to what was being asked for. Dismissing it stored an empty string, so the
+  page then failed with "Unauthorized" and looked broken. The token now lives
+  in an in-page card, the same shape /dashboard already used.
+
+  A reader with no token at all is not stuck: the committed SVG at
+  docs/diagrams/codegraph.svg holds the same data with no auth and no
+  JavaScript, and the failure states link to it.
 """
 
 GRAPH_HTML = """<!doctype html>
@@ -31,19 +45,25 @@ GRAPH_HTML = """<!doctype html>
   }
   * { box-sizing:border-box; }
   html,body { height:100%; }
+  /* Column layout, so the canvas takes whatever the header leaves. This used
+     to subtract a fixed header height instead. The header wraps on a narrow
+     screen, so that constant was wrong by however much it had grown, and the
+     canvas ran off the bottom of the viewport exactly when there was least
+     room to spare — measured at 44px lost on a 390px-wide screen. */
   body { margin:0; background:var(--bg); color:var(--text); overflow:hidden;
+    display:flex; flex-direction:column;
     font:14px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
   header { padding:14px 20px; border-bottom:1px solid var(--border);
-    display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+    display:flex; align-items:center; gap:16px; flex-wrap:wrap; flex:none; }
   header h1 { font-size:16px; margin:0; font-weight:650; }
   header .stat { font-size:12px; color:var(--dim); }
   header .stat b { color:var(--text); font-weight:600; }
-  #wrap { display:flex; height:calc(100% - 53px); }
-  #stage { flex:1; position:relative; }
-  canvas { display:block; width:100%; height:100%; cursor:grab; }
+  #wrap { display:flex; flex:1; min-height:0; }
+  #stage { flex:1; position:relative; min-width:0; }
+  canvas { display:block; width:100%; height:100%; cursor:grab; touch-action:none; }
   canvas.dragging { cursor:grabbing; }
   aside { width:310px; border-left:1px solid var(--border); background:var(--panel);
-    padding:16px 18px; overflow-y:auto; }
+    padding:16px 18px; overflow-y:auto; flex:none; }
   aside h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em;
     color:var(--dim); margin:0 0 10px; font-weight:600; }
   aside section { margin-bottom:22px; }
@@ -75,7 +95,22 @@ GRAPH_HTML = """<!doctype html>
   #tooltip { position:absolute; pointer-events:none; background:var(--panel);
     border:1px solid var(--border); border-radius:8px; padding:7px 10px; font-size:12.5px;
     display:none; max-width:280px; z-index:5; }
-  #err { padding:40px; color:var(--dim); }
+  /* The failure/auth surface. Centred, readable, and always offering the
+     no-auth fallback — a dead end with a status code is what made this page
+     look broken rather than gated. */
+  #gate { flex:1; display:none; align-items:center; justify-content:center; padding:24px; }
+  #gate .card { background:var(--panel); border:1px solid var(--border); border-radius:14px;
+    padding:22px 24px; max-width:520px; width:100%; }
+  #gate h2 { margin:0 0 8px; font-size:16px; color:var(--text); }
+  #gate p { color:var(--dim); font-size:13px; margin:0 0 14px; }
+  #gate code { color:var(--cyan); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  #gate .rowf { display:flex; gap:8px; flex-wrap:wrap; }
+  #tok { flex:1; min-width:200px; padding:8px 10px; background:var(--bg); color:var(--text);
+    border:1px solid var(--border); border-radius:8px; font-size:13px; }
+  #gate .go { background:var(--violet); color:#0b1120; border:0; padding:8px 16px;
+    border-radius:8px; font-weight:600; cursor:pointer; }
+  #gate .hint { margin:14px 0 0; font-size:12.5px; }
+  #gate .hint a { color:var(--cyan); }
   @media (max-width:820px) { aside { display:none; } }
 </style>
 </head>
@@ -117,7 +152,22 @@ GRAPH_HTML = """<!doctype html>
     </section>
   </aside>
 </div>
-<div id="err" style="display:none"></div>
+<div id="gate">
+  <div class="card">
+    <h2 id="gate-title">This map is access-controlled</h2>
+    <p id="gate-msg">A dependency graph is a map of the whole system, so
+      <code>/graph.json</code> is gated with the same token as
+      <code>/health</code>. Paste <code>METRICS_AUTH_TOKEN</code> to continue.</p>
+    <div class="rowf" id="gate-form">
+      <input id="tok" type="password" placeholder="METRICS_AUTH_TOKEN" autocomplete="off"/>
+      <button class="go" id="gate-go">View map</button>
+    </div>
+    <p class="hint">No token? The same graph is committed as a picture that needs
+      no server and no sign-in:
+      <a href="https://github.com/Shweta-Mishra-ai/github-autopilot/blob/main/docs/diagrams/codegraph.svg"
+         rel="noopener">docs/diagrams/codegraph.svg</a>.</p>
+  </div>
+</div>
 
 <script>
 "use strict";
@@ -125,6 +175,8 @@ const $ = id => document.getElementById(id);
 
 // Layer colours. Fixed rather than generated so a module keeps its colour
 // between runs — the map should look like the same map each time you open it.
+// Kept in step with LAYER_COLORS in app/intelligence/graph_svg.py, which draws
+// the committed picture from the same data.
 const LAYER_COLORS = {
   handlers:"#22d3ee", core:"#818cf8", ai:"#f472b6", github:"#34d399",
   security:"#f59e0b", intelligence:"#a78bfa", mcp:"#60a5fa",
@@ -134,6 +186,7 @@ const colorFor = l => LAYER_COLORS[l] || LAYER_COLORS.other;
 
 let NODES=[], EDGES=[], STATS={}, SELECTED=null, HOVER=null, FILTER="";
 let alpha=1, cam={x:0,y:0,k:1}, dragNode=null, panning=false, last={x:0,y:0};
+let running=false;
 
 const cv=$('cv'), ctx=cv.getContext('2d');
 let W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2);
@@ -141,44 +194,90 @@ let W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2);
 function resize(){
   const r=cv.getBoundingClientRect();
   W=r.width; H=r.height;
-  cv.width=W*DPR; cv.height=H*DPR;
+  DPR=Math.min(window.devicePixelRatio||1,2);
+  cv.width=Math.max(1,Math.round(W*DPR)); cv.height=Math.max(1,Math.round(H*DPR));
   ctx.setTransform(DPR,0,0,DPR,0,0);
+  draw();
 }
-window.addEventListener('resize',()=>{resize();});
+window.addEventListener('resize',resize);
 
 // ── Data ────────────────────────────────────────────────────────────────────
-function token(){
-  let t=sessionStorage.getItem('metrics_token');
-  if(t===null){
-    t=prompt('METRICS_AUTH_TOKEN (blank if unset):')||'';
-    sessionStorage.setItem('metrics_token',t);
-  }
-  return t;
+// The token is only ever read from storage here. Nothing asks for it until a
+// request has actually come back 401, so an open deployment never sees a
+// prompt and a gated one gets a form it can retry.
+function storedToken(){
+  try { return sessionStorage.getItem('metrics_token') || ''; }
+  catch(err){ return ''; }   // private mode / blocked storage
+}
+function storeToken(v){
+  try { sessionStorage.setItem('metrics_token', v); } catch(err){}
+}
+function clearToken(){
+  try { sessionStorage.removeItem('metrics_token'); } catch(err){}
+}
+
+function showGate(title,msg,withForm){
+  $('wrap').style.display='none';
+  $('gate').style.display='flex';
+  $('gate-title').textContent=title;
+  $('gate-msg').innerHTML=msg;
+  $('gate-form').style.display = withForm ? 'flex' : 'none';
+  if(withForm) $('tok').focus();
+}
+function showMap(){
+  $('gate').style.display='none';
+  $('wrap').style.display='flex';
 }
 
 async function load(){
+  const t=storedToken();
   let res;
   try{
-    const t=token();
     res=await fetch('/graph.json',{headers:t?{'Authorization':'Bearer '+t}:{}});
-  }catch(e){ return fail('Could not reach /graph.json'); }
+  }catch(err){
+    return showGate('Could not reach /graph.json',
+      'The server did not answer. If this deployment sleeps when idle, the first '+
+      'request can take up to a minute — reload and try again.', false);
+  }
+
   if(res.status===401){
-    sessionStorage.removeItem('metrics_token');
-    return fail('Unauthorized. Reload and enter the correct METRICS_AUTH_TOKEN.');
+    clearToken();
+    return showGate('This map is access-controlled',
+      t ? 'That token was rejected. Check <code>METRICS_AUTH_TOKEN</code> on the '+
+          'deployment and try again.'
+        : 'A dependency graph is a map of the whole system, so <code>/graph.json</code> '+
+          'is gated with the same token as <code>/health</code>. Paste '+
+          '<code>METRICS_AUTH_TOKEN</code> to continue.',
+      true);
   }
   if(res.status===404){
-    return fail('No graph has been generated yet. Run:<br><br>'+
-      '<code>python -m app.intelligence.codegraph app server.py worker.py '+
-      '--out docs/diagrams/codegraph.json</code>');
+    return showGate('No graph has been generated yet',
+      'Run <code>python -m app.intelligence.codegraph app server.py worker.py '+
+      '--out docs/diagrams/codegraph.json</code> and redeploy. CI normally does '+
+      'this on every run.', false);
   }
-  if(!res.ok) return fail('Failed to load graph ('+res.status+').');
+  if(!res.ok){
+    return showGate('Could not load the map',
+      'The server answered '+res.status+'.', false);
+  }
 
-  const data=await res.json();
+  let data;
+  try { data=await res.json(); }
+  catch(err){ return showGate('The map data is not valid JSON','', false); }
+
+  showMap();
   STATS=data.stats||{};
   // Seed positions on a circle: starting every node at the centre makes the
   // first frames a single overlapping blob that the simulation has to climb
   // out of, which looks broken even though it converges.
   const n=(data.nodes||[]).length;
+  if(!n){
+    return showGate('The map is empty',
+      'The generated file contains no modules.', false);
+  }
+  // Measure the stage before seeding — W and H are still 0 on first load
+  // because the canvas was inside a hidden container until showMap() ran.
+  resize();
   NODES=(data.nodes||[]).map((d,i)=>{
     const a=(i/Math.max(n,1))*Math.PI*2, r=Math.min(W,H)*0.32||220;
     return Object.assign({},d,{
@@ -190,14 +289,14 @@ async function load(){
   EDGES=(data.edges||[]).map(e=>({s:byId[e.source],t:byId[e.target],kind:e.kind}))
                         .filter(e=>e.s&&e.t);
   render_sidebar();
-  resize(); alpha=1; tick();
+  reheat();
 }
 
-function fail(msg){
-  $('wrap').style.display='none';
-  $('err').style.display='block';
-  $('err').innerHTML=msg;
-}
+$('gate-go').addEventListener('click',()=>{
+  storeToken($('tok').value.trim());
+  load();
+});
+$('tok').addEventListener('keydown',ev=>{ if(ev.key==='Enter') $('gate-go').click(); });
 
 // ── Force simulation ────────────────────────────────────────────────────────
 // Plain O(n^2) repulsion. At this scale (a few hundred modules) that is a
@@ -255,6 +354,7 @@ function neighbours(nd){
 
 function draw(){
   ctx.clearRect(0,0,W,H);
+  if(!NODES.length) return;
   ctx.save();
   ctx.translate(W/2+cam.x,H/2+cam.y); ctx.scale(cam.k,cam.k);
 
@@ -294,68 +394,123 @@ function draw(){
   ctx.restore();
 }
 
+// The loop stops once the layout has settled and restarts on the next
+// interaction. It used to call requestAnimationFrame forever, redrawing an
+// unchanging picture at 60fps for as long as the tab stayed open — which on a
+// laptop is a measurable amount of battery spent on a static image.
 function tick(){
-  if(alpha>0.005 && !dragNode) step();
-  else if(dragNode) step();
-  draw();
-  requestAnimationFrame(tick);
+  if(alpha>0.005 || dragNode){ step(); draw(); requestAnimationFrame(tick); }
+  else { draw(); running=false; }
+}
+function reheat(a){
+  alpha=Math.max(alpha, a===undefined?1:a);
+  if(!running){ running=true; requestAnimationFrame(tick); }
 }
 
 // ── Interaction ─────────────────────────────────────────────────────────────
 function toWorld(px,py){
   return {x:(px-W/2-cam.x)/cam.k, y:(py-H/2-cam.y)/cam.k};
 }
-function pick(px,py){
+function pick(px,py,slack){
   const p=toWorld(px,py);
   let best=null,bd=Infinity;
   for(const nd of NODES){
     if(!visible(nd)) continue;
     const d=Math.hypot(nd.x-p.x,nd.y-p.y);
-    if(d<nd.r+6 && d<bd){ best=nd; bd=d; }
+    if(d<nd.r+(slack||6) && d<bd){ best=nd; bd=d; }
   }
   return best;
 }
-cv.addEventListener('mousedown',ev=>{
+
+// Pointer events rather than mouse events. The page had no touch handling at
+// all, so on a phone or tablet the map rendered and then ignored every gesture
+// — no pan, no zoom, no selection, and (below 820px) no sidebar either, which
+// is indistinguishable from a broken page.
+function localPoint(ev){
   const r=cv.getBoundingClientRect();
-  const hit=pick(ev.clientX-r.left,ev.clientY-r.top);
-  if(hit){ dragNode=hit; select(hit); }
+  return {x:ev.clientX-r.left, y:ev.clientY-r.top};
+}
+const touches=new Map();
+let pinchDist=0;
+
+cv.addEventListener('pointerdown',ev=>{
+  cv.setPointerCapture(ev.pointerId);
+  touches.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
+  if(touches.size===2){
+    const pts=[...touches.values()];
+    pinchDist=Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+    dragNode=null; panning=false;
+    return;
+  }
+  const p=localPoint(ev);
+  // A fingertip is far less precise than a cursor, so touch gets a bigger
+  // hit radius than the 6px a mouse needs.
+  const hit=pick(p.x,p.y, ev.pointerType==='touch'?14:6);
+  if(hit){ dragNode=hit; select(hit); reheat(0.35); }
   else { panning=true; cv.classList.add('dragging'); }
   last={x:ev.clientX,y:ev.clientY};
 });
-window.addEventListener('mousemove',ev=>{
-  const r=cv.getBoundingClientRect();
-  const mx=ev.clientX-r.left, my=ev.clientY-r.top;
+
+cv.addEventListener('pointermove',ev=>{
+  if(touches.has(ev.pointerId)) touches.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
+
+  if(touches.size===2){
+    const pts=[...touches.values()];
+    const d=Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+    if(pinchDist>0){
+      cam.k=Math.max(0.25,Math.min(4,cam.k*(d/pinchDist)));
+      draw();
+    }
+    pinchDist=d;
+    return;
+  }
+
+  const p=localPoint(ev);
   if(dragNode){
-    const p=toWorld(mx,my);
-    dragNode.x=p.x; dragNode.y=p.y; dragNode.vx=0; dragNode.vy=0;
-    alpha=Math.max(alpha,0.35);
+    const w=toWorld(p.x,p.y);
+    dragNode.x=w.x; dragNode.y=w.y; dragNode.vx=0; dragNode.vy=0;
+    reheat(0.35);
   } else if(panning){
     cam.x+=ev.clientX-last.x; cam.y+=ev.clientY-last.y;
     last={x:ev.clientX,y:ev.clientY};
-  } else {
-    const hit=pick(mx,my);
-    HOVER=hit;
+    draw();
+  } else if(ev.pointerType!=='touch'){
+    const hit=pick(p.x,p.y,6);
+    if(hit!==HOVER){ HOVER=hit; draw(); }
     const tt=$('tooltip');
     if(hit){
       tt.style.display='block';
-      tt.style.left=Math.min(mx+14,W-290)+'px';
-      tt.style.top=(my+14)+'px';
+      tt.style.left=Math.min(p.x+14,W-290)+'px';
+      tt.style.top=(p.y+14)+'px';
       tt.innerHTML='<b>'+esc(hit.id)+'</b><br>'+hit.loc+' lines · in '+
         hit.fan_in+' · out '+hit.fan_out;
     } else tt.style.display='none';
   }
 });
-window.addEventListener('mouseup',()=>{
+
+function endPointer(ev){
+  touches.delete(ev.pointerId);
+  if(touches.size<2) pinchDist=0;
   dragNode=null; panning=false; cv.classList.remove('dragging');
+}
+cv.addEventListener('pointerup',endPointer);
+cv.addEventListener('pointercancel',endPointer);
+cv.addEventListener('pointerleave',ev=>{
+  if(ev.pointerType!=='touch'){ $('tooltip').style.display='none'; HOVER=null; draw(); }
 });
+
 cv.addEventListener('wheel',ev=>{
   ev.preventDefault();
   const f=ev.deltaY<0?1.12:1/1.12;
   cam.k=Math.max(0.25,Math.min(4,cam.k*f));
+  draw();
 },{passive:false});
 
-$('reheat').addEventListener('click',()=>{ alpha=1; });
-$('search').addEventListener('input',e=>{ FILTER=e.target.value.trim().toLowerCase(); });
+$('reheat').addEventListener('click',()=>{ reheat(1); });
+$('search').addEventListener('input',ev=>{
+  FILTER=ev.target.value.trim().toLowerCase();
+  draw();
+});
 
 function esc(s){
   return String(s).replace(/[&<>"']/g,c=>(
@@ -378,6 +533,7 @@ function select(nd){
       ? '<div class="kv"><span>External</span><span>'+esc(nd.external_deps.join(', '))+'</span></div>'
       : '')+
     listBlock('Imported by',ins)+listBlock('Imports',outs);
+  draw();
 }
 function listBlock(title,items){
   if(!items.length) return '';
@@ -417,12 +573,11 @@ function render_sidebar(){
   document.querySelectorAll('.listrow.clickable').forEach(el=>{
     el.addEventListener('click',()=>{
       const nd=NODES.find(n=>n.id===el.dataset.id);
-      if(nd){ select(nd); cam.x=-nd.x*cam.k; cam.y=-nd.y*cam.k; }
+      if(nd){ select(nd); cam.x=-nd.x*cam.k; cam.y=-nd.y*cam.k; draw(); }
     });
   });
 }
 
-resize();
 load();
 </script>
 </body>

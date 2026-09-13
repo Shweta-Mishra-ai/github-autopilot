@@ -142,11 +142,11 @@ Done. ✈️
 <!-- autopilot:stats:start -->
 | | |
 |---|---|
-| Modules | 92 |
-| Lines of code | 20,977 |
+| Modules | 93 |
+| Lines of code | 21,554 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 286 |
+| Internal imports | 287 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>
@@ -211,15 +211,32 @@ flowchart TB
     MCP --> H
 ```
 
+### The real dependency graph
+
+The diagram above is the request flow, written by hand. This one is not drawn
+at all — it is generated from the import graph on every CI run, so it cannot
+drift from the code:
+
+<img src="docs/diagrams/codegraph.svg" alt="Module dependency map: every Python module in this repository on a ring grouped by layer, with imports drawn as curves through the centre" width="100%"/>
+
+Every module is on the ring, grouped and coloured by layer. Each curve is one
+import; dashed curves are imports made inside a function body, which this
+codebase uses deliberately to break cycles. Dot size is lines of code. The
+panel reports the two things that are defects rather than facts — import cycles
+and modules nothing imports — and CI fails the build if either appears.
+
+It is a committed file, so it needs no deployment, no token and no JavaScript:
+what you are looking at is the structure at this commit. To explore it — click
+a node, see exactly what imports it — use the interactive version at
+[`/graph`](#codebase-map).
+
 <details>
-<summary><b>Module dependency graph</b> — generated from the AST, never hand-drawn</summary>
+<summary><b>The same graph as mermaid</b>, collapsed to one box per layer</summary>
 
 <br/>
 
-The diagram above is the request flow, written by hand. The one below is
-derived from the import graph on every CI run, so it cannot drift from the
-code. Explore it interactively at [`/graph`](#codebase-map), or regenerate with
-`python -m app.intelligence.codegraph app server.py worker.py`.
+Useful where an image is not: a diff, a terminal, a PR comment. Regenerate
+either form with `python -m app.intelligence.codegraph app server.py worker.py`.
 
 <!-- autopilot:architecture:start -->
 ```mermaid
@@ -228,7 +245,7 @@ graph LR
     core["core<br/>24 modules"]
     github["github<br/>8 modules"]
     handlers["handlers<br/>23 modules"]
-    intelligence["intelligence<br/>6 modules"]
+    intelligence["intelligence<br/>7 modules"]
     mcp["mcp<br/>4 modules"]
     other["other<br/>6 modules"]
     security["security<br/>5 modules"]
@@ -393,8 +410,9 @@ Two behaviours worth knowing:
 
 ## Codebase map
 
-An interactive, force-directed view of every module and what imports what,
-served at `/graph`:
+The always-visible version is [in the README above](#the-real-dependency-graph)
+— a committed SVG that needs no server. For exploring rather than reading,
+`/graph` serves an interactive, force-directed view of the same data:
 
 - **Click a node** to see exactly what imports it and what it imports
 - **Import cycles** are detected and flagged — they are what makes a module
@@ -406,16 +424,21 @@ served at `/graph`:
 
 The data comes from `python -m app.intelligence.codegraph`, which reads the AST
 and **never imports the code it analyses**, so it is safe to point at any
-repository. CI regenerates it and fails a PR whose committed copy is stale.
+repository. CI regenerates both the data and the picture, and fails a PR whose
+committed copies are stale.
 
 ```bash
 python -m app.intelligence.codegraph app server.py worker.py \
-  --out docs/diagrams/codegraph.json
+  --out docs/diagrams/codegraph.json \
+  --svg docs/diagrams/codegraph.svg
 ```
 
 `/graph.json` is auth-gated with `METRICS_AUTH_TOKEN`, the same as `/health` —
-a dependency graph is a map of the whole system. The same data is available to
-your IDE through the `codebase_map` MCP tool.
+a dependency graph is a map of the whole system. The page asks for that token
+only after a request has actually been refused, so an unauthenticated
+deployment never interrogates a visitor for a secret that does not exist, and a
+reader without one is pointed at the committed SVG instead of a dead end. The
+same data is available to your IDE through the `codebase_map` MCP tool.
 
 ---
 

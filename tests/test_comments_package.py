@@ -323,3 +323,59 @@ class TestFileSize:
         assert len(lines) <= 282, (
             f"service.py has {len(lines)} lines — should stay under 282 lines as an orchestration layer."
         )
+
+
+class TestTheImportPathSurvivedDeletingTheShim:
+    """
+    `app/handlers/comments.py` was deleted. It described itself as a
+    backward-compatibility shim, so the fair question is whether deleting it
+    broke the path it claimed to keep alive.
+
+    It did not, and it never could have: a package and a module of the same
+    name cannot both be imported, and Python always prefers the package. The
+    shim's own re-export line pointed at the package, which is to say at
+    itself, and nothing ever ran it — `app/handlers/comments/__init__.py`
+    answered every `import app.handlers.comments` before and after.
+
+    Several suites already use this path incidentally. These assert it as the
+    contract it is, so a future package reorganisation fails here with a
+    reason rather than somewhere far away with an ImportError.
+    """
+
+    def test_the_dotted_path_still_imports(self):
+        import app.handlers.comments as comments
+
+        assert comments.__file__.endswith(
+            os.path.join("comments", "__init__.py")
+        ), f"expected the package, got {comments.__file__}"
+
+    def test_the_name_serverpy_dispatches_on_is_still_exported(self):
+        """server._run_handler does `from app.handlers.comments import handle`.
+        This is the one import whose loss would silently stop every slash
+        command."""
+        from app.handlers.comments import handle
+
+        assert callable(handle)
+        assert handle.__name__ == "handle_comment_event"
+
+    def test_the_public_api_is_unchanged(self):
+        import app.handlers.comments as comments
+
+        for name in ("handle", "handle_comment_event", "gh_get", "gh_post", "load_config"):
+            assert hasattr(comments, name), f"{name} is no longer exported"
+
+    def test_no_module_file_shadows_the_package_again(self):
+        """The defect this replaced: a sibling .py with the package's name is
+        dead on arrival, because the package wins. codegraph now fails CI on
+        it; this fails faster and says why."""
+        import pathlib
+
+        root = pathlib.Path(__file__).resolve().parent.parent
+        for pkg in (root / "app").rglob("*/"):
+            if not (pkg / "__init__.py").exists():
+                continue
+            twin = pkg.with_suffix(".py")
+            assert not twin.exists(), (
+                f"{twin.relative_to(root)} can never be imported — "
+                f"{pkg.relative_to(root)}/ shadows it"
+            )

@@ -91,8 +91,21 @@ class TestVerifyRunsTheSameChecksAsCI:
         assert "RUNS=2" in body, "one green run is weaker evidence than it looks"
 
     def test_it_does_not_silently_rewrite_the_tree(self):
+        # Matched on the two words that carry the meaning rather than one exact
+        # sentence: the script regenerates more than one file now, so the
+        # phrasing is plural, and pinning the old literal would have failed for
+        # a wording change while a genuinely silent rewrite still passed.
         body = self._body()
-        assert "commit it" in body, (
+        assert "regenerated" in body and "commit" in body, (
             "regenerating a file without saying so leaves an uncommitted change "
             "the author never sees"
         )
+
+    def test_it_checks_the_picture_the_readme_embeds(self):
+        """The SVG is the only view of the graph a reader gets without a
+        deployment, a token and JavaScript, and CI fails a stale copy. A local
+        gate that checks the JSON but not the picture lets exactly that
+        through."""
+        body, ci = self._body(), self._ci()
+        assert "--svg" in body, "verify.sh must regenerate the committed picture too"
+        assert "codegraph.svg" in ci, "CI must gate on the committed picture"

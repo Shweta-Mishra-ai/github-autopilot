@@ -852,7 +852,7 @@
       "id": "app.graphview",
       "path": "app/graphview.py",
       "layer": "other",
-      "loc": 434,
+      "loc": 589,
       "functions": 1,
       "classes": 0,
       "is_package": false,
@@ -1244,14 +1244,15 @@
       "id": "app.intelligence.codegraph",
       "path": "app/intelligence/codegraph.py",
       "layer": "intelligence",
-      "loc": 526,
+      "loc": 544,
       "functions": 7,
       "classes": 4,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 0,
+      "fan_out": 1,
       "external_deps": [
         "__future__",
+        "app",
         "argparse",
         "ast",
         "dataclasses",
@@ -1276,6 +1277,22 @@
         "os",
         "sentence_transformers",
         "threading"
+      ]
+    },
+    {
+      "id": "app.intelligence.graph_svg",
+      "path": "app/intelligence/graph_svg.py",
+      "layer": "intelligence",
+      "loc": 404,
+      "functions": 12,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 0,
+      "external_deps": [
+        "__future__",
+        "html",
+        "math"
       ]
     },
     {
@@ -2707,6 +2724,11 @@
       "kind": "runtime"
     },
     {
+      "source": "app.intelligence.codegraph",
+      "target": "app.intelligence.graph_svg",
+      "kind": "runtime"
+    },
+    {
       "source": "app.intelligence.memory",
       "target": "app.core.redaction",
       "kind": "runtime"
@@ -2963,9 +2985,9 @@
     }
   ],
   "stats": {
-    "modules": 92,
-    "edges": 286,
-    "total_loc": 20977,
+    "modules": 93,
+    "edges": 287,
+    "total_loc": 21554,
     "layers": [
       "ai",
       "core",

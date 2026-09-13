@@ -487,6 +487,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("targets", nargs="*", default=["app"], help="directories to scan")
     parser.add_argument("--root", default=".", help="project root (default: cwd)")
     parser.add_argument("--out", help="write JSON here (default: stdout)")
+    parser.add_argument(
+        "--svg",
+        help=(
+            "also write a standalone SVG picture here. Unlike the interactive "
+            "/graph view it needs no deployment, no auth token and no "
+            "JavaScript, so it can be embedded in a README."
+        ),
+    )
     parser.add_argument("--mermaid", action="store_true", help="print a mermaid diagram instead")
     parser.add_argument(
         "--entrypoint",
@@ -505,6 +513,16 @@ def main(argv: list[str] | None = None) -> int:
     payload = graph.to_dict()
     payload["stats"]["orphans"] = graph.orphans(tuple(args.entrypoint))
     text = json.dumps(payload, indent=2, sort_keys=False)
+
+    # Written before the JSON branch below so `--svg` works on its own, and so
+    # a picture is still produced when the JSON goes to stdout.
+    if args.svg:
+        from app.intelligence.graph_svg import render_svg
+
+        svg_path = Path(args.svg)
+        svg_path.parent.mkdir(parents=True, exist_ok=True)
+        svg_path.write_text(render_svg(payload), encoding="utf-8")
+        print(f"codegraph: wrote {svg_path}")
 
     if args.out:
         out_path = Path(args.out)

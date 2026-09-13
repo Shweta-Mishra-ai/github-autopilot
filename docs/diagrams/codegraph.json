@@ -907,12 +907,12 @@
     },
     {
       "id": "app.handlers.comments",
-      "path": "app/handlers/comments.py",
+      "path": "app/handlers/comments/__init__.py",
       "layer": "handlers",
-      "loc": 12,
+      "loc": 106,
       "functions": 0,
       "classes": 0,
-      "is_package": false,
+      "is_package": true,
       "fan_in": 6,
       "fan_out": 10,
       "external_deps": [
@@ -1244,7 +1244,7 @@
       "id": "app.intelligence.codegraph",
       "path": "app/intelligence/codegraph.py",
       "layer": "intelligence",
-      "loc": 544,
+      "loc": 578,
       "functions": 7,
       "classes": 4,
       "is_package": false,
@@ -1283,7 +1283,7 @@
       "id": "app.intelligence.graph_svg",
       "path": "app/intelligence/graph_svg.py",
       "layer": "intelligence",
-      "loc": 404,
+      "loc": 410,
       "functions": 12,
       "classes": 0,
       "is_package": false,
@@ -2987,7 +2987,7 @@
   "stats": {
     "modules": 93,
     "edges": 287,
-    "total_loc": 21554,
+    "total_loc": 21688,
     "layers": [
       "ai",
       "core",
@@ -3061,6 +3061,7 @@
         "fan_out": 1
       }
     ],
+    "collisions": {},
     "orphans": []
   }
 }

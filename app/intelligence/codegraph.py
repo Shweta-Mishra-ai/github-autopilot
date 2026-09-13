@@ -107,10 +107,40 @@ class CodeGraph:
     def __init__(self) -> None:
         self.nodes: dict[str, ModuleNode] = {}
         self.edges: list[Edge] = []
+        # module id -> every file that claims it. See add_module().
+        self.collisions: dict[str, list[str]] = {}
 
     # ── Building ────────────────────────────────────────────────────────────
 
     def add_module(self, node: ModuleNode) -> None:
+        """
+        Register a module, recording the case where two files claim one id.
+
+        Nodes are keyed by dotted import path, so a second file with the same
+        path silently replaced the first and the graph came out one module
+        short — with no warning, and with the surviving node's `path`, `loc`
+        and `is_package` describing a file that may not be the one Python
+        actually imports.
+
+        That is not hypothetical. `app/handlers/comments.py` and
+        `app/handlers/comments/__init__.py` both resolved to
+        `app.handlers.comments`. Python always prefers the package, so the
+        module the map drew was the one that could never run, and the one that
+        handles every slash command was absent from the picture entirely.
+
+        A collision is always a real defect in the tree being scanned — one of
+        the two files is unreachable — so it is recorded and reported rather
+        than resolved by a rule about which file wins.
+        """
+        existing = self.nodes.get(node.id)
+        if existing is not None and existing.path != node.path:
+            seen = self.collisions.setdefault(node.id, [existing.path])
+            if node.path not in seen:
+                seen.append(node.path)
+            log.warning(
+                f"codegraph.module_id_collision id={node.id} "
+                f"files={sorted(seen)} — one of these is unreachable"
+            )
         self.nodes[node.id] = node
 
     def add_edge(self, source: str, target: str, kind: str = "import") -> None:
@@ -269,6 +299,10 @@ class CodeGraph:
                 "layers": sorted({n.layer for n in self.nodes.values()}),
                 "cycles": self.cycles(),
                 "hotspots": self.hotspots(),
+                # Two files claiming one import path. Reported next to cycles
+                # because it is the same kind of finding: a structural defect
+                # that makes the map itself wrong, not a fact about the code.
+                "collisions": {k: sorted(v) for k, v in sorted(self.collisions.items())},
             },
         }
 

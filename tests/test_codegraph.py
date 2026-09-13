@@ -364,3 +364,69 @@ class TestAgainstThisRepository:
         for e in g.edges:
             assert e.source in g.nodes
             assert e.target in g.nodes
+
+
+class TestTwoFilesCannotSilentlyShareOneImportPath:
+    """
+    Nodes are keyed by dotted import path. A second file claiming the same path
+    used to overwrite the first, so the graph came out one module short with no
+    warning — and the surviving node described whichever file happened to be
+    scanned last, which is not necessarily the one Python imports.
+
+    This was real. `app/handlers/comments.py` (a deprecated shim) and
+    `app/handlers/comments/__init__.py` (every slash command) both resolved to
+    `app.handlers.comments`. Python always prefers the package, so the map drew
+    the file that could never run and omitted the one that does.
+    """
+
+    @staticmethod
+    def _graph_with_collision(tmp_path):
+        from app.intelligence.codegraph import build_graph
+
+        pkg = tmp_path / "thing"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("X = 1\n", encoding="utf-8")
+        (tmp_path / "thing.py").write_text("Y = 2\n", encoding="utf-8")
+        return build_graph("thing", "thing.py", root=str(tmp_path))
+
+    def test_a_collision_is_recorded_rather_than_swallowed(self, tmp_path):
+        graph = self._graph_with_collision(tmp_path)
+        assert "thing" in graph.collisions
+        assert len(graph.collisions["thing"]) == 2
+
+    def test_a_collision_reaches_the_stats_ci_reads(self, tmp_path):
+        stats = self._graph_with_collision(tmp_path).to_dict()["stats"]
+        assert stats["collisions"], "CI fails on this key — it must be emitted"
+        assert sorted(stats["collisions"]["thing"]) == ["thing.py", "thing/__init__.py"]
+
+    def test_a_clean_tree_reports_no_collisions(self, tmp_path):
+        from app.intelligence.codegraph import build_graph
+
+        (tmp_path / "a.py").write_text("import b\n", encoding="utf-8")
+        (tmp_path / "b.py").write_text("Z = 1\n", encoding="utf-8")
+        assert build_graph("a.py", "b.py", root=str(tmp_path)).to_dict()["stats"][
+            "collisions"
+        ] == {}
+
+    def test_rescanning_the_same_file_is_not_a_collision(self, tmp_path):
+        """Naming a target twice, or a directory and a file inside it, reaches
+        add_module twice for one path. That is not two files."""
+        from app.intelligence.codegraph import build_graph
+
+        (tmp_path / "a.py").write_text("Z = 1\n", encoding="utf-8")
+        graph = build_graph("a.py", "a.py", root=str(tmp_path))
+        assert graph.collisions == {}
+
+    def test_this_repository_has_none(self):
+        """The gate, run locally as well as in CI. A file shadowed by a package
+        keeps passing its own tests while never executing in production."""
+        import json
+        import pathlib
+
+        stats = json.loads(
+            pathlib.Path("docs/diagrams/codegraph.json").read_text(encoding="utf-8")
+        )["stats"]
+        assert stats.get("collisions") == {}, (
+            f"two files share one import path: {stats.get('collisions')}. "
+            "Python imports only one of them; the other is dead code."
+        )

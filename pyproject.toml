@@ -78,6 +78,20 @@ quote-style = "double"
 indent-style = "space"
 
 # ── Pytest ───────────────────────────────────────────────────────────────────
+# The ONLY pytest configuration. There was also a pytest.ini, and it silently
+# won: pytest picks pytest.ini over pyproject.toml when both exist, so
+# everything below was ignored. Worse, that file used `[tool:pytest]`, which is
+# the section name for setup.cfg — a pytest.ini needs `[pytest]` — so its own
+# settings were ignored as well. Net effect: NO pytest configuration was in
+# force at all.
+#
+# The markers were the costly part. pytest.ini carried a comment explaining
+# that registering them "makes that filter checkable rather than a string that
+# silently matches nothing: an unregistered marker is a typo pytest will not
+# report, so `not integraton` would have quietly excluded zero tests forever."
+# That was exactly right, and it was exactly what was happening — the
+# registration never took effect, so a mistyped mark in CI's filter, or on a
+# test, raised nothing. Verified with `pytest --markers` before the fix.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]

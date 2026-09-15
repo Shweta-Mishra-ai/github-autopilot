@@ -15,7 +15,11 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-SCRIPTS = [ROOT / "scripts/verify.sh", ROOT / "scripts/verify-deployment.sh"]
+SCRIPTS = [
+    ROOT / "scripts/verify.sh",
+    ROOT / "scripts/verify-deployment.sh",
+    ROOT / "scripts/delete-merged-branches.sh",
+]
 
 
 @pytest.mark.parametrize("script", SCRIPTS, ids=lambda p: p.name)

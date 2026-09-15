@@ -852,7 +852,7 @@
       "id": "app.graphview",
       "path": "app/graphview.py",
       "layer": "other",
-      "loc": 434,
+      "loc": 589,
       "functions": 1,
       "classes": 0,
       "is_package": false,
@@ -907,12 +907,12 @@
     },
     {
       "id": "app.handlers.comments",
-      "path": "app/handlers/comments.py",
+      "path": "app/handlers/comments/__init__.py",
       "layer": "handlers",
-      "loc": 12,
+      "loc": 106,
       "functions": 0,
       "classes": 0,
-      "is_package": false,
+      "is_package": true,
       "fan_in": 6,
       "fan_out": 10,
       "external_deps": [
@@ -951,8 +951,8 @@
       "id": "app.handlers.comments.dispatcher",
       "path": "app/handlers/comments/dispatcher.py",
       "layer": "handlers",
-      "loc": 159,
-      "functions": 9,
+      "loc": 187,
+      "functions": 10,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
@@ -1057,7 +1057,7 @@
       "id": "app.handlers.comments.service",
       "path": "app/handlers/comments/service.py",
       "layer": "handlers",
-      "loc": 277,
+      "loc": 283,
       "functions": 3,
       "classes": 0,
       "is_package": false,
@@ -1149,7 +1149,7 @@
       "id": "app.handlers.pull_request.gaps",
       "path": "app/handlers/pull_request/gaps.py",
       "layer": "handlers",
-      "loc": 113,
+      "loc": 134,
       "functions": 1,
       "classes": 0,
       "is_package": false,
@@ -1244,14 +1244,15 @@
       "id": "app.intelligence.codegraph",
       "path": "app/intelligence/codegraph.py",
       "layer": "intelligence",
-      "loc": 526,
+      "loc": 578,
       "functions": 7,
       "classes": 4,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 0,
+      "fan_out": 1,
       "external_deps": [
         "__future__",
+        "app",
         "argparse",
         "ast",
         "dataclasses",
@@ -1276,6 +1277,22 @@
         "os",
         "sentence_transformers",
         "threading"
+      ]
+    },
+    {
+      "id": "app.intelligence.graph_svg",
+      "path": "app/intelligence/graph_svg.py",
+      "layer": "intelligence",
+      "loc": 410,
+      "functions": 12,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 0,
+      "external_deps": [
+        "__future__",
+        "html",
+        "math"
       ]
     },
     {
@@ -2707,6 +2724,11 @@
       "kind": "runtime"
     },
     {
+      "source": "app.intelligence.codegraph",
+      "target": "app.intelligence.graph_svg",
+      "kind": "runtime"
+    },
+    {
       "source": "app.intelligence.memory",
       "target": "app.core.redaction",
       "kind": "runtime"
@@ -2963,9 +2985,9 @@
     }
   ],
   "stats": {
-    "modules": 92,
-    "edges": 286,
-    "total_loc": 20977,
+    "modules": 93,
+    "edges": 287,
+    "total_loc": 21743,
     "layers": [
       "ai",
       "core",
@@ -3039,6 +3061,7 @@
         "fan_out": 1
       }
     ],
+    "collisions": {},
     "orphans": []
   }
 }

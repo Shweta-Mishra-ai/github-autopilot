@@ -17,6 +17,7 @@ from .dispatcher import (
     augment_with_memory,
     check_user_rate_limit,
     command_disabled_comment,
+    empty_response_comment,
     extract_command,
     is_providers_down,
     make_degraded_response,
@@ -140,8 +141,13 @@ def handle_comment_event(payload: dict) -> None:
         log_ctx=log_ctx,
     )
 
+    # Reached only after the comment carried a real command the author was
+    # allowed to run — so somebody is waiting for an answer. This used to
+    # `return` on a log line; see empty_response_comment() for why silence is
+    # the worst reply available here.
     if not response:
         log_ctx.warning("empty_response")
+        _post_comment(repo, issue_number, token, empty_response_comment(cmd), log_ctx)
         return
 
     # ── Check for providers-down sentinel ─────────────────────────────────

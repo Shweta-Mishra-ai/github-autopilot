@@ -46,6 +46,19 @@ note() { printf '   %s•%s %s\n' "$YELLOW" "$OFF" "$1"; }
 # ignores. Running plain `ruff check` reports findings in tests/ that CI does
 # not gate on, which trains you to ignore the output.
 step "Lint (ruff) — app/ only, CI's rule set"
+
+# Formatting is version-dependent: ruff's formatter changes its mind between
+# releases, so a newer local ruff reports files CI considers clean (and, worse,
+# "fixing" them makes CI's pinned version reject them). CI installs the version
+# pinned in requirements-dev.txt, so a mismatch here means the results below
+# are not the results CI will produce.
+WANT_RUFF="$(grep -oE '^ruff==[0-9.]+' requirements-dev.txt 2>/dev/null | cut -d= -f3)"
+HAVE_RUFF="$("$PY" -m ruff --version 2>/dev/null | awk '{print $2}')"
+if [ -n "$WANT_RUFF" ] && [ -n "$HAVE_RUFF" ] && [ "$WANT_RUFF" != "$HAVE_RUFF" ]; then
+  note "ruff $HAVE_RUFF installed, CI pins $WANT_RUFF — formatting results will differ"
+  note "  fix: $PY -m pip install 'ruff==$WANT_RUFF'"
+fi
+
 if "$PY" -m ruff check app/ --select E,F,W,B,C4,SIM --ignore E501,B008 --quiet; then
   ok "no lint findings"
 else
@@ -90,16 +103,19 @@ else
   fi
 
   MAP="docs/diagrams/codegraph.json"
-  BEFORE=$(sha256sum "$MAP" 2>/dev/null | cut -d' ' -f1)
+  PIC="docs/diagrams/codegraph.svg"
+  BEFORE=$(sha256sum "$MAP" "$PIC" 2>/dev/null | cut -d' ' -f1 | tr -d '\n')
   GRAPH=$("$PY" -m app.intelligence.codegraph app server.py worker.py \
     --entrypoint app --entrypoint server --entrypoint worker \
     --entrypoint app.dashboard --entrypoint app.graphview \
-    --out "$MAP" 2>&1 | tail -1)
-  AFTER=$(sha256sum "$MAP" 2>/dev/null | cut -d' ' -f1)
+    --out "$MAP" --svg "$PIC" 2>&1 | tail -1)
+  AFTER=$(sha256sum "$MAP" "$PIC" 2>/dev/null | cut -d' ' -f1 | tr -d '\n')
   if [ "$BEFORE" = "$AFTER" ]; then
     ok "codebase map current — $GRAPH"
   else
-    bad "codebase map was stale; it has been regenerated — commit it"
+    # Both are committed and both are checked by CI. The SVG is the one the
+    # README embeds, so a stale copy is a wrong picture on the front page.
+    bad "codebase map was stale; JSON + SVG regenerated — commit them"
   fi
   case "$GRAPH" in
     *"0 cycles, 0 orphans"*) ok "no import cycles, no unreachable modules" ;;

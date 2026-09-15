@@ -116,6 +116,34 @@ def command_disabled_comment(cmd: str) -> str:
     )
 
 
+def empty_response_comment(cmd: str) -> str:
+    """
+    Reply when a command handler returns nothing at all.
+
+    This should be unreachable: every dispatcher arm returns a non-empty
+    string, and a test asserts it. It exists because the alternative when it
+    *is* reached is silence, and silence is the worst answer the bot can give
+    — the reader cannot tell it apart from the service being down, the webhook
+    never arriving, or the command not existing, so they retry, then file an
+    issue, then stop using it.
+
+    Says what is known and what to do next, and does not speculate about the
+    cause: the handler returned nothing, so there is no cause to report.
+    """
+    return (
+        f"## ⚠️ `{cmd}` Produced No Output\n\n"
+        "The command ran and was allowed to run, but its handler returned "
+        "nothing to post. That is a bug in this bot, not something you did "
+        "wrong.\n\n"
+        "**What to try:**\n"
+        "- Run the command again — if it was transient, it will work.\n"
+        "- Check `/health` for a provider outage or misconfiguration.\n\n"
+        "> If it keeps happening, please open an issue with this comment's "
+        "link. The failure is recorded in the deployment logs as "
+        "`empty_response`."
+    )
+
+
 def providers_down_comment(retry_in: int = 60) -> str:
     """Standard degraded-mode comment when all LLM providers are unavailable."""
     return (

@@ -42,8 +42,21 @@ Most AI review bots are a service you send your code to. This one is a service y
 
 ## Get started
 
-Three ways in, shortest first. They are not alternatives — the plugin and the editor
-integration talk to a deployment you run.
+Four ways in, shortest first. The first two are clients; the last two are the
+deployment they talk to, and you pick one of those.
+
+**Which deployment?** The only difference is where the model runs.
+
+| | Option 3 — hosted | Option 4 — your own hardware |
+|---|---|---|
+| Model | Groq, Gemini or OpenRouter | Ollama, on your machine |
+| Your code | goes to that provider | never leaves the box |
+| Needs | a free API key | ~6GB RAM for an 8B model |
+| Speed | seconds | tens of seconds on CPU |
+| Cost | $0 on free tiers | $0, and no third party |
+
+Both are one command and both are fully supported. Option 4 is the reason this
+project exists; Option 3 is the one to start with if you just want to see it work.
 
 ### Option 1 — From Claude Code, in about ten seconds
 
@@ -81,7 +94,7 @@ claude mcp add --transport http github-autopilot \
 Client configs, the full tool reference, and troubleshooting:
 **[docs/mcp-setup.md](docs/mcp-setup.md)**
 
-### Option 3 — As a GitHub App, in about ten minutes
+### Option 3 — Hosted, as a GitHub App, in about ten minutes
 
 <details open>
 <summary><b>Full deployment walkthrough</b></summary>
@@ -110,7 +123,7 @@ The credentials are shown once. Put them in your host's environment:
 | `GITHUB_APP_ID` | the setup page |
 | `GITHUB_PRIVATE_KEY` | the setup page |
 | `GITHUB_WEBHOOK_SECRET` | the setup page |
-| `GROQ_API_KEY` | [console.groq.com](https://console.groq.com), free — **or skip it entirely and run locally, below** |
+| `GROQ_API_KEY` | [console.groq.com](https://console.groq.com), free — **or skip it and use Option 4 instead** |
 | `REDIS_URL` | wired automatically by `render.yaml` |
 | `METRICS_AUTH_TOKEN` | any strong random string — recommended |
 | `MCP_API_KEY` | `python3 -c "import secrets; print(secrets.token_hex(32))"` |
@@ -155,6 +168,76 @@ grade, and you are done. ✈️
 
 </details>
 
+### Option 4 — Entirely on your own hardware, in about ten minutes
+
+<details open>
+<summary><b>Nothing leaves the machine, including the model</b></summary>
+
+<br/>
+
+Same application, same commands, same GitHub App. The model runs next to it in
+a container instead of at a provider, so no source code is sent anywhere.
+
+**1. Get the GitHub App credentials.** Identical to Option 3, steps 1–2 — you
+still need `GITHUB_APP_ID`, `GITHUB_PRIVATE_KEY` and `GITHUB_WEBHOOK_SECRET`.
+Run `/setup` on any temporary deployment, or create the App by hand.
+
+**2. Write `.env`.** No model key appears here:
+
+```bash
+GITHUB_APP_ID=...
+GITHUB_PRIVATE_KEY=...
+GITHUB_WEBHOOK_SECRET=...
+
+OLLAMA_HOST=http://ollama:11434   # the compose service, not localhost
+OLLAMA_MODEL=llama3.1:8b
+LLM_LOCAL_ONLY=1                  # Ollama or nothing
+
+MCP_API_KEY=...                   # python3 -c "import secrets; print(secrets.token_hex(32))"
+METRICS_AUTH_TOKEN=...            # any strong random string
+```
+
+`localhost` inside a container is the container. `http://ollama:11434` is the
+service name from [`docker-compose.yml`](docker-compose.yml), which is what
+reaches the model.
+
+**3. Start it and fetch the model.**
+
+```bash
+docker compose --profile local up -d
+docker compose exec ollama ollama pull llama3.1:8b
+```
+
+That is the whole deployment: web, worker, Redis and Ollama. Without
+`--profile local` the Ollama container is not started and not downloaded, so
+Option 3 users never pay for it.
+
+**4. Let GitHub reach it.** A webhook needs a public URL. Put it behind your
+own reverse proxy, or tunnel it while you try things out:
+
+```bash
+cloudflared tunnel --url http://localhost:8000    # or: ngrok http 8000
+```
+
+Set that URL as the App's webhook URL and as `PUBLIC_URL`.
+
+**5. Confirm it is actually local.**
+
+```bash
+curl -H "Authorization: Bearer $METRICS_AUTH_TOKEN" http://localhost:8000/health
+```
+
+Then comment `/health` on an issue. Every comment the bot posts names the model
+that wrote it, so `llama3.1:8b` in the footer is the deployment telling you the
+cloud was not involved.
+
+> **Speed, honestly.** An 8B model on CPU takes tens of seconds for a review
+> where Groq takes a few. It is the same pipeline and the same prompts, and the
+> findings are shallower than a frontier model's. If the machine has a GPU, add
+> a device reservation to the `ollama` service and the gap closes considerably.
+
+</details>
+
 > **On cold starts.** The demo instance is on Render's free tier. A scheduled
 > [keep-alive workflow](.github/workflows/keepalive.yml) pings it every ten
 > minutes, and the badge above turns red if production is genuinely down. If a
@@ -165,22 +248,20 @@ grade, and you are done. ✈️
 
 ## Keep your code on your own hardware
 
-This is the reason the project exists. By default the bot calls
-Groq, Gemini or OpenRouter. For a private or regulated repository, point it at
-a local model instead and **nothing leaves your infrastructure**:
+This is the reason the project exists. **Option 4 above is how you do it**;
+this is what the guarantee actually means, and how it is held to.
+
+Already running against a model on your own machine or network? The three
+settings are all there is:
 
 ```bash
-ollama pull llama3.1:8b
-```
-
-```bash
-OLLAMA_HOST=http://localhost:11434
+OLLAMA_HOST=http://localhost:11434   # http://ollama:11434 from inside compose
 OLLAMA_MODEL=llama3.1:8b
 LLM_LOCAL_ONLY=1     # Ollama or nothing. No cloud provider is ever contacted.
 # LLM_PREFER_LOCAL=1 # Softer: try local first, fall back to cloud on failure.
 ```
 
-Two guarantees worth being precise about:
+Three guarantees worth being precise about:
 
 - **`LLM_LOCAL_ONLY=1` fails closed.** If Ollama is unreachable, the call
   errors. It does not silently reach for a cloud provider, on the first attempt
@@ -188,6 +269,15 @@ Two guarantees worth being precise about:
 - **Learned repository memory is local by default.** Recalled context is only
   injected into a prompt when a local model is active, unless you explicitly set
   `MEMORY_ALLOW_CLOUD=1` and accept the egress.
+- **The promise is tested, not asserted.**
+  [`tests/test_privacy_no_egress.py`](tests/test_privacy_no_egress.py) sets
+  every cloud credential, enables `LLM_LOCAL_ONLY`, points Ollama at a dead
+  port — the exact conditions a fallback would trigger in — and records every
+  address the process attempts, across `ask`, `safe_ask`, `ask_text` and five
+  task types. Mocking the provider would only prove the mock stays home, so
+  nothing is mocked. One of those tests is a control that turns the guarantee
+  off and *requires* egress to be observed, because a watcher that sees nothing
+  passes a privacy test for the wrong reason.
 
 Reported cost in local mode is always `0`.
 

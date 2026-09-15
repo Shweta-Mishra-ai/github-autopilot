@@ -1388,8 +1388,8 @@
       "id": "app.mcp.handlers",
       "path": "app/mcp/handlers.py",
       "layer": "mcp",
-      "loc": 522,
-      "functions": 10,
+      "loc": 563,
+      "functions": 11,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
@@ -1397,7 +1397,8 @@
       "external_deps": [
         "app",
         "logging",
-        "os"
+        "os",
+        "pathlib"
       ]
     },
     {
@@ -3035,7 +3036,7 @@
   "stats": {
     "modules": 94,
     "edges": 292,
-    "total_loc": 22445,
+    "total_loc": 22486,
     "layers": [
       "ai",
       "core",

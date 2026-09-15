@@ -4,6 +4,7 @@ evals/run.py — run the AI-output eval suite against real providers.
     python -m evals.run                 # all tasks
     python -m evals.run --task fix      # just /fix cases
     python -m evals.run --task review   # just PR-review cases
+    python -m evals.run --task gaps     # just test-gap cases
     python -m evals.run --min-pass-rate 0.8
 
 Requires a real GROQ_API_KEY (and optionally GEMINI_API_KEY etc.) — this
@@ -296,7 +297,87 @@ def run_review_cases() -> tuple[list, list]:
     return results, blocked
 
 
-def _attempt(call, case: dict, results: list):
+def run_gaps_cases() -> tuple[list, list]:
+    """Push each case through the real gap-analysis path.
+
+    This task is scored differently from the other two, because for gap
+    analysis the correct answer is frequently NOTHING. Two of the four cases
+    are changes whose tests are already adequate, and the bot passes them by
+    staying silent.
+
+    That asymmetry is the whole reason this task is here. `/fix` and review are
+    scored on what they say, so a model that says more scores better. Gap
+    analysis inverts it: a report naming gaps that a reviewer can see are
+    already covered costs more than no report at all, and this exact failure
+    shipped — PR #103 was told to add tests for four functions the same diff
+    tested by name, and for a file it deleted.
+
+    `looks_blocked` cannot be used here for the same reason: a correct silent
+    answer and a provider that never replied are both the empty string. The
+    structured verdict tells them apart, so it is captured from the router as
+    the call passes through.
+    """
+    from app.ai.validator import is_unusable
+    from app.handlers.pull_request import gaps as gaps_module
+    from evals.scorers import score_output
+
+    results = []
+    blocked = []
+    for index, case in enumerate(_load("gaps_cases.json")):
+        if index:
+            _pace()
+        captured: list[dict] = []
+
+        def _run(case=case, captured=captured):
+            captured.clear()
+            real_ask = gaps_module.router.ask
+
+            def _spy(*args, **kwargs):
+                response, meta = real_ask(*args, **kwargs)
+                captured.append(response if isinstance(response, dict) else {})
+                return response, meta
+
+            files = [
+                {"filename": case["filename"], "patch": case["patch"], "status": "modified"}
+            ]
+            files += [
+                {"filename": t["filename"], "patch": t["patch"], "status": "modified"}
+                for t in case.get("test_files", [])
+            ]
+            cfg = MagicMock()
+            cfg.get.side_effect = lambda *a, **kw: kw.get("default", True)
+            cfg.footer = ""
+            with patch.object(gaps_module.router, "ask", side_effect=_spy):
+                return gaps_module._detect_test_gaps(
+                    {"head": {"sha": "eval0000"}},
+                    "eval/repo",
+                    1,
+                    files,
+                    "tok",
+                    cfg,
+                    MagicMock(),
+                )
+
+        output = _attempt(_run, case, results, blocked_check=lambda _out: not captured)
+        if output is None:
+            continue
+
+        # _detect_test_gaps swallows every exception and returns "". An empty
+        # capture therefore means the provider never answered, not that the
+        # code under test decided there was nothing to say.
+        verdict = captured[0] if captured else None
+        if verdict is None or is_unusable(verdict):
+            blocked.append(case["id"])
+            _print_blocked(case["id"])
+            continue
+
+        result = score_output(output, case, structured=verdict)
+        results.append(result)
+        _print_case(result)
+    return results, blocked
+
+
+def _attempt(call, case: dict, results: list, blocked_check=None):
     """
     Run one case, retrying once when the provider gave us nothing.
 
@@ -305,6 +386,11 @@ def _attempt(call, case: dict, results: list):
     so a raising case was counted in the summary and invisible in the output:
     the 2026-08-29 run showed two FAIL lines above a summary listing five
     failed cases, and the three silent ones were the actual story.
+
+    `blocked_check` overrides how "the provider gave us nothing" is decided.
+    The default reads the output text, which is right for /fix and review and
+    wrong for gap analysis, where an empty output is frequently the correct
+    answer and retrying it would spend quota to confirm a pass.
     """
     from evals.scorers import CaseResult
 
@@ -321,7 +407,8 @@ def _attempt(call, case: dict, results: list):
             _print_case(result)
             return None
 
-        if attempt == 1 and looks_blocked(output):
+        is_blocked = blocked_check(output) if blocked_check else looks_blocked(output)
+        if attempt == 1 and is_blocked:
             print(f"  [RETRY] {case['id']}  no answer from the provider")
             time.sleep(THROTTLE_BACKOFF_SECONDS)
             continue
@@ -342,7 +429,7 @@ def _print_case(result) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="GitHub Autopilot AI evals")
-    parser.add_argument("--task", choices=["all", "fix", "review"], default="all")
+    parser.add_argument("--task", choices=["all", "fix", "review", "gaps"], default="all")
     parser.add_argument("--min-pass-rate", type=float, default=0.7)
     args = parser.parse_args()
 
@@ -370,6 +457,11 @@ def main() -> int:
         review_results, review_blocked = run_review_cases()
         results += review_results
         blocked += review_blocked
+    if args.task in ("all", "gaps"):
+        print("== test-gap cases ==")
+        gaps_results, gaps_blocked = run_gaps_cases()
+        results += gaps_results
+        blocked += gaps_blocked
 
     stats = summarize(results)
     stats["blocked_cases"] = blocked

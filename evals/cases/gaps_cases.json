@@ -1,0 +1,53 @@
+[
+  {
+    "id": "gaps-fully-tested-change-stays-quiet",
+    "planted": "nothing — both branches of the new function are tested directly in the same PR",
+    "filename": "app/billing/discount.py",
+    "patch": "@@ -0,0 +1,12 @@\n+def apply_discount(total, percent):\n+    \"\"\"Reduce total by percent. Percent must be 0-100.\"\"\"\n+    if percent < 0 or percent > 100:\n+        raise ValueError(\"percent must be between 0 and 100\")\n+    return round(total * (1 - percent / 100), 2)\n",
+    "test_files": [
+      {
+        "filename": "tests/test_discount.py",
+        "patch": "@@ -0,0 +1,18 @@\n+import pytest\n+from app.billing.discount import apply_discount\n+\n+def test_applies_percentage():\n+    assert apply_discount(200.0, 10) == 180.0\n+\n+def test_zero_percent_is_a_no_op():\n+    assert apply_discount(99.99, 0) == 99.99\n+\n+def test_full_discount_is_free():\n+    assert apply_discount(50.0, 100) == 0.0\n+\n+@pytest.mark.parametrize(\"bad\", [-1, 101])\n+def test_rejects_out_of_range_percent(bad):\n+    with pytest.raises(ValueError):\n+        apply_discount(10.0, bad)\n"
+      }
+    ],
+    "expect_gaps": false,
+    "must_not_mention": ["Gaps Found", "apply_discount"]
+  },
+  {
+    "id": "gaps-new-function-with-no-tests-at-all",
+    "planted": "apply_refund is new, has three branches, and the PR adds no tests",
+    "filename": "app/billing/refund.py",
+    "patch": "@@ -0,0 +1,16 @@\n+def apply_refund(charge, amount, reason=None):\n+    if charge[\"status\"] != \"succeeded\":\n+        raise ValueError(\"only a succeeded charge can be refunded\")\n+    if amount > charge[\"amount\"]:\n+        raise ValueError(\"refund exceeds the original charge\")\n+    remaining = charge[\"amount\"] - amount\n+    return {\n+        \"refunded\": amount,\n+        \"remaining\": remaining,\n+        \"status\": \"refunded\" if remaining == 0 else \"partially_refunded\",\n+        \"reason\": reason,\n+    }\n",
+    "test_files": [],
+    "expect_gaps": true,
+    "must_mention": ["apply_refund|refund"]
+  },
+  {
+    "id": "gaps-happy-path-tested-error-branch-not",
+    "planted": "the retry helper's give-up branch is untested; only the success path is covered",
+    "filename": "app/net/retry.py",
+    "patch": "@@ -1,8 +1,20 @@\n def call_with_retry(fn, attempts=3, on_giveup=None):\n-    return fn()\n+    last = None\n+    for attempt in range(attempts):\n+        try:\n+            return fn()\n+        except TimeoutError as exc:\n+            last = exc\n+            continue\n+    if on_giveup is not None:\n+        on_giveup(last)\n+    raise last\n",
+    "test_files": [
+      {
+        "filename": "tests/test_retry.py",
+        "patch": "@@ -1,4 +1,10 @@\n from app.net.retry import call_with_retry\n \n def test_returns_the_result_when_the_call_succeeds():\n     assert call_with_retry(lambda: 42) == 42\n+\n+def test_retries_until_it_succeeds():\n+    calls = []\n+    def flaky():\n+        calls.append(1)\n+        if len(calls) < 2:\n+            raise TimeoutError()\n+        return \"ok\"\n+    assert call_with_retry(flaky) == \"ok\"\n"
+      }
+    ],
+    "expect_gaps": true,
+    "must_mention": ["giveup|give up|exhaust|raise|last|all attempts|call_with_retry"]
+  },
+  {
+    "id": "gaps-refactor-covered-by-updated-tests",
+    "planted": "nothing — an extracted helper, with the existing tests updated to exercise it",
+    "filename": "app/text/slug.py",
+    "patch": "@@ -1,10 +1,14 @@\n-def slugify(title):\n-    s = title.lower().strip()\n-    s = re.sub(r\"[^a-z0-9]+\", \"-\", s)\n-    return s.strip(\"-\")\n+def _normalise(title):\n+    return title.lower().strip()\n+\n+def slugify(title):\n+    s = _normalise(title)\n+    s = re.sub(r\"[^a-z0-9]+\", \"-\", s)\n+    return s.strip(\"-\")\n",
+    "test_files": [
+      {
+        "filename": "tests/test_slug.py",
+        "patch": "@@ -1,6 +1,16 @@\n-from app.text.slug import slugify\n+from app.text.slug import _normalise, slugify\n \n def test_basic_slug():\n     assert slugify(\"Hello World\") == \"hello-world\"\n \n def test_strips_punctuation():\n     assert slugify(\"What's New?!\") == \"what-s-new\"\n+\n+def test_normalise_lowercases_and_trims():\n+    assert _normalise(\"  Mixed Case  \") == \"mixed case\"\n+\n+def test_normalise_is_used_by_slugify():\n+    assert slugify(\"  Spaced Out  \") == \"spaced-out\"\n"
+      }
+    ],
+    "expect_gaps": false,
+    "must_not_mention": ["Gaps Found", "_normalise"]
+  }
+]

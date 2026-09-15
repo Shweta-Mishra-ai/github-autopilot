@@ -366,7 +366,7 @@
 <circle cx="160.0" cy="511.2" r="4.21" fill="#818cf8"/>
 <circle cx="154.7" cy="495.1" r="5.15" fill="#818cf8"/>
 <circle cx="150.5" cy="478.6" r="4.05" fill="#818cf8"/>
-<circle cx="147.3" cy="462.0" r="6.19" fill="#818cf8"/>
+<circle cx="147.3" cy="462.0" r="6.42" fill="#818cf8"/>
 <circle cx="144.4" cy="434.0" r="1.8" fill="#f59e0b"/>
 <circle cx="144.0" cy="417.0" r="5.66" fill="#f59e0b"/>
 <circle cx="144.7" cy="400.1" r="7.5" fill="#f59e0b"/>
@@ -489,7 +489,7 @@
 <line x1="800.0" y1="110.0" x2="1280" y2="110.0" stroke="#1f2937" stroke-width="1"/>
 <text x="800.0" y="133.0" font-size="12" fill="#9ca3af">Modules</text><text x="1280" y="133.0" font-size="12" fill="#e5e7eb" text-anchor="end" font-weight="600">94</text>
 <text x="800.0" y="156.0" font-size="12" fill="#9ca3af">Imports</text><text x="1280" y="156.0" font-size="12" fill="#e5e7eb" text-anchor="end" font-weight="600">290</text>
-<text x="800.0" y="179.0" font-size="12" fill="#9ca3af">Lines of code</text><text x="1280" y="179.0" font-size="12" fill="#e5e7eb" text-anchor="end" font-weight="600">22,193</text>
+<text x="800.0" y="179.0" font-size="12" fill="#9ca3af">Lines of code</text><text x="1280" y="179.0" font-size="12" fill="#e5e7eb" text-anchor="end" font-weight="600">22,240</text>
 <text x="800.0" y="202.0" font-size="12" fill="#9ca3af">Import cycles</text><text x="1280" y="202.0" font-size="12" fill="#22c55e" text-anchor="end" font-weight="600">none</text>
 <text x="800.0" y="225.0" font-size="12" fill="#9ca3af">Unreferenced modules</text><text x="1280" y="225.0" font-size="12" fill="#22c55e" text-anchor="end" font-weight="600">none</text>
 <text x="800.0" y="255.0" font-size="10" fill="#9ca3af" font-weight="600">LAYERS</text>
@@ -509,7 +509,7 @@
 <text x="800.0" y="540.0" font-size="11.5" fill="#e5e7eb">enhanced_secrets</text><text x="1280" y="540.0" font-size="11" fill="#9ca3af" text-anchor="end">898 lines · 4 in</text>
 <text x="800.0" y="559.0" font-size="11.5" fill="#e5e7eb">config</text><text x="1280" y="559.0" font-size="11" fill="#9ca3af" text-anchor="end">392 lines · 7 in</text>
 <text x="800.0" y="578.0" font-size="11.5" fill="#e5e7eb">base</text><text x="1280" y="578.0" font-size="11" fill="#9ca3af" text-anchor="end">348 lines · 7 in</text>
-<text x="800.0" y="597.0" font-size="11.5" fill="#e5e7eb">model_catalog</text><text x="1280" y="597.0" font-size="11" fill="#9ca3af" text-anchor="end">356 lines · 6 in</text>
+<text x="800.0" y="597.0" font-size="11.5" fill="#e5e7eb">webhook_security</text><text x="1280" y="597.0" font-size="11" fill="#9ca3af" text-anchor="end">521 lines · 4 in</text>
 <text x="412.0" y="814" font-size="10.5" fill="#9ca3af" text-anchor="middle">Solid curve: module-level import · Dashed: import inside a function · Dot size: lines of code</text>
 </g>
 </svg>

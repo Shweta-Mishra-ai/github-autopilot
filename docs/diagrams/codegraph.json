@@ -28,8 +28,8 @@
       "id": "app.ai.circuit_breaker",
       "path": "app/ai/circuit_breaker.py",
       "layer": "ai",
-      "loc": 144,
-      "functions": 4,
+      "loc": 179,
+      "functions": 6,
       "classes": 3,
       "is_package": false,
       "fan_in": 13,
@@ -3036,7 +3036,7 @@
   "stats": {
     "modules": 94,
     "edges": 292,
-    "total_loc": 22486,
+    "total_loc": 22521,
     "layers": [
       "ai",
       "core",
@@ -3098,15 +3098,15 @@
         "fan_out": 1
       },
       {
-        "id": "app.ai.model_catalog",
-        "loc": 356,
-        "fan_in": 6,
+        "id": "app.ai.circuit_breaker",
+        "loc": 179,
+        "fan_in": 13,
         "fan_out": 1
       },
       {
-        "id": "app.ai.circuit_breaker",
-        "loc": 144,
-        "fan_in": 13,
+        "id": "app.ai.model_catalog",
+        "loc": 356,
+        "fan_in": 6,
         "fan_out": 1
       }
     ],

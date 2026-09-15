@@ -398,6 +398,32 @@ def clean_redis_singleton():
     rc.reset_client()
 
 
+@pytest.fixture(autouse=True)
+def clean_circuit_breakers():
+    """Every test starts with every provider's circuit closed.
+
+    The breakers are four module-level objects whose failure counts persist for
+    the entire session — there is no expiry short of recovery_timeout, which is
+    30 to 120 seconds. So a test that drives a provider to its threshold leaves
+    it open for everything that runs afterwards.
+
+    Under a fixed alphabetical order that happened to be harmless. Under a
+    shuffled one it cost a CI run on main: tests/test_router.py's
+    test_ask_calls_provider failed with "All LLM providers are unavailable",
+    and the probe showed usage at 0% with both Groq breakers open — the test
+    never touched a provider, it inherited the state. An infrastructure-shaped
+    message from leaked state is the worst kind of failure to read.
+
+    Reset before AND after: before so this test is not the victim, after so it
+    is not the culprit.
+    """
+    from app.ai.circuit_breaker import reset_breakers
+
+    reset_breakers()
+    yield
+    reset_breakers()
+
+
 @pytest.fixture
 def fake_redis():
     """Provide a fresh FakeRedis instance with REDIS_URL unset."""

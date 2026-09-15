@@ -135,13 +135,31 @@ class TestRouterThreadSafety(unittest.TestCase):
         """_get_gemini must construct GeminiProvider only once under concurrent access."""
         with _set_env(GEMINI_API_KEY="fake-key"):
             from app.ai import router as router_module
-            # Re-import to get fresh router
-            import importlib
-            importlib.reload(router_module)
+
+            # NO importlib.reload here, and this is load-bearing.
+            #
+            # Reloading app.ai.router rebinds LLMRouter to a NEW class object
+            # and app.ai.router.router to a NEW singleton — permanently, for
+            # the rest of the session. Every module that did
+            # `from app.ai.router import router` at import time (gaps.py,
+            # pull_request, comments, ...) still holds the OLD instance, whose
+            # class is the OLD LLMRouter. From that point on, any test that
+            # patches app.ai.router.LLMRouter.ask patches a class nothing in
+            # the handlers is an instance of, so the patch silently does
+            # nothing and the real router runs.
+            #
+            # That is a landmine with a fuse the length of the test ordering.
+            # Under `pytest -p randomly --randomly-seed=1` it produced eight
+            # failures in files that have no connection to this one, each
+            # reporting "All LLM providers are unavailable" — an infrastructure
+            # message from a suite that never touches the network.
+            #
+            # The reload was never needed: _get_gemini reads GEMINI_API_KEY at
+            # call time (that is what makes it lazy), _set_env above has
+            # already set it, and this test constructs its own router below.
             r = router_module.LLMRouter()
 
             construction_count = [0]
-            original_import = __builtins__.__import__ if hasattr(__builtins__, '__import__') else None
 
             class FakeGemini:
                 def __init__(self):
@@ -273,24 +291,45 @@ class TestThreadPoolSaturation(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class TestRedisProductionGuard(unittest.TestCase):
+    """
+    REDIS_URL and _IS_PRODUCTION are computed at module import, so testing the
+    production guard means overwriting them — and this class used to overwrite
+    them and never put them back.
+
+    tearDown called reset_client(), which clears the connection singleton and
+    nothing else, so _IS_PRODUCTION stayed True and REDIS_URL stayed "" for the
+    remainder of the session. Every later test that touched Redis then raised
+    "REDIS_URL is not set in production environment".
+
+    Under the repository's fixed alphabetical ordering this file runs near the
+    end and almost nothing follows it, so it never showed. Under a shuffled
+    order it lands anywhere: one seed produced 55 failures and 50 errors across
+    eight unrelated files, all from this one unrestored assignment.
+
+    The importlib.reload() calls are gone too. They were redundant — each test
+    assigns the three attributes explicitly on the next line — and reloading
+    rebinds the module for everything that imported from it.
+    """
+
     def setUp(self):
         import app.core.redis_client as rc
+
+        self._saved = (rc._IS_PRODUCTION, rc.REDIS_URL)
         rc.reset_client()
 
     def tearDown(self):
         import app.core.redis_client as rc
+
+        rc._IS_PRODUCTION, rc.REDIS_URL = self._saved
         rc.reset_client()
 
     def test_no_redis_url_in_production_raises(self):
         """Missing REDIS_URL in production must raise RuntimeError."""
         with _set_env(REDIS_URL=None, FLASK_ENV="production", ENVIRONMENT=None):
-            import importlib
             import app.core.redis_client as rc
             rc.reset_client()
-            importlib.reload(rc)
             rc._IS_PRODUCTION = True
             rc.REDIS_URL = ""
-            rc._client = None
 
             with self.assertRaises(RuntimeError, msg="Should raise in production without REDIS_URL"):
                 rc.get_redis()
@@ -298,13 +337,10 @@ class TestRedisProductionGuard(unittest.TestCase):
     def test_no_redis_url_in_dev_uses_fake(self):
         """Missing REDIS_URL in dev returns _FakeRedis, not error."""
         with _set_env(REDIS_URL=None, FLASK_ENV="development", ENVIRONMENT=None):
-            import importlib
             import app.core.redis_client as rc
             rc.reset_client()
-            importlib.reload(rc)
             rc._IS_PRODUCTION = False
             rc.REDIS_URL = ""
-            rc._client = None
 
             client = rc.get_redis()
             self.assertIsInstance(client, rc._FakeRedis)

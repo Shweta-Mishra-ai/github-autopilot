@@ -28,6 +28,26 @@ def _fresh_redis():
     reset_client()
 
 
+@pytest.fixture
+def registered(request):
+    """Make sure the provider under test exists in the breaker registry.
+
+    get_system_health()["providers"] is keyed by the circuit-breaker registry,
+    and that registry is lazily populated — a breaker exists only once
+    get_breaker(name) has been called for it. These tests asserted on
+    providers["groq_70b"] without ever registering it, so they passed only
+    because some earlier test in the session happened to touch that provider.
+
+    tests/test_ollama_local.py clears the registry around every test, which is
+    correct hygiene for that file and left this one raising KeyError whenever
+    the ordering put it afterwards. A test that depends on global state some
+    other file established is a test that reports on the ordering.
+    """
+    from app.ai.circuit_breaker import get_breaker
+
+    return get_breaker
+
+
 class TestRouterFeedsLatency:
     def test_successful_call_records_a_latency(self):
         from app.ai.router import LLMRouter
@@ -90,17 +110,29 @@ class TestBreakerFeedsErrors:
 
 
 class TestHealthStatsAreRealNow:
-    def test_recorded_latency_shows_up_in_system_health(self):
+    def test_recorded_latency_shows_up_in_system_health(self, registered):
+        registered("groq_70b")
         for ms in (100, 200, 300):
             H.record_latency("groq_70b", ms)
         providers = H.get_system_health()["providers"]
         assert providers["groq_70b"]["avg_latency_ms"] > 0
 
-    def test_recorded_errors_raise_the_error_rate(self):
+    def test_recorded_errors_raise_the_error_rate(self, registered):
+        registered("gemini")
         for _ in range(3):
             H.record_latency("gemini", 0, is_error=True)
         H.record_latency("gemini", 100)
         assert H.get_system_health()["providers"]["gemini"]["error_rate"] > 0
+
+    def test_a_provider_with_no_breaker_is_simply_absent(self, registered):
+        """Not an error — the health report describes providers this process
+        has actually used. Pinned because the two tests above spent a while
+        depending on the opposite by accident."""
+        from app.ai.circuit_breaker import _breakers
+
+        _breakers.pop("openrouter", None)
+        H.record_latency("openrouter", 100)
+        assert "openrouter" not in H.get_system_health()["providers"]
 
     def test_empty_dataset_does_not_crash(self):
         assert "providers" in H.get_system_health()

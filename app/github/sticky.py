@@ -15,26 +15,50 @@ from __future__ import annotations
 
 import logging
 
-from app.github.client import gh_get_all, gh_patch, gh_post
+from app.github.client import gh_get, gh_patch, gh_post
 
 log = logging.getLogger(__name__)
 
 MARKER_PR_REPORT = "<!-- github-autopilot:pr-report -->"
 MARKER_CI_REPORT = "<!-- github-autopilot:ci-report -->"
 
+# Same bound gh_get_all uses. A thread with more comments than this is one
+# where a fresh comment is the honest outcome anyway.
+MAX_COMMENT_PAGES = 5
+PER_PAGE = 100
+
 
 def find_sticky(repo: str, issue_number: int, token: str, marker: str) -> int | None:
     """
     Comment id of the bot's marker-bearing comment, or None.
 
+    Pages until the marker is found, rather than fetching every page and then
+    looking. This used gh_get_all, which walks to the end of the thread before
+    returning anything, so a busy pull request cost five API requests to locate
+    a comment that was on the first page — measured at 450 comments: five GETs
+    for a sticky sitting at position four.
+
+    That is the normal case, not a pathological one. The sticky is posted when
+    the pull request opens and edited afterwards, so it is almost always among
+    the oldest comments, and GitHub returns them oldest first. The work thrown
+    away was the entire rest of the thread.
+
     Never raises: a lookup failure means "post a fresh one", which is the safe
     direction — a duplicate comment is recoverable, a lost report is not.
     """
     try:
-        comments = gh_get_all(f"/repos/{repo}/issues/{issue_number}/comments", token)
-        for c in comments or []:
-            if marker in (c.get("body") or ""):
-                return c.get("id")
+        path = f"/repos/{repo}/issues/{issue_number}/comments"
+        for page in range(1, MAX_COMMENT_PAGES + 1):
+            comments = gh_get(f"{path}?per_page={PER_PAGE}&page={page}", token)
+            if not isinstance(comments, list) or not comments:
+                return None
+
+            for c in comments:
+                if marker in (c.get("body") or ""):
+                    return c.get("id")
+
+            if len(comments) < PER_PAGE:
+                return None  # short page: that was the end of the thread
     except Exception as e:
         log.debug(f"sticky.find_failed repo={repo} issue={issue_number}: {e}")
     return None

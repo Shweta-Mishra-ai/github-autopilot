@@ -735,8 +735,8 @@
       "id": "app.github.auth",
       "path": "app/github/auth.py",
       "layer": "github",
-      "loc": 118,
-      "functions": 4,
+      "loc": 160,
+      "functions": 6,
       "classes": 0,
       "is_package": false,
       "fan_in": 9,
@@ -754,7 +754,7 @@
       "id": "app.github.client",
       "path": "app/github/client.py",
       "layer": "github",
-      "loc": 240,
+      "loc": 246,
       "functions": 9,
       "classes": 2,
       "is_package": false,
@@ -819,16 +819,20 @@
       "id": "app.github.rate_limit",
       "path": "app/github/rate_limit.py",
       "layer": "github",
-      "loc": 132,
-      "functions": 5,
+      "loc": 269,
+      "functions": 10,
       "classes": 0,
       "is_package": false,
       "fan_in": 3,
       "fan_out": 1,
       "external_deps": [
+        "__future__",
         "app",
+        "hashlib",
         "logging",
+        "os",
         "requests",
+        "threading",
         "time"
       ]
     },
@@ -2987,7 +2991,7 @@
   "stats": {
     "modules": 93,
     "edges": 287,
-    "total_loc": 21743,
+    "total_loc": 21928,
     "layers": [
       "ai",
       "core",
@@ -3014,7 +3018,7 @@
       },
       {
         "id": "app.github.client",
-        "loc": 240,
+        "loc": 246,
         "fan_in": 22,
         "fan_out": 2
       },

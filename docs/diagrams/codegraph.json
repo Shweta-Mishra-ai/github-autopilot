@@ -495,7 +495,7 @@
       "functions": 2,
       "classes": 2,
       "is_package": false,
-      "fan_in": 7,
+      "fan_in": 9,
       "fan_out": 0,
       "external_deps": [
         "json",
@@ -1531,12 +1531,12 @@
       "id": "server",
       "path": "server.py",
       "layer": "other",
-      "loc": 802,
+      "loc": 822,
       "functions": 30,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 31,
+      "fan_out": 32,
       "external_deps": [
         "app",
         "flask",
@@ -1552,12 +1552,12 @@
       "id": "worker",
       "path": "worker.py",
       "layer": "other",
-      "loc": 60,
+      "loc": 66,
       "functions": 1,
       "classes": 0,
       "is_package": false,
       "fan_in": 0,
-      "fan_out": 3,
+      "fan_out": 4,
       "external_deps": [
         "app",
         "logging",
@@ -2892,6 +2892,11 @@
     },
     {
       "source": "server",
+      "target": "app.core.logger",
+      "kind": "import"
+    },
+    {
+      "source": "server",
       "target": "app.core.maintenance",
       "kind": "runtime"
     },
@@ -3012,6 +3017,11 @@
     },
     {
       "source": "worker",
+      "target": "app.core.logger",
+      "kind": "import"
+    },
+    {
+      "source": "worker",
       "target": "app.core.webhook_security",
       "kind": "runtime"
     },
@@ -3023,8 +3033,8 @@
   ],
   "stats": {
     "modules": 94,
-    "edges": 290,
-    "total_loc": 22240,
+    "edges": 292,
+    "total_loc": 22266,
     "layers": [
       "ai",
       "core",

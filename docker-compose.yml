@@ -46,7 +46,11 @@ x-app-env: &app-env
   # ── Optional ────────────────────────────────────────────────────────────
   PUBLIC_URL: ${PUBLIC_URL:-}
   TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
-  LOG_FORMAT: ${LOG_FORMAT:-json}
+  # text, matching render.yaml and the app's own default. json is a real
+  # choice now — it selects the single-line JSON formatter meant for a log
+  # drain — so it is opt-in rather than something compose picks for you.
+  LOG_FORMAT: ${LOG_FORMAT:-text}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
   SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
   DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
 

@@ -1306,8 +1306,8 @@
       "id": "app.intelligence.graph_svg",
       "path": "app/intelligence/graph_svg.py",
       "layer": "intelligence",
-      "loc": 410,
-      "functions": 12,
+      "loc": 514,
+      "functions": 15,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
@@ -3035,7 +3035,7 @@
   "stats": {
     "modules": 94,
     "edges": 292,
-    "total_loc": 22317,
+    "total_loc": 22421,
     "layers": [
       "ai",
       "core",

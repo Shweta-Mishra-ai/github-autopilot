@@ -34,6 +34,26 @@ SVG_PATH = pathlib.Path("docs/diagrams/codegraph.svg")
 JSON_PATH = pathlib.Path("docs/diagrams/codegraph.json")
 
 
+SVG_NS = "{http://www.w3.org/2000/svg}"
+
+
+def _import_curves(root):
+    """Only the edge curves.
+
+    These assertions used to count every <path> in the document, which was the
+    right number only while imports were the one curved thing in it. Adding the
+    layer bands — also paths — broke both of them without either the renderer or
+    the property under test being wrong. Ask the group by name instead.
+    """
+    group = root.find(f'{SVG_NS}g/{SVG_NS}g[@id="imports"]')
+    if group is None:
+        group = next(
+            (g for g in root.iter(f"{SVG_NS}g") if g.get("id") == "imports"), None
+        )
+    assert group is not None, "the renderer no longer emits an #imports group"
+    return list(group.iter(f"{SVG_NS}path"))
+
+
 def _payload(**over) -> dict:
     base = {
         "nodes": [
@@ -113,14 +133,13 @@ class TestRenders:
 
     def test_one_curve_per_import(self):
         root = ET.fromstring(render_svg(_payload()))
-        paths = list(root.iter("{http://www.w3.org/2000/svg}path"))
-        assert len(paths) == 2
+        assert len(_import_curves(root)) == 2
 
     def test_a_runtime_import_is_drawn_differently_from_a_top_level_one(self):
         """A deferred import is a weaker coupling. Drawing both the same way
         overstates how tangled the codebase is."""
         root = ET.fromstring(render_svg(_payload()))
-        dashed = [p for p in root.iter("{http://www.w3.org/2000/svg}path") if p.get("stroke-dasharray")]
+        dashed = [p for p in _import_curves(root) if p.get("stroke-dasharray")]
         assert len(dashed) == 1
 
     def test_module_names_appear_as_text(self):
@@ -271,7 +290,7 @@ class TestSurvivesOddInput:
         p = _payload()
         p["edges"].append({"source": "app.handlers.push", "target": "app.gone", "kind": "import"})
         root = ET.fromstring(render_svg(p))
-        assert len(list(root.iter("{http://www.w3.org/2000/svg}path"))) == 2
+        assert len(_import_curves(root)) == 2
 
     def test_a_module_with_zero_lines_still_gets_a_visible_dot(self):
         p = _payload()
@@ -350,3 +369,125 @@ class TestCommittedPicture:
             "the README no longer embeds the generated map — which is the only "
             "place most readers will ever see it"
         )
+
+
+class TestLayerBands:
+    """The ring groups modules by layer, and before this the grouping was
+    carried entirely by dot colour — eight palettes across 94 dots, which a
+    reader decodes rather than sees. A band outside the dots marks where each
+    layer starts and ends."""
+
+    def _bands(self, payload=None):
+        root = ET.fromstring(render_svg(payload or _payload()))
+        group = next((g for g in root.iter(f"{SVG_NS}g") if g.get("id") == "layer-bands"), None)
+        assert group is not None, "no layer-bands group"
+        return list(group.iter(f"{SVG_NS}path"))
+
+    def test_one_band_per_layer_present(self):
+        payload = _payload()
+        layers = {n["layer"] for n in payload["nodes"]}
+        assert len(self._bands(payload)) == len(layers)
+
+    def test_a_band_takes_its_layers_colour(self):
+        colours = {b.get("stroke") for b in self._bands()}
+        assert colours <= set(LAYER_COLORS.values()) | {"#9ca3af"}
+
+    def test_a_single_module_layer_still_draws_a_visible_band(self):
+        """A run of one has zero angular extent, so an unpadded arc is a path
+        from a point to itself — which renders as nothing at all."""
+        payload = _payload()
+        payload["nodes"] = [payload["nodes"][0]]
+        payload["edges"] = []
+
+        d = self._bands(payload)[0].get("d")
+        head = re.match(r"M([\d.-]+) ([\d.-]+)A[\d.]+ [\d.]+ 0 \d 1 ([\d.-]+) ([\d.-]+)", d)
+        assert head, d
+        x0, y0, x1, y1 = (float(v) for v in head.groups())
+        assert (x0, y0) != (x1, y1), "a one-module layer drew a zero-length arc"
+
+    def test_bands_sit_outside_the_dots_and_inside_the_labels(self):
+        """Overlapping the dots would hide data; overlapping the labels would
+        make them unreadable."""
+        from app.intelligence.graph_svg import ARC_R, LABEL_R, RING_R
+
+        assert RING_R < ARC_R < LABEL_R
+
+
+class TestBetweenLayers:
+    """The chord diagram draws all 292 imports and lets you trace none of them.
+    'Does core reach into handlers?' is unanswerable from the picture, so the
+    panel answers it in numbers."""
+
+    def test_imports_inside_a_layer_are_excluded(self):
+        """They are the majority and they are expected. Counting them would
+        bury the rows worth reading."""
+        from app.intelligence.graph_svg import layer_flows
+
+        nodes = [
+            {"id": "a", "layer": "core"},
+            {"id": "b", "layer": "core"},
+            {"id": "c", "layer": "handlers"},
+        ]
+        edges = [
+            {"source": "a", "target": "b"},
+            {"source": "c", "target": "a"},
+        ]
+        assert layer_flows(nodes, edges) == [("handlers", "core", 1)]
+
+    def test_flows_are_counted_and_sorted_by_weight(self):
+        from app.intelligence.graph_svg import layer_flows
+
+        nodes = [
+            {"id": "h1", "layer": "handlers"},
+            {"id": "c1", "layer": "core"},
+            {"id": "g1", "layer": "github"},
+        ]
+        edges = [
+            {"source": "h1", "target": "c1"},
+            {"source": "h1", "target": "c1"},
+            {"source": "h1", "target": "g1"},
+        ]
+        assert layer_flows(nodes, edges) == [
+            ("handlers", "core", 2),
+            ("handlers", "github", 1),
+        ]
+
+    def test_direction_is_preserved(self):
+        """core → github and github → core are different facts, and only one of
+        them is a surprise."""
+        from app.intelligence.graph_svg import layer_flows
+
+        nodes = [{"id": "c", "layer": "core"}, {"id": "g", "layer": "github"}]
+        flows = layer_flows(nodes, [{"source": "c", "target": "g"}])
+        assert flows == [("core", "github", 1)]
+
+    def test_equal_counts_order_deterministically(self):
+        """The committed SVG is diffed by CI, so a tie that reorders between
+        runs would fail a PR that changed nothing."""
+        from app.intelligence.graph_svg import layer_flows
+
+        nodes = [
+            {"id": "h", "layer": "handlers"},
+            {"id": "c", "layer": "core"},
+            {"id": "g", "layer": "github"},
+            {"id": "a", "layer": "ai"},
+        ]
+        edges = [{"source": "h", "target": "c"}, {"source": "a", "target": "g"}]
+        assert layer_flows(nodes, edges) == [("ai", "github", 1), ("handlers", "core", 1)]
+
+    def test_an_edge_naming_an_unknown_module_is_ignored(self):
+        from app.intelligence.graph_svg import layer_flows
+
+        nodes = [{"id": "a", "layer": "core"}]
+        assert layer_flows(nodes, [{"source": "a", "target": "missing"}]) == []
+
+    def test_the_section_appears_in_the_rendered_panel(self):
+        svg = render_svg(_payload())
+        assert "BETWEEN LAYERS" in svg
+
+    def test_no_section_when_nothing_crosses_a_boundary(self):
+        """A heading over an empty list is noise."""
+        payload = _payload()
+        for n in payload["nodes"]:
+            n["layer"] = "core"
+        assert "BETWEEN LAYERS" not in render_svg(payload)

@@ -78,7 +78,9 @@ WIDTH = 1320
 HEIGHT = 840
 CX, CY = 412.0, 420.0
 RING_R = 268.0  # radius the module dots sit on
-LABEL_R = 277.0  # radius module labels start at
+ARC_R = 276.0  # radius of the layer band just outside the dots
+ARC_WIDTH = 3.0
+LABEL_R = 284.0  # radius module labels start at
 PANEL_X = 800.0
 
 # How hard edges are pulled toward the centre. 0 draws straight chords (an
@@ -210,6 +212,48 @@ def _edge_paths(edges: list[dict], placed: dict[str, dict]) -> list[str]:
     return out
 
 
+def _layer_spans(placed: dict[str, dict]) -> list[tuple[str, float, float]]:
+    """(layer, first angle, last angle) for each contiguous run on the ring.
+
+    _place already groups the ring by layer and leaves a gap between groups, so
+    a run is simply the modules between two gaps.
+    """
+    spans: list[tuple[str, float, float]] = []
+    for entry in placed.values():
+        layer = entry["node"].get("layer", "other")
+        angle = entry["angle"]
+        if spans and spans[-1][0] == layer:
+            spans[-1] = (layer, spans[-1][1], angle)
+        else:
+            spans.append((layer, angle, angle))
+    return spans
+
+
+def _layer_arcs(placed: dict[str, dict]) -> list[str]:
+    """A coloured band outside the dots marking where each layer starts and ends.
+
+    Without it the grouping is carried entirely by dot colour, which at 94
+    modules and eight palettes is a thing you have to decode rather than see.
+    The band turns "which part of the ring is core?" into a glance, and it sits
+    outside the dots so it never overlaps the edges.
+    """
+    out: list[str] = []
+    for layer, start, end in _layer_spans(placed):
+        # A single-module layer has zero extent; widen it so the band is still
+        # a visible mark rather than a degenerate path of length nothing.
+        pad = math.radians(0.9)
+        a0, a1 = start - pad, end + pad
+        x0, y0 = CX + math.cos(a0) * ARC_R, CY + math.sin(a0) * ARC_R
+        x1, y1 = CX + math.cos(a1) * ARC_R, CY + math.sin(a1) * ARC_R
+        large = 1 if (a1 - a0) > math.pi else 0
+        out.append(
+            f'<path d="M{_r(x0)} {_r(y0)}A{ARC_R} {ARC_R} 0 {large} 1 {_r(x1)} {_r(y1)}" '
+            f'stroke="{_color(layer)}" stroke-width="{ARC_WIDTH}" opacity="0.55" '
+            f'fill="none" stroke-linecap="round"/>'
+        )
+    return out
+
+
 def _node_circles(placed: dict[str, dict]) -> list[str]:
     out: list[str] = []
     for entry in placed.values():
@@ -249,7 +293,35 @@ def _node_labels(placed: dict[str, dict]) -> list[str]:
     return out
 
 
-def _panel(payload: dict, nodes: list[dict]) -> list[str]:
+def layer_flows(nodes: list[dict], edges: list[dict]) -> list[tuple[str, str, int]]:
+    """Cross-layer import counts, heaviest first: (from, to, imports).
+
+    The chord diagram draws all 292 imports and lets you trace none of them —
+    that is the known cost of the shape, and past roughly fifty edges the
+    middle is texture rather than information. This is the summary the picture
+    cannot give: whether `core` imports from `handlers`, and how hard.
+
+    Imports inside a layer are excluded. They are the majority, they are
+    expected, and including them would bury the eight numbers worth reading.
+    """
+    layer_of = {n.get("id", ""): n.get("layer", "other") for n in nodes}
+    counts: dict[tuple[str, str], int] = {}
+    for e in edges:
+        src = layer_of.get(e.get("source", ""))
+        dst = layer_of.get(e.get("target", ""))
+        if src is None or dst is None or src == dst:
+            continue
+        counts[(src, dst)] = counts.get((src, dst), 0) + 1
+
+    # Count descending, then the pair name, so equal counts never reorder
+    # between runs — the committed file has to be byte-reproducible.
+    return sorted(
+        ((src, dst, n) for (src, dst), n in counts.items()),
+        key=lambda row: (-row[2], row[0], row[1]),
+    )
+
+
+def _panel(payload: dict, nodes: list[dict], edges: list[dict]) -> list[str]:
     """The right-hand column: what the picture cannot say on its own."""
     stats = payload.get("stats") or {}
     cycles = stats.get("cycles") or []
@@ -332,6 +404,31 @@ def _panel(payload: dict, nodes: list[dict]) -> list[str]:
                 f'text-anchor="end">{h.get("loc", 0)} lines · {h.get("fan_in", 0)} in</text>'
             )
 
+    # ── Which layers actually touch ──────────────────────────────────────────
+    # The one question the ring is bad at. Every import is drawn, and past about
+    # fifty edges the middle is texture — you cannot follow a curve from one dot
+    # to another, so "does core reach into handlers?" is unanswerable from the
+    # picture. These eight rows answer it, and the bar makes the ratios visible
+    # without a second axis to read.
+    flows = layer_flows(nodes, edges)
+    if flows:
+        y += 30
+        line("BETWEEN LAYERS — imports crossing a boundary", size=10, fill=DIM, dy=0, weight="600")
+        widest = max(n for _, _, n in flows[:8])
+        bar_x = PANEL_X + 196.0
+        bar_max = float(WIDTH - 40 - 34) - bar_x
+        for src, dst, count in flows[:8]:
+            y += 19
+            width = max(2.0, bar_max * (count / widest)) if widest else 2.0
+            out.append(
+                f'<text x="{_r(PANEL_X)}" y="{_r(y)}" font-size="11.5" fill="{TEXT}">'
+                f"{escape(f'{src} → {dst}')}</text>"
+                f'<rect x="{_r(bar_x)}" y="{_r(y - 8)}" width="{_r(width)}" height="8" '
+                f'rx="2" fill="{_color(src)}" opacity="0.55"/>'
+                f'<text x="{WIDTH - 40}" y="{_r(y)}" font-size="11" fill="{DIM}" '
+                f'text-anchor="end">{count}</text>'
+            )
+
     # ── Anything actually wrong ──────────────────────────────────────────────
     # Reported here rather than left to the reader to spot in the ring: a cycle
     # is a design defect and an unreferenced module is dead code or an
@@ -394,12 +491,19 @@ def render_svg(payload: dict) -> str:
         # font would be an external fetch, which an <img>-embedded SVG cannot make.
         '<g font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, '
         'Helvetica, Arial, sans-serif">',
-        '<g fill="none" stroke-linecap="round">',
+        # Named groups, because "how many imports are drawn" is a thing tests
+        # ask and the layer band is also a <path>. Counting every path in the
+        # document answered that question correctly only by accident, and
+        # stopped the moment anything else curved was added.
+        '<g id="imports" fill="none" stroke-linecap="round">',
         *_edge_paths(edges, placed),
+        "</g>",
+        '<g id="layer-bands">',
+        *_layer_arcs(placed),
         "</g>",
         *_node_circles(placed),
         *_node_labels(placed),
-        *_panel(payload, nodes),
+        *_panel(payload, nodes, edges),
         f'<text x="{_r(CX)}" y="{HEIGHT - 26}" font-size="10.5" fill="{DIM}" '
         f'text-anchor="middle">Solid curve: module-level import · '
         f"Dashed: import inside a function · Dot size: lines of code</text>",

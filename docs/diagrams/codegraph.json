@@ -859,7 +859,7 @@
       "id": "app.github.sticky",
       "path": "app/github/sticky.py",
       "layer": "github",
-      "loc": 62,
+      "loc": 86,
       "functions": 2,
       "classes": 0,
       "is_package": false,
@@ -3035,7 +3035,7 @@
   "stats": {
     "modules": 94,
     "edges": 292,
-    "total_loc": 22421,
+    "total_loc": 22445,
     "layers": [
       "ai",
       "core",

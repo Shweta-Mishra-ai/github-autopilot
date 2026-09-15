@@ -113,6 +113,45 @@ def _build_redis_mock():
             with self._lock:
                 return len(self._d.get(key, []))
 
+        def ttl(self, key):
+            """Seconds left, -1 for no expiry, -2 when the key is gone.
+
+            Same convention as real Redis, because a test asserting `> 0`
+            against a fake that returned None would pass for the wrong reason.
+            """
+            with self._lock:
+                self._evict(key)
+                if key not in self._d:
+                    return -2
+                exp = self._exp.get(key)
+                if not exp:
+                    return -1
+                return max(0, int(exp - time.time()))
+
+        def keys(self, pattern="*"):
+            import fnmatch
+
+            with self._lock:
+                for k in list(self._d):
+                    self._evict(k)
+                return [k for k in self._d if fnmatch.fnmatch(k, pattern)]
+
+        def scan_iter(self, match="*", count=None):
+            """The app uses SCAN rather than KEYS on request paths, because KEYS
+            blocks the server for the whole keyspace. A fake without it makes
+            every such path untestable, which is how app/core/process_guard.py
+            came to need this."""
+            return iter(self.keys(match))
+
+        def rpop(self, key):
+            with self._lock:
+                lst = self._d.get(key) or []
+                if not lst:
+                    return None
+                value = lst.pop()
+                self._d[key] = lst
+                return value
+
         def hset(self, key, mapping=None, **kwargs):
             with self._lock:
                 h = self._d.get(key, {})
@@ -224,6 +263,130 @@ def no_provider_catalogue_calls():
         yield
     mc.clear_cache()
     mc.clear_substitutions()
+
+
+@pytest.fixture(autouse=True)
+def no_real_network(request):
+    """
+    The unit suite must not open a socket to the internet.
+
+    This generalises the guard above. That one stopped the provider catalogue
+    reaching openrouter.ai, which is the instance that turned CI red — but it
+    fixed the instance, not the class, and another one was already present:
+    `/secfull` walks requirements.txt through app/security/licenses.py, which
+    asks PyPI about each package. Six real connections to Fastly per suite run,
+    from a test that believed it was offline.
+
+    A test whose result depends on the network is not a test. It passes on a
+    laptop, fails in a locked-down runner, and is slow everywhere — and in an
+    environment that blocks egress it still passes, while silently exercising
+    the error path instead of the one it names.
+
+    Loopback stays open, because the in-process fakes and the Flask test client
+    use it. Tests marked `integration` or `e2e` opt out, which is what those
+    marks are for.
+
+    A PROXY DEFEATS A SOCKET-ONLY GUARD, which is why this is not just two
+    socket hooks. With HTTPS_PROXY set — this sandbox, many corporate runners,
+    anyone with mitmproxy or a local Squid — the socket destination of every
+    outbound request is the proxy, and the proxy is usually on 127.0.0.1. The
+    guard then sees loopback, waves it through, and the request reaches the
+    internet anyway. Reproduced: a test doing requests.get("https://api.github
+    .com/zen") under the socket-only version got a real HTTP 403 back from
+    GitHub while the guard stayed silent.
+
+    So the real destination has to be taken from where it actually survives
+    proxying:
+      - env proxies are removed for the duration, which puts the real hostname
+        back into getaddrinfo;
+      - HTTPConnection.set_tunnel carries the true target of a CONNECT, so it
+        catches a proxy passed explicitly as requests(proxies=...), which no
+        amount of environment scrubbing would;
+      - HTTPConnection.putrequest sees the absolute-URI request line that plain
+        http:// through a proxy uses instead of CONNECT — the one remaining
+        path with no tunnel and no DNS lookup to observe.
+    """
+    import http.client
+    import socket
+
+    if request.node.get_closest_marker("integration") or request.node.get_closest_marker("e2e"):
+        yield
+        return
+
+    real_connect = socket.socket.connect
+    real_getaddrinfo = socket.getaddrinfo
+    real_set_tunnel = http.client.HTTPConnection.set_tunnel
+    real_putrequest = http.client.HTTPConnection.putrequest
+
+    # Removing these is what makes the hostname visible to the hooks at all.
+    # requests and urllib re-read the environment per request, so deleting them
+    # here is enough; no session needs rebuilding.
+    saved_proxy_env = {}
+    for var in (
+        "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "FTP_PROXY",
+        "http_proxy", "https_proxy", "all_proxy", "ftp_proxy",
+    ):
+        if var in os.environ:
+            saved_proxy_env[var] = os.environ.pop(var)
+
+    def _is_local(host) -> bool:
+        return isinstance(host, str) and (
+            host.startswith(("127.", "localhost", "::1")) or host in ("", "0.0.0.0")
+        )
+
+    def _refuse(host):
+        raise RuntimeError(
+            f"A unit test tried to open a real connection to {host!r}.\n"
+            "Mock the client instead. If the test genuinely needs the network, "
+            "mark it `@pytest.mark.integration` — the default run excludes those."
+        )
+
+    # Both socket hooks, because they catch different things and only together
+    # do they give a usable message. getaddrinfo fires first and still knows the
+    # HOSTNAME — guarding connect alone reports the resolved IP, which tells an
+    # author nothing, and lets the DNS lookup itself go out regardless.
+    # connect still matters for a request made straight to an IP.
+    def _guard_getaddrinfo(host, *args, **kwargs):
+        if not _is_local(host):
+            _refuse(host)
+        return real_getaddrinfo(host, *args, **kwargs)
+
+    def _guard_connect(self, address, *args, **kwargs):
+        host = address[0] if isinstance(address, tuple) and address else address
+        if not _is_local(host):
+            _refuse(host)
+        return real_connect(self, address, *args, **kwargs)
+
+    def _guard_set_tunnel(self, host, port=None, headers=None):
+        # The one place a CONNECT still names where the bytes are really going.
+        if not _is_local(host):
+            _refuse(host)
+        return real_set_tunnel(self, host, port, headers)
+
+    def _guard_putrequest(self, method, url, *args, **kwargs):
+        # Normally `url` is just a path. Through a proxy, plain http:// sends
+        # the whole absolute URI on the request line — the only trace of the
+        # real host on that route.
+        if isinstance(url, str) and url.startswith(("http://", "https://")):
+            from urllib.parse import urlparse
+
+            host = urlparse(url).hostname
+            if host and not _is_local(host):
+                _refuse(host)
+        return real_putrequest(self, method, url, *args, **kwargs)
+
+    socket.getaddrinfo = _guard_getaddrinfo
+    socket.socket.connect = _guard_connect
+    http.client.HTTPConnection.set_tunnel = _guard_set_tunnel
+    http.client.HTTPConnection.putrequest = _guard_putrequest
+    try:
+        yield
+    finally:
+        socket.socket.connect = real_connect
+        socket.getaddrinfo = real_getaddrinfo
+        http.client.HTTPConnection.set_tunnel = real_set_tunnel
+        http.client.HTTPConnection.putrequest = real_putrequest
+        os.environ.update(saved_proxy_env)
 
 
 @pytest.fixture(autouse=True)

@@ -20,9 +20,15 @@ import signal
 import sys
 import time
 
-logging.basicConfig(
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    level=logging.INFO,
+from app.core.logger import setup_logging
+
+# Same configuration as the web process, for the same reasons — see the note
+# in server.py. A worker whose LOG_LEVEL is ignored is the worse half of that
+# bug: the web process at least answers /health, while this one is only ever
+# debugged through its logs.
+setup_logging(
+    level=os.environ.get("LOG_LEVEL", "INFO"),
+    fmt=os.environ.get("LOG_FORMAT", "text"),
 )
 log = logging.getLogger("worker")
 

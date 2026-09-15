@@ -4,83 +4,129 @@
 
 # GitHub Autopilot
 
-**Your repository's AI co-pilot. Fix bugs, review PRs, scan secrets — from a single comment.**
+### AI code review that never sends your code anywhere.
 
-**The self-hosted one**: runs on your own free-tier infra, and in
-[local-LLM mode](#private-mode--keep-code-on-your-own-hardware) your code
-**never leaves your hardware** — the private-repo alternative to SaaS review bots.
+**Self-hosted. Runs on your own infrastructure, or entirely on your own hardware.**<br/>
+Reviews pull requests, fixes bugs, scans for secrets — from a comment, your terminal, or your editor.
 
 [![CI](https://github.com/Shweta-Mishra-ai/github-autopilot/actions/workflows/ci.yml/badge.svg)](https://github.com/Shweta-Mishra-ai/github-autopilot/actions/workflows/ci.yml)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://python.org)
 [![Tests](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FShweta-Mishra-ai%2Fgithub-autopilot%2Fbadges%2Ftests.json)](https://github.com/Shweta-Mishra-ai/github-autopilot/actions/workflows/ci.yml)
 [![Server Health](https://github.com/Shweta-Mishra-ai/github-autopilot/actions/workflows/keepalive.yml/badge.svg)](https://github.com/Shweta-Mishra-ai/github-autopilot/actions/workflows/keepalive.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://python.org)
 [![MCP](https://img.shields.io/badge/MCP-server-a371f7?logo=anthropic&logoColor=white)](docs/mcp-setup.md)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-22c55e.svg)](LICENSE)
-[![Deploy to Render](https://img.shields.io/badge/deploy-Render-46E3B7?logo=render&logoColor=white)](https://render.com/deploy)
 [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-db61a2?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/Shweta-Mishra-ai)
 
-<img src="assets/demo.svg" alt="Illustration: /fix command in a GitHub issue, bot replies with root cause, fix and test" width="720"/>
+<img src="assets/demo.svg" alt="Illustration: a /fix command in a GitHub issue, and the bot replying with a root cause, a fix and a test" width="720"/>
 
-<sub>*Simulated output for illustration — see the [eval suite](evals/) for measured behaviour.*</sub>
+<sub>*Illustration. Real behaviour is measured by the [eval suite](evals/), which runs nightly against planted bugs.*</sub>
 
 </div>
 
 ---
 
-## Upgrading from V6?
+## Why this one
 
-V7 changed three visible behaviours — one sticky PR comment instead of six,
-secret issues only for critical/high, and silence when there is nothing to say.
-All of it, plus the V7.1 and V7.2 notes: **[docs/MIGRATING.md](docs/MIGRATING.md)**.
-
-## Why Autopilot?
+Most AI review bots are a service you send your code to. This one is a service you run.
 
 | | |
 |---|---|
-| ⚡ **27 slash commands** | `/fix` `/security` `/merge` `/autofix` `/rollback` … right in issue/PR comments |
-| 🛡️ **Safety-first automation** | Confidence gates, guardrails, human-in-the-loop `/apply`, maintainer-only permissions |
-| 🔁 **Durable event queue** | Webhooks parked in Redis — survive restarts, deploys and crashes; if Redis itself dies, degrades to best-effort in-process dispatch (and says so in the logs) |
-| 🧠 **5-provider AI failover** | Groq 70B → Groq 8B → Gemini → OpenRouter, with per-provider circuit breakers |
-| 🔒 **Local-LLM privacy mode** | Run on your own Ollama — set `LLM_LOCAL_ONLY=1` and code **never** leaves your infra |
-| 🧩 **Private repo memory** | Learns your repo's fixes & decisions; sensitive context stays local, [encrypted backup](docs/ai-system/memory.md) for durability |
-| 🔐 **Security scanning** | Secret detection on **every push to every branch**, dependency CVE checks |
-| 📍 **Inline PR reviews** | Findings land as line-anchored review comments with committable suggestions — not a wall-of-text comment |
-| 📏 **Honest AI output** | Every comment discloses which model wrote it; optional [quality floor](#configuration) refuses to degrade reviews to a small model; [measured by evals](evals/), not vibes |
-| 🔌 **MCP server built in** | Call Autopilot tools from Claude Code, Cursor, or Codex — [setup guide](docs/mcp-setup.md) |
-| 📊 **Live ops dashboard** | `/dashboard` — queue depth, event throughput, provider circuit-breakers, thread pool. Zero build, no CDN |
-| 💸 **Runs on free tier** | Render free web service + free Redis. $0/month |
+| 🔒 **Your code can stay on your hardware** | Point it at a local [Ollama](https://ollama.com) and set `LLM_LOCAL_ONLY=1`. The router then **fails closed**: if the local model is down, calls error out rather than quietly falling back to a cloud API. There is deliberately no setting that weakens this. |
+| 🧩 **It lives where you already work** | A built-in MCP server and a Claude Code plugin, not just a bot that comments on pull requests. Review a PR from your terminal without opening a browser. |
+| 📊 **Its quality is measured, not asserted** | A nightly [eval suite](evals/) scores the bot against known bugs and opens an issue when the score drops. Every comment it posts also discloses which model wrote it. |
+| 🛑 **It says nothing rather than something wrong** | Low-confidence output is withheld with an honest message. Unparseable model responses are never rendered as findings. Silence is a supported answer. |
+| 🏗️ **Built to be operated** | Durable Redis-backed webhook queue, per-provider circuit breakers, a live ops dashboard, and a `/setup/doctor` endpoint that tells you exactly which command will not work and why. |
+| 💸 **Free to run** | Fits the Render free tier with free Redis, and a free Groq key. $0/month, or $0 and no third party at all in local mode. |
 
 ---
 
-## Quickstart — deploy in 10 minutes
+## Get started
 
-### 1. Deploy
+Four ways in, shortest first. The first two are clients; the last two are the
+deployment they talk to, and you pick one of those.
+
+**Which deployment?** The only difference is where the model runs.
+
+| | Option 3 — hosted | Option 4 — your own hardware |
+|---|---|---|
+| Model | Groq, Gemini or OpenRouter | Ollama, on your machine |
+| Your code | goes to that provider | never leaves the box |
+| Needs | a free API key | ~6GB RAM for an 8B model |
+| Speed | seconds | tens of seconds on CPU |
+| Cost | $0 on free tiers | $0, and no third party |
+
+Both are one command and both are fully supported. Option 4 is the reason this
+project exists; Option 3 is the one to start with if you just want to see it work.
+
+### Option 1 — From Claude Code, in about ten seconds
+
+```
+/plugin marketplace add Shweta-Mishra-ai/github-autopilot
+/plugin install github-autopilot
+```
+
+Then point it at an instance and use it:
+
+```bash
+export GITHUB_AUTOPILOT_URL="https://your-deployment.onrender.com/mcp"
+export MCP_API_KEY="<your server's MCP_API_KEY>"
+```
+
+```
+/github-autopilot:review owner/repo 42
+/github-autopilot:fix owner/repo 17
+/github-autopilot:security file.py
+/github-autopilot:health owner/repo
+```
+
+Details in [`plugin/README.md`](plugin/README.md).
+
+### Option 2 — From any MCP editor
+
+Claude Code, Cursor and Codex all speak MCP. One command:
+
+```bash
+claude mcp add --transport http github-autopilot \
+  https://your-deployment.onrender.com/mcp \
+  --header "Authorization: Bearer YOUR_MCP_API_KEY"
+```
+
+Client configs, the full tool reference, and troubleshooting:
+**[docs/mcp-setup.md](docs/mcp-setup.md)**
+
+### Option 3 — Hosted, as a GitHub App, in about ten minutes
+
+<details open>
+<summary><b>Full deployment walkthrough</b></summary>
+
+<br/>
+
+**1. Deploy.**
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
 
-Or: fork this repo → Render → **New Blueprint** → connect the fork.
-[`render.yaml`](render.yaml) wires the web service and Redis.
+Or fork this repository, then Render → **New Blueprint** → connect the fork.
+[`render.yaml`](render.yaml) wires up the web service and Redis for you.
 
-### 2. Create the GitHub App — one click
+**2. Create the GitHub App with one click.**
 
-Open **`https://<your-deployment>/setup`** and press the button.
+Open `https://<your-deployment>/setup` and press the button. GitHub builds the
+App from a manifest that already has the webhook URL, the four event
+subscriptions and every permission set. Nothing to tick — which matters,
+because a missed permission is the one mistake that makes commands refuse to
+run and struggle to explain why.
 
-GitHub creates the App from a manifest with the webhook URL, the four events
-and every permission already set, then hands back your credentials. There is
-nothing to tick, which matters: a missed permission is the one mistake that
-makes commands refuse to run and struggle to say why.
+The credentials are shown once. Put them in your host's environment:
 
-The credentials appear once. Paste them into your host's environment:
-
-| Variable | From |
-|----------|------|
+| Variable | Where it comes from |
+|----------|---------------------|
 | `GITHUB_APP_ID` | the setup page |
 | `GITHUB_PRIVATE_KEY` | the setup page |
 | `GITHUB_WEBHOOK_SECRET` | the setup page |
-| `GROQ_API_KEY` | [console.groq.com](https://console.groq.com) — free |
-| `REDIS_URL` | auto-wired by `render.yaml` |
+| `GROQ_API_KEY` | [console.groq.com](https://console.groq.com), free — **or skip it and use Option 4 instead** |
+| `REDIS_URL` | wired automatically by `render.yaml` |
 | `METRICS_AUTH_TOKEN` | any strong random string — recommended |
-| `MCP_API_KEY` | `python3 -c "import secrets; print(secrets.token_hex(32))"` — for IDE use |
+| `MCP_API_KEY` | `python3 -c "import secrets; print(secrets.token_hex(32))"` |
 
 <details>
 <summary>Prefer to create the App by hand?</summary>
@@ -101,39 +147,139 @@ do it by hand, run the doctor below afterwards.
 
 </details>
 
-### 3. Install & verify
-
-Install the App on your repositories, then ask the deployment to check itself:
+**3. Install it, then ask the deployment to check itself.**
 
 ```bash
 curl -H "Authorization: Bearer $METRICS_AUTH_TOKEN" \
   "https://<your-deployment>/setup/doctor?repo=owner/name&installation_id=<id>"
 ```
 
-It probes each capability with a real read and reports **which commands will
-not work and why** — including the App-permission failure that used to be
-invisible. `installation_id` is in the URL of the App's installation settings
-page.
+Every capability is probed with a real read, and the reply names **which
+commands will not work, and why**. The installation id is in the URL of the
+App's installation settings page.
 
-It also reports the deployment settings that fail *quietly* when unset —
-encrypted memory backup, the local triage gate, and whether
-`TRUSTED_PROXY_HOPS` matches the X-Forwarded-For chains your traffic actually
-carries. Those need no repository, so the doctor answers with them even
-without arguments:
+Called with no arguments it reports the settings that fail *silently* when
+unset — encrypted memory backup, the local triage gate, and whether
+`TRUSTED_PROXY_HOPS` matches the forwarding chains your traffic actually
+carries.
+
+Then comment `/health` on any issue. The bot replies with a repository health
+grade, and you are done. ✈️
+
+</details>
+
+### Option 4 — Entirely on your own hardware, in about ten minutes
+
+<details open>
+<summary><b>Nothing leaves the machine, including the model</b></summary>
+
+<br/>
+
+Same application, same commands, same GitHub App. The model runs next to it in
+a container instead of at a provider, so no source code is sent anywhere.
+
+**1. Get the GitHub App credentials.** Identical to Option 3, steps 1–2 — you
+still need `GITHUB_APP_ID`, `GITHUB_PRIVATE_KEY` and `GITHUB_WEBHOOK_SECRET`.
+Run `/setup` on any temporary deployment, or create the App by hand.
+
+**2. Write `.env`.** No model key appears here:
 
 ```bash
-curl -H "Authorization: Bearer $METRICS_AUTH_TOKEN" \
-  "https://<your-deployment>/setup/doctor"
+GITHUB_APP_ID=...
+GITHUB_PRIVATE_KEY=...
+GITHUB_WEBHOOK_SECRET=...
+
+OLLAMA_HOST=http://ollama:11434   # the compose service, not localhost
+OLLAMA_MODEL=llama3.1:8b
+LLM_LOCAL_ONLY=1                  # Ollama or nothing
+
+MCP_API_KEY=...                   # python3 -c "import secrets; print(secrets.token_hex(32))"
+METRICS_AUTH_TOKEN=...            # any strong random string
 ```
 
-Then comment `/health` on any issue. The bot replies with a repo health grade.
-Done. ✈️
+`localhost` inside a container is the container. `http://ollama:11434` is the
+service name from [`docker-compose.yml`](docker-compose.yml), which is what
+reaches the model.
 
-> **Cold starts** — the demo instance runs on Render's free tier. A scheduled
-> [keep-alive workflow](.github/workflows/keepalive.yml) pings it every 10 minutes
-> to keep it warm (the badge above goes red if production is actually down), but if
-> a ping window is missed the first request can take **~50 s** while the instance
-> wakes. If a request stalls, retry once.
+**3. Start it and fetch the model.**
+
+```bash
+docker compose --profile local up -d
+docker compose exec ollama ollama pull llama3.1:8b
+```
+
+That is the whole deployment: web, worker, Redis and Ollama. Without
+`--profile local` the Ollama container is not started and not downloaded, so
+Option 3 users never pay for it.
+
+**4. Let GitHub reach it.** A webhook needs a public URL. Put it behind your
+own reverse proxy, or tunnel it while you try things out:
+
+```bash
+cloudflared tunnel --url http://localhost:8000    # or: ngrok http 8000
+```
+
+Set that URL as the App's webhook URL and as `PUBLIC_URL`.
+
+**5. Confirm it is actually local.**
+
+```bash
+curl -H "Authorization: Bearer $METRICS_AUTH_TOKEN" http://localhost:8000/health
+```
+
+Then comment `/health` on an issue. Every comment the bot posts names the model
+that wrote it, so `llama3.1:8b` in the footer is the deployment telling you the
+cloud was not involved.
+
+> **Speed, honestly.** An 8B model on CPU takes tens of seconds for a review
+> where Groq takes a few. It is the same pipeline and the same prompts, and the
+> findings are shallower than a frontier model's. If the machine has a GPU, add
+> a device reservation to the `ollama` service and the gap closes considerably.
+
+</details>
+
+> **On cold starts.** The demo instance is on Render's free tier. A scheduled
+> [keep-alive workflow](.github/workflows/keepalive.yml) pings it every ten
+> minutes, and the badge above turns red if production is genuinely down. If a
+> ping window is missed, the first request can take around 50 seconds while the
+> instance wakes. Retry once.
+
+---
+
+## Keep your code on your own hardware
+
+This is the reason the project exists. **Option 4 above is how you do it**;
+this is what the guarantee actually means, and how it is held to.
+
+Already running against a model on your own machine or network? The three
+settings are all there is:
+
+```bash
+OLLAMA_HOST=http://localhost:11434   # http://ollama:11434 from inside compose
+OLLAMA_MODEL=llama3.1:8b
+LLM_LOCAL_ONLY=1     # Ollama or nothing. No cloud provider is ever contacted.
+# LLM_PREFER_LOCAL=1 # Softer: try local first, fall back to cloud on failure.
+```
+
+Three guarantees worth being precise about:
+
+- **`LLM_LOCAL_ONLY=1` fails closed.** If Ollama is unreachable, the call
+  errors. It does not silently reach for a cloud provider, on the first attempt
+  or on any fallback path, and there is no configuration that relaxes this.
+- **Learned repository memory is local by default.** Recalled context is only
+  injected into a prompt when a local model is active, unless you explicitly set
+  `MEMORY_ALLOW_CLOUD=1` and accept the egress.
+- **The promise is tested, not asserted.**
+  [`tests/test_privacy_no_egress.py`](tests/test_privacy_no_egress.py) sets
+  every cloud credential, enables `LLM_LOCAL_ONLY`, points Ollama at a dead
+  port — the exact conditions a fallback would trigger in — and records every
+  address the process attempts, across `ask`, `safe_ask`, `ask_text` and five
+  task types. Mocking the provider would only prove the mock stays home, so
+  nothing is mocked. One of those tests is a control that turns the guarantee
+  off and *requires* egress to be observed, because a watcher that sees nothing
+  passes a privacy test for the wrong reason.
+
+Reported cost in local mode is always `0`.
 
 ---
 
@@ -142,11 +288,11 @@ Done. ✈️
 <!-- autopilot:stats:start -->
 | | |
 |---|---|
-| Modules | 93 |
-| Lines of code | 21,743 |
+| Modules | 94 |
+| Lines of code | 22,266 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 287 |
+| Internal imports | 292 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>
@@ -155,41 +301,42 @@ Done. ✈️
 
 ## Commands
 
-Type any of these in a GitHub issue or PR comment:
+**27 slash commands**, typed straight into a GitHub issue or pull request
+comment. Anything that writes to your repository is restricted to maintainers,
+and anything irreversible asks for confirmation first.
 
-| Command | Description | Who |
-|---------|-------------|-----|
-| `/fix` | AI bug fix with root cause + test | Anyone |
+| Command | What it does | Who can run it |
+|---------|--------------|----------------|
+| `/fix` | AI bug fix with root cause and a test | Anyone |
 | `/explain` | Plain-English explanation | Anyone |
 | `/improve` | Concrete improvement suggestions | Anyone |
-| `/test` | Generate pytest test cases | Anyone |
-| `/docs` | Generate docstrings + README section | Anyone |
-| `/refactor` | Refactoring with before/after | Anyone |
-| `/perf` | Performance analysis (O(n²), N+1, …) | Anyone |
+| `/test` | Generate pytest cases | Anyone |
+| `/docs` | Generate docstrings and a README section | Anyone |
+| `/refactor` | Refactoring with before and after | Anyone |
+| `/perf` | Performance analysis — O(n²), N+1, and similar | Anyone |
 | `/gaps` | Test coverage gap analysis | Anyone |
 | `/arch` | Architecture review | Anyone |
-| `/ci` | Analyze CI failure | Anyone |
-| `/security` | Secret + dependency scan on PR | Anyone |
-| `/secfull` | Full repo security scan + licence compliance | Maintainers |
-| `/health` | Repo health grade | Anyone |
+| `/ci` | Analyse a CI failure | Anyone |
+| `/security` | Secret and dependency scan on a PR | Anyone |
+| `/secfull` | Full repository scan plus licence compliance | Maintainers |
+| `/health` | Repository health grade | Anyone |
 | `/version` | Tags, releases, recent commits | Anyone |
-| `/summarize` | Summarize issue thread | Anyone |
+| `/summarize` | Summarise an issue thread | Anyone |
 | `/budget` | Today's AI token usage | Anyone |
 | `/report` | Weekly analytics | Anyone |
-| `/changelog` | Generate CHANGELOG entry | Anyone |
-| `/impact` | PR blast radius analysis | Anyone |
-| `/merge` | Merge PR after checks pass | Maintainers |
-| `/apply` | Open PR from autofix branch | Maintainers |
+| `/changelog` | Generate a CHANGELOG entry | Anyone |
+| `/impact` | Pull request blast radius | Anyone |
+| `/merge` | Merge a PR once checks pass | Maintainers |
+| `/apply` | Open a PR from an autofix branch | Maintainers |
 | `/rollback N` | Restore to snapshot N | Maintainers |
-| `/release` | Draft GitHub release | Maintainers |
-| `/runtests` | Trigger CI workflow | Maintainers |
-| `/notify` | Send Discord/Slack alert | Maintainers |
-| `/ignore <rule>` | Teach the bot to stop flagging a pattern in this repo | Maintainers |
-| `/autofix` | Auto-apply code improvements (human-confirmed via `/apply`) | Maintainers |
+| `/release` | Draft a GitHub release | Maintainers |
+| `/runtests` | Trigger a CI workflow | Maintainers |
+| `/notify` | Send a Discord or Slack alert | Maintainers |
+| `/ignore <rule>` | Teach the bot to stop flagging a pattern here | Maintainers |
+| `/autofix` | Auto-apply changes, confirmed by a human via `/apply` | Maintainers |
 
-**[Full command reference →](docs/COMMANDS.md)** — syntax, arguments, scope
-(issue vs PR), the access model, and what to check when a command does not
-respond.
+**[Full command reference →](docs/COMMANDS.md)** — syntax, arguments, scope,
+the access model, and what to check when a command does not respond.
 
 ---
 
@@ -204,30 +351,32 @@ flowchart TB
     IDEM -. "Redis down → fallback" .-> TP["thread_pool<br/>bounded, backpressure"]
     TP --> H
     C --> H["handlers<br/>push · pull_request · issues · comments"]
-    H --> R["ai/router<br/>Groq 70B → 8B → Gemini → OpenRouter"]
+    H --> R["ai/router<br/>local → Groq → Gemini → OpenRouter"]
     R --> CB["circuit breakers<br/>per provider"]
-    H --> GHA["GitHub API client<br/>retry · rate-limit aware"]
+    H --> GHA["GitHub API client<br/>retry · per-installation rate limits"]
     IDE["Claude Code / Cursor / Codex"] -->|"MCP · Bearer auth"| MCP["/mcp endpoint<br/>fail-closed"]
     MCP --> H
 ```
 
 ### The real dependency graph
 
-The diagram above is the request flow, written by hand. This one is not drawn
-at all — it is generated from the import graph on every CI run, so it cannot
-drift from the code:
+The diagram above is the request flow, drawn by hand. The one below is not
+drawn at all — it is generated from the import graph on every CI run, so it
+cannot drift from the code:
 
 <img src="docs/diagrams/codegraph.svg" alt="Module dependency map: every Python module in this repository on a ring grouped by layer, with imports drawn as curves through the centre" width="100%"/>
 
-Every module is on the ring, grouped and coloured by layer. Each curve is one
+Every module sits on the ring, grouped and coloured by layer. Each curve is one
 import; dashed curves are imports made inside a function body, which this
-codebase uses deliberately to break cycles. Dot size is lines of code. The
-panel reports the two things that are defects rather than facts — import cycles
-and modules nothing imports — and CI fails the build if either appears.
+codebase uses deliberately to break cycles. Dot size is lines of code.
 
-It is a committed file, so it needs no deployment, no token and no JavaScript:
-what you are looking at is the structure at this commit. To explore it — click
-a node, see exactly what imports it — use the interactive version at
+The panel reports the three things that are defects rather than facts — import
+cycles, modules nothing imports, and two files claiming one import path — and
+CI fails the build if any of them appears.
+
+It is a committed file, so it needs no deployment, no token and no JavaScript.
+What you are looking at is the structure at this commit. To explore it
+interactively — click a node and see exactly what imports it — use
 [`/graph`](#codebase-map).
 
 <details>
@@ -235,14 +384,15 @@ a node, see exactly what imports it — use the interactive version at
 
 <br/>
 
-Useful where an image is not: a diff, a terminal, a PR comment. Regenerate
-either form with `python -m app.intelligence.codegraph app server.py worker.py`.
+Useful where an image is not: a diff, a terminal, a pull request comment.
+Regenerate either form with
+`python -m app.intelligence.codegraph app server.py worker.py`.
 
 <!-- autopilot:architecture:start -->
 ```mermaid
 graph LR
     ai["ai<br/>16 modules"]
-    core["core<br/>24 modules"]
+    core["core<br/>25 modules"]
     github["github<br/>8 modules"]
     handlers["handlers<br/>23 modules"]
     intelligence["intelligence<br/>7 modules"]
@@ -286,91 +436,40 @@ graph LR
 </details>
 
 **The queue is the backbone.** Every webhook is parked in Redis *before* the
-`202` ACK, then consumed by an in-process worker group:
+`202` acknowledgement, then consumed by an in-process worker group:
 
-- **Durable** — deploys/restarts/crashes don't lose events; stranded work is requeued at boot, poison events dead-letter after 2 attempts
-- **Bounded** — queue capped at 200 events, envelopes at 512KB, dead-letter at 50: nothing grows unbounded on a 512MB / 25MB-Redis free tier
-- **Backpressured** — queue full → `503` → GitHub redelivers automatically
-- **Degradable** — Redis down → automatic fallback to the bounded thread pool (reduced durability, still working)
-- **Scale-ready** — need more throughput later? Run [`worker.py`](worker.py) as a Render worker service and set `EVENT_QUEUE_CONSUMERS=0` on web. Zero code changes.
+- **Durable** — deploys, restarts and crashes do not lose events. Stranded work
+  is requeued at boot; poison events dead-letter after two attempts.
+- **Bounded** — 200 events, 512KB per envelope, 50 dead-lettered. Nothing grows
+  without limit on a 512MB instance with 25MB of Redis.
+- **Backpressured** — a full queue returns `503`, and GitHub redelivers.
+- **Degradable** — if Redis dies, it falls back to the bounded thread pool with
+  reduced durability, and says so in the logs.
+- **Scale-ready** — run [`worker.py`](worker.py) as a separate service and set
+  `EVENT_QUEUE_CONSUMERS=0` on web. No code changes.
 
-**Other key decisions:**
+**Other decisions worth knowing:**
 
-- Idempotency keys live 24h — matches GitHub's webhook retry window
-- Redis runs `noeviction` — dedup/queue keys are never silently evicted
-- MCP + `/metrics` auth fail **closed** with constant-time compares
-- Secret scanning runs on all branches, not just main
-- Confidence gates: every automated action needs a per-action threshold (e.g. auto-merge ≥ 0.95)
-
----
-
-## Use it from your IDE (MCP)
-
-Autopilot ships an MCP server — analyze PRs, scan secrets, and generate tests
-from Claude Code, Cursor, or Codex without leaving your editor:
-
-```bash
-claude mcp add --transport http github-autopilot \
-  https://github-autopilot-1.onrender.com/mcp \
-  --header "Authorization: Bearer YOUR_MCP_API_KEY"
-```
-
-Full client configs, tool reference, and troubleshooting: **[docs/mcp-setup.md](docs/mcp-setup.md)**
-
----
-
-## Use it from your IDE (Claude Code plugin)
-
-Install the commands + MCP server in one step:
-
-```
-/plugin marketplace add Shweta-Mishra-ai/github-autopilot
-/plugin install github-autopilot
-```
-
-Point it at your deployed instance:
-
-```bash
-export GITHUB_AUTOPILOT_URL="https://github-autopilot-1.onrender.com/mcp"
-export MCP_API_KEY="<your server's MCP_API_KEY>"
-```
-
-Then, from Claude Code: `/github-autopilot:review owner/repo 42` ·
-`/github-autopilot:fix owner/repo 17` · `/github-autopilot:security file.py` ·
-`/github-autopilot:health owner/repo`. Full details in [`plugin/README.md`](plugin/README.md).
-
----
-
-## Private mode — keep code on your own hardware
-
-By default the bot sends code to Groq/Gemini/OpenRouter. For private or
-regulated repos, point it at a local [Ollama](https://ollama.com) instead —
-source code never leaves your infrastructure:
-
-```bash
-ollama pull llama3.1:8b
-```
-
-```bash
-OLLAMA_HOST=http://localhost:11434
-OLLAMA_MODEL=llama3.1:8b
-LLM_LOCAL_ONLY=1     # Ollama or nothing — no cloud provider is ever contacted
-# LLM_PREFER_LOCAL=1 # softer: try local first, fall back to cloud on failure
-```
-
-In `LLM_LOCAL_ONLY` mode the router **fails closed** — if Ollama is down, calls
-error out rather than silently leaking to a cloud API. `cost_usd` is always `0`.
+- Idempotency keys live 24 hours, matching GitHub's webhook retry window.
+- Redis runs `noeviction`, so dedup and queue keys are never silently dropped.
+- MCP and `/metrics` authentication fail **closed**, with constant-time compares.
+- Secret scanning runs on every branch, not only the default one.
+- Nothing may sleep in a shared worker thread. Provider throttling and GitHub
+  rate limits are both ridden out only if the wait is short, and reported
+  otherwise.
+- Rate-limit state is tracked **per installation**, so one busy tenant cannot
+  throttle another or mask its exhaustion.
 
 ---
 
 ## Configuration
 
-Drop `.ai-repo-manager.yml` in your repo root (the filename predates the
-GitHub Autopilot rename and is kept so existing installs don't break):
+Drop `.ai-repo-manager.yml` in your repository root. The filename predates the
+rename to GitHub Autopilot and is kept so existing installs keep working.
 
 ```yaml
 push:
-  scan_secrets: true          # always on for all branches
+  scan_secrets: true          # always on, for every branch
   scan_dependencies: true
 
 confidence:
@@ -381,51 +480,81 @@ confidence:
 commands:
   permissions:
     maintainer_only: [merge, rollback, release]
+  enabled: [fix, explain, health]   # optional allow-list; omit to keep all
 
 bot:
   enabled: true               # master kill switch — false stops everything
   footer: "*Powered by GitHub Autopilot*"
-
-commands:
-  enabled: [fix, explain, health]   # optional allow-list; omit to keep all commands
 ```
 
-All keys are validated on load — bad values log a warning and fall back to safe defaults.
+Every key is validated on load. A bad value logs a warning and falls back to a
+safe default.
 
-**Config is read from your default branch, never from a pull request.** This is
-deliberate: config decides who may merge, whether auto-merge runs, and whether
-secrets are scanned, so honouring it from a PR head would let any contributor
-grant themselves those rights by editing the file inside their own PR. Config
-changes take effect once merged — the same trust boundary GitHub Actions applies
-to workflow permissions.
+**Configuration is read from your default branch, never from a pull request.**
+This is deliberate. Config decides who may merge, whether auto-merge runs, and
+whether secrets are scanned — so honouring it from a PR head would let any
+contributor grant themselves those rights by editing the file inside their own
+pull request. Changes take effect once merged, which is the same trust boundary
+GitHub Actions applies to workflow permissions.
 
 Two behaviours worth knowing:
 
-- Omitting `commands.enabled` means *no restriction* — every command stays
-  available. It is an allow-list, not a registry, so you never have to keep it in
-  sync with new releases. An explicit `enabled: []` disables everything.
-- `bot.enabled: false` stops all handlers: PRs, issues, pushes, CI and commands.
+- Omitting `commands.enabled` means **no restriction**, not "none enabled". It
+  is an allow-list, not a registry, so you never have to keep it in sync with
+  new releases. An explicit `enabled: []` disables everything.
+- `bot.enabled: false` stops every handler: pull requests, issues, pushes, CI
+  and commands.
+
+---
+
+## Security model
+
+- **Fail closed everywhere it matters.** No webhook secret, and boot refuses to
+  start. No `MCP_API_KEY`, and the MCP endpoint returns 503. Token comparisons
+  are constant-time.
+- HMAC-SHA256 verification on every webhook, with replay protection and
+  spoof-resistant per-IP rate limiting.
+- Autofix cannot touch CI workflows, Dockerfiles, environment files or security
+  modules — a path allow-list, a prefix blocklist and a traversal guard, all
+  applied to one normalised spelling of the path. Changes still require a human
+  `/apply`.
+- Prompt-injection mitigation: input sanitisation plus delimiter-wrapped user
+  content, with delimiter-shaped sequences inside that content escaped so it
+  cannot close its own block.
+- Oversized bodies are refused **while being read**, before any signature is
+  verified, so a large unauthenticated request cannot exhaust memory first.
+- Optional `MCP_ALLOWED_INSTALLATIONS` allow-list for tenant isolation.
+- **No code-execution path.** The bot never runs untrusted repository code —
+  no `eval`, `exec`, `subprocess` or `pickle` anywhere in `app/`. A malicious
+  repository cannot execute anything on the host.
+
+Full analysis: [reliability and isolation audit](docs/architecture/reliability-audit.md) ·
+[September 2026 full audit](docs/architecture/audit-2026-09.md) ·
+[roadmap](docs/architecture/roadmap.md).
+
+Found a vulnerability? Please email rather than opening a public issue.
 
 ---
 
 ## Codebase map
 
-The always-visible version is [in the README above](#the-real-dependency-graph)
-— a committed SVG that needs no server. For exploring rather than reading,
-`/graph` serves an interactive, force-directed view of the same data:
+The always-visible version is [in the architecture section
+above](#the-real-dependency-graph) — a committed SVG that needs no server. For
+exploring rather than reading, `/graph` serves an interactive, force-directed
+view of the same data:
 
-- **Click a node** to see exactly what imports it and what it imports
+- **Click a node** to see exactly what imports it and what it imports.
 - **Import cycles** are detected and flagged — they are what makes a module
-  impossible to test on its own
-- **Unreferenced modules** are listed: nothing in `app/`, `server.py` or
-  `worker.py` imports them, which usually means dead code
-- **Hotspots** rank modules by size × how many things depend on them — the
-  files that are expensive to change
+  impossible to test on its own.
+- **Unreferenced modules** are listed: nothing imports them, which usually
+  means dead code.
+- **Hotspots** rank modules by size multiplied by how much depends on them —
+  the files that are expensive to change.
 
 The data comes from `python -m app.intelligence.codegraph`, which reads the AST
 and **never imports the code it analyses**, so it is safe to point at any
-repository. CI regenerates both the data and the picture, and fails a PR whose
-committed copies are stale.
+repository. CI regenerates both the data and the picture, and fails a pull
+request whose committed copies are stale.
 
 ```bash
 python -m app.intelligence.codegraph app server.py worker.py \
@@ -433,25 +562,24 @@ python -m app.intelligence.codegraph app server.py worker.py \
   --svg docs/diagrams/codegraph.svg
 ```
 
-`/graph.json` is auth-gated with `METRICS_AUTH_TOKEN`, the same as `/health` —
+`/graph.json` is gated with `METRICS_AUTH_TOKEN`, the same as `/health`, because
 a dependency graph is a map of the whole system. The page asks for that token
 only after a request has actually been refused, so an unauthenticated
 deployment never interrogates a visitor for a secret that does not exist, and a
 reader without one is pointed at the committed SVG instead of a dead end. The
-same data is available to your IDE through the `codebase_map` MCP tool.
+same data reaches your editor through the `codebase_map` MCP tool.
 
 ---
 
 ## Managed README sections
 
-Some facts in this README restate what the code already knows: module counts,
-the command registry, the dependency graph. Those rot silently — this file
-claimed the MCP endpoint had "8 tools" for exactly as long as it took someone
-to add a ninth.
+Some facts in this file restate what the code already knows: module counts, the
+command registry, the dependency graph. Those rot silently — this README
+claimed the MCP endpoint had "8 tools" for exactly as long as it took someone to
+add a ninth.
 
-Blocks between `autopilot` markers are regenerated from the code. Paste an
-empty pair where you want the content — writing `NAME` as one of the region
-names below:
+Blocks between `autopilot` markers are regenerated from the code. Paste an empty
+pair wherever you want the content:
 
 ```markdown
 <!-- autopilot:NAME:start -->
@@ -459,9 +587,8 @@ names below:
 ```
 
 Available regions: `stats`, `architecture`, `commands`. Everything outside a
-marker pair is hand-written and never touched by the bot, and a repository with
-no markers gets no edits at all — you opt in one region at a time by pasting a
-marker pair where you want the content.
+marker pair is hand-written and never touched, and a repository with no markers
+gets no edits at all — you opt in one region at a time.
 
 Refreshes arrive as a pull request, never as a direct commit to the default
 branch. Set `README_SELF_UPDATE_REPO=owner/repo` to enable it for the
@@ -480,11 +607,6 @@ cp .env.example .env          # fill in your credentials
 python server.py
 ```
 
-```bash
-pytest tests/ -v              # full suite; the tests badge above is the live count
-ruff check app/               # lint
-```
-
 **Before you push**, run every gate CI runs, with CI's exact flags:
 
 ```bash
@@ -492,10 +614,10 @@ ruff check app/               # lint
 ./scripts/verify.sh fast      # lint + one test run, skips regeneration
 ```
 
-The gates are spread across five CI jobs and each has flags that matter — ruff
-lints `app/` only, the suite is run twice because parts of it are randomised,
-and two files are generated, so a stale README region or codebase map fails
-the build for a reason invisible in the diff.
+The gates are spread across five CI jobs and each has flags that matter. Ruff
+lints `app/` only, the suite runs twice because parts of it are randomised, and
+two files are generated — so a stale README region or codebase map fails the
+build for a reason that is invisible in the diff.
 
 **After you deploy**, check the running service rather than the code:
 
@@ -504,51 +626,40 @@ BASE_URL=https://your-app.onrender.com METRICS_AUTH_TOKEN=... \
   ./scripts/verify-deployment.sh owner/repo <installation_id>
 ```
 
-It reports whether the deployment answers, whether the provider still serves
-the model ids it asks for, and which App capabilities are missing. All reads —
-nothing it does changes anything. A green test suite cannot tell you any of
-it: a retired model id took every AI command down while CI stayed green.
-
----
-
-## Security model
-
-- **Fail closed everywhere it matters**: unset webhook secret → boot refuses; unset `MCP_API_KEY` → MCP returns 503; token compares are constant-time
-- HMAC-SHA256 signature verification on every webhook, replay + IP rate limiting (spoof-resistant)
-- Autofix cannot touch CI workflows, Dockerfiles, env files, or security modules (path allowlist + prefix blocklist + traversal guard); changes require human `/apply`
-- Optional `MCP_ALLOWED_INSTALLATIONS` allowlist for tenant isolation
-- Bot-loop prevention on all event handlers
-- Prompt-injection mitigation: input sanitization + delimiter-wrapped user content, with delimiter-shaped sequences inside that content escaped so it cannot close its own block
-- Oversized bodies are refused **while being read** (`MAX_CONTENT_LENGTH`), not after — checking `len(request.data)` cannot run until the body is fully materialised, and that check runs before any signature is verified
-- The per-IP rate limit reads X-Forwarded-For from the trusted end of the chain, with how much of the chain is trustworthy declared by `TRUSTED_PROXY_HOPS` — set it to `0` if you expose the app without a proxy
-- **No code-execution path**: the bot never runs untrusted repo code (no `eval`/`exec`/`subprocess`/`pickle`) — a malicious repo cannot execute code on the host
-
-Full analysis: [reliability & isolation audit](docs/architecture/reliability-audit.md) · where we're headed: [roadmap](docs/architecture/roadmap.md).
-
-Found a vulnerability? Please email rather than opening a public issue.
+It reports whether the deployment answers, whether the provider still serves the
+model ids it asks for, and which App capabilities are missing. Every call is a
+read; nothing it does changes anything. A green test suite cannot tell you any
+of it — a retired model id once took every AI command down while CI stayed
+green.
 
 ---
 
 ## Changelog
 
-Every release, with the reasoning behind each change: **[CHANGELOG.md](CHANGELOG.md)**.
+Every release, with the reasoning behind each change:
+**[CHANGELOG.md](CHANGELOG.md)**.
 
-Latest is **v7.2.0** — a full-codebase audit. The short version: seven commands
-were silently refusing to run, the secret scanner reported its own ruleset as a
-leak, an unauthenticated request could exhaust memory before being rejected,
-and several features had been written, tested, merged, and then never wired to
-anything. All fixed, with structural gates so each class fails the build rather
+Latest is **v7.2.0**, a full-codebase audit. Seven commands were silently
+refusing to run, the secret scanner reported its own ruleset as a leak, an
+unauthenticated request could exhaust memory before being rejected, and several
+features had been written, tested, merged and then never wired to anything. All
+fixed, each with a structural gate so the class of defect fails the build rather
 than shipping quietly.
 
-Upgrading from V6? **[docs/MIGRATING.md](docs/MIGRATING.md)**.
+Upgrading from V6? **[docs/MIGRATING.md](docs/MIGRATING.md)** — V7 changed three
+visible behaviours: one sticky pull request comment instead of six, secret
+issues only for critical and high severity, and silence when there is nothing to
+say.
+
+---
 
 ## Contributing
 
-Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the
-development setup, test commands, and coding conventions.
+Pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the
+development setup, test commands and coding conventions.
 
-Before opening a PR: `python -m pytest -q` and `ruff check app/` must pass.
-CI runs Python 3.10, 3.11 and 3.12.
+Before opening a pull request, `./scripts/verify.sh` must pass. CI runs Python
+3.10, 3.11 and 3.12.
 
 ---
 
@@ -561,8 +672,8 @@ Dual-licensed under **either** of:
 
 at your option. SPDX: `MIT OR Apache-2.0`
 
-You only need to satisfy one of them, whichever your organisation prefers. MIT is
-short and widely pre-approved; Apache-2.0 adds an explicit patent grant that some
+You only need to satisfy one, whichever your organisation prefers. MIT is short
+and widely pre-approved; Apache-2.0 adds an explicit patent grant that some
 corporate legal teams require before approving a dependency. Offering both means
 neither requirement blocks adoption.
 
@@ -572,9 +683,9 @@ Contributions are accepted under the same dual licence — see [LICENSE](LICENSE
 
 ## Support
 
-Free and open source. If you'd like to support development, sponsorship is
-available via [GitHub Sponsors](https://github.com/sponsors/Shweta-Mishra-ai) —
-entirely optional.
+Free and open source. If you would like to support development, sponsorship is
+available through [GitHub Sponsors](https://github.com/sponsors/Shweta-Mishra-ai)
+and is entirely optional.
 
 ---
 
@@ -582,6 +693,6 @@ entirely optional.
 
 Built by [Shweta Mishra](https://github.com/Shweta-Mishra-ai) · Licensed under MIT OR Apache-2.0
 
-⭐ Star this repo if Autopilot saved you time!
+⭐ Star this repository if Autopilot saved you time.
 
 </div>

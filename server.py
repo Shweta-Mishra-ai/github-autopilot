@@ -16,6 +16,7 @@ import traceback
 from flask import Flask, jsonify, request
 
 from app import __version__
+from app.core.logger import setup_logging
 from app.core.metrics import metrics
 from app.core.redis_client import is_redis_available
 from app.core.thread_pool import is_saturated, pool_stats, shutdown
@@ -41,9 +42,28 @@ def verify_webhook(*a, **kw):
     return webhook_security.verify_webhook(*a, **kw)
 
 
-logging.basicConfig(
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    level=logging.INFO,
+# LOG_LEVEL and LOG_FORMAT are documented in .env.example and set by two
+# workflows, and until now nothing read either of them. This called
+# basicConfig with a hardcoded INFO and a hardcoded text format, so
+# LOG_LEVEL=DEBUG on a deployment did nothing at all — verified by running it:
+# root stayed at INFO and the debug line was never emitted. For an application
+# whose operability story includes /setup/doctor, the one knob you reach for
+# when production misbehaves was a no-op.
+#
+# app/core/logger.py had the function that reads both, complete with a JSON
+# formatter for log drains. It was never called from anywhere.
+#
+# basicConfig was the wrong call for a second reason: it does nothing when the
+# root logger already has a handler, and under gunicorn it sometimes does. So
+# the format above was not even reliably applied.
+#
+# Default is text, not the function's own "json" default: text is what every
+# deployment emits today, and silently reformatting everyone's production logs
+# is not a thing to do while fixing a setting that never worked. json is opt-in
+# through the variable that now genuinely selects it.
+setup_logging(
+    level=os.environ.get("LOG_LEVEL", "INFO"),
+    fmt=os.environ.get("LOG_FORMAT", "text"),
 )
 log = logging.getLogger("server")
 
@@ -422,6 +442,10 @@ def health():
                 # being used instead -- working, but not what was asked for.
                 "llm_model_substitutions": llm_substitutions,
                 "thread_pool": "saturated" if pool_saturated else "ok",
+                # "warn" means more than one web process is running. Nothing
+                # crashes; events can be handled twice and the rate limits
+                # multiply. See app/core/process_guard.py.
+                "web_processes": _web_process_check(),
             },
             "thread_pool": pool,
             "event_queue": _queue_stats(),
@@ -657,6 +681,17 @@ def _dispatch(webhook_event: str, payload: dict, repo: str):
     return dispatch(_run_handler, webhook_event, payload, repo)
 
 
+def _web_process_check() -> dict:
+    """One web process, or more than the singletons in this app assume."""
+    try:
+        from app.core.process_guard import active_process_count, verdict
+
+        state, message = verdict()
+        return {"state": state, "count": active_process_count(), "detail": message}
+    except Exception as e:
+        return {"state": "unknown", "count": 0, "detail": str(e)[:120]}
+
+
 def _queue_stats() -> dict:
     from app.core.event_queue import queue_stats
 
@@ -732,6 +767,18 @@ def _notification_status() -> dict:
 def _boot():
     """Shared boot path for gunicorn import and `python server.py`."""
     startup_check()
+
+    # Runs before the consumers start, because a second web process starting
+    # them is the thing being warned about. Registration is best-effort and
+    # never blocks boot.
+    try:
+        from app.core.process_guard import register_this_process, warn_if_multiprocess
+
+        register_this_process()
+        warn_if_multiprocess()
+    except Exception as e:
+        log.debug(f"boot.process_guard_skipped: {e}")
+
     from app.core.event_queue import start_consumers
 
     start_consumers(_run_handler)

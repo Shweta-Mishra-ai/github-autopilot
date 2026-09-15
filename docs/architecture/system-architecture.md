@@ -86,7 +86,7 @@ Eight non-negotiable properties. Every tradeoff in this document traces back to 
               ┌───────────────────┼──────────────────────┐
               ▼                   ▼                      ▼
     pull_request.py          comments.py              push.py
-    issues.py                (26 slash cmds)          ci.py
+    issues.py                (27 slash cmds)          ci.py
     PR analysis              /fix  /autofix            Commit lint
     Blast radius             /merge /rollback          Secret scan
     Code review              /perf /arch               Dep scan

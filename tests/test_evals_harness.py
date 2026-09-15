@@ -271,3 +271,148 @@ class TestLooksBlocked:
         )
         assert len(review) > 200
         assert not looks_blocked(review)
+
+
+class TestGapCases:
+    """
+    The gap-analysis cases are scored on a verdict, not on prose, and half of
+    them are passed by producing no output at all. That makes two degenerate
+    models — "always report gaps" and "never report gaps" — the things this
+    task exists to catch, so the case file has to be able to fail both.
+    """
+
+    def _cases(self):
+        return json.loads(
+            (_ROOT / "evals" / "cases" / "gaps_cases.json").read_text(encoding="utf-8")
+        )
+
+    def test_schema(self):
+        cases = self._cases()
+        assert len(cases) >= 4
+        ids = [c["id"] for c in cases]
+        assert len(ids) == len(set(ids)), "duplicate case ids"
+        for c in cases:
+            assert c["filename"] and c["patch"]
+            assert isinstance(c["expect_gaps"], bool), f"{c['id']} must state a verdict"
+            assert c.get("planted"), f"{c['id']} must say what a reviewer should conclude"
+
+    def test_the_suite_can_fail_a_model_that_always_reports_gaps(self):
+        """Without a silent case, "there are gaps" scores 100% every time —
+        and reporting gaps on tested code is the failure that shipped."""
+        assert any(c["expect_gaps"] is False for c in self._cases())
+
+    def test_the_suite_can_fail_a_model_that_never_reports_gaps(self):
+        assert any(c["expect_gaps"] is True for c in self._cases())
+
+    def test_silent_cases_are_not_marked_down_for_being_silent(self):
+        """The default min_length of 80 would fail every correct "no gaps"
+        answer, which would make the suite reward noise."""
+        from evals.scorers import score_output
+
+        case = {"id": "quiet", "expect_gaps": False}
+        result = score_output("", case, structured={"has_gaps": False})
+        assert result.passed and result.score == 1.0, result.failures
+
+    def test_inventing_gaps_on_tested_code_fails(self):
+        from evals.scorers import score_output
+
+        case = {"id": "quiet", "expect_gaps": False, "must_not_mention": ["Gaps Found"]}
+        result = score_output(
+            "🔴 **Coverage Score: 3/10**\n### Gaps Found\n| `a.py` | `f` |",
+            case,
+            structured={"has_gaps": True},
+        )
+        assert not result.passed
+        assert any("expect_gaps" in f for f in result.failures)
+
+    def test_missing_a_real_gap_fails(self):
+        from evals.scorers import score_output
+
+        case = {"id": "loud", "expect_gaps": True, "must_mention": ["apply_refund"]}
+        result = score_output("", case, structured={"has_gaps": False})
+        assert not result.passed
+
+    def test_expect_gaps_is_opt_in(self):
+        """Every existing case omits it, and must score exactly as before."""
+        from evals.scorers import score_output
+
+        case = {"id": "review-ish", "must_mention": ["injection"], "min_length": 10}
+        assert score_output("possible sql injection here", case).passed
+
+
+class TestGapHarnessWiring:
+    """The runner has to reach the real gap-analysis code and read its verdict.
+    The review half of this suite once scored "" on every case for a whole
+    month because the harness captured the wrong thing."""
+
+    def _stub(self, verdict):
+        from unittest.mock import MagicMock
+
+        def fake_ask(self, system, user, **kwargs):
+            meta = MagicMock(provider="groq", model="m", total_tokens=10, cost_usd=0.0)
+            return verdict, meta
+
+        return fake_ask
+
+    def _run(self, monkeypatch, verdict):
+        from unittest.mock import patch
+
+        import app.ai.router as router_mod
+        import evals.run as ev
+
+        monkeypatch.setattr(ev, "CASE_DELAY_SECONDS", 0.0)
+        monkeypatch.setattr(ev, "THROTTLE_BACKOFF_SECONDS", 0.0)
+        with patch.object(router_mod.LLMRouter, "ask", self._stub(verdict)):
+            return ev.run_gaps_cases()
+
+    def test_a_provider_that_answers_blocks_nothing(self, monkeypatch):
+        results, blocked = self._run(monkeypatch, {"has_gaps": False, "gaps": [], "summary": "ok"})
+        assert blocked == [], f"harness saw no verdict for {blocked}"
+        assert len(results) == 4
+
+    def test_a_model_that_always_says_no_gaps_fails_the_loud_cases(self, monkeypatch):
+        results, _ = self._run(monkeypatch, {"has_gaps": False, "gaps": [], "summary": "ok"})
+        failed = {r.case_id for r in results if not r.passed}
+        assert failed == {
+            "gaps-new-function-with-no-tests-at-all",
+            "gaps-happy-path-tested-error-branch-not",
+        }, failed
+
+    def test_a_model_that_always_reports_gaps_fails_the_quiet_cases(self, monkeypatch):
+        verdict = {
+            "has_gaps": True,
+            "coverage_score": 3,
+            "gaps": [
+                {
+                    "file": "app/billing/discount.py",
+                    "function": "apply_discount",
+                    "risk": "high",
+                    "suggested_test": "test it",
+                }
+            ],
+            "summary": "needs tests",
+        }
+        results, _ = self._run(monkeypatch, verdict)
+        failed = {r.case_id for r in results if not r.passed}
+        assert "gaps-fully-tested-change-stays-quiet" in failed, failed
+        assert "gaps-refactor-covered-by-updated-tests" in failed, failed
+
+    def test_a_provider_that_never_answers_is_blocked_not_scored(self, monkeypatch):
+        """A silent provider and a correct "no gaps" both render "". Counting
+        the first as a pass would report quality that was never measured."""
+        from unittest.mock import patch
+
+        import app.ai.router as router_mod
+        import evals.run as ev
+
+        monkeypatch.setattr(ev, "CASE_DELAY_SECONDS", 0.0)
+        monkeypatch.setattr(ev, "THROTTLE_BACKOFF_SECONDS", 0.0)
+
+        def raising_ask(self, system, user, **kwargs):
+            raise RuntimeError("all providers down")
+
+        with patch.object(router_mod.LLMRouter, "ask", raising_ask):
+            results, blocked = ev.run_gaps_cases()
+
+        assert len(blocked) == 4, (results, blocked)
+        assert results == []

@@ -1,47 +1,130 @@
-version: "3.9"
+# docker-compose.yml — run the whole thing on hardware you control.
+#
+#   docker compose up -d                    cloud model (needs GROQ_API_KEY)
+#   docker compose --profile local up -d    local model, nothing leaves the box
+#
+# The second one is the reason this project exists, and until now this file
+# could not express it: OLLAMA_HOST, OLLAMA_MODEL and LLM_LOCAL_ONLY were not
+# passed into the containers at all, so setting them in .env did nothing and
+# the private path was unreachable through the project's own compose file.
+#
+# See docs/ or the README's "Keep your code on your own hardware".
+
+# Both services need the same credentials, and keeping two copies in sync by
+# hand is how one of them ends up missing a variable — which is what happened.
+x-app-env: &app-env
+  # ── Required ────────────────────────────────────────────────────────────
+  GITHUB_APP_ID: ${GITHUB_APP_ID}
+  GITHUB_PRIVATE_KEY: ${GITHUB_PRIVATE_KEY}
+  GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET}
+  REDIS_URL: redis://redis:6379/0
+
+  # ── The model ───────────────────────────────────────────────────────────
+  # Set GROQ_API_KEY for the cloud path, or the three OLLAMA/LLM_LOCAL_ONLY
+  # variables below for the private one. Neither set is required at boot:
+  # startup_check() only demands the GitHub credentials, so the container
+  # starts either way and tells you what is missing when a command runs.
+  GROQ_API_KEY: ${GROQ_API_KEY:-}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+
+  # With the `local` profile, set OLLAMA_HOST=http://ollama:11434 in .env —
+  # `localhost` inside a container is the container, not your machine.
+  OLLAMA_HOST: ${OLLAMA_HOST:-}
+  OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
+  LLM_LOCAL_ONLY: ${LLM_LOCAL_ONLY:-}
+  LLM_PREFER_LOCAL: ${LLM_PREFER_LOCAL:-}
+
+  # ── Endpoints that fail closed when unset ───────────────────────────────
+  # Omitting these does not degrade a feature, it removes one: the MCP
+  # endpoint answers 503 with no key, and /health and /setup/doctor cannot be
+  # read without a token. Both were missing here, so the plugin and the editor
+  # integration could not be used against a compose deployment at all.
+  MCP_API_KEY: ${MCP_API_KEY:-}
+  METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN:-}
+
+  # ── Optional ────────────────────────────────────────────────────────────
+  PUBLIC_URL: ${PUBLIC_URL:-}
+  TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
+  # text, matching render.yaml and the app's own default. json is a real
+  # choice now — it selects the single-line JSON formatter meant for a log
+  # drain — so it is opt-in rather than something compose picks for you.
+  LOG_FORMAT: ${LOG_FORMAT:-text}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
+  DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
 
 services:
   web:
     build: .
     ports:
-      - "8000:8000"
+      - "${PORT:-8000}:8000"
     environment:
-      - GITHUB_APP_ID=${GITHUB_APP_ID}
-      - GITHUB_PRIVATE_KEY=${GITHUB_PRIVATE_KEY}
-      - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
-      - GROQ_API_KEY=${GROQ_API_KEY}
-      - REDIS_URL=redis://redis:6379
-      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
-      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
+      <<: *app-env
+      # A dedicated worker runs below, so the web process must NOT also start
+      # consumers. Both call recover_stale() at boot, which requeues whatever
+      # it finds in evq:processing on the assumption that nothing is legitimately
+      # in flight — so with two of them, an event one process is handling right
+      # now gets handed to the other and processed twice. worker.py has always
+      # said to set this to 0; this file shipped without it.
+      EVENT_QUEUE_CONSUMERS: "0"
+    depends_on:
+      redis:
+        condition: service_healthy
     volumes:
       - app_data:/app/data
-    depends_on:
-      - redis
     restart: unless-stopped
 
   worker:
     build: .
     command: python worker.py
     environment:
-      - GITHUB_APP_ID=${GITHUB_APP_ID}
-      - GITHUB_PRIVATE_KEY=${GITHUB_PRIVATE_KEY}
-      - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
-      - GROQ_API_KEY=${GROQ_API_KEY}
-      - REDIS_URL=redis://redis:6379
-      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
-      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
+      <<: *app-env
+      # worker.py exits(1) if this is 0 — it would have nothing to do.
+      EVENT_QUEUE_CONSUMERS: ${EVENT_QUEUE_CONSUMERS:-2}
+    depends_on:
+      redis:
+        condition: service_healthy
     volumes:
       - app_data:/app/data
-    depends_on:
-      - redis
     restart: unless-stopped
 
   redis:
     image: redis:7-alpine
+    # noeviction, matching render.yaml. Under the default allkeys-lru Redis
+    # discards idempotency keys when memory fills, and GitHub's redelivery of
+    # an event whose key was evicted is then handled a second time. A queue
+    # that refuses new writes is recoverable; one that silently forgets what it
+    # already did is not.
+    command: redis-server --maxmemory-policy noeviction --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     volumes:
       - redis_data:/data
+    restart: unless-stopped
+
+  # Started only by `docker compose --profile local up`. Pulling ~2GB of image
+  # on someone who wanted the cloud path would be rude.
+  #
+  # After the first start, fetch the model once:
+  #     docker compose exec ollama ollama pull llama3.1:8b
+  #
+  # It runs on CPU as written. That works and is genuinely private; it is also
+  # slow — expect tens of seconds per review on a laptop. For GPU, add a
+  # `deploy.resources.reservations.devices` block for your runtime.
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["local"]
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_models:/root/.ollama
     restart: unless-stopped
 
 volumes:
   app_data:
   redis_data:
+  ollama_models:

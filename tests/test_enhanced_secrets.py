@@ -216,14 +216,29 @@ class TestFalsePositives:
         findings = scan_diff(diff)
         assert len(findings) == 0
 
-    def test_markdown_file_skipped(self):
+    def test_a_real_token_in_markdown_is_reported(self):
+        """Inverted deliberately. This used to require that a README was not
+        scanned at all, which meant a real `ghp_…` token pasted into one while
+        writing instructions — one of the most ordinary ways a credential
+        reaches a public repository — was invisible.
+
+        Documentation is now scanned with the patterns that identify a
+        credential on their own. Placeholders in prose stay quiet; a token
+        carrying a real vendor prefix does not."""
         from app.security.enhanced_secrets import scan_diff
         token = _github_pat()
         findings = scan_diff(
             _diff(f'GITHUB_TOKEN = "{token}"'),
             file_path="README.md",
         )
-        assert len(findings) == 0
+        assert len(findings) == 1
+        assert findings[0].pattern_name == "GitHub PAT (classic)"
+
+    def test_a_placeholder_in_markdown_is_still_quiet(self):
+        """The other half: scanning docs must not flood them with findings."""
+        from app.security.enhanced_secrets import scan_diff
+        findings = scan_diff(_diff('password = "changeme"'), file_path="README.md")
+        assert findings == []
 
     def test_test_file_skipped(self):
         from app.security.enhanced_secrets import scan_diff

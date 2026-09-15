@@ -97,12 +97,44 @@ class CircuitBreaker:
 
 # ── Module-level singletons ───────────────────────────────────────────────────
 
-_breakers: dict[str, CircuitBreaker] = {
-    "groq_70b": CircuitBreaker("groq_70b", fail_threshold=3, recovery_timeout=60),
-    "groq_8b": CircuitBreaker("groq_8b", fail_threshold=5, recovery_timeout=30),
-    "gemini": CircuitBreaker("gemini", fail_threshold=3, recovery_timeout=90),
-    "openrouter": CircuitBreaker("openrouter", fail_threshold=5, recovery_timeout=120),
+# Thresholds live here, once. They used to be inline in the dict below, which
+# meant a caller that cleared the registry got breakers rebuilt by get_breaker()
+# with CircuitBreaker's *default* thresholds instead of these — a quieter
+# version of the same bug reset_breakers() exists to prevent.
+_BREAKER_SPECS: dict[str, tuple[int, int]] = {
+    # provider: (fail_threshold, recovery_timeout)
+    "groq_70b": (3, 60),
+    "groq_8b": (5, 30),
+    "gemini": (3, 90),
+    "openrouter": (5, 120),
 }
+
+
+def _build_registry() -> dict[str, CircuitBreaker]:
+    return {
+        name: CircuitBreaker(name, fail_threshold=fails, recovery_timeout=recovery)
+        for name, (fails, recovery) in _BREAKER_SPECS.items()
+    }
+
+
+_breakers: dict[str, CircuitBreaker] = _build_registry()
+
+
+def reset_breakers() -> None:
+    """Restore the registry to its canonical state, all closed. Tests only.
+
+    Breaker state is process-wide and has no expiry short of recovery_timeout,
+    so a test that drives a provider to its failure threshold leaves it open for
+    everything that runs afterwards. That is invisible under a fixed test order
+    and turns into a confusing failure under a shuffled one: the symptom is
+    "All LLM providers are unavailable" in a test that never touches a provider,
+    which reads as an infrastructure fault rather than leaked state.
+
+    Mutates the existing dict rather than rebinding the name, because modules
+    that imported `_breakers` hold a reference to that object.
+    """
+    _breakers.clear()
+    _breakers.update(_build_registry())
 
 
 def get_breaker(provider: str) -> CircuitBreaker:
@@ -111,7 +143,10 @@ def get_breaker(provider: str) -> CircuitBreaker:
     If provider unknown, adds it. Never creates a throwaway instance.
     """
     if provider not in _breakers:
-        _breakers[provider] = CircuitBreaker(provider)
+        fails, recovery = _BREAKER_SPECS.get(provider, (5, 60))
+        _breakers[provider] = CircuitBreaker(
+            provider, fail_threshold=fails, recovery_timeout=recovery
+        )
     return _breakers[provider]
 
 

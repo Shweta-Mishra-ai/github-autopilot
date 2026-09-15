@@ -105,3 +105,51 @@ class TestReadmeStaysConsistent:
             assert any("Maintainer" in r for r in rows), (
                 f"README lists {command} without marking it Maintainers-only"
             )
+
+
+class TestNoDocumentMisstatesTheCommandCount:
+    """
+    `docs/COMMANDS.md` and the README are gated above. Nothing gated the rest
+    of `docs/`, and it drifted: six files across guides, deployment,
+    architecture and diagrams all claimed one fewer slash command than the
+    registry held. A reader who counts the table and trusts the sentence finds
+    they disagree, and has no way to know which is right.
+
+    A stated count is the one kind of documentation claim a test can check
+    exactly, so it should never be wrong again. Prose that describes the shape
+    of the system still needs a human to read it.
+    """
+
+    DOCS = Path(__file__).resolve().parent.parent / "docs"
+
+    # "27 slash commands", "All 27 slash commands", "27 slash cmds".
+    COUNT_RE = re.compile(r"(\d+)\s+slash\s+(?:commands|cmds)\b")
+
+    def test_every_stated_count_matches_the_registry(self):
+        expected = len(ALL_COMMANDS)
+        wrong = []
+        for path in sorted(self.DOCS.rglob("*.md")):
+            for lineno, line in enumerate(
+                path.read_text(encoding="utf-8").splitlines(), start=1
+            ):
+                for stated in self.COUNT_RE.findall(line):
+                    if int(stated) != expected:
+                        rel = path.relative_to(self.DOCS.parent)
+                        wrong.append(f"{rel}:{lineno} says {stated}, registry has {expected}")
+        assert not wrong, (
+            "documentation states a slash-command count that disagrees with "
+            "app/core/commands.py:\n  " + "\n  ".join(wrong)
+        )
+
+    def test_the_pattern_actually_matches_the_docs(self):
+        """A guard that matches nothing passes forever. If the phrasing across
+        docs/ changes, this fails and the check above gets fixed rather than
+        quietly becoming decorative."""
+        found = sum(
+            len(self.COUNT_RE.findall(p.read_text(encoding="utf-8")))
+            for p in self.DOCS.rglob("*.md")
+        )
+        assert found >= 3, (
+            f"only {found} stated command counts found in docs/ — the phrasing "
+            "changed and this guard no longer checks anything"
+        )

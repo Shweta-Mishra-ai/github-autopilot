@@ -168,7 +168,7 @@ After adding all variables, click **Save Changes**. Render will automatically re
    |-------|---------|----------------|
    | ✅ Pull request | `pull_request.py` | Auto PR review, title polish, test gaps |
    | ✅ Issues | `issues.py` | Issue triage, auto-labeling |
-   | ✅ Issue comment | `comments.py` | All 26 slash commands |
+   | ✅ Issue comment | `comments.py` | All 27 slash commands |
    | ✅ Push | `push.py` | Commit lint, secret scan, dep scan |
    | ✅ Check run | `ci.py` | CI failure analysis |
 

@@ -1,6 +1,6 @@
 # Slash Commands Reference
 
-> Complete reference for all 26 slash commands.
+> Complete reference for all 27 slash commands.
 > For each command: syntax, permissions, what it uses, what it posts, example output, and common errors.
 
 ---

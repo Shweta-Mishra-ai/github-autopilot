@@ -567,18 +567,36 @@
       "id": "app.core.preflight",
       "path": "app/core/preflight.py",
       "layer": "core",
-      "loc": 299,
+      "loc": 310,
       "functions": 5,
       "classes": 4,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 3,
+      "fan_out": 4,
       "external_deps": [
         "__future__",
         "app",
         "dataclasses",
         "logging",
         "os"
+      ]
+    },
+    {
+      "id": "app.core.process_guard",
+      "path": "app/core/process_guard.py",
+      "layer": "core",
+      "loc": 142,
+      "functions": 4,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 2,
+      "fan_out": 1,
+      "external_deps": [
+        "__future__",
+        "app",
+        "logging",
+        "os",
+        "time"
       ]
     },
     {
@@ -605,7 +623,7 @@
       "functions": 5,
       "classes": 1,
       "is_package": false,
-      "fan_in": 27,
+      "fan_in": 28,
       "fan_out": 0,
       "external_deps": [
         "__future__",
@@ -1513,12 +1531,12 @@
       "id": "server",
       "path": "server.py",
       "layer": "other",
-      "loc": 775,
-      "functions": 29,
+      "loc": 802,
+      "functions": 30,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 30,
+      "fan_out": 31,
       "external_deps": [
         "app",
         "flask",
@@ -1904,6 +1922,11 @@
     },
     {
       "source": "app.core.preflight",
+      "target": "app.core.process_guard",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.preflight",
       "target": "app.core.webhook_security",
       "kind": "runtime"
     },
@@ -1915,6 +1938,11 @@
     {
       "source": "app.core.preflight",
       "target": "app.github.client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.process_guard",
+      "target": "app.core.redis_client",
       "kind": "runtime"
     },
     {
@@ -2884,6 +2912,11 @@
     },
     {
       "source": "server",
+      "target": "app.core.process_guard",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
       "target": "app.core.redis_client",
       "kind": "import"
     },
@@ -2989,9 +3022,9 @@
     }
   ],
   "stats": {
-    "modules": 93,
-    "edges": 287,
-    "total_loc": 22013,
+    "modules": 94,
+    "edges": 290,
+    "total_loc": 22193,
     "layers": [
       "ai",
       "core",
@@ -3007,7 +3040,7 @@
       {
         "id": "app.core.redis_client",
         "loc": 497,
-        "fan_in": 27,
+        "fan_in": 28,
         "fan_out": 0
       },
       {

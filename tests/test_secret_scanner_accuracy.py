@@ -346,3 +346,127 @@ class TestStructuralRecognition:
         """37 hex chars is not a digest length — a Cloudflare key is exactly
         that shape, so the structural filter must not swallow it."""
         assert _is_structural_non_secret("a1b2c3d4e5f60718293a4b5c6d7e8f9012345") is False
+
+
+class TestDocsAndTextFilesAreStillScanned:
+    """
+    The scanner used to `return []` for any path matching
+    FALSE_POSITIVE_FILE_PATTERNS — every `.md`, every `.txt`, everything under
+    `docs/` or `tests/`. Not "scanned more carefully": not scanned.
+
+    So a real `AKIA…` key committed to `credentials.txt`, or a real `ghp_…`
+    token pasted into `README.md`, were both invisible. Those are two of the
+    most ordinary ways a credential actually reaches a public repository, and
+    this is the feature the project advertises as "secret detection on every
+    push to every branch".
+
+    The exclusions are still right about noise — documentation really is full
+    of `password = "changeme"`. They are now applied to the patterns that
+    produce that noise rather than to the whole file.
+    """
+
+    AWS = "+AWS_KEY = 'AKIA" + "0" * 16 + "'"
+    GITHUB = "+token = 'ghp_" + "a" * 36 + "'"
+    STRIPE = "+key = 'sk_live_" + "b" * 24 + "'"
+
+    # Prose and data files: scanned, identifiable patterns only.
+    PROSE_PATHS = [
+        "credentials.txt",
+        "secrets.txt",
+        "deploy/keys.txt",
+        "README.md",
+        "docs/setup.md",
+        "notes.md",
+        "CHANGELOG.md",
+        "requirements.txt",
+    ]
+
+    # Files whose PURPOSE is to hold stand-in values: still not scanned. A
+    # fixture has to look like the thing it tests, and `.env.example` exists to
+    # show the shape of a value — reporting those is a category error that
+    # arrives on every commit until someone silences the scanner for good.
+    EXAMPLE_PATHS = [
+        "tests/test_auth.py",
+        "conftest.py",
+        "fixtures/sample.json",
+        ".env.example",
+        "config.yml.template",
+    ]
+
+    LOW_SIGNAL_PATHS = PROSE_PATHS
+
+    @pytest.mark.parametrize("path", LOW_SIGNAL_PATHS)
+    def test_a_real_aws_key_is_found_there(self, path):
+        assert scan_diff(self.AWS, file_path=path), f"AWS key invisible in {path}"
+
+    @pytest.mark.parametrize("path", LOW_SIGNAL_PATHS)
+    def test_a_real_github_token_is_found_there(self, path):
+        assert scan_diff(self.GITHUB, file_path=path), f"GitHub token invisible in {path}"
+
+    @pytest.mark.parametrize("path", LOW_SIGNAL_PATHS)
+    def test_a_real_stripe_key_is_found_there(self, path):
+        assert scan_diff(self.STRIPE, file_path=path), f"Stripe key invisible in {path}"
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            '+password = "changeme"',
+            '+api_key = "your-api-key-here"',
+            '+secret = "TODO-replace-me"',
+        ],
+    )
+    @pytest.mark.parametrize("path", ["README.md", "docs/setup.md", "tests/test_auth.py"])
+    def test_placeholders_in_documentation_stay_quiet(self, path, line):
+        """The reason the exclusions exist. Losing this would flood every
+        docs change with findings and train everyone to ignore the scanner —
+        which costs more than the gap it closed."""
+        assert scan_diff(line, file_path=path) == [], f"{line!r} flagged in {path}"
+
+    def test_weak_patterns_still_apply_in_real_source(self):
+        """Narrowing must happen only on low-signal paths. Application code
+        keeps the full pattern set."""
+        from app.security.enhanced_secrets import is_low_signal_path
+
+        assert is_low_signal_path("app/core/config.py") is False
+        assert is_low_signal_path("README.md") is True
+        assert is_low_signal_path("") is False
+
+    def test_a_path_that_is_not_excluded_is_unaffected(self):
+        assert scan_diff(self.AWS, file_path="app/core/config.py")
+
+    def test_every_high_specificity_pattern_survives_a_low_signal_path(self):
+        """Derived from the pattern table rather than a hand-written list, so a
+        newly added vendor pattern is covered here the day it lands."""
+        from app.security.enhanced_secrets import PATTERNS, is_low_signal_path
+
+        assert is_low_signal_path("README.md")
+        strong = [(n, p) for n, p, _sev, entropy in PATTERNS if not entropy]
+        assert len(strong) > 10, "pattern table shape changed — revisit this test"
+        # The narrowing keeps exactly the non-entropy patterns; assert the
+        # split is what the scanner actually branches on.
+        weak = [n for n, _p, _s, entropy in PATTERNS if entropy]
+        assert weak, "no weak patterns left — the exclusion has nothing to suppress"
+
+    @pytest.mark.parametrize("path", EXAMPLE_PATHS)
+    def test_example_files_are_still_skipped_entirely(self, path):
+        """The other half of the decision, stated so it is a choice rather
+        than an oversight. These paths exist to contain realistic-looking
+        stand-ins; scanning them reports the file working as designed."""
+        assert scan_diff(self.AWS, file_path=path) == []
+
+    def test_the_two_tiers_do_not_overlap(self):
+        from app.security.enhanced_secrets import is_example_path, is_prose_path
+
+        for path in self.PROSE_PATHS:
+            assert is_prose_path(path), f"{path} should be scanned as prose"
+            assert not is_example_path(path)
+        for path in self.EXAMPLE_PATHS:
+            assert is_example_path(path), f"{path} should be skipped as an example"
+            assert not is_prose_path(path)
+
+    def test_a_test_fixture_under_docs_is_treated_as_a_fixture(self):
+        """Precedence matters: `docs/` is prose, but `docs/fixtures/` is not."""
+        from app.security.enhanced_secrets import is_example_path
+
+        assert is_example_path("docs/fixtures/sample.md")
+

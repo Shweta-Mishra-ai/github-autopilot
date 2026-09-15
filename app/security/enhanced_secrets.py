@@ -168,6 +168,11 @@ FALSE_POSITIVE_VALUES = {
     # AWS documentation example keys (from AWS docs)
     _fp(["AKIA", "IOSFODNN7EXAMPLE"]),
     _fp(["wJalrXUtnFEMI/K7MDENG/bPxRfi", "CYEXAMPLEKEY"]),
+    # NOTE: do not add this project's own test stand-ins here. This set is
+    # also consulted by the redaction path, so whitelisting a value stops it
+    # being masked in logs and memory — which is the opposite of what a
+    # redaction stand-in is for. Three redaction tests catch that immediately.
+    # A key-shaped string in a document is fixed in the document.
     # GitHub placeholder formats (all X's — not real tokens)
     _fp(["ghp_", "X" * 36]),
     # Slack placeholder (not real format)
@@ -193,25 +198,50 @@ FALSE_POSITIVE_VALUES = {
 # `tests/conftest.py` has no leading slash and the old `/tests/` entry could
 # never match a top-level tests directory — the exclusion existed and did
 # nothing for the most common layout there is.
-FALSE_POSITIVE_FILE_PATTERNS = [
-    r"\.md$",
-    r"\.txt$",
-    r"\.example$",
-    r"\.sample$",
-    r"\.template$",
+# Files whose PURPOSE is to hold stand-in values. Not scanned at all.
+#
+# A realistic-looking credential here is the file working as intended: a test
+# fixture has to look like the thing it tests, and `.env.example` exists to
+# show the shape of a value. Reporting those is not a near miss, it is a
+# category error, and it arrives on every commit until someone silences the
+# scanner entirely.
+EXAMPLE_FILE_PATTERNS = [
     r"(^|/)test_",
     r"_test\.",
     r"(^|/)tests?/",
     r"(^|/)conftest\.py$",
     r"(^|/)fixtures?/",
-    r"(^|/)docs?/",
-    r"README",
-    r"CHANGELOG",
-    r"CONTRIBUTING",
+    r"\.example$",
+    r"\.sample$",
+    r"\.template$",
     r"\.env\.example",
     r"\.env\.sample",
     r"\.env\.template",
 ]
+
+# Prose and data files. Scanned, but only with the patterns that identify a
+# credential on their own.
+#
+# These were previously skipped outright, which meant a real `AKIA…` key in
+# `credentials.txt` and a real `ghp_…` token pasted into `README.md` were both
+# invisible — two of the most ordinary ways a credential reaches a public
+# repository, missed by the feature this project advertises as scanning every
+# push on every branch.
+#
+# They are not example files. A token in a README is usually a token someone
+# pasted while writing instructions and forgot to remove.
+PROSE_FILE_PATTERNS = [
+    r"\.md$",
+    r"\.txt$",
+    r"(^|/)docs?/",
+    r"README",
+    r"CHANGELOG",
+    r"CONTRIBUTING",
+]
+
+# Kept as the union so anything reading this name still sees every excluded
+# path. The two lists above are what the scanner actually branches on.
+FALSE_POSITIVE_FILE_PATTERNS = EXAMPLE_FILE_PATTERNS + PROSE_FILE_PATTERNS
 
 HIGH_ENTROPY_THRESHOLD = 4.5
 MIN_LENGTH_FOR_ENTROPY = 20
@@ -646,17 +676,59 @@ def _pem_has_key_material(lines: list[str], index: int, matched: str) -> bool:
     return False
 
 
+def _matches_any(file_path: str, patterns: list[str]) -> bool:
+    return any(re.search(p, file_path, re.IGNORECASE) for p in patterns)
+
+
+def is_example_path(file_path: str) -> bool:
+    """A file that exists to hold stand-in values. Not scanned at all."""
+    return bool(file_path) and _matches_any(file_path, EXAMPLE_FILE_PATTERNS)
+
+
+def is_prose_path(file_path: str) -> bool:
+    """Documentation or plain text. Scanned, identifiable patterns only."""
+    return (
+        bool(file_path)
+        and not is_example_path(file_path)
+        and _matches_any(file_path, PROSE_FILE_PATTERNS)
+    )
+
+
+def is_low_signal_path(file_path: str) -> bool:
+    """Either of the above — anywhere the weak patterns are not trusted."""
+    return is_example_path(file_path) or is_prose_path(file_path)
+
+
 def scan_diff(diff: str, file_path: str = "") -> list[SecretFinding]:
     """
     Scan a git diff for secrets. Returns list of SecretFinding.
     Same API as original secrets.py — drop-in replacement.
+
+    On a low-signal path this scans with the high-specificity patterns only,
+    rather than not scanning at all.
+
+    It used to `return []` immediately for anything matching
+    FALSE_POSITIVE_FILE_PATTERNS, which is every `.md`, every `.txt`, and
+    everything under `docs/`. A real `AKIA…` key in `credentials.txt`, a real
+    `ghp_…` token pasted into `README.md` — the two most ordinary ways a
+    credential actually reaches a public repository — were both invisible to
+    the one feature advertised as "secret detection on every push to every
+    branch".
+
+    The exclusions exist for a good reason and are kept, but they are applied
+    where the noise is. `entropy_required` already marks the patterns that
+    need context to be believed; the rest match a fixed vendor prefix and a
+    fixed length, so nothing but a GitHub token looks like `ghp_` and 36
+    characters. Those are reported wherever they appear. A placeholder in a
+    tutorial still is not, because a placeholder does not carry a real prefix.
     """
-    # Skip known false-positive file types
-    if file_path:
-        for pattern in FALSE_POSITIVE_FILE_PATTERNS:
-            if re.search(pattern, file_path, re.IGNORECASE):
-                log.debug(f"secret_scan.skipped_file path={file_path}")
-                return []
+    if is_example_path(file_path):
+        log.debug(f"secret_scan.skipped_example_file path={file_path}")
+        return []
+
+    low_signal = is_prose_path(file_path)
+    if low_signal:
+        log.debug(f"secret_scan.high_specificity_only path={file_path}")
 
     findings: list[SecretFinding] = []
     seen_matches: set[str] = set()  # Deduplicate within same diff
@@ -675,6 +747,11 @@ def scan_diff(diff: str, file_path: str = "") -> list[SecretFinding]:
 
         # ── Pattern matching ──────────────────────────────────────────────
         for name, pattern, severity, entropy_required in PATTERNS:
+            # On a low-signal path, only the patterns that identify a
+            # credential on their own are trusted. The keyword-anchored ones
+            # are exactly the noise these paths were excluded for.
+            if low_signal and entropy_required:
+                continue
             match = re.search(pattern, content)
             if not match:
                 continue
@@ -726,8 +803,16 @@ def scan_diff(diff: str, file_path: str = "") -> list[SecretFinding]:
             )
 
         # ── Entropy-only detection (catch novel secrets) ──────────────────
+        #
+        # Skipped entirely on a low-signal path. This branch has no vendor
+        # prefix to lean on — it reports a string for looking random — and a
+        # random-looking string is precisely what a fixture, a sample payload
+        # or a `.env.example` is supposed to contain. It is the single largest
+        # source of noise these paths were excluded for, so it is the one
+        # detector that stays off there while the identifiable patterns above
+        # keep running.
         line_matched = any(f.line_number == lineno for f in findings)
-        if not line_matched:
+        if not line_matched and not low_signal:
             tokens = re.findall(r"['\"]([a-zA-Z0-9+/=_\-]{20,})['\"]", content)
             for token in tokens:
                 if token in seen_matches:

@@ -289,7 +289,7 @@ Reported cost in local mode is always `0`.
 | | |
 |---|---|
 | Modules | 94 |
-| Lines of code | 22,266 |
+| Lines of code | 22,486 |
 | Slash commands | 27 |
 | MCP tools | 9 |
 | Internal imports | 292 |
@@ -366,13 +366,21 @@ cannot drift from the code:
 
 <img src="docs/diagrams/codegraph.svg" alt="Module dependency map: every Python module in this repository on a ring grouped by layer, with imports drawn as curves through the centre" width="100%"/>
 
-Every module sits on the ring, grouped and coloured by layer. Each curve is one
-import; dashed curves are imports made inside a function body, which this
-codebase uses deliberately to break cycles. Dot size is lines of code.
+Every module sits on the ring, grouped by layer and marked by a coloured band.
+Each curve is one import; dashed curves are imports made inside a function
+body, which this codebase uses deliberately to break cycles. Dot size is lines
+of code.
 
-The panel reports the three things that are defects rather than facts — import
-cycles, modules nothing imports, and two files claiming one import path — and
-CI fails the build if any of them appears.
+**Read the panel, not the middle.** A chord diagram draws every edge, and past
+roughly fifty the centre is texture — all 292 imports are in there and not one
+of them can be traced from dot to dot. So the panel answers the question the
+picture cannot: which layers actually touch, and how hard. `handlers → core` at
+45 is expected; `core → github` at 9 is the sort of thing worth knowing about
+your own architecture, and it was invisible in the hairball.
+
+The panel also reports the three things that are defects rather than facts —
+import cycles, modules nothing imports, and two files claiming one import path
+— and CI fails the build if any of them appears.
 
 It is a committed file, so it needs no deployment, no token and no JavaScript.
 What you are looking at is the structure at this commit. To explore it
@@ -523,10 +531,23 @@ Two behaviours worth knowing:
   cannot close its own block.
 - Oversized bodies are refused **while being read**, before any signature is
   verified, so a large unauthenticated request cannot exhaust memory first.
-- Optional `MCP_ALLOWED_INSTALLATIONS` allow-list for tenant isolation.
+- Optional `MCP_ALLOWED_INSTALLATIONS` allow-list for tenant isolation, and MCP
+  tools that read the filesystem are confined to the deployment's own source
+  tree — an MCP key is not a key to the host.
+- **The installation token only ever goes to GitHub.** Absolute URLs handed to
+  the API client are checked against `api.github.com` by exact host match, so a
+  URL that arrived in a webhook payload cannot carry a credential somewhere
+  else.
 - **No code-execution path.** The bot never runs untrusted repository code —
   no `eval`, `exec`, `subprocess` or `pickle` anywhere in `app/`. A malicious
   repository cannot execute anything on the host.
+
+Two of those lines describe fixes, not long-standing properties: `gh_get` would
+send the installation token to any host it was given, and the `codebase_map`
+MCP tool honoured an undeclared `root` argument that pointed it at any
+directory. Neither was reachable from outside — every call site built its own
+path — and both are now closed and tested. They are listed here because a
+security section that only lists wins is not one you should trust.
 
 Full analysis: [reliability and isolation audit](docs/architecture/reliability-audit.md) ·
 [September 2026 full audit](docs/architecture/audit-2026-09.md) ·

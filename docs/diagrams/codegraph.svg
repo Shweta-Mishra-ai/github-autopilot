@@ -376,7 +376,7 @@
 <circle cx="149.4" cy="366.5" r="5.11" fill="#f59e0b"/>
 <circle cx="156.5" cy="339.2" r="1.8" fill="#34d399"/>
 <circle cx="162.1" cy="323.2" r="4.18" fill="#34d399"/>
-<circle cx="168.7" cy="307.6" r="4.85" fill="#34d399"/>
+<circle cx="168.7" cy="307.6" r="5.19" fill="#34d399"/>
 <circle cx="176.3" cy="292.5" r="2.19" fill="#34d399"/>
 <circle cx="184.8" cy="277.8" r="6.45" fill="#34d399"/>
 <circle cx="194.3" cy="263.7" r="3.85" fill="#34d399"/>
@@ -491,7 +491,7 @@
 <line x1="800.0" y1="110.0" x2="1280" y2="110.0" stroke="#1f2937" stroke-width="1"/>
 <text x="800.0" y="133.0" font-size="12" fill="#9ca3af">Modules</text><text x="1280" y="133.0" font-size="12" fill="#e5e7eb" text-anchor="end" font-weight="600">94</text>
 <text x="800.0" y="156.0" font-size="12" fill="#9ca3af">Imports</text><text x="1280" y="156.0" font-size="12" fill="#e5e7eb" text-anchor="end" font-weight="600">292</text>
-<text x="800.0" y="179.0" font-size="12" fill="#9ca3af">Lines of code</text><text x="1280" y="179.0" font-size="12" fill="#e5e7eb" text-anchor="end" font-weight="600">22,266</text>
+<text x="800.0" y="179.0" font-size="12" fill="#9ca3af">Lines of code</text><text x="1280" y="179.0" font-size="12" fill="#e5e7eb" text-anchor="end" font-weight="600">22,317</text>
 <text x="800.0" y="202.0" font-size="12" fill="#9ca3af">Import cycles</text><text x="1280" y="202.0" font-size="12" fill="#22c55e" text-anchor="end" font-weight="600">none</text>
 <text x="800.0" y="225.0" font-size="12" fill="#9ca3af">Unreferenced modules</text><text x="1280" y="225.0" font-size="12" fill="#22c55e" text-anchor="end" font-weight="600">none</text>
 <text x="800.0" y="255.0" font-size="10" fill="#9ca3af" font-weight="600">LAYERS</text>
@@ -506,7 +506,7 @@
 <text x="800.0" y="445.0" font-size="10" fill="#9ca3af" font-weight="600">HOTSPOTS — size × how much depends on it</text>
 <text x="800.0" y="464.0" font-size="11.5" fill="#e5e7eb">redis_client</text><text x="1280" y="464.0" font-size="11" fill="#9ca3af" text-anchor="end">497 lines · 28 in</text>
 <text x="800.0" y="483.0" font-size="11.5" fill="#e5e7eb">router</text><text x="1280" y="483.0" font-size="11" fill="#9ca3af" text-anchor="end">689 lines · 13 in</text>
-<text x="800.0" y="502.0" font-size="11.5" fill="#e5e7eb">client</text><text x="1280" y="502.0" font-size="11" fill="#9ca3af" text-anchor="end">246 lines · 22 in</text>
+<text x="800.0" y="502.0" font-size="11.5" fill="#e5e7eb">client</text><text x="1280" y="502.0" font-size="11" fill="#9ca3af" text-anchor="end">297 lines · 22 in</text>
 <text x="800.0" y="521.0" font-size="11.5" fill="#e5e7eb">notifications</text><text x="1280" y="521.0" font-size="11" fill="#9ca3af" text-anchor="end">527 lines · 8 in</text>
 <text x="800.0" y="540.0" font-size="11.5" fill="#e5e7eb">enhanced_secrets</text><text x="1280" y="540.0" font-size="11" fill="#9ca3af" text-anchor="end">898 lines · 4 in</text>
 <text x="800.0" y="559.0" font-size="11.5" fill="#e5e7eb">config</text><text x="1280" y="559.0" font-size="11" fill="#9ca3af" text-anchor="end">392 lines · 7 in</text>

@@ -97,9 +97,15 @@ def _headers(token: str) -> dict:
     }
 
 
-def _handle_response(r: requests.Response, method: str, path: str):
-    """Parse response, update rate limit state, raise on errors."""
-    update_from_headers(dict(r.headers))
+def _handle_response(r: requests.Response, method: str, path: str, token: str = ""):
+    """Parse response, update rate limit state, raise on errors.
+
+    `token` identifies which installation these rate-limit headers belong
+    to. Without it every installation shared one counter, so a busy tenant
+    made an idle one look exhausted and an idle one masked a real
+    exhaustion. It is never logged or stored — see rate_limit.token_key.
+    """
+    update_from_headers(dict(r.headers), token)
 
     if r.status_code in (200, 201):
         return r.json() if r.content else {}
@@ -164,13 +170,13 @@ def _handle_response(r: requests.Response, method: str, path: str):
 
 
 def gh_get(path: str, token: str) -> dict | list:
-    check_and_wait()
+    check_and_wait(token)
     url = path if path.startswith("http") else f"{GITHUB_API}{path}"
     try:
         r = _session.get(url, headers=_headers(token), timeout=DEFAULT_TIMEOUT)
     except requests.exceptions.ConnectionError as e:
         raise GitHubError(f"Connection error: {e}", 0) from e
-    return _handle_response(r, "GET", path)
+    return _handle_response(r, "GET", path, token)
 
 
 def gh_get_all(path: str, token: str, max_pages: int = 5) -> list:
@@ -200,40 +206,40 @@ def gh_get_all(path: str, token: str, max_pages: int = 5) -> list:
 
 
 def gh_post(path: str, token: str, data: dict) -> dict:
-    check_and_wait()
+    check_and_wait(token)
     url = f"{GITHUB_API}{path}"
     try:
         r = _session.post(url, headers=_headers(token), json=data, timeout=DEFAULT_TIMEOUT)
     except requests.exceptions.ConnectionError as e:
         raise GitHubError(f"Connection error: {e}", 0) from e
-    return _handle_response(r, "POST", path)
+    return _handle_response(r, "POST", path, token)
 
 
 def gh_put(path: str, token: str, data: dict) -> dict:
-    check_and_wait()
+    check_and_wait(token)
     url = f"{GITHUB_API}{path}"
     try:
         r = _session.put(url, headers=_headers(token), json=data, timeout=DEFAULT_TIMEOUT)
     except requests.exceptions.ConnectionError as e:
         raise GitHubError(f"Connection error: {e}", 0) from e
-    return _handle_response(r, "PUT", path)
+    return _handle_response(r, "PUT", path, token)
 
 
 def gh_patch(path: str, token: str, data: dict) -> dict:
-    check_and_wait()
+    check_and_wait(token)
     url = f"{GITHUB_API}{path}"
     try:
         r = _session.patch(url, headers=_headers(token), json=data, timeout=DEFAULT_TIMEOUT)
     except requests.exceptions.ConnectionError as e:
         raise GitHubError(f"Connection error: {e}", 0) from e
-    return _handle_response(r, "PATCH", path)
+    return _handle_response(r, "PATCH", path, token)
 
 
 def gh_delete(path: str, token: str) -> dict:
-    check_and_wait()
+    check_and_wait(token)
     url = f"{GITHUB_API}{path}"
     try:
         r = _session.delete(url, headers=_headers(token), timeout=DEFAULT_TIMEOUT)
     except requests.exceptions.ConnectionError as e:
         raise GitHubError(f"Connection error: {e}", 0) from e
-    return _handle_response(r, "DELETE", path)
+    return _handle_response(r, "DELETE", path, token)

@@ -54,7 +54,7 @@
      ┌──────────────────┐  ┌──────────────┐  ┌────────────────────┐  ┌──────────┐
      │  pull_request.py │  │  issues.py   │  │   comments.py      │  │ push.py  │
      │                  │  │              │  │                    │  │ ci.py    │
-     │ PR analysis      │  │ Triage       │  │ 26 slash commands  │  │          │
+     │ PR analysis      │  │ Triage       │  │ 27 slash commands  │  │          │
      │ Blast radius     │  │ Auto-label   │  │ /fix  /autofix     │  │ Secrets  │
      │ Code review      │  │ Welcome msg  │  │ /merge /rollback   │  │ Deps     │
      │ Test gaps        │  │ Questions    │  │ /perf /arch        │  │ Lint     │

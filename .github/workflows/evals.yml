@@ -21,7 +21,7 @@ on:
       task:
         description: "Which eval set"
         type: choice
-        options: [all, fix, review]
+        options: [all, fix, review, gaps]
         default: all
       min_pass_rate:
         description: "Fail below this pass rate"

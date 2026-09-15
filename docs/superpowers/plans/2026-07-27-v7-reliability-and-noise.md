@@ -1493,8 +1493,8 @@ from app.core.redaction import redact
 
 class TestRedaction:
     def test_aws_key_is_removed(self):
-        out = redact("the key is AKIAIOSFODNN7REALKEY here")
-        assert "AKIAIOSFODNN7REALKEY" not in out
+        out = redact("the key is AKIAIOSFODNN7EXAMPLE here")
+        assert "AKIAIOSFODNN7EXAMPLE" not in out
         assert "[REDACTED]" in out
 
     def test_github_pat_is_removed(self):
@@ -1619,9 +1619,9 @@ class TestMemoryWrites:
         monkeypatch.delenv("REDIS_URL", raising=False)
         reset_client()
         memory.clear("o/r")
-        memory.remember("o/r", "deploy key is AKIAIOSFODNN7REALKEY do not share", kind="fact")
+        memory.remember("o/r", "deploy key is AKIAIOSFODNN7EXAMPLE do not share", kind="fact")
         stored = " ".join(i.text for i in memory.recall("o/r", "deploy key"))
-        assert "AKIAIOSFODNN7REALKEY" not in stored
+        assert "AKIAIOSFODNN7EXAMPLE" not in stored
 
     def test_merge_of_bot_branch_records_a_memory(self):
         from app.handlers.comments import publisher

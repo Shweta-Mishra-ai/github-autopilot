@@ -495,7 +495,7 @@
       "functions": 2,
       "classes": 2,
       "is_package": false,
-      "fan_in": 7,
+      "fan_in": 9,
       "fan_out": 0,
       "external_deps": [
         "json",
@@ -567,18 +567,36 @@
       "id": "app.core.preflight",
       "path": "app/core/preflight.py",
       "layer": "core",
-      "loc": 299,
+      "loc": 310,
       "functions": 5,
       "classes": 4,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 3,
+      "fan_out": 4,
       "external_deps": [
         "__future__",
         "app",
         "dataclasses",
         "logging",
         "os"
+      ]
+    },
+    {
+      "id": "app.core.process_guard",
+      "path": "app/core/process_guard.py",
+      "layer": "core",
+      "loc": 142,
+      "functions": 4,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 2,
+      "fan_out": 1,
+      "external_deps": [
+        "__future__",
+        "app",
+        "logging",
+        "os",
+        "time"
       ]
     },
     {
@@ -605,7 +623,7 @@
       "functions": 5,
       "classes": 1,
       "is_package": false,
-      "fan_in": 27,
+      "fan_in": 28,
       "fan_out": 0,
       "external_deps": [
         "__future__",
@@ -691,8 +709,8 @@
       "id": "app.core.webhook_security",
       "path": "app/core/webhook_security.py",
       "layer": "core",
-      "loc": 474,
-      "functions": 15,
+      "loc": 521,
+      "functions": 16,
       "classes": 0,
       "is_package": false,
       "fan_in": 4,
@@ -735,8 +753,8 @@
       "id": "app.github.auth",
       "path": "app/github/auth.py",
       "layer": "github",
-      "loc": 118,
-      "functions": 4,
+      "loc": 160,
+      "functions": 6,
       "classes": 0,
       "is_package": false,
       "fan_in": 9,
@@ -754,7 +772,7 @@
       "id": "app.github.client",
       "path": "app/github/client.py",
       "layer": "github",
-      "loc": 240,
+      "loc": 246,
       "functions": 9,
       "classes": 2,
       "is_package": false,
@@ -819,16 +837,20 @@
       "id": "app.github.rate_limit",
       "path": "app/github/rate_limit.py",
       "layer": "github",
-      "loc": 132,
-      "functions": 5,
+      "loc": 269,
+      "functions": 10,
       "classes": 0,
       "is_package": false,
       "fan_in": 3,
       "fan_out": 1,
       "external_deps": [
+        "__future__",
         "app",
+        "hashlib",
         "logging",
+        "os",
         "requests",
+        "threading",
         "time"
       ]
     },
@@ -1439,8 +1461,8 @@
       "id": "app.security.enhanced_secrets",
       "path": "app/security/enhanced_secrets.py",
       "layer": "security",
-      "loc": 813,
-      "functions": 18,
+      "loc": 898,
+      "functions": 22,
       "classes": 1,
       "is_package": false,
       "fan_in": 4,
@@ -1509,12 +1531,12 @@
       "id": "server",
       "path": "server.py",
       "layer": "other",
-      "loc": 775,
-      "functions": 29,
+      "loc": 822,
+      "functions": 30,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 30,
+      "fan_out": 32,
       "external_deps": [
         "app",
         "flask",
@@ -1530,12 +1552,12 @@
       "id": "worker",
       "path": "worker.py",
       "layer": "other",
-      "loc": 60,
+      "loc": 66,
       "functions": 1,
       "classes": 0,
       "is_package": false,
       "fan_in": 0,
-      "fan_out": 3,
+      "fan_out": 4,
       "external_deps": [
         "app",
         "logging",
@@ -1900,6 +1922,11 @@
     },
     {
       "source": "app.core.preflight",
+      "target": "app.core.process_guard",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.preflight",
       "target": "app.core.webhook_security",
       "kind": "runtime"
     },
@@ -1911,6 +1938,11 @@
     {
       "source": "app.core.preflight",
       "target": "app.github.client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.process_guard",
+      "target": "app.core.redis_client",
       "kind": "runtime"
     },
     {
@@ -2860,6 +2892,11 @@
     },
     {
       "source": "server",
+      "target": "app.core.logger",
+      "kind": "import"
+    },
+    {
+      "source": "server",
       "target": "app.core.maintenance",
       "kind": "runtime"
     },
@@ -2876,6 +2913,11 @@
     {
       "source": "server",
       "target": "app.core.preflight",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
+      "target": "app.core.process_guard",
       "kind": "runtime"
     },
     {
@@ -2975,6 +3017,11 @@
     },
     {
       "source": "worker",
+      "target": "app.core.logger",
+      "kind": "import"
+    },
+    {
+      "source": "worker",
       "target": "app.core.webhook_security",
       "kind": "runtime"
     },
@@ -2985,9 +3032,9 @@
     }
   ],
   "stats": {
-    "modules": 93,
-    "edges": 287,
-    "total_loc": 21743,
+    "modules": 94,
+    "edges": 292,
+    "total_loc": 22266,
     "layers": [
       "ai",
       "core",
@@ -3003,7 +3050,7 @@
       {
         "id": "app.core.redis_client",
         "loc": 497,
-        "fan_in": 27,
+        "fan_in": 28,
         "fan_out": 0
       },
       {
@@ -3014,7 +3061,7 @@
       },
       {
         "id": "app.github.client",
-        "loc": 240,
+        "loc": 246,
         "fan_in": 22,
         "fan_out": 2
       },
@@ -3026,7 +3073,7 @@
       },
       {
         "id": "app.security.enhanced_secrets",
-        "loc": 813,
+        "loc": 898,
         "fan_in": 4,
         "fan_out": 0
       },
@@ -3043,15 +3090,15 @@
         "fan_out": 3
       },
       {
-        "id": "app.ai.model_catalog",
-        "loc": 356,
-        "fan_in": 6,
+        "id": "app.core.webhook_security",
+        "loc": 521,
+        "fan_in": 4,
         "fan_out": 1
       },
       {
-        "id": "app.core.webhook_security",
-        "loc": 474,
-        "fan_in": 4,
+        "id": "app.ai.model_catalog",
+        "loc": 356,
+        "fan_in": 6,
         "fan_out": 1
       },
       {

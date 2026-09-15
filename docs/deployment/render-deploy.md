@@ -273,7 +273,7 @@ Subscribe to exactly these events:
 |-------|------------|----------------|
 | ✅ Pull request | `pull_request` | Auto PR analysis when opened/updated |
 | ✅ Issues | `issues` | Issue triage when created |
-| ✅ Issue comment | `issue_comment` | All 26 slash commands |
+| ✅ Issue comment | `issue_comment` | All 27 slash commands |
 | ✅ Push | `push` | Commit lint, secret scan, dep scan |
 | ✅ Check run | `check_run` | CI failure analysis |
 

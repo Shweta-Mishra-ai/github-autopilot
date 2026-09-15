@@ -7,6 +7,36 @@ pytest-cov==6.0.0
 pytest-mock==3.14.0
 ruff==0.8.0
 
+# Shuffles test order every run. scripts/verify.sh has claimed "random
+# ordering" since it was written, and ran the suite twice in IDENTICAL order
+# because this was never installed or declared — so the second run only ever
+# caught tests that are nondeterministic in themselves, never one that depends
+# on what ran before it. Its own comment says an ordering-dependent failure
+# reached CI after passing locally; this was meant to be the fix for that and
+# was not one.
+#
+# Installing it failed 5 of the first 10 seeds, with up to 55 failures and 50
+# errors in files that had nothing to do with each other. Three root causes,
+# all now fixed, all the same shape — a test mutating process-wide state and
+# not putting it back:
+#
+#   - TestRedisProductionGuard set redis_client._IS_PRODUCTION = True and
+#     REDIS_URL = "" and restored neither, so every later test touching Redis
+#     raised "REDIS_URL is not set in production environment". This was the
+#     bulk of it.
+#   - TestRouterThreadSafety called importlib.reload(app.ai.router), rebinding
+#     LLMRouter and the module singleton for the rest of the session, which
+#     silently disarmed every later patch of LLMRouter.ask — eight failures
+#     reporting "All LLM providers are unavailable" from a suite that never
+#     touches the network.
+#   - Two health tests asserted on a provider that is only in the
+#     circuit-breaker registry when some earlier file happened to register it.
+#
+# 24 seeds green afterwards. Keep the pin: an unpinned shuffler makes a CI
+# failure unreproducible, which is the opposite of the point. The seed is
+# printed at the top of every run — replay one with --randomly-seed=N.
+pytest-randomly==3.15.0
+
 # Optional: heavy intelligence layer (not needed for core bot to run)
 # qdrant-client==1.9.1
 # sentence-transformers==3.2.1

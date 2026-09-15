@@ -227,6 +227,73 @@ def no_provider_catalogue_calls():
 
 
 @pytest.fixture(autouse=True)
+def no_real_network(request):
+    """
+    The unit suite must not open a socket to the internet.
+
+    This generalises the guard above. That one stopped the provider catalogue
+    reaching openrouter.ai, which is the instance that turned CI red — but it
+    fixed the instance, not the class, and another one was already present:
+    `/secfull` walks requirements.txt through app/security/licenses.py, which
+    asks PyPI about each package. Six real connections to Fastly per suite run,
+    from a test that believed it was offline.
+
+    A test whose result depends on the network is not a test. It passes on a
+    laptop, fails in a locked-down runner, and is slow everywhere — and in an
+    environment that blocks egress it still passes, while silently exercising
+    the error path instead of the one it names.
+
+    Loopback stays open, because the in-process fakes and the Flask test client
+    use it. Tests marked `integration` or `e2e` opt out, which is what those
+    marks are for.
+    """
+    import socket
+
+    if request.node.get_closest_marker("integration") or request.node.get_closest_marker("e2e"):
+        yield
+        return
+
+    real_connect = socket.socket.connect
+    real_getaddrinfo = socket.getaddrinfo
+
+    def _is_local(host) -> bool:
+        return isinstance(host, str) and (
+            host.startswith(("127.", "localhost", "::1")) or host in ("", "0.0.0.0")
+        )
+
+    def _refuse(host):
+        raise RuntimeError(
+            f"A unit test tried to open a real connection to {host!r}.\n"
+            "Mock the client instead. If the test genuinely needs the network, "
+            "mark it `@pytest.mark.integration` — the default run excludes those."
+        )
+
+    # Both hooks, because they catch different things and only together do they
+    # give a usable message. getaddrinfo fires first and still knows the
+    # HOSTNAME — guarding connect alone reports the resolved IP, which tells an
+    # author nothing, and lets the DNS lookup itself go out regardless.
+    # connect still matters for a request made straight to an IP.
+    def _guard_getaddrinfo(host, *args, **kwargs):
+        if not _is_local(host):
+            _refuse(host)
+        return real_getaddrinfo(host, *args, **kwargs)
+
+    def _guard_connect(self, address, *args, **kwargs):
+        host = address[0] if isinstance(address, tuple) and address else address
+        if not _is_local(host):
+            _refuse(host)
+        return real_connect(self, address, *args, **kwargs)
+
+    socket.getaddrinfo = _guard_getaddrinfo
+    socket.socket.connect = _guard_connect
+    try:
+        yield
+    finally:
+        socket.socket.connect = real_connect
+        socket.getaddrinfo = real_getaddrinfo
+
+
+@pytest.fixture(autouse=True)
 def clean_redis_singleton():
     """Reset Redis singleton before every test for isolation."""
     import app.core.redis_client as rc

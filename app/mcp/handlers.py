@@ -8,6 +8,7 @@ use it.
 
 import logging
 import os
+from pathlib import Path
 
 log = logging.getLogger(__name__)
 
@@ -426,6 +427,16 @@ def _handle_run_command(args: dict) -> str:
         return f"Error: {str(e)[:200]}"
 
 
+def _project_root() -> Path:
+    """The deployment's own source tree — the parent of the `app` package.
+
+    Taken from the package location rather than the working directory, because
+    the working directory is whatever the process was started in and this is a
+    security boundary.
+    """
+    return Path(__file__).resolve().parent.parent.parent
+
+
 def _handle_codebase_map(args: dict) -> str:
     """
     Structural map of the local codebase, derived from the AST.
@@ -434,14 +445,44 @@ def _handle_codebase_map(args: dict) -> str:
     because it analyses the deployed source tree, not a remote repository. It
     never imports what it reads, so pointing it at untrusted code executes
     nothing.
+
+    "Local" used to mean "wherever you point it". This read a `root` argument
+    that does not appear in the tool's inputSchema — so no client could know it
+    existed, and any client could use it:
+
+        {"root": "/tmp", "targets": ["outside_project"]}
+
+    returned a full structural map of code outside the deployment: module
+    names, file paths, line counts and external dependencies. Verified against
+    the shipped code. It needs an MCP key, so this is not unauthenticated, but
+    a tool whose schema promises a codebase map should not also be a filesystem
+    enumeration primitive — and MCP_ALLOWED_INSTALLATIONS exists precisely
+    because holding a key is not meant to mean holding everything.
+
+    `root` is gone rather than documented. Every target is now resolved and
+    required to be inside the deployment's own tree.
     """
     from app.intelligence.codegraph import build_graph
 
     focus = (args.get("module") or "").strip()
     targets = args.get("targets") or ["app", "server.py", "worker.py"]
 
+    root = _project_root()
+    for target in targets:
+        try:
+            resolved = (root / str(target)).resolve()
+            resolved.relative_to(root)
+        except (ValueError, OSError):
+            # The refusal names the target the caller sent, not the absolute
+            # path it resolved to: echoing that back is the disclosure this is
+            # trying to prevent, and it is what the old error message did.
+            return (
+                f"`{str(target)[:80]}` is outside this deployment's source tree. "
+                "codebase_map only reads the code this instance is running."
+            )
+
     try:
-        graph = build_graph(*targets, root=args.get("root") or ".")
+        graph = build_graph(*targets, root=root)
     except Exception as e:
         log.error(f"mcp.codebase_map error: {e}")
         return f"Error: {str(e)[:200]}"

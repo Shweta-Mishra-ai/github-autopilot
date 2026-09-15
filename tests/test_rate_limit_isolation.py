@@ -160,16 +160,60 @@ class TestItNeverHoldsAWorkerThread:
 
 
 class TestTheClientReportsTheToken:
-    def test_every_verb_passes_its_token_to_the_tracker(self):
-        """Per-installation state is only correct if the call site supplies the
-        token. A verb that forgets silently reopens the shared-counter bug."""
-        import inspect
+    """Per-installation state is only correct if the call site supplies the
+    token. A verb that forgets silently reopens the shared-counter bug.
 
+    This used to count substrings in the module's source, which is a proxy for
+    the property and not the property. It passed for the wrong reason and then
+    failed on a refactor that was correct — routing the five verbs through one
+    helper — because the strings it counted had moved. Asserting on behaviour
+    instead survives any shape the module takes.
+    """
+
+    VERBS = [
+        ("gh_get", ()),
+        ("gh_post", ({"body": "x"},)),
+        ("gh_put", ({"body": "x"},)),
+        ("gh_patch", ({"body": "x"},)),
+        ("gh_delete", ()),
+    ]
+
+    @pytest.mark.parametrize("verb,extra", VERBS)
+    def test_the_verb_checks_the_limit_for_its_own_token(self, verb, extra):
         from app.github import client
 
-        src = inspect.getsource(client)
-        assert src.count("check_and_wait(token)") == 5, "a verb is not passing its token"
-        assert src.count('path, token)') >= 5, "a verb is not attributing its response headers"
+        seen = []
+        response = MagicMock(status_code=200, content=b"{}", headers={})
+        response.json.return_value = {}
+
+        with (
+            patch.object(client, "check_and_wait", side_effect=lambda t: seen.append(t)),
+            patch.object(client._session, "request", return_value=response),
+        ):
+            getattr(client, verb)("/repos/o/r", "ghs_token_for_this_call", *extra)
+
+        assert seen == ["ghs_token_for_this_call"], f"{verb} did not check its own token"
+
+    @pytest.mark.parametrize("verb,extra", VERBS)
+    def test_the_verb_attributes_response_headers_to_its_own_token(self, verb, extra):
+        from app.github import client
+
+        seen = []
+        response = MagicMock(status_code=200, content=b"{}", headers=_headers(17))
+        response.json.return_value = {}
+
+        with (
+            patch.object(client, "check_and_wait", lambda *a, **k: None),
+            patch.object(
+                client, "update_from_headers", side_effect=lambda h, t: seen.append(t)
+            ),
+            patch.object(client._session, "request", return_value=response),
+        ):
+            getattr(client, verb)("/repos/o/r", "ghs_token_for_this_call", *extra)
+
+        assert seen == ["ghs_token_for_this_call"], (
+            f"{verb} attributed its rate-limit headers to the wrong installation"
+        )
 
 
 # ── One installation's cold fetch must not block another ─────────────────────

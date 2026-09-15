@@ -132,6 +132,17 @@ def inspect_environment() -> list[EnvFinding]:
     except Exception as exc:  # a diagnostic must not break the diagnostic
         findings.append(EnvFinding("X-Forwarded-For trust", "unknown", str(exc)[:160]))
 
+    # How many web processes are actually running. --workers 1 is load-bearing
+    # and nothing enforced it; the comments saying so live in Dockerfile,
+    # Procfile and render.yaml, where the person raising the number never looks.
+    try:
+        from app.core.process_guard import verdict as process_verdict
+
+        state, detail = process_verdict()
+        findings.append(EnvFinding("Web processes", state, detail))
+    except Exception as exc:
+        findings.append(EnvFinding("Web processes", "unknown", str(exc)[:160]))
+
     # Encrypted memory backup. Partial configuration is the dangerous state:
     # it looks configured and silently keeps nothing off-box.
     key = bool(os.environ.get("MEMORY_BACKUP_KEY", "").strip())

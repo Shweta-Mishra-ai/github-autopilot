@@ -67,15 +67,15 @@ jobs:
         python-version: ["3.10", "3.11", "3.12"]
       fail-fast: false
 
-    # No Redis service. It cost ~19s of container startup on each of the three
-    # legs, and nothing connected to it: tests/conftest.py installs an
-    # in-process fake and its autouse env fixture forces REDIS_URL="", so the
-    # service was provisioned and then ignored. There are also zero tests
-    # marked `integration`, which is what it existed for.
+    # No Redis service here, on purpose. It cost ~19s of container startup on
+    # each of the three legs and nothing connected to it: tests/conftest.py
+    # installs an in-process fake and its autouse env fixture forces
+    # REDIS_URL="", so the service was provisioned and then ignored.
     #
-    # To bring it back when integration tests are written, give them their own
-    # job with the service attached rather than re-attaching it here — the unit
-    # matrix should not pay for a dependency it does not use.
+    # The integration tests that need a real server now exist and have their
+    # own job above, with the service attached and the production eviction
+    # policy set. The unit matrix still should not pay for a dependency it
+    # does not use.
 
     steps:
       - uses: actions/checkout@v4
@@ -161,6 +161,93 @@ jobs:
           file: coverage.xml
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  # ── Integration (real Redis) ─────────────────────────────────────────────────
+  # Its own job, deliberately. A Redis service was once attached to the unit
+  # matrix and nothing ever connected to it: conftest installs an in-process
+  # fake and forces REDIS_URL="", so the service was provisioned and ignored on
+  # all three legs. It was removed with a note to give these their own job when
+  # they were written. This is that job.
+  #
+  # What it proves that the fake cannot: BLMOVE is atomic under concurrent
+  # consumers, LPUSH plus a RIGHT-pop is genuinely FIFO, a TTL really expires,
+  # and `noeviction` errors on a full instance instead of silently dropping the
+  # idempotency keys that stop duplicate webhook processing.
+  integration:
+    name: Integration (real Redis)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: lint
+
+    services:
+      redis:
+        # Same policy render.yaml sets. Testing against allkeys-lru would prove
+        # nothing about production, which is the configuration that matters.
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: integration-pip-${{ hashFiles('requirements-dev.txt') }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Configure the server the way production is
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq redis-tools
+          redis-cli -h 127.0.0.1 -p 6379 config set maxmemory-policy noeviction
+          echo -n "policy: "
+          redis-cli -h 127.0.0.1 -p 6379 config get maxmemory-policy | tail -1
+
+      - name: Run the integration suite
+        env:
+          REDIS_TEST_URL: redis://127.0.0.1:6379/0
+          GROQ_API_KEY: "test_key_not_real"
+          GITHUB_APP_ID: "99999"
+          GITHUB_PRIVATE_KEY: ""
+          GITHUB_WEBHOOK_SECRET: "test-webhook-secret-32chars-abc!"
+          METRICS_AUTH_TOKEN: "test_metrics_token"
+          MCP_API_KEY: "test-mcp-api-key-xyz"
+          LOG_FORMAT: "text"
+        run: pytest tests/ -m integration --tb=short
+
+      - name: Fail if nothing actually ran
+        # The suite skips itself when REDIS_TEST_URL is unset or unreachable,
+        # which is right locally and wrong here: a job that silently skips every
+        # test is a green tick that measured nothing.
+        env:
+          REDIS_TEST_URL: redis://127.0.0.1:6379/0
+          GROQ_API_KEY: "test_key_not_real"
+          GITHUB_APP_ID: "99999"
+          GITHUB_PRIVATE_KEY: ""
+          GITHUB_WEBHOOK_SECRET: "test-webhook-secret-32chars-abc!"
+          METRICS_AUTH_TOKEN: "test_metrics_token"
+          MCP_API_KEY: "test-mcp-api-key-xyz"
+        run: |
+          set -o pipefail
+          pytest tests/ -m integration -q --tb=no | tee out.txt
+          if grep -qE "^(no tests ran|[0-9]+ skipped)" out.txt || ! grep -qE "[0-9]+ passed" out.txt; then
+            echo "::error::The integration suite did not run. Redis was unreachable, so this job proved nothing."
+            exit 1
+          fi
 
   # ── Security ─────────────────────────────────────────────────────────────────
   security:

@@ -113,6 +113,45 @@ def _build_redis_mock():
             with self._lock:
                 return len(self._d.get(key, []))
 
+        def ttl(self, key):
+            """Seconds left, -1 for no expiry, -2 when the key is gone.
+
+            Same convention as real Redis, because a test asserting `> 0`
+            against a fake that returned None would pass for the wrong reason.
+            """
+            with self._lock:
+                self._evict(key)
+                if key not in self._d:
+                    return -2
+                exp = self._exp.get(key)
+                if not exp:
+                    return -1
+                return max(0, int(exp - time.time()))
+
+        def keys(self, pattern="*"):
+            import fnmatch
+
+            with self._lock:
+                for k in list(self._d):
+                    self._evict(k)
+                return [k for k in self._d if fnmatch.fnmatch(k, pattern)]
+
+        def scan_iter(self, match="*", count=None):
+            """The app uses SCAN rather than KEYS on request paths, because KEYS
+            blocks the server for the whole keyspace. A fake without it makes
+            every such path untestable, which is how app/core/process_guard.py
+            came to need this."""
+            return iter(self.keys(match))
+
+        def rpop(self, key):
+            with self._lock:
+                lst = self._d.get(key) or []
+                if not lst:
+                    return None
+                value = lst.pop()
+                self._d[key] = lst
+                return value
+
         def hset(self, key, mapping=None, **kwargs):
             with self._lock:
                 h = self._d.get(key, {})

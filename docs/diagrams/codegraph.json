@@ -709,8 +709,8 @@
       "id": "app.core.webhook_security",
       "path": "app/core/webhook_security.py",
       "layer": "core",
-      "loc": 474,
-      "functions": 15,
+      "loc": 521,
+      "functions": 16,
       "classes": 0,
       "is_package": false,
       "fan_in": 4,
@@ -3024,7 +3024,7 @@
   "stats": {
     "modules": 94,
     "edges": 290,
-    "total_loc": 22193,
+    "total_loc": 22240,
     "layers": [
       "ai",
       "core",
@@ -3080,15 +3080,15 @@
         "fan_out": 3
       },
       {
-        "id": "app.ai.model_catalog",
-        "loc": 356,
-        "fan_in": 6,
+        "id": "app.core.webhook_security",
+        "loc": 521,
+        "fan_in": 4,
         "fan_out": 1
       },
       {
-        "id": "app.core.webhook_security",
-        "loc": 474,
-        "fan_in": 4,
+        "id": "app.ai.model_catalog",
+        "loc": 356,
+        "fan_in": 6,
         "fan_out": 1
       },
       {

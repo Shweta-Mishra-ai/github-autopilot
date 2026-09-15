@@ -232,3 +232,78 @@ class TestSignatureVerificationStillHolds:
 
         monkeypatch.setenv("GITHUB_WEBHOOK_SECRET", "second-secret-value-32-chars-k!!")
         assert verify_signature(body, sig_first) is False
+
+
+class TestTheIpRateLimitIsConfigurable:
+    """
+    It was a module constant with no override, and it is the binding
+    constraint on throughput.
+
+    Measured with scripts/loadtest.py against gunicorn as production runs it
+    (one worker, eight threads, real Redis): the ingest path accepts ~320
+    requests/second at a p95 of 81ms. The limit allows 100 per MINUTE. The
+    pipeline is not the bottleneck — this is, by a factor of about 190.
+
+    100/min remains the right default for an endpoint on the open internet.
+    But GitHub delivers every webhook for every installation from its own small
+    IP range, so all of an organisation's repositories share one bucket, and an
+    operator watching a busy org get 429s had no way to change it short of
+    editing the source.
+    """
+
+    @staticmethod
+    def _limit():
+        from app.core.webhook_security import _ip_rate_limit
+
+        return _ip_rate_limit()
+
+    def test_the_default_is_unchanged(self, monkeypatch):
+        monkeypatch.delenv("WEBHOOK_IP_RATE_LIMIT", raising=False)
+        assert self._limit() == 100
+
+    def test_an_operator_can_raise_it(self, monkeypatch):
+        monkeypatch.setenv("WEBHOOK_IP_RATE_LIMIT", "2000")
+        assert self._limit() == 2000
+
+    def test_an_operator_can_lower_it(self, monkeypatch):
+        monkeypatch.setenv("WEBHOOK_IP_RATE_LIMIT", "10")
+        assert self._limit() == 10
+
+    @pytest.mark.parametrize("bad", ["", "   ", "abc", "10.5", "-5", "0"])
+    def test_a_nonsense_value_falls_back_to_the_default(self, monkeypatch, bad):
+        """A typo must not disable the limiter. Zero and negatives are the
+        dangerous ones: read literally they would reject every request, or
+        admit every request, depending on the comparison."""
+        monkeypatch.setenv("WEBHOOK_IP_RATE_LIMIT", bad)
+        assert self._limit() == 100
+
+    def test_it_is_read_per_call_not_at_import(self, monkeypatch):
+        """So it can be changed without a redeploy on hosts that allow it."""
+        monkeypatch.setenv("WEBHOOK_IP_RATE_LIMIT", "7")
+        assert self._limit() == 7
+        monkeypatch.setenv("WEBHOOK_IP_RATE_LIMIT", "9")
+        assert self._limit() == 9
+
+    def test_the_limiter_actually_honours_it(self, monkeypatch):
+        """The setting is worthless if check_ip_rate_limit ignores it."""
+        import app.core.webhook_security as ws
+
+        monkeypatch.setenv("WEBHOOK_IP_RATE_LIMIT", "3")
+        monkeypatch.setattr(ws, "IP_RATE_LIMIT", 100)  # default, so env wins
+        ws._ip_counts.clear()
+
+        ip = "203.0.113.77"
+        verdicts = [ws.check_ip_rate_limit(ip) for _ in range(5)]
+        assert verdicts[:3] == [True, True, True]
+        assert verdicts[3] is False, "the fourth request past a limit of 3 must be refused"
+
+    def test_it_is_documented(self):
+        """An undocumented knob is one nobody turns. There is also a gate in
+        test_prelaunch_audit.py that fails on an undocumented variable; this
+        states the intent at the point of the change."""
+        from pathlib import Path
+
+        env = Path(__file__).resolve().parent.parent / ".env.example"
+        text = env.read_text(encoding="utf-8")
+        assert "WEBHOOK_IP_RATE_LIMIT" in text
+        assert "GitHub delivers every" in text, "the shared-IP reason must be stated"

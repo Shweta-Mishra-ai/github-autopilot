@@ -45,6 +45,12 @@ def gh_put(*a, **kw):
     return hc.gh_put(*a, **kw)
 
 
+def gh_patch(*a, **kw):
+    import app.handlers.comments as hc
+
+    return hc.gh_patch(*a, **kw)
+
+
 def gh_delete(*a, **kw):
     import app.handlers.comments as hc
 

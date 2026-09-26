@@ -226,6 +226,16 @@ def _request(method: str, path: str, token: str, **kwargs) -> dict | list:
         )
     except requests.exceptions.ConnectionError as e:
         raise GitHubError(f"Connection error: {e}", 0) from e
+    except requests.exceptions.RequestException as e:
+        # Every other transport failure — a read timeout above all, which is
+        # NOT a ConnectionError and so escaped this module entirely. Callers
+        # are written against one failure type: `_post_inline_review` catches
+        # GitHubError, so a read timeout on the reviews POST propagated out of
+        # the handler and the sticky PR report was never posted at all — the
+        # analysis, summary, review and gap sections all discarded over one
+        # slow request. Status 0, the same as a connection error, because there
+        # is no HTTP status to report.
+        raise GitHubError(f"{type(e).__name__}: {e}", 0) from e
     return _handle_response(r, method, path, token)
 
 

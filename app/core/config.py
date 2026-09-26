@@ -18,6 +18,7 @@ V4 NEW: Extended defaults for all new V4 commands and features.
 import base64
 import copy
 import logging
+import re
 import threading
 import time
 from typing import Any
@@ -276,8 +277,28 @@ class Config:
 
     @property
     def footer(self) -> str:
-        text = self.get("bot", "footer", default="🤖 GitHub Autopilot")
-        return f"\n\n---\n*{text}*"
+        """
+        The configured footer text, wrapped once as a separator and emphasis.
+
+        This wrapped whatever it was given, and this repository's own example
+        config — whose header tells users to copy it into their repo root — set
+        `footer` to an already-wrapped value: "\\n\\n---\\n*🤖 ...*". Every
+        comment from a repo that copied it ended "---\\n*\\n\\n---\\n*🤖 ...**",
+        which is what this repository's own PR reports showed. A leading
+        separator and a single emphasis wrapper are stripped before wrapping, so
+        both forms render the same. An explicitly empty footer renders nothing,
+        where it used to render a bare "---" and "**".
+        """
+        text = str(self.get("bot", "footer", default="🤖 GitHub Autopilot") or "").strip()
+        text = re.sub(r"^-{3,}\s*", "", text).strip()
+        if (
+            len(text) > 2
+            and text.startswith("*")
+            and text.endswith("*")
+            and not (text.startswith("**") or text.endswith("**"))
+        ):
+            text = text[1:-1].strip()
+        return f"\n\n---\n*{text}*" if text else ""
 
 
 # ── Loader ────────────────────────────────────────────────────────────────────

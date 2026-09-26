@@ -51,7 +51,7 @@ class TestSafetySnapshotActuallyGuards:
     def test_rollback_aborts_when_the_safety_snapshot_fails(self):
         """take_snapshot returns None on failure rather than raising."""
         with (
-            patch.object(P, "gh_put") as put,
+            patch.object(P, "gh_patch") as edit,
             patch("app.core.snapshot.take_snapshot", return_value=None),
             patch(
                 "app.core.snapshot.get_snapshot_by_number",
@@ -61,11 +61,11 @@ class TestSafetySnapshotActuallyGuards:
             out = P.cmd_rollback("o/r", 1, "tok", "1 confirm", "dev")
 
         assert "Rollback Aborted" in out
-        put.assert_not_called(), "nothing may be undone without a way back"
+        edit.assert_not_called(), "nothing may be undone without a way back"
 
     def test_rollback_aborts_when_take_snapshot_raises(self):
         with (
-            patch.object(P, "gh_put") as put,
+            patch.object(P, "gh_patch") as edit,
             patch("app.core.snapshot.take_snapshot", side_effect=RuntimeError("redis")),
             patch(
                 "app.core.snapshot.get_snapshot_by_number",
@@ -75,11 +75,11 @@ class TestSafetySnapshotActuallyGuards:
             out = P.cmd_rollback("o/r", 1, "tok", "1 confirm", "dev")
 
         assert "Rollback Aborted" in out
-        put.assert_not_called()
+        edit.assert_not_called()
 
     def test_rollback_proceeds_when_the_safety_snapshot_succeeds(self):
         with (
-            patch.object(P, "gh_put") as put,
+            patch.object(P, "gh_patch") as edit,
             patch("app.core.snapshot.take_snapshot", return_value="safe1"),
             patch(
                 "app.core.snapshot.get_snapshot_by_number",
@@ -89,7 +89,7 @@ class TestSafetySnapshotActuallyGuards:
             out = P.cmd_rollback("o/r", 1, "tok", "1 confirm", "dev")
 
         assert "Rollback Complete" in out
-        put.assert_called_once()
+        edit.assert_called_once()
 
 
 class TestUndoOrdering:
@@ -100,7 +100,7 @@ class TestUndoOrdering:
             {"type": "edit_pr_title", "number": 5, "old_title": "original"},
         ]
         with (
-            patch.object(P, "gh_put") as put,
+            patch.object(P, "gh_patch") as edit,
             patch("app.core.snapshot.take_snapshot", return_value="safe1"),
             patch(
                 "app.core.snapshot.get_snapshot_by_number",
@@ -109,7 +109,7 @@ class TestUndoOrdering:
         ):
             P.cmd_rollback("o/r", 1, "tok", "1 confirm", "dev")
 
-        applied = [c.args[2]["title"] for c in put.call_args_list]
+        applied = [c.args[2]["title"] for c in edit.call_args_list]
         assert applied == ["second", "original"]
         assert applied[-1] == "original", (
             "the last write decides the final title; undoing oldest-first "
@@ -129,7 +129,7 @@ class TestUnrecoverableActionsAreReported:
     def test_unknown_action_type_is_reported_as_failed(self):
         actions = [{"type": "deleted_branch", "number": 9}]
         with (
-            patch.object(P, "gh_put"),
+            patch.object(P, "gh_patch"),
             patch("app.core.snapshot.take_snapshot", return_value="safe1"),
             patch(
                 "app.core.snapshot.get_snapshot_by_number",
@@ -144,7 +144,7 @@ class TestUnrecoverableActionsAreReported:
     def test_known_action_without_a_number_is_reported(self):
         actions = [{"type": "create_issue"}]  # no number
         with (
-            patch.object(P, "gh_put") as put,
+            patch.object(P, "gh_patch") as edit,
             patch("app.core.snapshot.take_snapshot", return_value="safe1"),
             patch(
                 "app.core.snapshot.get_snapshot_by_number",
@@ -153,7 +153,7 @@ class TestUnrecoverableActionsAreReported:
         ):
             out = P.cmd_rollback("o/r", 1, "tok", "1 confirm", "dev")
 
-        put.assert_not_called()
+        edit.assert_not_called()
         assert "no issue/PR number recorded" in out
 
     def test_api_failure_on_one_action_does_not_stop_the_rest(self):
@@ -162,7 +162,7 @@ class TestUnrecoverableActionsAreReported:
             {"type": "create_issue", "number": 2},
         ]
         with (
-            patch.object(P, "gh_put", side_effect=[GitHubError("403", 403), None]),
+            patch.object(P, "gh_patch", side_effect=[GitHubError("403", 403), None]),
             patch("app.core.snapshot.take_snapshot", return_value="safe1"),
             patch(
                 "app.core.snapshot.get_snapshot_by_number",
@@ -178,7 +178,7 @@ class TestUnrecoverableActionsAreReported:
 class TestConfirmationGate:
     def test_preview_without_confirm_performs_nothing(self):
         with (
-            patch.object(P, "gh_put") as put,
+            patch.object(P, "gh_patch") as edit,
             patch("app.core.snapshot.take_snapshot") as snap,
             patch(
                 "app.core.snapshot.get_snapshot_by_number",
@@ -188,7 +188,7 @@ class TestConfirmationGate:
             out = P.cmd_rollback("o/r", 1, "tok", "1", "dev")
 
         assert "Confirm Rollback" in out
-        put.assert_not_called()
+        edit.assert_not_called()
         snap.assert_not_called(), "a preview must not take a safety snapshot"
 
     def test_non_numeric_argument_is_rejected(self):

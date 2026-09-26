@@ -12,7 +12,7 @@ import re
 import contextlib
 from app.github.client import GitHubError
 from app.github.helpers import fmt_error
-from ._client import gh_get, gh_post, gh_put, gh_delete, router  # noqa: F401  (re-exported: tests patch these names)
+from ._client import gh_get, gh_post, gh_put, gh_patch, gh_delete, router  # noqa: F401  (re-exported: tests patch these names)
 
 
 log = logging.getLogger(__name__)
@@ -290,18 +290,23 @@ def cmd_rollback(
     # recorded title edits on one PR (X->Y then Y->Z), oldest-first restores X
     # and then Y, leaving the intermediate title; newest-first restores Y then
     # X, which is the original.
+    # PATCH for both edits below. They were gh_put, and GitHub has no PUT on an
+    # issue or a pull request, so /rollback could never close an issue the bot
+    # opened or restore a title it changed: each attempt was a 404, recorded
+    # under "failed" — the one command meant to undo the bot's mistakes could
+    # not undo the two it was written for.
     for action in bot_actions:
         action_type = action.get("type", "")
         num = action.get("number")
         try:
             if action_type == "create_issue" and num:
-                gh_put(f"/repos/{repo}/issues/{num}", token, {"state": "closed"})
+                gh_patch(f"/repos/{repo}/issues/{num}", token, {"state": "closed"})
                 restored.append(f"Closed issue #{num}: {action.get('title', '')[:50]}")
 
             elif action_type == "edit_pr_title" and num:
                 old_title = action.get("old_title", "")
                 if old_title:
-                    gh_put(f"/repos/{repo}/pulls/{num}", token, {"title": old_title})
+                    gh_patch(f"/repos/{repo}/pulls/{num}", token, {"title": old_title})
                     restored.append(f"Reverted PR #{num} title → `{old_title[:50]}`")
                 else:
                     failed.append(f"edit_pr_title #{num}: no old_title recorded")
@@ -355,12 +360,27 @@ def cmd_release(repo: str, token: str, author: str) -> str:
         if not commits:
             return "## ⚠️ No Commits Found\n\nThis repository has no commits yet."
 
-        existing_tags = [t["name"] for t in (tags if isinstance(tags, list) else [])]
+        tag_list = [t for t in (tags if isinstance(tags, list) else []) if isinstance(t, dict)]
+        existing_tags = [t["name"] for t in tag_list if t.get("name")]
         latest_tag = existing_tags[0] if existing_tags else "v0.0.0"
+
+        # "commits since last tag", per the docstring — which this did not do.
+        # It listed the last 20 commits on the branch whatever the tag pointed
+        # at, so the drafted release notes re-announced everything already
+        # released in `latest_tag`.
+        from .reviewer import commits_since
+
+        commits = commits_since(
+            commits, (tag_list[0].get("commit") or {}).get("sha") if tag_list else None
+        )
+        if not commits:
+            return f"## ℹ️ Nothing to Release\n\nNo commits since `{latest_tag}`."
+
         commit_list = "\n".join(
             f"- {c['commit']['message'].split(chr(10))[0][:120]}" for c in commits[:15]
         )
 
+        from app.ai.validator import as_text
         from .reviewer import _bump_version
         from app.handlers.comments import router
 
@@ -382,7 +402,7 @@ Return JSON:
             task="changelog",
         )
 
-        version = r.get("version", "").strip()
+        version = as_text(r.get("version")).strip()
         if not version or not re.match(r"^v\d+\.\d+\.\d+", version):
             version = _bump_version(latest_tag)
             log.warning(f"cmd_release: bad version from LLM, using {version}")

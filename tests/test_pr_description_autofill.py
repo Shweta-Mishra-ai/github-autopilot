@@ -59,7 +59,11 @@ def _analysis(**over):
 
 
 def _run(pr, analysis, config, auto_apply=True):
-    """Drive _analyze_pr with the LLM and GitHub stubbed. Returns the gh_put mock."""
+    """Drive _analyze_pr with the LLM and GitHub stubbed. Returns the gh_patch mock.
+
+    gh_patch, not gh_put: GitHub updates a pull request with PATCH. This helper
+    mocked gh_put, so every test below asserted the request GitHub 404s.
+    """
     gate = MagicMock()
     gate.evaluate.return_value = {"auto_apply": auto_apply, "confidence_note": ""}
     log = MagicMock()
@@ -67,7 +71,7 @@ def _run(pr, analysis, config, auto_apply=True):
     with (
         patch.object(A.router, "ask", return_value=({}, {})),
         patch.object(A, "validate_pr_analysis", return_value=analysis),
-        patch.object(A, "gh_put") as put,
+        patch.object(A, "gh_patch") as put,
         patch.object(A, "notify_high_risk_pr"),
     ):
         A._analyze_pr(pr, "o/r", 7, [], "tok", config, gate, "", log)

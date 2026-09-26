@@ -32,7 +32,9 @@ def _route(files, *, head_sha="headsha123", contents_by_ref=None):
     contents_by_ref = contents_by_ref or {}
 
     def _side_effect(path, token, *a, **kw):
-        if path.endswith("/files"):
+        # Match on the path alone: the files list is fetched paginated, with
+        # a ?per_page=&page= query.
+        if path.split("?", 1)[0].endswith("/files"):
             return files
         if "/pulls/" in path and "/files" not in path:
             return {"head": {"sha": head_sha}}
@@ -65,19 +67,28 @@ class TestSecretScanning:
         out = S.cmd_security("o/r", 1, _pr_issue(), "tok")
         assert "No secrets detected" in out
 
-    def test_binary_file_with_null_patch_is_skipped(self, gh):
+    def test_binary_file_with_null_patch_is_reported_unscanned(self, gh):
         """A null patch is not an absent key; `.get("patch", "")` returned None
-        and the truthiness check was the only thing preventing a crash."""
+        and the truthiness check was the only thing preventing a crash.
+
+        This asserted "No secrets detected" for a PR whose only file had no
+        diff to scan — a clean result for a file nobody read. It must say the
+        file was not scanned instead."""
         gh.side_effect = _route([{"filename": "logo.png", "patch": None}])
         out = S.cmd_security("o/r", 1, _pr_issue(), "tok")
-        assert "No secrets detected" in out
+        assert "No secrets detected" not in out
+        assert "1 file(s) not scanned" in out
+        assert "`logo.png`" in out
 
     def test_file_without_filename_does_not_raise(self, gh):
         gh.side_effect = _route([{"patch": "+x = 1"}])
         out = S.cmd_security("o/r", 1, _pr_issue(), "tok")
         assert "Security Scan Results" in out
 
-    def test_only_first_ten_files_are_secret_scanned(self, gh):
+    def test_every_file_is_secret_scanned(self, gh):
+        """This asserted that only the first ten files were scanned — and the
+        report then said "No secrets detected in changed files" about all of
+        them. A secret in the eleventh file was reported clean."""
         from app.security import enhanced_secrets
 
         files = [{"filename": f"f{i}.py", "patch": "+x"} for i in range(20)]
@@ -85,8 +96,16 @@ class TestSecretScanning:
         # scan_diff is imported inside cmd_security, so patching the module
         # attribute takes effect at call time.
         with patch.object(enhanced_secrets, "scan_diff", return_value=[]) as scan:
-            S.cmd_security("o/r", 1, _pr_issue(), "tok")
-        assert scan.call_count == 10
+            out = S.cmd_security("o/r", 1, _pr_issue(), "tok")
+        assert scan.call_count == 20
+        assert "No secrets detected** in the 20 changed file(s) scanned" in out
+
+    def test_a_deleted_file_is_not_reported_unscanned(self, gh):
+        gh.side_effect = _route(
+            [{"filename": "a.py", "patch": "+x = 1"}, {"filename": "old.bin", "status": "removed"}]
+        )
+        out = S.cmd_security("o/r", 1, _pr_issue(), "tok")
+        assert "not scanned" not in out
 
 
 class TestDependencyScanUsesPrHead:
@@ -113,7 +132,7 @@ class TestDependencyScanUsesPrHead:
         """Losing the ref is better than losing the whole report."""
 
         def _side_effect(path, token, *a, **kw):
-            if path.endswith("/files"):
+            if path.split("?", 1)[0].endswith("/files"):
                 return [{"filename": "requirements.txt", "patch": "+x"}]
             if "/pulls/" in path:
                 raise RuntimeError("pr fetch failed")

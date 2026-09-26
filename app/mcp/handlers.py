@@ -13,6 +13,14 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 
+def _confidence_line(value) -> str:
+    """`*Confidence: N%*`, or "" when the model did not give a number."""
+    try:
+        return f"*Confidence: {int(max(0.0, min(1.0, float(value))) * 100)}%*"
+    except (TypeError, ValueError):
+        return ""
+
+
 def _installation_allowed(install_id) -> bool:
     """
     Optional tenant isolation for install-id-scoped tools.
@@ -159,7 +167,9 @@ Return JSON:
                 result.get("test", ""),
                 "```",
                 "",
-                f"*Confidence: {int(float(result.get('confidence', 0.8)) * 100)}%*",
+                # Omit rather than raise: a non-numeric confidence used to
+                # discard the fix and the test along with it.
+                _confidence_line(result.get("confidence", 0.8)),
             ]
         )
 
@@ -273,18 +283,24 @@ Return JSON:
             max_tokens=1200,
         )
 
-        risk = result.get("risk_level", "unknown").upper()
-        findings = result.get("findings", [])
-        cves = result.get("cve_risks", [])
+        from app.ai.validator import as_text
+
+        risk = as_text(result.get("risk_level"), "unknown").upper()
+        findings = result.get("findings")
+        findings = findings if isinstance(findings, list) else []
+        cves = result.get("cve_risks")
+        cves = cves if isinstance(cves, list) else []
 
         lines = ["## Security Review", f"**Risk Level:** {risk}", ""]
         if findings:
             lines += ["**Findings:**"]
             for f in findings[:8]:
-                sev = f.get("severity", "").upper()
-                lines.append(f"- [{sev}] {f.get('issue', '')} — {f.get('fix', '')}")
+                if not isinstance(f, dict):
+                    continue
+                sev = as_text(f.get("severity")).upper()
+                lines.append(f"- [{sev}] {as_text(f.get('issue'))} — {as_text(f.get('fix'))}")
         if cves:
-            lines += ["", "**CVE Risks:**"] + [f"- {c}" for c in cves]
+            lines += ["", "**CVE Risks:**"] + [f"- {as_text(c)}" for c in cves]
         return "\n".join(lines)
 
     except Exception as e:

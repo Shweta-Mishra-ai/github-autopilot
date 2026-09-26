@@ -6,7 +6,8 @@
 
 bot:
   enabled: true
-  footer: "\n\n---\n*🤖 GitHub Autopilot — AI-powered repo management*"
+  # Plain text: the bot adds the separator and italics itself.
+  footer: "🤖 GitHub Autopilot — AI-powered repo management"
 
 pull_requests:
   enabled: true

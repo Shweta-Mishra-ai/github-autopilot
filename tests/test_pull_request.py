@@ -148,7 +148,7 @@ class TestAnalyzePR:
                    return_value=_fake_router_response(analysis)), \
              patch("app.handlers.pull_request.analysis.validate_pr_analysis",
                    return_value=analysis), \
-             patch("app.handlers.pull_request.analysis.gh_put") as mock_put, \
+             patch("app.handlers.pull_request.analysis.gh_patch") as mock_put, \
              patch("app.handlers.pull_request.review.gh_post") as mock_post, \
              patch("app.handlers.pull_request.analysis.check_pr_title_update",
                    return_value=MagicMock(allowed=True)), \
@@ -178,7 +178,7 @@ class TestAnalyzePR:
                    return_value=_fake_router_response(analysis)), \
              patch("app.handlers.pull_request.analysis.validate_pr_analysis",
                    return_value=analysis), \
-             patch("app.handlers.pull_request.analysis.gh_put"), \
+             patch("app.handlers.pull_request.analysis.gh_patch"), \
              patch("app.handlers.pull_request.review.gh_post"), \
              patch("app.handlers.pull_request.analysis.check_pr_title_update",
                    return_value=MagicMock(allowed=True)), \

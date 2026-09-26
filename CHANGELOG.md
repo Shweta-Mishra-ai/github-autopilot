@@ -15,6 +15,21 @@ See [docs/MIGRATING.md](docs/MIGRATING.md).
 
 ### Unreleased
 
+**An end-to-end suite, and what it found on its first run**
+- `tests/test_e2e_webhook_pipeline.py` drives the real server the way production runs it: gunicorn with the Procfile's flags, the Redis event queue and its in-process consumers, HMAC verification, the GitHub App JWT and token exchange, the LLM router and the real Ollama provider over HTTP. Only the two remote services are fakes, answering on `127.0.0.1`; inside the server the one intervention is the socket destination for `api.github.com`, rewritten at the `requests` transport layer — so URL building, host validation, auth and response handling all run unmodified. Patching `client.GITHUB_API` would not have been enough: `auth.py` hardcodes its own `api.github.com` URL. Thirteen scenarios; marked `integration`, so CI's Redis job runs it and its "fail if nothing actually ran" guard covers it.
+- Every unit test in the repository mocks the GitHub client, so none of them could see the request a handler actually sends. The first run found three that GitHub rejects.
+
+**PR titles and descriptions were never written**
+- `_analyze_pr` sent `PUT /repos/{repo}/pulls/{n}`. GitHub has no `PUT` on a pull request — only on its `/merge` — so every title polish and description fill since it shipped was a **404**, logged as "PR metadata update failed" and never surfaced. The comment directly above the call already said PATCH. The unit tests mocked `gh_put`, so they asserted the request GitHub refuses.
+
+**`/rollback` could not undo the two things it was written to undo**
+- Closing an issue the bot opened and restoring a title it changed were both sent as `PUT`, and both were 404s recorded under "failed" — the one command meant to reverse the bot's mistakes. `PATCH` now. The rollback tests moved from `gh_put` to `gh_patch` wholesale, not just the three that failed: the others asserted `gh_put` was **not** called on abort paths, which would have passed vacuously forever once rollback stopped calling it.
+
+**`/secfull` said "All Clear" for repositories it had not read**
+- The three security fetchers classified failures with `"403" in str(e) or "404" in str(e)`, and the GitHub client's messages are `"Forbidden: …"` and `"Not found: …"` — the status is on `e.status_code`. So a missing App permission (the commonest real case), a disabled feature, a 5xx and a timeout all fell through to a log line, left `errors` empty, and the report said **🔒 All Clear**. A security report that says clear when it checked nothing is the most dangerous wrong answer this bot can give. The unit tests raised `Exception("403 Forbidden")`, a message the real client never produces.
+- Every failure is recorded now. When no source could be read the report says **Not Scanned** and what to grant; when some could not, their rows show `—` rather than a column of zeros, which is the same false claim in a different shape. A response that is not a list of alerts is a failure too, where iterating a dict's keys used to raise into the same silent branch.
+- The 15-day maintenance sweep counted every such repository as scanned with 0 findings: `run_security_scan` never raises, so reaching the next line proved nothing. A repository none of whose sources could be read is `ok: false` with the reasons, as the record's own docstring always promised.
+
 **The confidence gate scored prose style and ignored its own strongest signal**
 - "Did the model answer" was measured as *is the per-file summary at least ten characters* — binary, on a term worth 38% of the score. A perfectly anchored critical finding beside the summary "Bad" scored **0.500**, exactly the same as a review none of whose findings anchored, and was demoted. Completeness is graded now, and for a code review a substantive finding counts as an answer as much as a substantive summary does. A clean bill of health from a model that said nothing is still doubted.
 - The hallucination term — the heaviest in the gate at 0.35 — was **never supplied by code review**, so every review was scored on the three weaker terms and a response full of invented files or "I'm not sure" scored the same as a clean one. It is supplied now.

@@ -351,6 +351,8 @@ def cmd_impact(repo: str, issue_number: int, issue: dict, token: str) -> str:
 
         from app.ai.guarded import degraded_comment, guarded_ask, is_degraded
 
+        from app.github.helpers import repo_file_context
+
         r, _verdict = guarded_ask(
             "Senior architect. Analyze PR impact on system. JSON only.",
             f"""Analyze blast radius of these file changes:
@@ -367,6 +369,11 @@ Return JSON:
 }}""",
             task="arch",
             response_type="impact",
+            # The whole tree, not the PR's files: naming files outside the
+            # change is what a blast-radius answer is for.
+            context=repo_file_context(
+                repo, token, extra=[f.get("filename") for f in files], get=gh_get
+            ),
         )
 
         if is_degraded(r):

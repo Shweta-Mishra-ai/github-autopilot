@@ -70,16 +70,29 @@ class TestDemotionNeverDeletesAFinding:
     nowhere at all.
     """
 
+    # Demotion is forced with a stub gate rather than by picking inputs the
+    # real weights happen to score low. What these assert — that demotion never
+    # deletes — has to hold whatever triggers it, and it must not start passing
+    # vacuously the next time the weights are tuned.
+    @staticmethod
+    def _demoting_gate():
+        g = MagicMock()
+        g.evaluate.return_value = {"auto_apply": False, "confidence_score": 0.4}
+        return g
+
     def test_demoted_finding_still_appears_in_the_report(self):
-        # A summary under _MIN_FIELD_CHARS is enough to demote the file.
-        md, inline = _review({"files": [_entry(summary="Bad")]})
+        md, inline = _review({"files": [_entry()]}, gate=self._demoting_gate())
         assert inline == [], "expected the inline comments to be suppressed"
         assert "SQL injection" in md, "the finding was deleted, not demoted"
 
     def test_demoted_file_does_not_claim_its_findings_were_posted(self):
-        md, inline = _review({"files": [_entry(summary="Bad")]})
+        md, inline = _review({"files": [_entry()]}, gate=self._demoting_gate())
         assert not inline
         assert "All findings posted as inline comments" not in md
+
+    def test_demoted_file_says_why(self):
+        md, _inline = _review({"files": [_entry()]}, gate=self._demoting_gate())
+        assert "Confidence 40%" in md
 
     def test_confident_file_still_anchors_and_stays_out_of_the_body(self):
         md, inline = _review({"files": [_entry()]})
@@ -89,11 +102,14 @@ class TestDemotionNeverDeletesAFinding:
 
     def test_every_finding_reaches_the_reader_either_way(self):
         """The invariant behind both branches, stated once."""
-        for summary in ("Bad", "Concatenates request input straight into SQL."):
-            md, inline = _review({"files": [_entry(summary=summary)]})
+        accepting = MagicMock()
+        accepting.evaluate.return_value = {"auto_apply": True, "confidence_score": 0.95}
+        for name, gate in (("demoting", self._demoting_gate()), ("accepting", accepting)):
+            md, inline = _review({"files": [_entry()]}, gate=gate)
             in_body = "SQL injection" in md
             in_diff = any("SQL injection" in c["body"] for c in inline)
-            assert in_body or in_diff, f"finding lost entirely for summary={summary!r}"
+            assert in_body or in_diff, f"finding lost entirely with a {name} gate"
+            assert not (in_body and in_diff), f"finding reported twice with a {name} gate"
 
 
 class TestBatchConfidenceIsRead:
@@ -822,9 +838,9 @@ class TestATimeoutDoesNotLoseTheWholeReport:
             patch.object(
                 client._session, "request", side_effect=requests.exceptions.ReadTimeout("slow")
             ),
+            pytest.raises(client.GitHubError) as exc,
         ):
-            with pytest.raises(client.GitHubError) as exc:
-                client.gh_get("/repos/o/r", "tok")
+            client.gh_get("/repos/o/r", "tok")
         assert exc.value.status_code == 0
         assert "ReadTimeout" in str(exc.value)
 
@@ -868,3 +884,357 @@ class TestATimeoutDoesNotLoseTheWholeReport:
                 )
                 == ""
             )
+
+
+class TestCompletenessIsNotAWritingStyle:
+    """
+    The gate scored "did the model answer" as "is the per-file summary at least
+    ten characters" — binary, on a term worth 38% of the score. A perfectly
+    anchored critical finding beside the summary "Bad" scored 0.500, exactly the
+    same as a review none of whose findings anchored, and was demoted.
+    """
+
+    def test_a_terse_summary_beside_a_real_finding_is_not_demoted(self):
+        md, inline = _review({"files": [_entry(summary="Bad")]})
+        assert len(inline) == 1, "a well-anchored finding was demoted over summary length"
+        assert "Confidence" not in md
+
+    def test_findings_that_do_not_anchor_are_still_demoted(self):
+        """The signal that IS evidence of guessing must keep working."""
+        from app.core.confidence import compute_confidence
+        from app.handlers.pull_request.review import _review_completeness
+
+        r = _entry()
+        score = compute_confidence(
+            {**r, "confidence": 0.5}, anchor_rate=0.0, completeness=_review_completeness(r)
+        )
+        assert score < 0.70
+
+    def test_there_is_no_cliff_at_ten_characters(self):
+        from app.core.confidence import compute_confidence
+
+        nine = compute_confidence({"summary": "x" * 9}, required_fields=("summary",))
+        ten = compute_confidence({"summary": "x" * 10}, required_fields=("summary",))
+        assert ten - nine < 0.1, f"a single character moved the score by {ten - nine:.3f}"
+
+    def test_a_clean_bill_from_a_model_that_said_nothing_is_still_doubted(self):
+        from app.handlers.pull_request.review import _review_completeness
+
+        assert _review_completeness({"summary": "", "issues": []}) == 0.0
+
+    def test_the_longer_of_summary_and_findings_counts(self):
+        from app.handlers.pull_request.review import _review_completeness
+
+        assert _review_completeness({"summary": "Bad", "issues": [{"issue": "x" * 40}]}) == 1.0
+        assert _review_completeness({"summary": "x" * 40, "issues": []}) == 1.0
+        assert _review_completeness({"summary": "Bad", "issues": []}) == 0.3
+
+    def test_an_explicit_completeness_overrides_required_fields(self):
+        from app.core.confidence import compute_confidence
+
+        a = compute_confidence({"summary": ""}, required_fields=("summary",), completeness=1.0)
+        b = compute_confidence({"summary": "x" * 40}, required_fields=("summary",))
+        assert a == b
+
+
+class TestHallucinationCheckerFalsePositives:
+    """The checker's own extractors produced most of what it flagged."""
+
+    PROSE = (
+        "Calling cur.execute with user.name interpolated is unsafe; use os.path.join "
+        "and self.timeout, e.g. via settings.DEBUG. The request.json body and "
+        "response.status_code are unchecked; data.get is fine."
+    )
+
+    def test_attribute_access_is_not_a_file_reference(self):
+        from app.ai.hallucination import _extract_file_refs
+
+        assert _extract_file_refs(self.PROSE) == []
+
+    @pytest.mark.parametrize(
+        "ref",
+        ["app/core/config.py", "utils.py", "src/index.ts", "README.md", "docs/api.json"],
+    )
+    def test_real_file_references_are_still_found(self, ref):
+        from app.ai.hallucination import _extract_file_refs
+
+        assert _extract_file_refs(f"See {ref} for the details.") == [ref]
+
+    def test_an_ambiguous_extension_needs_a_path(self):
+        """`request.json` is an attribute; `config/settings.json` is a file."""
+        from app.ai.hallucination import _extract_file_refs
+
+        assert _extract_file_refs("read request.json first") == []
+        assert _extract_file_refs("read config/settings.json first") == ["config/settings.json"]
+
+    def test_a_correct_answer_is_not_penalised_for_its_prose(self):
+        from app.ai.hallucination import check_response
+
+        r = check_response(
+            {"summary": self.PROSE + " See app/core/config.py."},
+            context={"files": ["app/core/config.py"]},
+        )
+        assert r.confidence == 1.0, r.warnings
+
+    @pytest.mark.parametrize("number", ["1048576", "20260823", "9876543"])
+    def test_a_number_is_not_a_commit_sha(self, number):
+        from app.ai.hallucination import _SHA_REF
+
+        assert _SHA_REF.findall(f"the value was {number} at the time") == []
+
+    @pytest.mark.parametrize("word", ["deadbeef", "defaced", "effaced"])
+    def test_a_hex_spelled_word_is_not_a_commit_sha(self, word):
+        from app.ai.hallucination import _SHA_REF
+
+        assert _SHA_REF.findall(f"marked {word} here") == []
+
+    @pytest.mark.parametrize(
+        "sha", ["2f34f3b", "d0bb6f3", "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"]
+    )
+    def test_real_shas_are_still_found(self, sha):
+        from app.ai.hallucination import _SHA_REF
+
+        assert _SHA_REF.findall(f"fixed in {sha}.") == [sha]
+
+    def test_nested_content_is_scanned(self):
+        """Findings live at files[].issues[].issue — the scanner saw ''."""
+        from app.ai.hallucination import _extract_text, check_response
+
+        payload = {"files": [{"issues": [{"issue": "I'm not sure, [insert value here]"}]}]}
+        assert "insert value here" in _extract_text(payload)
+        assert check_response(payload).confidence < 1.0
+
+    def test_extraction_is_depth_capped(self):
+        from app.ai.hallucination import _extract_text
+
+        deep: object = "bottom"
+        for _ in range(50):
+            deep = {"k": [deep]}
+        _extract_text(deep)  # must not raise RecursionError
+
+
+class TestRepoFileContext:
+    """Ground truth for the file check is the repository, not the PR."""
+
+    @staticmethod
+    def _tree(paths, truncated=False):
+        return {
+            "truncated": truncated,
+            "tree": [{"path": p, "type": "blob"} for p in paths]
+            + [{"path": "app", "type": "tree"}],
+        }
+
+    def test_returns_every_blob_plus_the_pr_additions(self):
+        from app.github.helpers import repo_file_context
+
+        ctx = repo_file_context(
+            "o/r",
+            "t",
+            extra=["app/new.py", None],
+            get=lambda path, tok: self._tree(["app/a.py", "README.md"]),
+        )
+        assert ctx == {"files": ["README.md", "app/a.py", "app/new.py"]}
+
+    def test_a_truncated_tree_disables_the_check(self):
+        """It cannot prove a file is absent, so it must not penalise one."""
+        from app.github.helpers import repo_file_context
+
+        ctx = repo_file_context(
+            "o/r", "t", get=lambda path, tok: self._tree(["a.py"], truncated=True)
+        )
+        assert ctx == {}
+
+    @pytest.mark.parametrize("response", [RuntimeError("boom"), [], None, {"tree": "x"}])
+    def test_anything_unexpected_disables_the_check(self, response):
+        from app.github.helpers import repo_file_context
+
+        def get(path, tok):
+            if isinstance(response, Exception):
+                raise response
+            return response
+
+        assert repo_file_context("o/r", "t", get=get) == {}
+
+    def _run_impact(self, answer):
+        """Run the real cmd_impact -> guarded_ask -> check_response path, and
+        return the verdict guarded_ask actually computed plus the context it
+        actually passed. Recording inside check_response, not beside it: an
+        earlier version of this test computed its own verdict from a context
+        guarded_ask never forwards, and passed vacuously."""
+        from app.ai import guarded
+        from app.ai import hallucination
+        from app.handlers.comments import reviewer as rv
+
+        pr_files = [{"filename": "app/auth.py"}]
+        tree = self._tree(["app/auth.py", "app/views/login.py", "app/session.py"])
+
+        def gh(path, tok, *a, **k):
+            return tree if "/git/trees/" in path else pr_files
+
+        seen = {}
+        real_check = hallucination.check_response
+
+        def recording_check(payload, context=None, response_type="generic"):
+            seen["context"] = context
+            seen["verdict"] = real_check(payload, context=context, response_type=response_type)
+            return seen["verdict"]
+
+        with (
+            patch.object(rv, "gh_get", side_effect=gh),
+            patch.object(guarded, "safe_router_ask", return_value=(answer, MagicMock())),
+            patch.object(guarded, "check_response", side_effect=recording_check),
+        ):
+            out = rv.cmd_impact("o/r", 5, {"pull_request": {}}, "t")
+        return out, seen
+
+    IMPACT = {
+        "affected_systems": ["auth"],
+        "breaking_change_risk": "medium",
+        "requires_migration": False,
+        "review_priority": "high",
+        "notes": "",
+    }
+
+    def test_impact_passes_the_whole_tree_as_context(self):
+        _out, seen = self._run_impact({**self.IMPACT, "summary": "Touches auth."})
+        assert seen["context"] is not None, "guarded_ask was given no context"
+        assert "app/views/login.py" in seen["context"]["files"]
+
+    def test_impact_names_files_outside_the_pr_without_penalty(self):
+        """What a blast-radius answer is FOR. Against the PR's own files it
+        would be flagged; against the tree it is simply correct."""
+        out, seen = self._run_impact(
+            {
+                **self.IMPACT,
+                "summary": "Touches auth; callers in app/views/login.py and app/session.py.",
+            }
+        )
+        assert seen["verdict"].confidence == 1.0, seen["verdict"].warnings
+        assert "Blast Radius" in out
+
+    def test_impact_penalises_a_file_that_does_not_exist(self):
+        _out, seen = self._run_impact(
+            {**self.IMPACT, "summary": "Breaks app/does_not_exist.py and app/invented.py."}
+        )
+        assert seen["verdict"].confidence < 1.0
+        assert any("does_not_exist" in w for w in seen["verdict"].warnings)
+
+    def test_impact_flags_a_file_that_does_not_exist(self):
+        from app.ai.hallucination import check_response
+
+        r = check_response(
+            {"summary": "Breaks app/does_not_exist.py and app/also_invented.py."},
+            context={"files": ["app/auth.py"]},
+        )
+        assert r.confidence < 1.0
+        assert any("does_not_exist" in w for w in r.warnings)
+
+
+class TestCodeReviewHasItsHallucinationTerm:
+    """
+    The gate's heaviest term (0.35) was never supplied by _review_code, so every
+    code review was scored on the three weaker terms and a response full of
+    invented files or "I'm not sure" scored the same as a clean one.
+    """
+
+    TWO_FILES = [
+        {"filename": "app/a.py", "patch": PATCH, "status": "modified"},
+        {"filename": "app/b.py", "patch": PATCH, "status": "modified"},
+    ]
+
+    def _run(self, entries, tree_paths=("app/a.py", "app/b.py", "app/callers.py")):
+        """Real _review_code with a recording gate and a counting tree fetch."""
+        from app.github import helpers
+
+        fetches = []
+
+        def fake_ctx(repo, token, ref="HEAD", extra=(), get=None):
+            fetches.append(ref)
+            return {"files": sorted(set(tree_paths) | set(extra))}
+
+        seen = []
+        gate = MagicMock()
+        gate.evaluate.side_effect = lambda action, r, **kw: (
+            seen.append(kw.get("hallucination")),
+            {"auto_apply": True, "confidence_score": 0.9},
+        )[1]
+        with (
+            patch.object(pr_mod.router, "ask", return_value=({"files": entries}, MagicMock())),
+            patch.object(helpers, "repo_file_context", side_effect=fake_ctx),
+        ):
+            pr_mod._review_code(
+                {"head": {"sha": "HEADSHA"}},
+                "o/r",
+                1,
+                self.TWO_FILES,
+                "t",
+                _cfg(),
+                gate,
+                "",
+                MagicMock(),
+            )
+        return seen, fetches
+
+    @staticmethod
+    def _file(name, issue, summary="Reviewed the change to this file carefully."):
+        return {
+            "file": name,
+            "score": 6,
+            "summary": summary,
+            "issues": [{"severity": "major", "line": "1", "issue": issue, "fix": "x = 2"}],
+        }
+
+    def test_the_gate_receives_a_hallucination_verdict(self):
+        seen, _ = self._run([self._file("app/a.py", "off by one in the loop bound")])
+        assert seen and seen[0] is not None, "code review still scored without the 0.35 term"
+
+    def test_no_tree_fetch_when_every_reference_is_in_the_pr(self):
+        """The common case pays nothing extra."""
+        _seen, fetches = self._run(
+            [self._file("app/a.py", "app/b.py calls this with a None default")]
+        )
+        assert fetches == []
+
+    def test_one_tree_fetch_per_review_not_per_file(self):
+        _seen, fetches = self._run(
+            [
+                self._file("app/a.py", "breaks app/callers.py which passes None"),
+                self._file("app/b.py", "also breaks app/callers.py"),
+            ]
+        )
+        assert fetches == ["HEADSHA"], "fetched per file, or not at the PR head"
+
+    def test_a_real_caller_outside_the_pr_is_not_penalised(self):
+        seen, _ = self._run([self._file("app/a.py", "breaks app/callers.py which passes None")])
+        assert seen[0].confidence == 1.0, seen[0].warnings
+
+    def test_an_invented_file_is_penalised(self):
+        seen, _ = self._run([self._file("app/a.py", "breaks app/nowhere/ghost.py badly")])
+        assert seen[0].confidence < 1.0
+        assert any("ghost.py" in w for w in seen[0].warnings)
+
+    def test_uncertainty_in_a_finding_is_penalised(self):
+        seen, _ = self._run(
+            [self._file("app/a.py", "I'm not sure, but this might leak the handle")]
+        )
+        assert seen[0].confidence < 1.0
+
+    @pytest.mark.parametrize(
+        "issue",
+        [
+            "The TODO on line 12 means this branch never runs.",
+            "XXX marker left in the retry loop; the fallback is unimplemented.",
+            "Hardcoded key: replace the [your api key] placeholder with an env lookup.",
+        ],
+    )
+    def test_a_finding_that_quotes_the_code_is_not_penalised(self, issue):
+        """Scanning nested findings would otherwise penalise exactly the
+        findings that caught an unfinished branch or an exposed secret."""
+        seen, _ = self._run([self._file("app/a.py", issue)])
+        assert seen[0].confidence == 1.0, seen[0].warnings
+
+    def test_the_exemption_is_only_for_code_review(self):
+        from app.ai.hallucination import check_response
+
+        r = check_response({"fix": "set it to [your api key] here please"}, response_type="fix")
+        assert r.confidence < 1.0

@@ -38,12 +38,29 @@ _W_COMPLETENESS = 0.25
 _MIN_FIELD_CHARS = 10
 
 
+def _field_completeness(value) -> float:
+    """
+    How far a field goes toward being an answer, from 0.0 to 1.0.
+
+    Graded, not binary. This was `len >= _MIN_FIELD_CHARS` — a 9-character
+    summary scored 0 and a 10-character one scored 1 — on a term carrying 38%
+    of the whole score when no hallucination signal is supplied. So the length
+    of one sentence could flip a review from posted to demoted, and "Bad"
+    beside a perfectly anchored critical finding scored exactly the same as a
+    review whose every finding failed to anchor (0.592 each).
+    """
+    if not isinstance(value, str):
+        return 0.0
+    return min(1.0, len(value.strip()) / _MIN_FIELD_CHARS)
+
+
 def compute_confidence(
     payload,
     *,
     hallucination=None,
     anchor_rate: float | None = None,
     required_fields: tuple = (),
+    completeness: float | None = None,
 ) -> float:
     """
     Confidence derived from evidence rather than from the model's own claim.
@@ -52,7 +69,9 @@ def compute_confidence(
       self_reported  — what the model said (weak, kept for continuity)
       hallucination  — check_response() confidence
       anchor_rate    — fraction of findings that mapped to real diff lines
-      completeness   — required fields present and non-trivial
+      completeness   — required fields present and non-trivial, graded by
+                       length; or supplied directly by a caller that knows
+                       better what "answered" means for its payload
 
     Terms with no signal available are dropped and the remaining weights
     renormalised, so a caller that cannot supply anchor_rate is not penalised
@@ -79,14 +98,12 @@ def compute_confidence(
         with contextlib.suppress(TypeError, ValueError):
             terms.append((_W_ANCHOR_RATE, max(0.0, min(1.0, float(anchor_rate)))))
 
-    if required_fields:
-        present = sum(
-            1
-            for f in required_fields
-            if isinstance(payload.get(f), str)
-            and len(payload.get(f, "").strip()) >= _MIN_FIELD_CHARS
-        )
-        terms.append((_W_COMPLETENESS, present / len(required_fields)))
+    if completeness is not None:
+        with contextlib.suppress(TypeError, ValueError):
+            terms.append((_W_COMPLETENESS, max(0.0, min(1.0, float(completeness)))))
+    elif required_fields:
+        graded = sum(_field_completeness(payload.get(f)) for f in required_fields)
+        terms.append((_W_COMPLETENESS, graded / len(required_fields)))
 
     total_weight = sum(w for w, _ in terms)
     if not total_weight:
@@ -110,8 +127,8 @@ class ConfidenceGate:
         """
         Evaluate AI response confidence and decide auto-apply.
 
-        `signals` accepts hallucination=, anchor_rate= and required_fields=,
-        forwarded to compute_confidence(). Callers that pass nothing still get
+        `signals` accepts hallucination=, anchor_rate=, required_fields= and
+        completeness=, forwarded to compute_confidence(). Callers that pass nothing still get
         a sane score; callers that pass signals get a calibrated one.
 
         This used to read ai_response["confidence"] directly — a number the

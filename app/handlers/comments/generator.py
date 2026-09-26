@@ -306,10 +306,14 @@ def cmd_arch(repo: str, issue_number: int, issue: dict, token: str) -> str:
     """Architecture review — layers, coupling, god classes."""
     from app.handlers.comments import gh_get
 
+    from app.github.helpers import repo_file_context
+
     context = ""
+    pr_files: list = []
     if "pull_request" in issue:
         try:
             files = gh_get(f"/repos/{repo}/pulls/{issue_number}/files", token)
+            pr_files = [f.get("filename") for f in files if isinstance(f, dict)]
             context = "Files changed:\n" + "\n".join(f["filename"] for f in files[:15])
         except Exception as e:
             log.debug(f"generator.cmd_arch_files_fetch_failed repo={repo} pr={issue_number}: {e}")
@@ -341,6 +345,9 @@ Return JSON:
         task="arch",
         response_type="arch",
         max_tokens=1500,
+        # Checked against the whole tree: an architecture review is about how
+        # the change sits in the codebase, so naming other files is the job.
+        context=repo_file_context(repo, token, extra=pr_files, get=gh_get),
     )
     if is_degraded(r):
         return degraded_comment(r, "architecture review")

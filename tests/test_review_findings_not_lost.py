@@ -160,6 +160,21 @@ class TestNoCommittableProse:
             "Consider extracting this into a helper.",
             "The variable is never used.",
             "Validate the input first",
+            # Sentences whose punctuation fooled the word-list heuristic this
+            # replaced: the `=` inside `>=` and `==` read as a code marker.
+            "Should be >= not >",
+            "Compare with is None rather than ==",
+            "Note: this value should be validated before use",
+            "Break this into two functions",
+            # Prose WITH code in it is still prose — committing it literally
+            # would be a syntax error.
+            "use params.get('uid')",
+            # A model declining to answer. `n/a` parses as one name divided by
+            # another, so a parser alone calls it code.
+            "n/a",
+            "N/A",
+            "TBD",
+            "no fix",
         ],
     )
     def test_prose_is_not_committable(self, fix):
@@ -170,11 +185,21 @@ class TestNoCommittableProse:
         [
             "y = 2",
             "x = sanitize(x)",
-            "use params.get('uid')",
+            "params.get('uid')",
             "return user.name if user else None",
             "if user is None: raise ValueError(uid)",
             "await flush",
             "None",
+            # Fragments that need context to parse — a decorator needs a def
+            # under it, a block header needs a body, `except` needs a `try`.
+            "@property",
+            "def f(self) -> int:",
+            "except (TypeError, ValueError):",
+            "elif amount > 0:",
+            "timeout=self.timeout",
+            # The common JS/TS single-line forms.
+            "const limit = 10;",
+            "obj.close();",
         ],
     )
     def test_code_is_still_committable(self, fix):
@@ -442,3 +467,404 @@ class TestReleaseStopsAtTheTag:
         _out, prompts, _post = self._release([{"name": "v1.1.0"}], self.COMMITS)
         assert "unreleased thing" in prompts[0]
         assert "shipped in v1.1.0" in prompts[0]
+
+
+class TestReviewFalsePositiveSources:
+    """Four ways the review said something untrue about the code, none of which
+    involved the model being wrong."""
+
+    def test_a_moved_anchor_gets_no_commit_button(self):
+        """
+        `nearest_commentable` may move a finding up to five lines to reach a
+        line GitHub accepts. A ```suggestion REPLACES the line it sits on, so on
+        a moved anchor the button commits the fix over a different statement —
+        presented by GitHub as a reviewed patch.
+        """
+        # Only line 1 is commentable; the model reports line 4.
+        md, inline = _review(
+            {
+                "files": [
+                    _entry(
+                        issues=[
+                            {
+                                "severity": "major",
+                                "line": "4",
+                                "issue": "unbounded read",
+                                "fix": "size = min(size, MAX)",
+                            }
+                        ]
+                    )
+                ]
+            }
+        )
+        assert len(inline) == 1
+        body = inline[0]["body"]
+        assert inline[0]["line"] == 1, "expected the anchor to have moved"
+        assert "```suggestion" not in body, "committable suggestion built on a moved anchor"
+        assert "size = min(size, MAX)" in body, "the fix must still be shown"
+        assert "Reported at line 4" in body, "the drift must be stated, not hidden"
+
+    def test_an_exact_anchor_still_gets_a_commit_button(self):
+        _md, inline = _review(
+            {
+                "files": [
+                    _entry(
+                        issues=[
+                            {
+                                "severity": "major",
+                                "line": "1",
+                                "issue": "off by one",
+                                "fix": "x = 2",
+                            }
+                        ]
+                    )
+                ]
+            }
+        )
+        assert "```suggestion" in inline[0]["body"]
+        assert "Reported at line" not in inline[0]["body"]
+
+    def test_the_per_file_cap_keeps_the_worst_findings(self):
+        """`issues[:4]` in model order dropped a critical listed fifth and kept
+        four nits above it."""
+        issues = [
+            {"severity": "nit", "line": "1", "issue": f"nit {n}", "fix": ""} for n in range(4)
+        ] + [
+            {
+                "severity": "critical",
+                "line": "1",
+                "issue": "remote code execution",
+                "fix": "",
+            }
+        ]
+        md, inline = _review({"files": [_entry(issues=issues)]})
+        everything = md + "\n".join(c["body"] for c in inline)
+        assert "remote code execution" in everything, "the critical finding was dropped for nits"
+
+    def test_a_truncated_diff_says_so(self):
+        """The model treated the end of the 3,000-character slice as the end of
+        the code and reported what was missing past the cut."""
+        big = "@@ -1,1 +1,900 @@\n" + "\n".join(f"+line_{n} = {n}" for n in range(900))
+        assert len(big) > 3000
+        sent = []
+        with patch.object(
+            pr_mod.router,
+            "ask",
+            side_effect=lambda s, u, **k: (sent.append(u), ({"files": []}, MagicMock()))[1],
+        ):
+            pr_mod._review_code(
+                {"head": {"sha": "s"}},
+                "o/r",
+                1,
+                [{"filename": "app/a.py", "patch": big}],
+                "t",
+                _cfg(),
+                ConfidenceGate(None),
+                "",
+                MagicMock(),
+            )
+        assert "Do not report anything as missing" in sent[0]
+        # The note must sit in the prompt's own voice: the diff is wrapped as
+        # UNTRUSTED content the model is told never to obey, so an instruction
+        # placed inside the delimiters is one it is being told to ignore.
+        before_diff = sent[0].split("BEGIN")[0]
+        assert "Do not report anything as missing" in before_diff
+
+    def test_a_short_diff_gets_no_truncation_marker(self):
+        sent = []
+        with patch.object(
+            pr_mod.router,
+            "ask",
+            side_effect=lambda s, u, **k: (sent.append(u), ({"files": []}, MagicMock()))[1],
+        ):
+            pr_mod._review_code(
+                {"head": {"sha": "s"}},
+                "o/r",
+                1,
+                FILES,
+                "t",
+                _cfg(),
+                ConfidenceGate(None),
+                "",
+                MagicMock(),
+            )
+        assert "Only the first" not in sent[0]
+
+    def test_the_prompt_does_not_offer_a_severity_it_forbids(self):
+        """The prompt says "Do NOT generate ... style nitpicks" and offered
+        `nit` as a severity in the same breath."""
+        sent = []
+        with patch.object(
+            pr_mod.router,
+            "ask",
+            side_effect=lambda s, u, **k: (sent.append(u), ({"files": []}, MagicMock()))[1],
+        ):
+            pr_mod._review_code(
+                {"head": {"sha": "s"}},
+                "o/r",
+                1,
+                FILES,
+                "t",
+                _cfg(),
+                ConfidenceGate(None),
+                "",
+                MagicMock(),
+            )
+        assert "critical|major|minor" in sent[0]
+        assert "|nit" not in sent[0]
+
+
+class TestFileClassification:
+    """Substring matching on filenames, in the two functions that decide what
+    gets reviewed at all."""
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "app/core/latest_run.py",
+            "app/latest_config.py",
+            "app/contest_entry.py",
+            "src/greatest_hits.ts",
+            "app/fastest_path.py",
+            "app/protest_form.py",
+            "testimonials/page.tsx",
+            "app/latest/run.py",
+        ],
+    )
+    def test_test_in_the_middle_of_a_word_is_not_a_test_file(self, name):
+        """ "latest_" contains "test_". Such a file was pushed down the review
+        budget, dropped from gap detection's SOURCE files, and counted as a TEST
+        file — so a PR touching only one reported "tests changed in this PR"."""
+        from app.handlers.pull_request.classify import _is_test_file
+
+        assert not _is_test_file(name)
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "tests/test_a.py",
+            "app/a_test.py",
+            "test_top.py",
+            "pkg/tests/helpers.py",
+            "app/test/x.py",
+            "tests.py",
+            "api/handlers_test.go",
+            "src/__tests__/a.ts",
+        ],
+    )
+    def test_real_test_files_are_still_caught(self, name):
+        from app.handlers.pull_request.classify import _is_test_file
+
+        assert _is_test_file(name)
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "package-lock.json",
+            "pnpm-lock.yaml",
+            "npm-shrinkwrap.json",
+            "api/schema.pb.go",
+            "src/api_pb2.py",
+            "dist/bundle.js",
+            "build/out.js",
+            "node_modules/x/index.js",
+            "a.min.js",
+            "__snapshots__/a.snap",
+        ],
+    )
+    def test_generated_files_are_not_reviewed(self, name):
+        """`package-lock.json` scored as CONFIG and `dist/bundle.js` and
+        `schema.pb.go` scored as SOURCE — priority 3, ahead of hand-written
+        code — so a machine-written diff could take a slot in the four-file
+        budget and be reviewed."""
+        from app.handlers.pull_request.classify import _is_generated
+
+        assert _is_generated(name)
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "app/main.py",
+            "src/dist_helper.py",
+            "app/distance.py",
+            "app/migrations/0003_auto.py",
+            "docs/guide.md",
+        ],
+    )
+    def test_hand_written_files_are_still_reviewed(self, name):
+        """Migrations are deliberately reviewable: generated, but routinely
+        hand-edited, and a destructive one is exactly what needs a reader."""
+        from app.handlers.pull_request.classify import _is_generated
+
+        assert not _is_generated(name)
+
+
+class TestJunkFieldDoesNotDiscardTheAnalysis:
+    """
+    A string method called straight on a model field — `.upper()`, `.replace()`,
+    `.strip()` — raises when the key is present holding a number, a list or
+    null. Every one of these sites sits inside a blanket `except Exception` that
+    returns an error string, so a single odd field threw away an analysis that
+    had already been produced and paid for.
+    """
+
+    def test_arch_review_survives_junk_in_every_field(self):
+        from app.ai import guarded
+        from app.handlers.comments import generator as gen
+
+        payload = {
+            "health": 3,  # not a string
+            "refactoring_priority": None,
+            "summary": "Layering is mostly respected.",
+            "positive_patterns": "not a list",
+            "violations": [
+                {
+                    "type": ["layer_violation"],  # not a string
+                    "severity": 1,
+                    "location": None,
+                    "description": "handlers import from core internals",
+                    "recommendation": 42,
+                },
+                "not a dict",
+            ],
+        }
+        with (
+            patch.object(gen, "guarded_ask", return_value=(payload, None)),
+            patch.object(gen, "is_degraded", return_value=False),
+            patch.object(guarded, "is_degraded", return_value=False),
+        ):
+            out = gen.cmd_arch("o/r", 1, {"title": "t", "body": "b"}, "tok")
+
+        assert "Architecture Review" in out
+        assert "handlers import from core internals" in out, "the finding was discarded"
+        assert "Error" not in out
+
+    def test_mcp_security_review_survives_junk_in_every_field(self):
+        from app.mcp import handlers as mh
+
+        payload = {
+            "risk_level": None,
+            "findings": [
+                {"issue": "hardcoded token", "severity": 9, "fix": None},
+                "not a dict",
+            ],
+            "cve_risks": {"not": "a list"},
+            "summary": "",
+        }
+        with (
+            patch.object(mh, "_installation_allowed", return_value=True),
+            patch("app.ai.router.router.ask", return_value=(payload, MagicMock())),
+        ):
+            out = mh._handle_security_review({"content": "token = 'abc'"})
+
+        assert "hardcoded token" in out, "the finding was discarded"
+        assert not out.startswith("Error")
+
+    def test_release_survives_a_numeric_version(self):
+        from app.handlers.comments import _cmd_release
+
+        plan = {
+            "version": 1.2,  # a number, not "v1.2.0"
+            "title": "t",
+            "highlights": [],
+            "breaking_changes": [],
+            "release_notes": "n",
+        }
+        with (
+            patch("app.handlers.comments.router.ask", return_value=(plan, MagicMock())),
+            patch(
+                "app.handlers.comments.gh_get",
+                side_effect=[
+                    [{"name": "v1.1.0"}],
+                    [{"sha": "a", "commit": {"message": "feat: x"}}],
+                ],
+            ),
+            patch(
+                "app.handlers.comments.gh_post", return_value={"html_url": "u", "number": 1}
+            ) as post,
+        ):
+            out = _cmd_release("o/r", "t", "a")
+
+        post.assert_called_once()
+        # A bad version falls back to a patch bump rather than losing the draft.
+        assert post.call_args[0][2]["tag_name"] == "v1.1.1"
+        assert "Error" not in out and "Failed" not in out
+
+    def test_as_text_coerces_without_raising(self):
+        from app.ai.validator import as_text
+
+        assert as_text(None, "low") == "low"
+        assert as_text("", "low") == "low"
+        assert as_text("high") == "high"
+        assert as_text(3) == "3"
+        assert as_text(["a"]) == "['a']"
+        assert as_text(None) == ""
+        # The point of it: these must not raise.
+        for v in (None, "", 3, 3.5, ["a"], {"a": 1}, True):
+            as_text(v).upper().replace("_", " ").strip()
+
+
+class TestATimeoutDoesNotLoseTheWholeReport:
+    """
+    `_request` wrapped only `ConnectionError`. A read timeout is not one — it is
+    a sibling under `RequestException` — so it escaped the GitHub client
+    entirely, and every caller in this codebase is written against a single
+    failure type.
+    """
+
+    def test_a_read_timeout_is_a_github_error(self):
+        import requests
+
+        from app.github import client
+
+        with (
+            patch.object(client, "check_and_wait"),
+            patch.object(
+                client._session, "request", side_effect=requests.exceptions.ReadTimeout("slow")
+            ),
+        ):
+            with pytest.raises(client.GitHubError) as exc:
+                client.gh_get("/repos/o/r", "tok")
+        assert exc.value.status_code == 0
+        assert "ReadTimeout" in str(exc.value)
+
+    def test_the_report_survives_a_failed_inline_post(self):
+        """_post_inline_review runs BEFORE the sticky report is built, so
+        anything escaping it discards the analysis, summary and gaps too."""
+        import requests
+
+        from app.handlers.pull_request.review import _post_inline_review
+
+        comments = [
+            {
+                "path": "app/a.py",
+                "line": 1,
+                "side": "RIGHT",
+                "body": "**CRITICAL** — SQL injection",
+                "_fallback_md": "- **CRITICAL** `app/a.py:1`: SQL injection",
+            }
+        ]
+        cfg = MagicMock()
+        cfg.footer = ""
+        with patch(
+            "app.handlers.pull_request.review.gh_post",
+            side_effect=requests.exceptions.ReadTimeout("slow"),
+        ):
+            recovered = _post_inline_review(
+                {"head": {"sha": "s"}}, "o/r", 1, "t", cfg, comments, MagicMock()
+            )
+        assert "SQL injection" in recovered, "the finding was lost with the failed post"
+
+    def test_a_successful_post_recovers_nothing(self):
+        from app.handlers.pull_request.review import _post_inline_review
+
+        cfg = MagicMock()
+        cfg.footer = ""
+        comments = [{"path": "a.py", "line": 1, "side": "RIGHT", "body": "b", "_fallback_md": "m"}]
+        with patch("app.handlers.pull_request.review.gh_post", return_value={}):
+            assert (
+                _post_inline_review(
+                    {"head": {"sha": "s"}}, "o/r", 1, "t", cfg, comments, MagicMock()
+                )
+                == ""
+            )

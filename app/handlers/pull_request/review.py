@@ -12,7 +12,7 @@ from __future__ import annotations
 from app.ai.router import router
 from app.ai.validator import is_unusable, validate_code_review
 from app.core.sanitizer import wrap_user_content
-from app.github.client import gh_post, GitHubError
+from app.github.client import gh_post
 
 from .classify import _is_generated, _review_sort_key
 
@@ -21,6 +21,34 @@ from .classify import _is_generated, _review_sort_key
 MAX_ISSUES_PER_FILE = 4
 MAX_DIFF_CHARS = 3000
 LOW_CONFIDENCE_THRESHOLD = 0.70
+
+
+# Worst first. The per-file cap slices `issues` directly, so in model order a
+# critical finding listed fifth was dropped while four nits above it were kept.
+_SEVERITY_RANK = {"critical": 0, "major": 1, "minor": 2, "nit": 3}
+
+
+def _truncation_note(f: dict) -> str:
+    """
+    A heading-level note when a file's patch was cut, or "" when it was not.
+
+    Without it the model treats the visible end of the slice as the end of the
+    code and reports a missing return, a missing `except`, an unclosed resource
+    — findings that are false because what it says is absent is simply past the
+    cut. It has no way to know the difference, and neither does the reader.
+
+    Deliberately returned separately from the diff rather than appended to it:
+    the diff goes inside wrap_user_content(), which the prompt marks UNTRUSTED
+    and instructs the model never to obey. An instruction placed in there is one
+    the model is being told to ignore, so the note belongs in the prompt's own
+    voice, outside the delimiters.
+    """
+    if len(f.get("patch") or "") <= MAX_DIFF_CHARS:
+        return ""
+    return (
+        f"\n(Only the first {MAX_DIFF_CHARS} characters of this diff are shown. "
+        "Do not report anything as missing, unclosed or unhandled beyond the cut.)"
+    )
 
 
 def _post_inline_review(pr, repo, pr_number, token, config, inline_comments, log):
@@ -58,8 +86,14 @@ def _post_inline_review(pr, repo, pr_number, token, config, inline_comments, log
             },
         )
         log.done(f"code_review_posted_inline: {len(inline_comments)} line comments")
-    except GitHubError as e:
+    except Exception as e:
         # Most likely a 422 from a line the API considers non-commentable.
+        #
+        # Deliberately broader than GitHubError: whatever goes wrong posting the
+        # inline review, the findings still exist and the caller is still going
+        # to post a report. Letting anything escape here means losing that
+        # report — analysis, summary, gaps and all — because this is called
+        # before it is built.
         log.warning(f"inline_review_rejected — folding findings into the report: {e}")
         recovered = [m for m in fallback_md if m]
         if not recovered:
@@ -102,8 +136,8 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
     # four LLM calls here plus analysis, summary and gaps — about seven per
     # open. It also denied the model any cross-file view of the change.
     files_block = "\n\n".join(
-        f"### FILE: {f.get('filename', '?')}\n"
-        f"{wrap_user_content(f.get('patch', '')[:MAX_DIFF_CHARS], 'DIFF')}"
+        f"### FILE: {f.get('filename', '?')}{_truncation_note(f)}\n"
+        f"{wrap_user_content((f.get('patch') or '')[:MAX_DIFF_CHARS], 'DIFF')}"
         for f in reviewable
     )
 
@@ -126,7 +160,7 @@ Return JSON with one entry per file:
       "summary": "overall assessment of this file",
       "issues": [
         {{
-          "severity": "critical|major|minor|nit",
+          "severity": "critical|major|minor",
           "line": "approximate line",
           "issue": "what is wrong",
           "fix": "exact fix"
@@ -184,7 +218,10 @@ IMPORTANT: If a file has no bugs or vulnerabilities, return an empty array `[]` 
         score = r.get("score")
         score = 8 if score is None else score
         score_md = f"{score:g}" if isinstance(score, (int, float)) else str(score)
-        issues = r.get("issues", [])
+        issues = sorted(
+            r.get("issues", []),
+            key=lambda i: _SEVERITY_RANK.get(str(i.get("severity", "minor")).lower(), 2),
+        )
 
         unanchored = []
         # This file's anchored findings are held locally until the confidence
@@ -196,22 +233,40 @@ IMPORTANT: If a file has no bugs or vulnerabilities, return an empty array `[]` 
             severity = i.get("severity", "minor").upper()
             issue_text = i.get("issue", "")
             fix = i.get("fix", "")
-            anchor = nearest_commentable(parse_line_ref(i.get("line")), diff_lines)
+            target = parse_line_ref(i.get("line"))
+            anchor = nearest_commentable(target, diff_lines)
             if anchor is None:
                 unanchored.append(
                     f"- **{severity}** ~line {i.get('line', '?')}: {issue_text} → `{fix[:80]}`"
                 )
                 continue
-            suggestion = make_suggestion_block(fix, anchor, diff_lines)
+
+            # A committable suggestion REPLACES the anchored line. The anchor
+            # is allowed to move up to five lines to find something GitHub will
+            # accept a comment on, and five lines is usually a different
+            # statement — so on a moved anchor the button would commit the fix
+            # over code the finding is not about, silently, and GitHub would
+            # present that as a reviewed patch. The comment is still worth
+            # posting there; the button is not.
+            exact = target is not None and target == anchor
+            suggestion = make_suggestion_block(fix, anchor, diff_lines) if exact else ""
             fix_md = (
                 suggestion if suggestion else (f"Proposed fix:\n```\n{fix}\n```" if fix else "")
+            )
+            # And say that it moved, rather than letting the comment read as a
+            # claim about whichever line it landed on.
+            drift = (
+                ""
+                if exact
+                else f"\n\n_Reported at line {target if target is not None else '?'}; "
+                f"anchored to line {anchor}, the nearest line GitHub accepts a comment on._"
             )
             file_comments.append(
                 {
                     "path": filename,
                     "line": anchor,
                     "side": "RIGHT",
-                    "body": f"**{severity}** — {issue_text}\n\n{fix_md}".strip(),
+                    "body": f"**{severity}** — {issue_text}{drift}\n\n{fix_md}".strip(),
                     # Not part of the GitHub payload — popped before posting.
                     # Lets the fallback path render this finding in the body.
                     "_fallback_md": f"- **{severity}** `{filename}:{anchor}`: {issue_text} → `{fix[:80]}`",

@@ -9,6 +9,8 @@ worth testing directly.
 
 from __future__ import annotations
 
+import re
+
 CODE_EXTENSIONS = (
     ".py",
     ".js",
@@ -54,21 +56,81 @@ GENERATED_EXTENSIONS = frozenset(
         ".zip",
         ".tar",
         ".whl",
+        ".snap",
     }
+)
+
+# Lockfiles whose extension says nothing. `package-lock.json` matched none of
+# the extensions above and scored as *config*, so a lockfile refresh could take
+# a slot in the four-file review budget and be reviewed — 3,000 characters of a
+# machine-written diff, which produces nothing but false findings.
+GENERATED_BASENAMES = frozenset(
+    {
+        "package-lock.json",
+        "pnpm-lock.yaml",
+        "npm-shrinkwrap.json",
+        "yarn.lock",
+        "poetry.lock",
+        "composer.lock",
+        "cargo.lock",
+        "pipfile.lock",
+        "gemfile.lock",
+        "go.sum",
+        "flake.lock",
+        "uv.lock",
+    }
+)
+
+# Paths and infixes that are generated whatever the extension. `.pb.go`,
+# `_pb2.py` and `dist/bundle.js` all end in a CODE extension, so they scored
+# **3** — outranking hand-written source for the review budget.
+#
+# Migrations are deliberately absent: they are generated but routinely
+# hand-edited, and a destructive migration is exactly the thing worth reviewing.
+GENERATED_MARKERS = (
+    "/dist/",
+    "/build/",
+    "/vendor/",
+    "/node_modules/",
+    "/__generated__/",
+    "/.next/",
+    ".generated.",
+    ".pb.go",
+    "_pb2.py",
+    "_pb2_grpc.py",
+    ".g.dart",
+    ".min.",
+)
+
+# Substring matching read `app/core/latest_run.py` as a test, because
+# "latest_" contains "test_". So did contest_, greatest_, fastest_, protest_,
+# and every path under testimonials/ via startswith("test"). Each one was then
+# dropped down the review budget, excluded from gap detection's source files,
+# AND counted as a test file — so a PR touching only such a file reported
+# "tests changed in this PR" and found no gaps in code nothing tests.
+# Anchored to path segments instead.
+_TEST_PATH = re.compile(
+    r"(?:^|/)tests?/"  # a test/ or tests/ directory
+    r"|(?:^|/)__tests?__/"  # the JS/TS convention
+    r"|(?:^|/)test_[^/]*$"  # test_foo.py
+    r"|(?:^|/)[^/]*_test\.[^/.]+$"  # foo_test.go
+    r"|(?:^|/)tests?\.[^/.]+$"  # tests.py
 )
 
 
 def _is_test_file(filename: str) -> bool:
-    return (
-        "test_" in filename
-        or "_test." in filename
-        or "/tests/" in filename
-        or filename.startswith("test")
-    )
+    return bool(_TEST_PATH.search((filename or "").replace("\\", "/")))
 
 
 def _is_generated(filename: str) -> bool:
-    return any(filename.endswith(ext) for ext in GENERATED_EXTENSIONS)
+    # Leading "/" so a marker anchored on a path separator also matches a
+    # top-level directory: "dist/bundle.js" has no slash before `dist`.
+    lower = "/" + (filename or "").replace("\\", "/").lower().lstrip("/")
+    return (
+        lower.endswith(tuple(GENERATED_EXTENSIONS))
+        or lower.rsplit("/", 1)[-1] in GENERATED_BASENAMES
+        or any(m in lower for m in GENERATED_MARKERS)
+    )
 
 
 def _file_review_priority(filename: str) -> int:

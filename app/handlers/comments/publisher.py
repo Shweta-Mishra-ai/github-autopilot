@@ -375,6 +375,7 @@ def cmd_release(repo: str, token: str, author: str) -> str:
             f"- {c['commit']['message'].split(chr(10))[0][:120]}" for c in commits[:15]
         )
 
+        from app.ai.validator import as_text
         from .reviewer import _bump_version
         from app.handlers.comments import router
 
@@ -396,7 +397,7 @@ Return JSON:
             task="changelog",
         )
 
-        version = r.get("version", "").strip()
+        version = as_text(r.get("version")).strip()
         if not version or not re.match(r"^v\d+\.\d+\.\d+", version):
             version = _bump_version(latest_tag)
             log.warning(f"cmd_release: bad version from LLM, using {version}")

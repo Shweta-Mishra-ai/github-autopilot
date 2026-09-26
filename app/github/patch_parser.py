@@ -14,6 +14,7 @@ No network, no state — deliberately unit-test friendly.
 
 from __future__ import annotations
 
+import ast
 import re
 
 # New-file line numbers a PR review comment may anchor to, mapped to
@@ -102,41 +103,77 @@ def nearest_commentable(
 # ``suggestion that is a one-click Commit button which replaces working code
 # with an English sentence — the most damaging thing this bot can render,
 # because GitHub presents it as a reviewed, ready-to-apply patch.
-_PROSE_OPENER = re.compile(
-    r"^\s*(add|use|using|consider|ensure|avoid|remove|delete|replace|rename|change|"
-    r"make|check|move|wrap|handle|validate|sanitiz|sanitis|prefer|should|must|need|"
-    r"try|call|set|initializ|initialis|escape|do not|don't|never|always|this|the|it)\b",
-    re.I,
-)
-# Punctuation that essentially only occurs in code, not in an English sentence.
-# Checked BEFORE the prose opener, so "use params.get('x')" is still code.
-_CODE_STRONG = re.compile(r"[=(){}\[\];]|->|=>|::")
-_CODE_KEYWORD = re.compile(
-    r"^\s*(return|if|elif|else|for|while|raise|assert|import|from|def|class|await|"
-    r"yield|del|pass|break|continue|try|except|finally|with|lambda|const|let|var|"
-    r"function|new|throw|export|public|private|static|@)\b"
+#
+# Guessed at with a word list first, which let "Should be >= not >" and
+# "Compare with is None rather than ==" through on the `=` inside them. So ask
+# a parser instead of guessing: a replacement line has to BE code, and code
+# parses. Each wrapper below supplies the context a bare fragment is missing —
+# a decorator needs a def under it, `await` needs an async def around it, a
+# block header needs a body — so the fragment is judged on its own syntax
+# rather than on where it happens to sit.
+_UNWRAP_C_FAMILY = re.compile(r"^\s*(?:const|let|var)\s+")
+_TRY_CLAUSE = re.compile(r"^\s*(?:except|finally)\b")
+_IF_CLAUSE = re.compile(r"^\s*(?:elif|else)\b")
+
+# A model declining to answer. `n/a` is the trap: it parses cleanly as one name
+# divided by another, so the parser calls it code and a reviewer gets a button
+# that replaces a working line with `n/a`. "None" is deliberately absent — that
+# is a real fix — so the comparison is case-sensitive on the lowered form only.
+_NON_ANSWER = {
+    "n/a",
+    "na",
+    "n.a.",
+    "n/a.",
+    "tbd",
+    "todo",
+    "-",
+    "--",
+    "?",
+    "??",
+    "???",
+    "unknown",
+    "unclear",
+    "see above",
+    "as above",
+    "no fix",
+    "no change",
+}
+
+_WRAPPERS = (
+    lambda s: s,
+    lambda s: "async def _():\n    " + s,  # await, return, yield, break
+    lambda s: s + "\n    pass",  # def/if/for/while/with header
+    lambda s: s + "\ndef _(): pass",  # @decorator
+    lambda s: "_f(" + s + ")",  # keyword argument
+    # `foo.bar();` and `const x = 1;` — the common JS/TS single-line forms.
+    lambda s: _UNWRAP_C_FAMILY.sub("", s).rstrip(";"),
+    # A dangling clause, which needs its opening statement above it.
+    lambda s: ("try:\n    pass\n" + s + "\n    pass") if _TRY_CLAUSE.match(s) else s,
+    lambda s: ("if _x:\n    pass\n" + s + "\n    pass") if _IF_CLAUSE.match(s) else s,
 )
 
 
 def _looks_like_code(fix: str) -> bool:
     """
-    True when `fix` is plausibly a line of source rather than a sentence about
-    one. Deliberately conservative: a false negative renders the fix in a plain
-    fenced block, which is merely less convenient. A false positive ships a
-    committable suggestion that breaks the branch.
+    True when `fix` parses as code rather than reading as a sentence about code.
+
+    Judged with Python's own parser, which also accepts the C-family lines this
+    bot sees most (`foo.bar();`, `const x = 1;`). A typed declaration in a
+    language we cannot parse — `int x = 1;` — is a known false negative, and
+    that is the side to be wrong on: a false negative renders the fix in a
+    plain fenced block, which is merely less convenient, while a false positive
+    ships a committable suggestion that breaks the branch.
     """
     s = fix.strip()
-    if not s:
+    if not s or s.lower() in _NON_ANSWER:
         return False
-    if _CODE_STRONG.search(s) or _CODE_KEYWORD.match(s):
-        return True
-    if _PROSE_OPENER.match(s):
-        return False
-    if ":" in s:
-        return True
-    # No code punctuation and no keyword. A bare token is still plausibly a
-    # replacement (`None`, `settings.DEBUG`); a sentence is not.
-    return len(s.split()) <= 3 and not s.endswith(".")
+    for wrap in _WRAPPERS:
+        try:
+            ast.parse(wrap(s))
+            return True
+        except (SyntaxError, ValueError, MemoryError, RecursionError):
+            continue
+    return False
 
 
 def make_suggestion_block(fix: str, anchor_line: int, lines: CommentableLines) -> str:

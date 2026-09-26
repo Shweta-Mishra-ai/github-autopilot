@@ -355,8 +355,22 @@ def cmd_release(repo: str, token: str, author: str) -> str:
         if not commits:
             return "## ⚠️ No Commits Found\n\nThis repository has no commits yet."
 
-        existing_tags = [t["name"] for t in (tags if isinstance(tags, list) else [])]
+        tag_list = [t for t in (tags if isinstance(tags, list) else []) if isinstance(t, dict)]
+        existing_tags = [t["name"] for t in tag_list if t.get("name")]
         latest_tag = existing_tags[0] if existing_tags else "v0.0.0"
+
+        # "commits since last tag", per the docstring — which this did not do.
+        # It listed the last 20 commits on the branch whatever the tag pointed
+        # at, so the drafted release notes re-announced everything already
+        # released in `latest_tag`.
+        from .reviewer import commits_since
+
+        commits = commits_since(
+            commits, (tag_list[0].get("commit") or {}).get("sha") if tag_list else None
+        )
+        if not commits:
+            return f"## ℹ️ Nothing to Release\n\nNo commits since `{latest_tag}`."
+
         commit_list = "\n".join(
             f"- {c['commit']['message'].split(chr(10))[0][:120]}" for c in commits[:15]
         )

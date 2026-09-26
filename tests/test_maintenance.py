@@ -103,7 +103,7 @@ class TestThePass:
         def scan(repo, token):
             if repo == "o/bad":
                 raise RuntimeError("403")
-            return MagicMock(critical_count=0, total_count=3)
+            return MagicMock(critical_count=0, total_count=3, scanned_nothing=False, errors=[])
 
         with (
             patch("app.github.auth.get_installation_token", return_value="tok"),
@@ -133,7 +133,7 @@ class TestThePass:
         repository-level count through it would render 'Package `3 critical
         findings` has a known vulnerability'."""
         INST.remember_installation("o/r", 1)
-        report = MagicMock(critical_count=3, total_count=9)
+        report = MagicMock(critical_count=3, total_count=9, scanned_nothing=False, errors=[])
 
         with (
             patch("app.github.auth.get_installation_token", return_value="tok"),
@@ -155,7 +155,7 @@ class TestThePass:
             patch("app.github.auth.get_installation_token", return_value="tok"),
             patch(
                 "app.security.scanner.run_security_scan",
-                return_value=MagicMock(critical_count=0, total_count=0),
+                return_value=MagicMock(critical_count=0, total_count=0, scanned_nothing=False, errors=[]),
             ),
             patch.object(MB, "run_backup_once", return_value=True),
             patch("app.github.notifications.notify") as notify,
@@ -173,7 +173,7 @@ class TestThePass:
             patch("app.github.auth.get_installation_token", return_value="tok"),
             patch(
                 "app.security.scanner.run_security_scan",
-                return_value=MagicMock(critical_count=0, total_count=0),
+                return_value=MagicMock(critical_count=0, total_count=0, scanned_nothing=False, errors=[]),
             ) as scan,
             patch.object(MB, "run_backup_once", return_value=True),
         ):

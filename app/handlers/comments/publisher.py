@@ -12,7 +12,7 @@ import re
 import contextlib
 from app.github.client import GitHubError
 from app.github.helpers import fmt_error
-from ._client import gh_get, gh_post, gh_put, gh_delete, router  # noqa: F401  (re-exported: tests patch these names)
+from ._client import gh_get, gh_post, gh_put, gh_patch, gh_delete, router  # noqa: F401  (re-exported: tests patch these names)
 
 
 log = logging.getLogger(__name__)
@@ -290,18 +290,23 @@ def cmd_rollback(
     # recorded title edits on one PR (X->Y then Y->Z), oldest-first restores X
     # and then Y, leaving the intermediate title; newest-first restores Y then
     # X, which is the original.
+    # PATCH for both edits below. They were gh_put, and GitHub has no PUT on an
+    # issue or a pull request, so /rollback could never close an issue the bot
+    # opened or restore a title it changed: each attempt was a 404, recorded
+    # under "failed" — the one command meant to undo the bot's mistakes could
+    # not undo the two it was written for.
     for action in bot_actions:
         action_type = action.get("type", "")
         num = action.get("number")
         try:
             if action_type == "create_issue" and num:
-                gh_put(f"/repos/{repo}/issues/{num}", token, {"state": "closed"})
+                gh_patch(f"/repos/{repo}/issues/{num}", token, {"state": "closed"})
                 restored.append(f"Closed issue #{num}: {action.get('title', '')[:50]}")
 
             elif action_type == "edit_pr_title" and num:
                 old_title = action.get("old_title", "")
                 if old_title:
-                    gh_put(f"/repos/{repo}/pulls/{num}", token, {"title": old_title})
+                    gh_patch(f"/repos/{repo}/pulls/{num}", token, {"title": old_title})
                     restored.append(f"Reverted PR #{num} title → `{old_title[:50]}`")
                 else:
                     failed.append(f"edit_pr_title #{num}: no old_title recorded")

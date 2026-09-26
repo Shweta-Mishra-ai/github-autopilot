@@ -1238,3 +1238,90 @@ class TestCodeReviewHasItsHallucinationTerm:
 
         r = check_response({"fix": "set it to [your api key] here please"}, response_type="fix")
         assert r.confidence < 1.0
+
+
+class TestASecurityReportNeverCallsAnUnreadSourceClear:
+    """
+    The fetchers classified failures by `"403" in str(e)`, and the GitHub
+    client says "Forbidden: ..." / "Not found: ..." with the status on
+    `e.status_code`. A missing permission, a disabled feature, an outage and a
+    timeout all left `errors` empty, and /secfull answered "All Clear" for a
+    repository it had not read. Found by the end-to-end suite, not by these
+    tests' predecessors, which raised Exception("403 Forbidden") — a message
+    the real client never produces.
+    """
+
+    @staticmethod
+    def _scan(side_effect):
+        from app.security import scanner as S
+
+        with patch("app.github.client.gh_get", side_effect=side_effect):
+            return S.run_security_scan("o/r", "t")
+
+    @pytest.mark.parametrize(
+        "status,message",
+        [
+            (403, "Forbidden: Resource not accessible by integration"),
+            (404, "Not found: /repos/o/r/dependabot/alerts"),
+            (502, "GitHub server error 502: /repos/o/r/x"),
+            (0, "ReadTimeout: slow"),
+        ],
+    )
+    def test_an_unreadable_repo_is_not_scanned_not_clear(self, status, message):
+        from app.github.client import GitHubError
+
+        rep = self._scan(GitHubError(message, status))
+        md = rep.to_markdown()
+        assert "All Clear" not in md
+        assert "Not Scanned" in md
+        assert rep.scanned_nothing
+        assert rep.unavailable == ["Dependabot", "CodeQL", "Secret Scanning"]
+
+    def test_a_non_list_response_is_a_failure_not_a_clean_result(self):
+        rep = self._scan(lambda path, tok: {"message": "unexpected shape"})
+        assert rep.scanned_nothing
+        assert "All Clear" not in rep.to_markdown()
+
+    def test_one_unreadable_source_is_a_dash_not_a_zero(self):
+        from app.github.client import GitHubError
+
+        def gh(path, tok):
+            if "dependabot" in path:
+                raise GitHubError("Forbidden: no", 403)
+            return []
+
+        md = self._scan(gh).to_markdown()
+        assert "| Dependabot | — | — | — | — |" in md
+        assert "| CodeQL | 0 | 0 | 0 | 0 |" in md
+        assert "All Clear" not in md
+
+    def test_a_genuinely_clean_repo_is_still_all_clear(self):
+        rep = self._scan(lambda path, tok: [])
+        assert "All Clear" in rep.to_markdown()
+        assert not rep.unavailable
+
+    def test_the_sweep_does_not_count_an_unread_repo_as_scanned(self):
+        """maintenance.scan_repo set ok=True after any scan that returned —
+        and the scan never raises — so a repo nothing could be read from was
+        counted as scanned with 0 findings."""
+        from app.core import maintenance
+        from app.github.client import GitHubError
+
+        with (
+            patch("app.github.auth.get_installation_token", return_value="t"),
+            patch("app.github.client.gh_get", side_effect=GitHubError("Forbidden: no", 403)),
+        ):
+            record = maintenance.scan_repo("o/r", 1)
+        assert record["ok"] is False
+        assert "not enabled or no permission" in record["error"]
+
+    def test_the_sweep_still_counts_a_readable_repo(self):
+        from app.core import maintenance
+
+        with (
+            patch("app.github.auth.get_installation_token", return_value="t"),
+            patch("app.github.client.gh_get", return_value=[]),
+        ):
+            record = maintenance.scan_repo("o/r", 1)
+        assert record["ok"] is True
+        assert record["error"] == ""

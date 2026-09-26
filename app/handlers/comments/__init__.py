@@ -16,7 +16,7 @@ Public API (used by server.py):
 # ── Additional shims for test patching (defined first to prevent circular imports) ──
 # Tests patch these at the package level (e.g. app.handlers.comments.gh_get).
 from app.github.auth import get_installation_token
-from app.github.client import gh_get, gh_post, gh_put, gh_delete
+from app.github.client import gh_get, gh_post, gh_put, gh_patch, gh_delete
 from app.core.config import load_config
 from app.ai.router import router
 
@@ -99,6 +99,7 @@ __all__ = [
     "gh_get",
     "gh_post",
     "gh_put",
+    "gh_patch",
     "gh_delete",
     "load_config",
     "router",

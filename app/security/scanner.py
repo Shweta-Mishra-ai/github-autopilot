@@ -17,6 +17,7 @@ Usage:
 """
 
 import logging
+import re
 from dataclasses import dataclass, field
 
 log = logging.getLogger(__name__)
@@ -64,7 +65,32 @@ class SecurityReport:
     def total_count(self) -> int:
         return len(self.all_findings)
 
+    @property
+    def unavailable(self) -> list[str]:
+        """Sources that could not be read, in SOURCES order."""
+        return [src for src in SOURCES if any(e.startswith(f"{src} (") for e in self.errors)]
+
+    @property
+    def scanned_nothing(self) -> bool:
+        return len(self.unavailable) == len(SOURCES)
+
     def to_markdown(self, include_low: bool = False) -> str:
+        if self.scanned_nothing:
+            # Not "All Clear", and not a table of zeros either: a row of zeros
+            # for a source that was never read is the same false claim in a
+            # different shape.
+            reasons = "\n".join(f"- {e}" for e in self.errors)
+            return (
+                "## 🔒 Security Report — Not Scanned\n\n"
+                "⚠️ None of the three sources could be read, so this is **not** "
+                "a clean result:\n\n"
+                f"{reasons}\n\n"
+                "Grant the GitHub App read access to *Dependabot alerts*, *Code "
+                "scanning alerts* and *Secret scanning alerts*, and enable those "
+                "features on the repository.\n\n"
+                f"*Repository: `{self.repo}`*"
+            )
+
         if self.total_count == 0 and not self.errors:
             return (
                 "## 🔒 Security Report — All Clear\n\n"
@@ -84,9 +110,11 @@ class SecurityReport:
         if high:
             sev_line.append(f"🔴 {high} high")
 
-        lines.append(
-            f"**{total} finding(s)** — {', '.join(sev_line) if sev_line else 'low/medium only'}\n"
-        )
+        if total:
+            summary = ", ".join(sev_line) if sev_line else "low/medium only"
+        else:
+            summary = "none in the sources that could be read"
+        lines.append(f"**{total} finding(s)** — {summary}\n")
         lines.append("| Source | Critical | High | Medium | Low |")
         lines.append("|--------|----------|------|--------|-----|")
 
@@ -95,6 +123,9 @@ class SecurityReport:
             ("CodeQL", self.codeql),
             ("Secret Scanning", self.secrets),
         ]:
+            if source_name in self.unavailable:
+                lines.append(f"| {source_name} | — | — | — | — |")
+                continue
             c = sum(1 for f in findings if f.severity == "critical")
             h = sum(1 for f in findings if f.severity == "high")
             m = sum(1 for f in findings if f.severity == "medium")
@@ -143,6 +174,42 @@ class SecurityReport:
         return "\n".join(lines)
 
 
+SOURCES = ("Dependabot", "CodeQL", "Secret Scanning")
+
+
+def _record_failure(source: str, e: Exception, errors: list) -> None:
+    """
+    Record that `source` could not be read. Every failure is recorded.
+
+    This matched `"403" in str(e) or "404" in str(e)`, and the GitHub client's
+    messages are "Forbidden: ..." and "Not found: ..." — the status lives in
+    `e.status_code`, not in the text. So a 403 (the App was never granted the
+    security permission — the commonest real case), a 404 (the feature is off),
+    a 5xx and a timeout ALL fell through to a log line, left `errors` empty, and
+    the report said "All Clear" for a repository it had not read at all. The
+    unit tests raised Exception("403 Forbidden"), a message the real client
+    never produces, which is why they passed.
+    """
+    status = getattr(e, "status_code", None)
+    if status in (403, 404) or (status is None and re.search(r"\b40[34]\b", str(e))):
+        errors.append(f"{source} (not enabled or no permission)")
+    else:
+        errors.append(f"{source} (unavailable: {str(e)[:80]})")
+    log.warning(f"security.source_unavailable source={source}: {e}")
+
+
+def _alerts(path: str, token: str) -> list:
+    """GET a list of alerts, refusing anything that is not a list."""
+    from app.github.client import gh_get
+
+    alerts = gh_get(path, token)
+    if not isinstance(alerts, list):
+        # Iterating a dict walks its keys, and `"key".get(...)` raised
+        # AttributeError into the same silent branch as everything else.
+        raise ValueError(f"expected a list of alerts, got {type(alerts).__name__}")
+    return alerts
+
+
 def run_security_scan(repo: str, token: str) -> SecurityReport:
     report = SecurityReport(repo=repo)
     report.dependabot = _scan_dependabot(repo, token, report.errors)
@@ -183,9 +250,7 @@ def run_pr_security_scan(repo: str, pr_number: int, token: str) -> SecurityRepor
 
 def _scan_dependabot(repo: str, token: str, errors: list) -> list[SecurityFinding]:
     try:
-        from app.github.client import gh_get
-
-        alerts = gh_get(f"/repos/{repo}/dependabot/alerts?state=open&per_page=30", token)
+        alerts = _alerts(f"/repos/{repo}/dependabot/alerts?state=open&per_page=30", token)
         findings = []
         for alert in alerts:
             adv = alert.get("security_advisory", {})
@@ -210,19 +275,13 @@ def _scan_dependabot(repo: str, token: str, errors: list) -> list[SecurityFindin
             )
         return findings
     except Exception as e:
-        err = str(e)
-        if "403" in err or "404" in err:
-            errors.append("Dependabot (not enabled or no permission)")
-        else:
-            log.warning(f"dependabot scan failed: {e}")
+        _record_failure("Dependabot", e, errors)
         return []
 
 
 def _scan_codeql(repo: str, token: str, errors: list) -> list[SecurityFinding]:
     try:
-        from app.github.client import gh_get
-
-        alerts = gh_get(f"/repos/{repo}/code-scanning/alerts?state=open&per_page=30", token)
+        alerts = _alerts(f"/repos/{repo}/code-scanning/alerts?state=open&per_page=30", token)
         findings = []
         for alert in alerts:
             rule = alert.get("rule", {})
@@ -248,19 +307,13 @@ def _scan_codeql(repo: str, token: str, errors: list) -> list[SecurityFinding]:
             )
         return findings
     except Exception as e:
-        err = str(e)
-        if "403" in err or "404" in err:
-            errors.append("CodeQL (not enabled or no permission)")
-        else:
-            log.warning(f"codeql scan failed: {e}")
+        _record_failure("CodeQL", e, errors)
         return []
 
 
 def _scan_secrets(repo: str, token: str, errors: list) -> list[SecurityFinding]:
     try:
-        from app.github.client import gh_get
-
-        alerts = gh_get(f"/repos/{repo}/secret-scanning/alerts?state=open&per_page=30", token)
+        alerts = _alerts(f"/repos/{repo}/secret-scanning/alerts?state=open&per_page=30", token)
         findings = []
         for alert in alerts:
             secret_type = alert.get("secret_type_display_name", alert.get("secret_type", "Secret"))
@@ -275,9 +328,5 @@ def _scan_secrets(repo: str, token: str, errors: list) -> list[SecurityFinding]:
             )
         return findings
     except Exception as e:
-        err = str(e)
-        if "403" in err or "404" in err:
-            errors.append("Secret Scanning (not enabled or no permission)")
-        else:
-            log.warning(f"secret scanning failed: {e}")
+        _record_failure("Secret Scanning", e, errors)
         return []

@@ -151,7 +151,11 @@ def handle(payload: dict):
         log.debug(f"archived_check_skipped repo={repo}: {e}")
 
     try:
-        files = gh_get(f"/repos/{repo}/pulls/{pr_number}/files", token)
+        # Every page. A single fetch returned GitHub's default of 30 files, so
+        # on a larger PR the rest were never reviewed or counted.
+        from app.github.helpers import pr_files
+
+        files = pr_files(repo, pr_number, token, get=gh_get)
     except Exception:
         files = []
 

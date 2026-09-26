@@ -15,6 +15,12 @@ See [docs/MIGRATING.md](docs/MIGRATING.md).
 
 ### Unreleased
 
+**Every PR over 30 files was reviewed in part and reported as whole**
+- Five call sites fetched `/pulls/{n}/files` once, and GitHub's default page is **30 files**. On any larger PR the rest were never reviewed, never checked for test gaps, never secret-scanned and never counted: the production bot reported PR #108 as "Files: 30 · +2101 −235" when it was 32 files, +3,618 −249. One `pr_files()` helper now fetches every page (to GitHub's own 3,000-file cap), keeps the pages it has if a later one fails, and raises on a first-page failure exactly as before. The end-to-end suite's fake GitHub now paginates the way GitHub does — serving every file on every request is what let this pass.
+
+**`/security` said "No secrets detected" about files it never scanned**
+- It scanned `pr_files[:10]` and then reported **"No secrets detected in changed files"** — a claim about every file, backed by at most ten. It also skipped any file GitHub sends without a diff (binaries, very large changes) and counted it inside the same clean result. Every file is scanned now (the scan is local pattern matching; there was no cost reason to stop), the clean line says how many files it covers, and files that could not be scanned are named, with a note to check them by hand. The test that asserted "only the first ten files are scanned" asserted the bug, and now asserts the opposite.
+
 **The gap report called tested code untested — on this PR**
 - Opened against its own fix, the production bot reported four "untested" symbols on PR #108 — `_SHA_REF`, `as_text`, `_field_completeness`, `scan_repo` — and every one had a test in the same diff. The gap model is shown the first 600 characters of at most four test files, with nothing to say they were cut; the tests sat 800 to 1,300 lines into one file, so it saw imports and a docstring and reasoned from absence.
 - The complete test diffs are now checked for the changed symbols by name, and the model is told which ones are referenced, in the prompt's own voice. A reference is not proof every branch is covered, and the prompt says so: a happy path tested beside an untested error branch is still a gap worth reporting. Excerpts say when they were cut, and the prompt forbids concluding anything from what a cut excerpt does not show.

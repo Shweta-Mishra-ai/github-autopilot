@@ -228,7 +228,9 @@ def run_pr_security_scan(repo: str, pr_number: int, token: str) -> SecurityRepor
     report = SecurityReport(repo=repo)
 
     try:
-        pr_files = gh_get(f"/repos/{repo}/pulls/{pr_number}/files", token)
+        from app.github.helpers import pr_files as fetch_pr_files
+
+        pr_files = fetch_pr_files(repo, pr_number, token, get=gh_get)
         changed_paths = {f["filename"] for f in pr_files}
     except Exception:
         changed_paths = set()

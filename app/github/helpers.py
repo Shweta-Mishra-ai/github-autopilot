@@ -51,3 +51,50 @@ def repo_file_context(repo: str, token: str, ref: str = "HEAD", extra=(), get=No
     if not paths:
         return {}
     return {"files": sorted(paths | {e for e in extra if e})}
+
+
+# GitHub serves at most 3,000 files for one pull request, 100 per page.
+PR_FILES_PER_PAGE = 100
+PR_FILES_MAX_PAGES = 30
+
+
+def pr_files(repo: str, number: int, token: str, get=None) -> list:
+    """
+    Every file in a pull request — not the first 30.
+
+    Five call sites fetched `/pulls/{n}/files` once, and GitHub's default page
+    is 30 files. On any larger PR the rest were never reviewed, never checked
+    for test gaps, never scanned for secrets and never counted: this
+    repository's own PR #108, at 32 files, was reported as "Files: 30 ·
+    +2101 −235" when it was +3,618 −249.
+
+    A first-page failure raises, exactly as the single fetch did, so every
+    caller's existing error handling is unchanged. A later-page failure keeps
+    the pages already fetched and logs — losing 100 files is better than losing
+    all of them. `get` defaults to the GitHub client and exists so a caller can
+    pass the name its own tests patch.
+    """
+    if get is None:
+        from app.github.client import gh_get as get
+
+    files: list = []
+    for page in range(1, PR_FILES_MAX_PAGES + 1):
+        path = f"/repos/{repo}/pulls/{number}/files?per_page={PR_FILES_PER_PAGE}&page={page}"
+        try:
+            batch = get(path, token)
+        except Exception as e:
+            if page == 1:
+                raise
+            log.warning(f"pr_files.partial repo={repo} pr={number} pages={page - 1}: {e}")
+            break
+        if not isinstance(batch, list) or not batch:
+            break
+        files.extend(batch)
+        if len(batch) < PR_FILES_PER_PAGE:
+            break
+    else:
+        log.warning(
+            f"pr_files.capped repo={repo} pr={number} files={len(files)} — GitHub lists at "
+            "most 3,000 files for a pull request"
+        )
+    return files

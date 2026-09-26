@@ -345,7 +345,9 @@ def cmd_impact(repo: str, issue_number: int, issue: dict, token: str) -> str:
     try:
         from app.handlers.pull_request import _blast_radius
 
-        files = gh_get(f"/repos/{repo}/pulls/{issue_number}/files", token)
+        from app.github.helpers import pr_files
+
+        files = pr_files(repo, issue_number, token, get=gh_get)
         blast = _blast_radius(files)
         filenames = [f["filename"] for f in files[:15]]
 

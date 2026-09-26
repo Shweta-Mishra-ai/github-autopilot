@@ -1501,3 +1501,122 @@ class TestTheFooterIsWrappedOnce:
             (Path(__file__).resolve().parent.parent / ".ai-repo-manager.yml").read_text()
         )
         assert not example["bot"]["footer"].lstrip().startswith(("---", "*", "\n"))
+
+
+class TestEveryFileInAPullRequest:
+    """
+    Five call sites fetched /pulls/{n}/files once, and GitHub's default page is
+    30 files. The production bot reported this repository's own 32-file PR #108
+    as "Files: 30 · +2101 −235" — the real figure was +3,618 −249 — and never
+    reviewed, gap-checked or secret-scanned the files past the thirtieth.
+    """
+
+    @staticmethod
+    def _pages(total):
+        files = [{"filename": f"f{i}.py", "additions": 1, "deletions": 0} for i in range(total)]
+        calls = []
+
+        def get(path, token):
+            calls.append(path)
+            page = int(path.rsplit("page=", 1)[1])
+            return files[(page - 1) * 100 : page * 100]
+
+        return files, calls, get
+
+    def test_every_page_is_fetched(self):
+        from app.github.helpers import pr_files
+
+        files, calls, get = self._pages(250)
+        assert pr_files("o/r", 1, "t", get=get) == files
+        assert len(calls) == 3
+        assert all("per_page=100" in c for c in calls)
+
+    def test_a_short_page_is_the_last(self):
+        from app.github.helpers import pr_files
+
+        _files, calls, get = self._pages(32)
+        assert len(pr_files("o/r", 1, "t", get=get)) == 32
+        assert len(calls) == 1
+
+    def test_an_exact_multiple_stops_on_the_empty_page(self):
+        from app.github.helpers import pr_files
+
+        _files, calls, get = self._pages(200)
+        assert len(pr_files("o/r", 1, "t", get=get)) == 200
+        assert len(calls) == 3
+
+    def test_a_first_page_failure_raises_as_before(self):
+        from app.github.helpers import pr_files
+
+        def get(path, token):
+            raise RuntimeError("down")
+
+        with pytest.raises(RuntimeError):
+            pr_files("o/r", 1, "t", get=get)
+
+    def test_a_later_page_failure_keeps_what_was_fetched(self):
+        from app.github.helpers import pr_files
+
+        files, _calls, good = self._pages(250)
+
+        def get(path, token):
+            if path.endswith("page=2"):
+                raise RuntimeError("blip")
+            return good(path, token)
+
+        assert pr_files("o/r", 1, "t", get=get) == files[:100]
+
+    def test_it_stops_at_githubs_cap(self):
+        from app.github.helpers import PR_FILES_MAX_PAGES, pr_files
+
+        calls = []
+
+        def get(path, token):
+            calls.append(path)
+            return [{"filename": "x"}] * 100
+
+        assert len(pr_files("o/r", 1, "t", get=get)) == 3000
+        assert len(calls) == PR_FILES_MAX_PAGES
+
+    def test_the_pr_handler_sees_every_file(self):
+        """handle() is where the report's file count and totals come from."""
+        from app.handlers import pull_request as P
+
+        files, _calls, paged = self._pages(35)
+
+        def gh(path, token):
+            return paged(path, token) if "/files" in path else {"archived": False}
+
+        payload = {
+            "action": "opened",
+            "pull_request": {
+                "number": 1,
+                "title": "t",
+                "user": {"login": "a"},
+                "head": {"sha": "s"},
+            },
+            "repository": {"full_name": "o/r"},
+            "installation": {"id": 1},
+        }
+        cfg = MagicMock()
+        cfg.pr_enabled.return_value = True
+        cfg.footer = ""
+        cfg.get.side_effect = lambda *a, default=None: default
+        seen = {}
+        with (
+            patch.object(P, "get_installation_token", return_value="t"),
+            patch.object(P, "load_config", return_value=cfg),
+            patch.object(P, "gh_get", side_effect=gh),
+            patch.object(P, "_analyze_pr", return_value=""),
+            patch.object(P, "_build_pr_summary", return_value=""),
+            patch.object(P, "_detect_test_gaps", return_value=""),
+            patch.object(
+                P,
+                "_review_code",
+                side_effect=lambda pr, repo, n, f, *a: (seen.setdefault("n", len(f)), ("", []))[1],
+            ),
+            patch("app.core.guardrails.check_repo_rate_limit", return_value=MagicMock(passed=True)),
+            patch("app.core.guardrails.increment_repo_usage"),
+        ):
+            P.handle(payload)
+        assert seen["n"] == 35, f"the review saw {seen.get('n')} of 35 files"

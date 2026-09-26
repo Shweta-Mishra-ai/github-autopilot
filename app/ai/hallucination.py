@@ -59,6 +59,23 @@ _HALLUCINATION_PATTERNS = [
     (r"\balways works\b", "overconfidence", 0.1),
 ]
 
+# An abbreviated or full commit SHA. `\b[0-9a-f]{7,40}\b` alone matched any
+# number of seven or more digits — a byte count, a date, an issue id — as a
+# commit reference. Requiring at least one hex letter AND one digit keeps ~96% of
+# real 7-character SHAs (the rest are all-digit or all-letter by chance) and
+# drops every plain number and every word spelled only from a–f.
+_SHA_REF = re.compile(r"\b(?=[0-9a-f]*[a-f])(?=[0-9a-f]*[0-9])[0-9a-f]{7,40}\b")
+
+# Signals that mean "the model left its own answer unfinished" — except in a
+# response whose whole subject is someone else's code. A review finding that
+# says "the TODO on line 12 means this branch never runs", or "replace the
+# [your api key] placeholder", is QUOTING the diff, and is correct. Scanning
+# nested findings (which _extract_text now does) would otherwise penalise
+# exactly the findings that caught an unfinished branch or an exposed secret.
+_EXEMPT_BY_TYPE = {
+    "code_review": frozenset({"todo_in_response", "xxx_placeholder", "placeholder"}),
+}
+
 # Minimum field lengths — too short = likely hallucinated
 _MIN_LENGTHS = {
     "fix": 20,
@@ -121,7 +138,10 @@ def check_response(
     # 2. Check all string fields for hallucination patterns
     text_content = _extract_text(response)
 
+    exempt = _EXEMPT_BY_TYPE.get(response_type, frozenset())
     for pattern, label, pen in _HALLUCINATION_PATTERNS:
+        if label in exempt:
+            continue
         if re.search(pattern, text_content, re.IGNORECASE):
             if pen > 0:
                 warnings.append(f"Hallucination signal: {label}")
@@ -152,7 +172,7 @@ def check_response(
     # 5. SHA validation (if commits provided)
     known_shas = set(context.get("commits", []))
     if known_shas:
-        referenced_shas = re.findall(r"\b[0-9a-f]{7,40}\b", text_content)
+        referenced_shas = _SHA_REF.findall(text_content)
         for sha in referenced_shas:
             if sha not in known_shas and not any(s.startswith(sha) for s in known_shas):
                 warnings.append(f"References unknown commit SHA: {sha[:7]}")
@@ -193,25 +213,76 @@ def add_confidence_footer(comment: str, result: HallucinationResult) -> str:
     return comment + note
 
 
-def _extract_text(response: dict) -> str:
-    """Extract all string values from response dict for pattern checking."""
-    parts = []
-    for val in response.values():
-        if isinstance(val, str):
-            parts.append(val)
-        elif isinstance(val, list):
-            for item in val:
-                if isinstance(item, str):
-                    parts.append(item)
-                elif isinstance(item, dict):
-                    parts.extend(v for v in item.values() if isinstance(v, str))
-    return " ".join(parts)
+_MAX_EXTRACT_DEPTH = 6
+
+
+def _extract_text(response, _depth: int = 0) -> str:
+    """
+    Every string value in the response, at any depth, for pattern checking.
+
+    Walked one level of list-of-dicts and stopped. A code-review payload keeps
+    its findings at files[].issues[].issue — two levels further in — so the
+    scanner saw the empty string for it and every pattern above passed
+    vacuously. Depth-capped so a pathological payload cannot recurse forever.
+    """
+    if _depth > _MAX_EXTRACT_DEPTH:
+        return ""
+    if isinstance(response, str):
+        return response
+    if isinstance(response, dict):
+        items = response.values()
+    elif isinstance(response, (list, tuple)):
+        items = response
+    else:
+        return ""
+    return " ".join(t for t in (_extract_text(v, _depth + 1) for v in items) if t)
+
+
+# Extensions that name a file and essentially never an attribute. A bare
+# `name.py` is a file reference; a bare `name.json` usually is not — it is
+# `request.json`, `response.json` — so the ambiguous ones below count only when
+# the token also carries a path separator (`config/settings.json`).
+_UNAMBIGUOUS_EXT = (
+    "py|pyi|js|jsx|ts|tsx|mjs|cjs|go|rs|java|kt|rb|php|cs|cpp|cc|hpp|swift|scala|"
+    "sh|bash|sql|yml|yaml|toml|cfg|ini|md|rst|lock|dockerfile|tf|proto|vue|svelte"
+)
+_AMBIGUOUS_EXT = "json|txt|html|css|scss|xml|csv|env|conf|log|c|h"
+
+_FILE_REF = re.compile(
+    rf"(?<![\w./-])(?:"
+    rf"(?:[\w.-]+/)+[\w.-]+\.(?:{_UNAMBIGUOUS_EXT}|{_AMBIGUOUS_EXT})"  # with a path
+    rf"|[\w-]+\.(?:{_UNAMBIGUOUS_EXT})"  # bare, unambiguous only
+    rf")(?![\w/])",
+    re.IGNORECASE,
+)
 
 
 def _extract_file_refs(text: str) -> list[str]:
-    """Extract likely file references from text."""
-    # Match things like app/auth.py, src/utils.ts, tests/test_foo.py
-    return re.findall(r"\b[\w/]+\.\w{2,4}\b", text)
+    """
+    Tokens in `text` that name a file.
+
+    This was `[\\w/]+\\.\\w{2,4}`: any dotted word with a two-to-four letter
+    tail. In ordinary review prose that matched `user.name`, `os.path`,
+    `request.json` and `data.get` as files — four of six "references" in one
+    sentence, each a 0.1 penalty against a correct answer. Attribute access and
+    file names share a shape; only the extension tells them apart.
+    """
+    return _FILE_REF.findall(text)
+
+
+def references_unknown_files(response, known_files) -> bool:
+    """
+    True when `response` names a file that is not among `known_files`.
+
+    Lets a caller skip fetching a larger ground truth when the smaller one
+    already accounts for every reference — which, for a code review, is the
+    usual case: most findings talk about the files in the PR.
+    """
+    known = set(known_files)
+    return any(
+        ref not in known and not _is_plausible_file(ref, known)
+        for ref in _extract_file_refs(_extract_text(response))
+    )
 
 
 def _is_plausible_file(ref: str, known_files: set[str]) -> bool:

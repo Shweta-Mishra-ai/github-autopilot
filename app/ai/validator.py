@@ -22,6 +22,21 @@ def _get(data: dict, key: str, default: Any = None) -> Any:
     return val if val is not None else default
 
 
+def as_text(value: Any, default: str = "") -> str:
+    """
+    A string for rendering, whatever the model actually sent.
+
+    `r.get("risk_level", "low").upper()` reads as safe and is not: the key can
+    be present holding a number, a list or null, and `.upper()` then raises
+    inside a blanket handler that replaces a finished analysis with an error
+    message. Absent, null or empty takes the default; anything else is coerced
+    rather than allowed to raise.
+    """
+    if value is None or value == "":
+        return default
+    return value if isinstance(value, str) else str(value)
+
+
 def _str(val: Any, max_len: int = 300) -> str:
     """Safe string conversion with length cap."""
     return str(val)[:max_len].strip() if val is not None else ""

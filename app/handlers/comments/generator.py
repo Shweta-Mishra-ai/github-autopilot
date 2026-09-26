@@ -306,10 +306,16 @@ def cmd_arch(repo: str, issue_number: int, issue: dict, token: str) -> str:
     """Architecture review — layers, coupling, god classes."""
     from app.handlers.comments import gh_get
 
+    from app.github.helpers import repo_file_context
+
     context = ""
+    pr_files: list = []
     if "pull_request" in issue:
         try:
-            files = gh_get(f"/repos/{repo}/pulls/{issue_number}/files", token)
+            from app.github.helpers import pr_files as fetch_pr_files
+
+            files = fetch_pr_files(repo, issue_number, token, get=gh_get)
+            pr_files = [f.get("filename") for f in files if isinstance(f, dict)]
             context = "Files changed:\n" + "\n".join(f["filename"] for f in files[:15])
         except Exception as e:
             log.debug(f"generator.cmd_arch_files_fetch_failed repo={repo} pr={issue_number}: {e}")
@@ -341,29 +347,47 @@ Return JSON:
         task="arch",
         response_type="arch",
         max_tokens=1500,
+        # Checked against the whole tree: an architecture review is about how
+        # the change sits in the codebase, so naming other files is the job.
+        context=repo_file_context(repo, token, extra=pr_files, get=gh_get),
     )
     if is_degraded(r):
         return degraded_comment(r, "architecture review")
     if not r:
         return "## 🏗️ Architecture Review\n\n_Could not complete analysis._"
 
-    health = r.get("health", "good")
+    from app.ai.validator import as_text
+
+    health = as_text(r.get("health"), "good")
     h_emoji = {"excellent": "🟢", "good": "🟡", "needs_work": "🟠", "critical": "🔴"}.get(
         health, "🟡"
     )
 
+    # Every field below is rendered with a string method. A model answering any
+    # one of them with a number, a list or null used to raise into cmd_arch's
+    # blanket handler, which replaced a finished architecture review with an
+    # error string — so the analysis was paid for, produced, and thrown away.
+    violations = r.get("violations")
     violations_md = ""
-    for v in r.get("violations", [])[:5]:
-        sev = v.get("severity", "medium")
+    for v in (violations if isinstance(violations, list) else [])[:5]:
+        if not isinstance(v, dict):
+            continue
+        sev = as_text(v.get("severity"), "medium")
         s_em = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(sev, "🟡")
         violations_md += (
-            f"\n- {s_em} **{v.get('type', '').replace('_', ' ').title()}** "
-            f"— `{v.get('location', '')}`: {v.get('description', '')}\n"
-            f"  → {v.get('recommendation', '')}"
+            f"\n- {s_em} **{as_text(v.get('type')).replace('_', ' ').title()}** "
+            f"— `{as_text(v.get('location'))}`: {as_text(v.get('description'))}\n"
+            f"  → {as_text(v.get('recommendation'))}"
         )
 
-    pos_md = "\n".join(f"- ✅ {p}" for p in r.get("positive_patterns", [])[:3]) or ""
-    priority = r.get("refactoring_priority", "planned")
+    patterns = r.get("positive_patterns")
+    pos_md = (
+        "\n".join(
+            f"- ✅ {as_text(p)}" for p in (patterns if isinstance(patterns, list) else [])[:3]
+        )
+        or ""
+    )
+    priority = as_text(r.get("refactoring_priority"), "planned")
     p_emoji = {"immediate": "🔴", "planned": "🟡", "backlog": "🟢"}.get(priority, "🟡")
 
     return (

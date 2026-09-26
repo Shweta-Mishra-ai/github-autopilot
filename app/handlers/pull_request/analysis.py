@@ -14,7 +14,7 @@ from app.ai.router import router
 from app.ai.validator import validate_pr_analysis
 from app.core.guardrails import check_pr_description_update, check_pr_title_update
 from app.core.sanitizer import wrap_user_content
-from app.github.client import gh_put
+from app.github.client import gh_patch
 from app.github.notifications import notify_high_risk_pr
 
 RISK_EMOJI = {"low": "🟢", "medium": "🟡", "high": "🔴"}
@@ -121,7 +121,14 @@ Return JSON:
 
         if payload:
             try:
-                gh_put(f"/repos/{repo}/pulls/{pr_number}", token, payload)
+                # PATCH. This was gh_put, and GitHub has no PUT on a pull
+                # request — only on its /merge — so every title and
+                # description update since this shipped was a 404, logged as
+                # "PR metadata update failed" and never surfaced. Every unit
+                # test mocked gh_put and so could not see it; the end-to-end
+                # suite, which serves the real routes, caught it on its first
+                # run. The comment above already said "PATCH".
+                gh_patch(f"/repos/{repo}/pulls/{pr_number}", token, payload)
                 log.done("pr_metadata_updated", fields=",".join(sorted(payload)))
             except Exception as e:
                 log.error(f"PR metadata update failed: {e}")

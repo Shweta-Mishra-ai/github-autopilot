@@ -150,10 +150,15 @@ def scan_repo(repo: str, installation_id: int) -> dict:
 
         token = get_installation_token(installation_id)
         report = run_security_scan(repo, token)
+        # run_security_scan never raises — it records unreadable sources on the
+        # report — so reaching this line proved nothing. A repository none of
+        # whose sources could be read was counted as scanned with 0 findings,
+        # which is exactly the "quietly omitting" this record exists to stop.
         record.update(
-            ok=True,
+            ok=not report.scanned_nothing,
             critical=report.critical_count,
             total=report.total_count,
+            error="; ".join(report.errors)[:150] if report.scanned_nothing else "",
         )
     except Exception as e:
         record["error"] = str(e)[:150]

@@ -312,7 +312,9 @@ def cmd_arch(repo: str, issue_number: int, issue: dict, token: str) -> str:
     pr_files: list = []
     if "pull_request" in issue:
         try:
-            files = gh_get(f"/repos/{repo}/pulls/{issue_number}/files", token)
+            from app.github.helpers import pr_files as fetch_pr_files
+
+            files = fetch_pr_files(repo, issue_number, token, get=gh_get)
             pr_files = [f.get("filename") for f in files if isinstance(f, dict)]
             context = "Files changed:\n" + "\n".join(f["filename"] for f in files[:15])
         except Exception as e:

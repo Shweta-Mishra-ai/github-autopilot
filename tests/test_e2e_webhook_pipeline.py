@@ -104,7 +104,18 @@ class World:
             lambda r: (201, {"token": "ghs_e2e", "permissions": {"pull_requests": "write"}}),
         )
         gh.route("GET", f"/repos/{name}", lambda r: (200, {"full_name": name, "archived": False}))
-        gh.route("GET", f"/repos/{name}/pulls/1/files", lambda r: (200, files))
+
+        def list_files(r):
+            # Paginated exactly as GitHub does it: 30 per page unless asked.
+            # Serving every file on every request hid a bug that fetched only
+            # the first page.
+            from urllib.parse import parse_qsl
+
+            q = dict(parse_qsl(r["query"]))
+            per, page = int(q.get("per_page", 30)), int(q.get("page", 1))
+            return 200, files[(page - 1) * per : page * per]
+
+        gh.route("GET", f"/repos/{name}/pulls/1/files", list_files)
         gh.route("PATCH", f"/repos/{name}/pulls/1", lambda r: (200, {"number": 1}))
         gh.route(
             "POST",
@@ -586,3 +597,28 @@ class TestRepoConfig:
         assert "*🤖 GitHub Autopilot — AI-powered repo management*" in body
         assert "**" not in body.split("repo management", 1)[1][:3], "footer double-wrapped"
         assert "---\n*\n" not in body, "footer double-wrapped"
+
+
+@pytest.mark.usefixtures("show_log_on_failure")
+class TestLargePullRequests:
+    def test_a_35_file_pr_is_reported_in_full(self, world):
+        """GitHub pages PR files 30 at a time. The bot fetched one page, and
+        reported this repository's own 32-file PR as 30 files with less than
+        two thirds of its additions."""
+        world.llm.script = script(_review(), gaps={"has_gaps": False, "gaps": [], "summary": "ok"})
+        files = [SQL_FILE] + [
+            {
+                "filename": f"app/mod{i}.py",
+                "status": "modified",
+                "additions": 10,
+                "deletions": 1,
+                "patch": "@@ -1 +1,2 @@\n x = 1\n+y = 2\n",
+            }
+            for i in range(34)
+        ]
+        repo = world.repo(files)
+        world.open_pr(repo)
+        body = world.sticky(repo)["body"]
+        world.settle(repo)
+        assert "**Files:** 35" in body, body.split("\n\n")[1]
+        assert "+342 −35" in body  # 2 + 34*10 additions, 1 + 34 deletions

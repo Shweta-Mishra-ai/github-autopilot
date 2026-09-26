@@ -791,11 +791,11 @@
       "id": "app.github.helpers",
       "path": "app/github/helpers.py",
       "layer": "github",
-      "loc": 54,
-      "functions": 2,
+      "loc": 101,
+      "functions": 3,
       "classes": 0,
       "is_package": false,
-      "fan_in": 7,
+      "fan_in": 10,
       "fan_out": 1,
       "external_deps": [
         "app",
@@ -996,7 +996,7 @@
       "id": "app.handlers.comments.generator",
       "path": "app/handlers/comments/generator.py",
       "layer": "handlers",
-      "loc": 433,
+      "loc": 435,
       "functions": 10,
       "classes": 0,
       "is_package": false,
@@ -1049,7 +1049,7 @@
       "id": "app.handlers.comments.reviewer",
       "path": "app/handlers/comments/reviewer.py",
       "layer": "handlers",
-      "loc": 455,
+      "loc": 457,
       "functions": 11,
       "classes": 0,
       "is_package": false,
@@ -1066,12 +1066,12 @@
       "id": "app.handlers.comments.security",
       "path": "app/handlers/comments/security.py",
       "layer": "handlers",
-      "loc": 131,
+      "loc": 152,
       "functions": 4,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 6,
+      "fan_out": 7,
       "external_deps": [
         "__future__",
         "app",
@@ -1131,12 +1131,12 @@
       "id": "app.handlers.pull_request",
       "path": "app/handlers/pull_request/__init__.py",
       "layer": "handlers",
-      "loc": 233,
+      "loc": 237,
       "functions": 1,
       "classes": 0,
       "is_package": true,
       "fan_in": 2,
-      "fan_out": 19,
+      "fan_out": 20,
       "external_deps": [
         "__future__",
         "app"
@@ -1502,12 +1502,12 @@
       "id": "app.security.scanner",
       "path": "app/security/scanner.py",
       "layer": "security",
-      "loc": 333,
+      "loc": 335,
       "functions": 7,
       "classes": 2,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 1,
+      "fan_out": 2,
       "external_deps": [
         "app",
         "dataclasses",
@@ -2325,6 +2325,11 @@
     },
     {
       "source": "app.handlers.comments.security",
+      "target": "app.github.helpers",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.security",
       "target": "app.handlers.comments._client",
       "kind": "import"
     },
@@ -2567,6 +2572,11 @@
       "source": "app.handlers.pull_request",
       "target": "app.github.client",
       "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.github.helpers",
+      "kind": "runtime"
     },
     {
       "source": "app.handlers.pull_request",
@@ -2904,6 +2914,11 @@
       "kind": "runtime"
     },
     {
+      "source": "app.security.scanner",
+      "target": "app.github.helpers",
+      "kind": "runtime"
+    },
+    {
       "source": "server",
       "target": "app",
       "kind": "import"
@@ -3086,8 +3101,8 @@
   ],
   "stats": {
     "modules": 94,
-    "edges": 301,
-    "total_loc": 23248,
+    "edges": 304,
+    "total_loc": 23326,
     "layers": [
       "ai",
       "core",

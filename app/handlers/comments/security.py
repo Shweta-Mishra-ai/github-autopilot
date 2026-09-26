@@ -41,14 +41,27 @@ def cmd_security(repo: str, issue_number: int, issue: dict, token: str) -> str:
         from app.security.enhanced_secrets import format_findings as fmt_secrets, scan_diff
         from app.security.dependencies import scan_requirements_txt, format_dep_findings
 
-        pr_files = gh_get(f"/repos/{repo}/pulls/{issue_number}/files", token)
+        from app.github.helpers import pr_files as fetch_pr_files
+
+        pr_files = fetch_pr_files(repo, issue_number, token, get=gh_get)
         all_findings = []
-        for f in pr_files[:10]:
+        scanned = 0
+        unscannable: list[str] = []
+        # Every file. This scanned `pr_files[:10]` and then reported "No
+        # secrets detected in changed files" — a claim about every file,
+        # backed by at most ten of them. The scan is local pattern matching,
+        # so there is no cost reason to stop early.
+        for f in pr_files:
             # `or ""` — GitHub sends an explicit null patch for binary files
             # and oversized diffs, which is not the same as an absent key.
             patch = f.get("patch") or ""
             if patch:
+                scanned += 1
                 all_findings.extend(scan_diff(patch, file_path=f.get("filename", "")))
+            elif f.get("status") != "removed":
+                # Not scanned, and the report must say so rather than let the
+                # file stand inside a "no secrets detected" claim.
+                unscannable.append(f.get("filename", "?"))
 
         dep_findings = []
         # The contents API defaults to the repository's default branch. Reading
@@ -69,11 +82,19 @@ def cmd_security(repo: str, issue_number: int, issue: dict, token: str) -> str:
             dep_findings.extend(scan_requirements_txt(content))
 
         lines = ["## 🔒 Security Scan Results\n"]
-        lines.append(
-            fmt_secrets(all_findings, repo)
-            if all_findings
-            else "✅ **No secrets detected** in changed files.\n"
-        )
+        if all_findings:
+            lines.append(fmt_secrets(all_findings, repo))
+        elif scanned:
+            lines.append(f"✅ **No secrets detected** in the {scanned} changed file(s) scanned.\n")
+        else:
+            lines.append("ℹ️ **No file diffs could be scanned for secrets.**\n")
+        if unscannable:
+            shown = ", ".join(f"`{n}`" for n in unscannable[:10])
+            more = f" and {len(unscannable) - 10} more" if len(unscannable) > 10 else ""
+            lines.append(
+                f"⚠️ **{len(unscannable)} file(s) not scanned** — GitHub sends no diff for "
+                f"binary files or very large changes: {shown}{more}. Check these by hand.\n"
+            )
         lines.append(
             format_dep_findings(dep_findings)
             if dep_findings

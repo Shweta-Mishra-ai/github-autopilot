@@ -96,18 +96,64 @@ def nearest_commentable(
     return best
 
 
+# A `fix` that is an instruction rather than a replacement line. The review
+# prompt asks for "exact fix" and models answer "Add a null check before
+# dereferencing user" about as often as they answer with code. Emitted as a
+# ``suggestion that is a one-click Commit button which replaces working code
+# with an English sentence — the most damaging thing this bot can render,
+# because GitHub presents it as a reviewed, ready-to-apply patch.
+_PROSE_OPENER = re.compile(
+    r"^\s*(add|use|using|consider|ensure|avoid|remove|delete|replace|rename|change|"
+    r"make|check|move|wrap|handle|validate|sanitiz|sanitis|prefer|should|must|need|"
+    r"try|call|set|initializ|initialis|escape|do not|don't|never|always|this|the|it)\b",
+    re.I,
+)
+# Punctuation that essentially only occurs in code, not in an English sentence.
+# Checked BEFORE the prose opener, so "use params.get('x')" is still code.
+_CODE_STRONG = re.compile(r"[=(){}\[\];]|->|=>|::")
+_CODE_KEYWORD = re.compile(
+    r"^\s*(return|if|elif|else|for|while|raise|assert|import|from|def|class|await|"
+    r"yield|del|pass|break|continue|try|except|finally|with|lambda|const|let|var|"
+    r"function|new|throw|export|public|private|static|@)\b"
+)
+
+
+def _looks_like_code(fix: str) -> bool:
+    """
+    True when `fix` is plausibly a line of source rather than a sentence about
+    one. Deliberately conservative: a false negative renders the fix in a plain
+    fenced block, which is merely less convenient. A false positive ships a
+    committable suggestion that breaks the branch.
+    """
+    s = fix.strip()
+    if not s:
+        return False
+    if _CODE_STRONG.search(s) or _CODE_KEYWORD.match(s):
+        return True
+    if _PROSE_OPENER.match(s):
+        return False
+    if ":" in s:
+        return True
+    # No code punctuation and no keyword. A bare token is still plausibly a
+    # replacement (`None`, `settings.DEBUG`); a sentence is not.
+    return len(s.split()) <= 3 and not s.endswith(".")
+
+
 def make_suggestion_block(fix: str, anchor_line: int, lines: CommentableLines) -> str:
     """
     Return a committable ```suggestion block for `fix`, or "" when a
     suggestion would be unsafe. GitHub applies a suggestion by REPLACING the
     anchored line, so we only emit one when:
       - the fix is a single line of code (no newlines, sane length),
+      - the fix reads as code rather than as an instruction about code,
       - the anchor is an ADDED line (suggesting over unchanged context is
         usually wrong), and
       - the fix actually differs from the current line content.
     Anything else belongs in a normal fenced code block.
     """
     if not fix or "\n" in fix or len(fix) > 200:
+        return ""
+    if not _looks_like_code(fix):
         return ""
     entry = lines.get(anchor_line)
     if entry is None:

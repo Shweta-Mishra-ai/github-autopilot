@@ -100,20 +100,45 @@ Only report real gaps. If tests are adequate, set has_gaps to false.""",
             log.info("test_gaps.none_found", pr=pr_number)
             return ""
 
-        gaps = r.get("gaps", [])
+        gaps = [g for g in (r.get("gaps") or []) if isinstance(g, dict)]
         if not gaps:
             return ""
 
+        # A gap against a file that is not in this PR. review.py has always
+        # dropped hallucinated filenames; this section rendered them, so the
+        # table could send a reviewer looking for a function in a file the
+        # change never touched.
+        changed = {f.get("filename", "") for f in files}
+        known = [g for g in gaps if str(g.get("file", "")) in changed]
+        if len(known) != len(gaps):
+            log.warning(f"test_gaps.unknown_file_skipped n={len(gaps) - len(known)}")
+        gaps = known
+        if not gaps:
+            return ""
+
+        VALID_RISK = {"high", "medium", "low"}
+
+        def _risk(g) -> str:
+            v = str(g.get("risk", "medium")).lower()
+            return v if v in VALID_RISK else "medium"
+
         gaps_md = "\n".join(
             f"| `{g.get('file', '?')}` | `{g.get('function', '?')}` | "
-            f"`{g.get('risk', 'medium')}` | {g.get('suggested_test', '')[:80]} |"
+            f"`{_risk(g)}` | {str(g.get('suggested_test', ''))[:80]} |"
             for g in gaps[:5]
         )
 
-        score = r.get("coverage_score", 5)
+        # The model returns this as a number, as a string, or as null. It was
+        # compared straight against 8 and 5, so a non-numeric value raised
+        # TypeError inside this function's try and the whole section — every
+        # gap it had just found included — disappeared behind one log line.
+        try:
+            score = max(0.0, min(10.0, float(r.get("coverage_score", 5))))
+        except (TypeError, ValueError):
+            score = 5.0
         score_emoji = "🟢" if score >= 8 else "🟡" if score >= 5 else "🔴"
 
-        comment = f"""{score_emoji} **Coverage Score: {score}/10**
+        comment = f"""{score_emoji} **Coverage Score: {score:g}/10**
 {r.get("summary", "")}
 
 ### Gaps Found

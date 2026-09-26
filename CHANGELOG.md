@@ -15,6 +15,32 @@ See [docs/MIGRATING.md](docs/MIGRATING.md).
 
 ### Unreleased
 
+**A demoted code review deleted its own findings, and then said they were posted**
+- `_review_code` builds each file's markdown, then asks the confidence gate whether that file's review is trustworthy enough to put on the diff. When the answer was no it dropped the file's inline comments — **after** the markdown had already been written. That markdown renders "_All findings posted as inline comments._" whenever every finding anchored to a diff line, because anchored findings are deliberately left out of the body on the assumption they will appear on the diff. So a demoted file lost its findings from the diff and from the report in the same breath, and the report then asserted they were on the diff. **A critical finding could be published nowhere at all.**
+- This is the same hole `_post_inline_review()`'s 422 fallback exists to close, reopened one branch earlier — and the docstring there already explains why the shape is dangerous. Demotion is a statement about how loudly a finding is presented, never about whether the reader is told it exists, so the findings now move into the report body (using the fallback markdown that was already attached to each comment) and the "posted as inline comments" line can only render when comments were actually posted.
+- The invariant is now asserted directly: for every confidence level, each finding appears in the body or on the diff.
+
+**Every file of every PR was reviewed at the same self-reported confidence**
+- The batch prompt asks for one `confidence` for the whole response. Each per-file entry was handed to `validate_code_review()` on its own, arrived without the key, and took the `0.5` default — so the self-reported term the gate weights was a **constant** for every file the bot has ever reviewed. The batch value is pushed down into any entry that does not carry its own.
+
+**A review score of 0/10 was published as 8/10**
+- `score = r.get("score") or 8`. The comment above it explained the `or` as a guard against a `None` that rendered "Score: None/10", and it does guard that — while also swallowing a genuine `0`, which is the one score that means *do not merge this*. `is None` now, and the score renders as given (`7.5`, not `7.5` shown as `7.0`).
+
+**The bot offered one-click Commit buttons that replaced code with English**
+- GitHub renders a ` ```suggestion ` block as an *Apply/Commit suggestion* button. `make_suggestion_block()` emitted one for any single-line `fix` under 200 characters — and the review prompt asks for an "exact fix", which a model answers with an instruction (`"Add a null check before dereferencing user"`) about as often as with code. Committing that suggestion replaces a working line with a sentence, presented by GitHub as a reviewed, ready-to-apply patch. It is the most damaging output this bot can produce.
+- A `fix` must now read as code before it becomes committable: code punctuation or a language keyword accepts it, an instruction opener without either rejects it. Deliberately conservative — a rejected fix is still shown, in a plain fenced block, which is merely less convenient. Both directions are tested against thirteen real-world fix strings.
+
+**The test-coverage section deleted itself on its own input**
+- `coverage_score` was compared straight against `8` and `5`. A model answering `"6"` or `null` — both of which it does — raised `TypeError` inside `_detect_test_gaps`'s blanket `try`, and the entire section disappeared behind one log line, **taking every gap it had just found with it**. The value is coerced and clamped now, and the section survives a string, a null, a word, and an out-of-range number.
+- Gaps naming a file the PR never touched were rendered verbatim. `review.py` has always dropped hallucinated filenames; this section did not, so the table could send a reviewer hunting for a function in a file the change does not contain. Unknown files are dropped and counted in the log; a genuine gap alongside an invented one still renders. `risk` is validated against its enum rather than interpolated raw.
+
+**`/changelog` and `/release` re-announced work that had already shipped**
+- `_fetch_commits_since_tag()` fetched the latest tag and the last twenty commits and returned both — using the tag only to interpolate into the prompt. Nothing filtered the commits, so every `/changelog` described commits already released in that tag, and its "No new commits since `<tag>`" branch was unreachable. `/release` had the same bug independently, because it duplicated the fetch instead of calling the shared helper.
+- Both stop at the tag's commit now, via one pure `commits_since()` helper. A tag older than the fetched page is treated as not visible rather than as empty, so the commits in hand are still reported. With nothing new, neither command spends an LLM call, and `/changelog`'s empty message names the tag instead of claiming the repository has no commits.
+
+**A word where a number was expected threw away a finished CI analysis**
+- `cmd_ci` formatted its confidence with `int(float(...))`. A model answering `"confidence": "high"` raised `ValueError` *after* a good root cause, fix and prevention had been produced, and the blanket handler replaced all of it with "CI Analysis Failed". The line is omitted when the value is not a number — rather than losing the analysis, and rather than printing a percentage the model never gave. Same fix in `app/mcp/handlers.py`, which had the same expression.
+
 **A provider misconfiguration was handled as an outage, and hidden by it**
 - Groq answers a retired model id with `404`. That fell through to `raise_for_status()` and was recorded as a **circuit-breaker failure**, so three requests opened the breaker on the 70b provider and five more opened it on the 8b fallback. The router then reported `all_providers_down` — sending a maintainer to check provider status when the fix was one environment variable.
 - A breaker exists to stop hammering a service that *might* recover. A model that does not exist, and a key that is not valid, will not recover on their own, so opening the breaker only replaces a precise error with a vague one. `401`, `403` and `404` are now classified as configuration faults: reported with the model id and the variable to change, and the breaker is left alone. A `5xx` still opens it, which is what it is for.

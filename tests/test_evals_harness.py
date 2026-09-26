@@ -13,7 +13,6 @@ _ROOT = Path(__file__).parent.parent
 
 
 class TestScorer:
-
     def test_all_checks_pass(self):
         case = {"id": "c1", "must_mention": ["null check"], "require_code_block": True}
         out = "The bug is a missing null check.\n```python\nif x is None: ...\n```" + "x" * 50
@@ -346,11 +345,22 @@ class TestGapHarnessWiring:
     month because the harness captured the wrong thing."""
 
     def _stub(self, verdict):
+        import re
         from unittest.mock import MagicMock
 
         def fake_ask(self, system, user, **kwargs):
             meta = MagicMock(provider="groq", model="m", total_tokens=10, cost_usd=0.0)
-            return verdict, meta
+            # Point each gap at the file THIS case changed, read back out of
+            # the prompt. A stub that always names one fixed path is
+            # indistinguishable from a model hallucinating a filename, which
+            # _detect_test_gaps now drops — so an over-reporting model would
+            # render nothing on three of the four cases and the scorer would
+            # never see the behaviour these cases exist to catch.
+            out = dict(verdict)
+            named = re.search(r"^### (\S+)$", user, re.M)
+            if named and out.get("gaps"):
+                out["gaps"] = [dict(g, file=named.group(1)) for g in out["gaps"]]
+            return out, meta
 
         return fake_ask
 

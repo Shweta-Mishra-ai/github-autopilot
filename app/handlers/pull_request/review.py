@@ -147,6 +147,14 @@ IMPORTANT: If a file has no bugs or vulnerabilities, return an empty array `[]` 
 
     by_name = {f["filename"]: f for f in reviewable}
 
+    # The prompt asks for ONE confidence for the whole batch, not one per file.
+    # Every per-file entry therefore reaches validate_code_review() without a
+    # `confidence` key and gets the 0.5 default, so the model's own estimate —
+    # the self-reported term the gate weights at 0.15 — was a constant for
+    # every file of every PR. Push the batch value down into each entry that
+    # does not carry its own.
+    batch_confidence = batch.get("confidence")
+
     for entry in (batch.get("files") or [])[: len(reviewable)]:
         f = by_name.get(entry.get("file", "")) if isinstance(entry, dict) else None
         if not f:
@@ -158,6 +166,8 @@ IMPORTANT: If a file has no bugs or vulnerabilities, return an empty array `[]` 
         filename = f["filename"]
         diff_lines = commentable_lines(f.get("patch", ""))
 
+        if batch_confidence is not None and "confidence" not in entry:
+            entry = {**entry, "confidence": batch_confidence}
         r = validate_code_review(entry)
 
         # A degraded payload means the model returned nothing usable for this
@@ -167,12 +177,21 @@ IMPORTANT: If a file has no bugs or vulnerabilities, return an empty array `[]` 
             log.warning(f"code_review.degraded_skipped file={filename}")
             continue
 
-        # `or 8` not `.get("score", 8)`: the key exists with a None value on
-        # some paths, which rendered as "Score: None/10".
-        score = r.get("score") or 8
+        # `is None`, not `or`: the key exists with a None value on some paths
+        # (which rendered "Score: None/10"), but `or 8` also swallowed a
+        # genuine 0 — the one score that means "do not merge this" — and
+        # published it as a passing 8/10.
+        score = r.get("score")
+        score = 8 if score is None else score
+        score_md = f"{score:g}" if isinstance(score, (int, float)) else str(score)
         issues = r.get("issues", [])
 
         unanchored = []
+        # This file's anchored findings are held locally until the confidence
+        # decision below. They used to be appended straight to the PR-wide
+        # accumulator, which made "how many of THIS file's findings anchored"
+        # a scan of every other file's comments as well.
+        file_comments = []
         for i in issues[:MAX_ISSUES_PER_FILE]:
             severity = i.get("severity", "minor").upper()
             issue_text = i.get("issue", "")
@@ -187,7 +206,7 @@ IMPORTANT: If a file has no bugs or vulnerabilities, return an empty array `[]` 
             fix_md = (
                 suggestion if suggestion else (f"Proposed fix:\n```\n{fix}\n```" if fix else "")
             )
-            inline_comments.append(
+            file_comments.append(
                 {
                     "path": filename,
                     "line": anchor,
@@ -199,21 +218,11 @@ IMPORTANT: If a file has no bugs or vulnerabilities, return an empty array `[]` 
                 }
             )
 
-        issues_md = (
-            "\n".join(unanchored)
-            if unanchored
-            else (
-                "✅ No issues found." if not issues else "_All findings posted as inline comments._"
-            )
-        )
-
         # Score this file's review on evidence: how many of its findings mapped
         # to real diff lines, and whether it actually said anything. The gate
         # was passed into this function and never called before V7.
-        total_findings = len(unanchored) + len(
-            [c for c in inline_comments if c["path"] == filename]
-        )
-        anchored = len([c for c in inline_comments if c["path"] == filename])
+        anchored = len(file_comments)
+        total_findings = len(unanchored) + anchored
         anchor_rate = (anchored / total_findings) if total_findings else 1.0
         verdict = gate.evaluate(
             "code_review", r, anchor_rate=anchor_rate, required_fields=("summary",)
@@ -231,10 +240,34 @@ IMPORTANT: If a file has no bugs or vulnerabilities, return an empty array `[]` 
                 f"\n\n> ⚠️ Confidence {verdict.get('confidence_score', 0):.0%} — "
                 "treat this file's review as a prompt to look, not a verdict."
             )
-            inline_comments = [c for c in inline_comments if c["path"] != filename]
+            # Suppressing the inline comments must not delete the findings.
+            #
+            # This used to drop them from `inline_comments` AFTER issues_md had
+            # already been built, and issues_md renders "All findings posted as
+            # inline comments" whenever every finding anchored. So a file whose
+            # review was demoted lost its findings from the diff and from the
+            # report at once, and the report then asserted they were on the
+            # diff. A critical finding could be reported nowhere at all — the
+            # same hole _post_inline_review()'s fallback exists to close, reopened
+            # one branch further up.
+            #
+            # Demotion is about how loudly a finding is presented, never about
+            # whether the reader is told it exists: they move into the body.
+            unanchored.extend(c["_fallback_md"] for c in file_comments if c.get("_fallback_md"))
+            file_comments = []
+
+        inline_comments.extend(file_comments)
+
+        issues_md = (
+            "\n".join(unanchored)
+            if unanchored
+            else (
+                "✅ No issues found." if not issues else "_All findings posted as inline comments._"
+            )
+        )
 
         reviews.append(
-            f"### `{filename}` — Score: {score}/10\n"
+            f"### `{filename}` — Score: {score_md}/10\n"
             f"{r.get('summary', '')}\n\n{issues_md}{low_confidence}"
         )
 

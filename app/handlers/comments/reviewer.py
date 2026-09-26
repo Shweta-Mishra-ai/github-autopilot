@@ -21,16 +21,41 @@ log = logging.getLogger(__name__)
 # ── Shared helpers ────────────────────────────────────────────────────────────
 
 
+def commits_since(commits: list, tag_sha: str | None) -> list:
+    """
+    Truncate a newest-first commit list at `tag_sha`, exclusive.
+
+    Returns `commits` unchanged when the tag is not in the window — the caller
+    fetches a bounded page, so a tag older than that page is simply not visible
+    and every commit in hand is genuinely unreleased as far as we can tell.
+    Pure, so both /changelog and /release can be tested against it directly.
+    """
+    if not tag_sha:
+        return commits
+    for idx, c in enumerate(commits):
+        if isinstance(c, dict) and c.get("sha") == tag_sha:
+            return commits[:idx]
+    return commits
+
+
 def _fetch_commits_since_tag(repo: str, token: str, per_page: int = 20) -> tuple[list, str]:
     """
-    Fetch recent commits and latest tag name.
-    Shared by /changelog and /release to avoid duplicate GitHub API calls.
-    Returns (commits, latest_tag).
+    Fetch the commits made SINCE the latest tag, plus that tag's name.
+
+    The name has always said "since tag" and the caller has always believed it:
+    /changelog renders "No new commits since <tag>" when the list is empty, and
+    otherwise asks the model for "the entry for the version after <tag>". But
+    the tag was only ever interpolated into the prompt — the list itself was the
+    last `per_page` commits on the default branch, released ones included — so
+    every /changelog re-described work that had already shipped in <tag>, and
+    the empty branch was unreachable.
     """
     tags = gh_get(f"/repos/{repo}/tags?per_page=1", token)
     commits = gh_get(f"/repos/{repo}/commits?per_page={per_page}", token)
-    latest_tag = tags[0]["name"] if (isinstance(tags, list) and tags) else "v0.0.0"
-    return (commits if isinstance(commits, list) else []), latest_tag
+    has_tag = isinstance(tags, list) and tags and isinstance(tags[0], dict)
+    latest_tag = tags[0].get("name", "v0.0.0") if has_tag else "v0.0.0"
+    tag_sha = (tags[0].get("commit") or {}).get("sha") if has_tag else None
+    return commits_since(commits if isinstance(commits, list) else [], tag_sha), latest_tag
 
 
 def _bump_version(version: str) -> str:
@@ -250,12 +275,23 @@ Return JSON:
         if not isinstance(r, dict) or "root_cause" not in r:
             return f"## ⚠️ CI Analysis Incomplete\n\nRaw output:\n\n```\n{str(r)[:500]}\n```"
 
+        # A model that answers "confidence": "high" used to raise ValueError
+        # here — after a perfectly good root cause and fix had been produced —
+        # and the blanket handler below replaced all of it with "CI Analysis
+        # Failed". Omit the line rather than lose the analysis, and rather than
+        # print a percentage the model never gave.
+        try:
+            conf = max(0.0, min(1.0, float(r.get("confidence", 0.85))))
+            conf_line = f"\n\n*Confidence: {int(conf * 100)}%*"
+        except (TypeError, ValueError):
+            conf_line = ""
+
         return (
             f"## 🔴 CI Failure Analysis\n\n"
             f"**Root Cause:** {r.get('root_cause', 'Unknown')}\n\n"
             f"**Fix:**\n```\n{r.get('fix', 'No fix suggested')}\n```\n\n"
-            f"**Prevention:** {r.get('prevention', 'N/A')}\n\n"
-            f"*Confidence: {int(float(r.get('confidence', 0.85)) * 100)}%*"
+            f"**Prevention:** {r.get('prevention', 'N/A')}"
+            f"{conf_line}"
         )
 
     except Exception as exc:
@@ -364,15 +400,16 @@ def cmd_changelog(repo: str, token: str) -> str:
     try:
         commits, latest_tag = _fetch_commits_since_tag(repo, token)
 
+        # Empty now means "nothing since the tag" — which is the case the old
+        # unreachable branch below was written for. It said "no commits in this
+        # repository yet", which was only ever true for an empty repo and is
+        # the wrong thing to tell someone who has simply already released.
         if not commits:
-            return "## ℹ️ No Commits Found\n\nNo commits in this repository yet."
+            return f"## ℹ️ No New Commits\n\nNothing on the default branch since `{latest_tag}`."
 
         commit_list = "\n".join(
             f"- {c['commit']['message'].split(chr(10))[0][:120]}" for c in commits[:15]
         )
-
-        if not commit_list.strip():
-            return f"## ℹ️ No New Commits\n\nNo new commits since `{latest_tag}`."
 
         changelog, _ = router.ask_text(
             "Technical writer. Generate a CHANGELOG entry. Keep a Changelog format.",

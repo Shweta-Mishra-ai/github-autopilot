@@ -566,3 +566,23 @@ class TestCommands:
         prompt = next(c["user"] for c in world.llm.calls[seen:] if "CHANGELOG" in c["system"])
         assert "unreleased work" in prompt
         assert "shipped in v1.2.0" not in prompt, "re-described a released commit"
+
+
+@pytest.mark.usefixtures("show_log_on_failure")
+class TestRepoConfig:
+    def test_a_repo_that_copied_the_old_example_gets_a_clean_footer(self, world):
+        """The example config's footer was already wrapped, and Config.footer
+        wrapped it again: this repository's own PR #108 report ended with
+        "---\\n*\\n\\n---\\n*🤖 ...**"."""
+        world.llm.script = script(_review())
+        old_example = (
+            "bot:\n" '  footer: "\\n\\n---\\n*🤖 GitHub Autopilot — AI-powered repo management*"\n'
+        )
+        repo = world.repo([SQL_FILE], config_yaml=old_example)
+        world.open_pr(repo)
+        sticky = world.sticky(repo)
+        world.settle(repo)
+        body = sticky["body"]
+        assert "*🤖 GitHub Autopilot — AI-powered repo management*" in body
+        assert "**" not in body.split("repo management", 1)[1][:3], "footer double-wrapped"
+        assert "---\n*\n" not in body, "footer double-wrapped"

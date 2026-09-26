@@ -15,6 +15,13 @@ See [docs/MIGRATING.md](docs/MIGRATING.md).
 
 ### Unreleased
 
+**The gap report called tested code untested — on this PR**
+- Opened against its own fix, the production bot reported four "untested" symbols on PR #108 — `_SHA_REF`, `as_text`, `_field_completeness`, `scan_repo` — and every one had a test in the same diff. The gap model is shown the first 600 characters of at most four test files, with nothing to say they were cut; the tests sat 800 to 1,300 lines into one file, so it saw imports and a docstring and reasoned from absence.
+- The complete test diffs are now checked for the changed symbols by name, and the model is told which ones are referenced, in the prompt's own voice. A reference is not proof every branch is covered, and the prompt says so: a happy path tested beside an untested error branch is still a gap worth reporting. Excerpts say when they were cut, and the prompt forbids concluding anything from what a cut excerpt does not show.
+
+**Every repo that copied the example config got a broken footer**
+- `Config.footer` wraps its text as a separator and italics, and the repository's own `.ai-repo-manager.yml` — whose header says to copy it into your repo root — set `footer` to an already-wrapped value. Every comment ended `---` / `*` / `---` / `*🤖 …**`, as PR #108's own report showed. The property now strips a leading separator and a single emphasis wrapper before wrapping once, so both forms render the same, and an explicitly empty footer renders nothing rather than a bare `---` and `**`. The example is plain text now.
+
 **An end-to-end suite, and what it found on its first run**
 - `tests/test_e2e_webhook_pipeline.py` drives the real server the way production runs it: gunicorn with the Procfile's flags, the Redis event queue and its in-process consumers, HMAC verification, the GitHub App JWT and token exchange, the LLM router and the real Ollama provider over HTTP. Only the two remote services are fakes, answering on `127.0.0.1`; inside the server the one intervention is the socket destination for `api.github.com`, rewritten at the `requests` transport layer — so URL building, host validation, auth and response handling all run unmodified. Patching `client.GITHUB_API` would not have been enough: `auth.py` hardcodes its own `api.github.com` URL. Thirteen scenarios; marked `integration`, so CI's Redis job runs it and its "fail if nothing actually ran" guard covers it.
 - Every unit test in the repository mocks the GitHub client, so none of them could see the request a handler actually sends. The first run found three that GitHub rejects.

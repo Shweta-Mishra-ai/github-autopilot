@@ -1325,3 +1325,179 @@ class TestASecurityReportNeverCallsAnUnreadSourceClear:
             record = maintenance.scan_repo("o/r", 1)
         assert record["ok"] is True
         assert record["error"] == ""
+
+
+class TestFieldCompletenessIsGraded:
+    @pytest.mark.parametrize(
+        "value,expected",
+        [
+            ("", 0.0),
+            ("abc", 0.3),
+            ("x" * 9, 0.9),
+            ("x" * 10, 1.0),
+            ("x" * 400, 1.0),
+            ("   ab   ", 0.2),
+        ],
+    )
+    def test_grades_by_stripped_length(self, value, expected):
+        from app.core.confidence import _field_completeness
+
+        assert _field_completeness(value) == pytest.approx(expected)
+
+    @pytest.mark.parametrize("value", [None, 42, ["a" * 20], {"a": "b" * 20}])
+    def test_a_non_string_is_no_answer(self, value):
+        from app.core.confidence import _field_completeness
+
+        assert _field_completeness(value) == 0.0
+
+
+class TestGapModelSeesWhatTheTestsReference:
+    """
+    The gap model is shown the first 600 characters of at most four test
+    files. On this repository's own PR #108 the production bot reported four
+    "untested" symbols, and every one had a direct test 800 to 1,300 lines into
+    a single test file: the model saw imports and a docstring. The complete
+    test diffs are now checked for the changed symbols by name, and the excerpts
+    say when they were cut.
+    """
+
+    SOURCE = (
+        "@@ -1,3 +1,9 @@ def scan_repo(repo, installation_id):\n"
+        " x = 1\n"
+        "+_SHA_REF = re.compile('x')\n"
+        "+def as_text(value, default=''):\n"
+        "+    return value\n"
+        "+class Report:\n"
+        "+    pass\n"
+        "+def _untested_helper():\n"
+        "+    return 2\n"
+    )
+
+    def test_changed_symbols_come_from_defs_constants_and_hunk_context(self):
+        from app.handlers.pull_request.gaps import changed_symbols
+
+        assert changed_symbols(self.SOURCE) == [
+            "scan_repo",
+            "_SHA_REF",
+            "as_text",
+            "Report",
+            "_untested_helper",
+        ]
+
+    def test_short_names_locals_and_dunders_are_ignored(self):
+        from app.handlers.pull_request.gaps import changed_symbols
+
+        patch_ = "@@ -1 +1,4 @@\n+q = 1\n+def __init__(self):\n+    local_value = 3\n+ab = 2\n"
+        assert changed_symbols(patch_) == []
+
+    def test_a_reference_past_the_excerpt_is_still_found(self):
+        from app.handlers.pull_request.gaps import referenced_by_tests
+
+        test_patch = (
+            "@@ -0,0 +1,900 @@\n" + "+# filler\n" * 800 + "+    assert as_text(None) == ''\n"
+        )
+        assert len(test_patch) > 600
+        assert referenced_by_tests(["as_text", "_untested_helper"], [test_patch]) == ["as_text"]
+
+    def test_a_deleted_test_is_not_a_reference(self):
+        from app.handlers.pull_request.gaps import referenced_by_tests
+
+        assert referenced_by_tests(["as_text"], ["@@ -1 +0,0 @@\n-    as_text(None)\n"]) == []
+
+    def test_a_substring_is_not_a_reference(self):
+        from app.handlers.pull_request.gaps import referenced_by_tests
+
+        assert referenced_by_tests(["as_text"], ["+    has_textual_form()\n"]) == []
+
+    def _prompt(self, source_patch, test_patch):
+        sent = []
+        files = [
+            {"filename": "app/core/x.py", "patch": source_patch, "status": "modified"},
+            {"filename": "tests/test_x.py", "patch": test_patch, "status": "modified"},
+        ]
+        with patch.object(
+            gaps_mod.router,
+            "ask",
+            side_effect=lambda s, u, **k: (sent.append(u), ({"has_gaps": False}, None))[1],
+        ):
+            gaps_mod._detect_test_gaps({}, "o/r", 1, files, "t", _cfg(), MagicMock())
+        return sent[0]
+
+    def test_the_prompt_names_what_the_full_tests_reference(self):
+        test_patch = (
+            "@@ -0,0 +1,900 @@\n" + "+# filler\n" * 800 + "+    assert as_text(None) == ''\n"
+        )
+        prompt = self._prompt(self.SOURCE, test_patch)
+        note = prompt.split("reference by name", 1)[1].split("\n\n", 1)[0]
+        assert "as_text" in note
+        assert "_untested_helper" not in note, "claimed a reference that does not exist"
+        assert "not proof every branch is covered" in note
+
+    def test_a_cut_excerpt_says_so(self):
+        test_patch = "@@ -0,0 +1,900 @@\n" + "+# filler\n" * 800
+        prompt = self._prompt(self.SOURCE, test_patch)
+        assert f"(first 600 of {len(test_patch):,} characters shown)" in prompt
+        flat = " ".join(prompt.split())  # the prompt wraps its lines
+        assert "Never conclude a symbol is untested because its test is not in an excerpt" in flat
+
+    def test_a_whole_excerpt_carries_no_cut_marker(self):
+        prompt = self._prompt(self.SOURCE, "@@ -0,0 +1 @@\n+    as_text(None)\n")
+        assert "characters shown)" not in prompt.split("Tests changed in this PR", 1)[1]
+
+    def test_the_filename_line_stays_first_and_alone(self):
+        """The eval stub reads `^### (\\S+)$` to learn which file a case changed."""
+        import re as _re
+
+        prompt = self._prompt(self.SOURCE, "@@ -0,0 +1,900 @@\n" + "+# filler\n" * 800)
+        assert _re.search(r"^### app/core/x.py$", prompt, _re.M)
+        assert _re.search(r"^### tests/test_x.py$", prompt, _re.M)
+
+
+class TestTheFooterIsWrappedOnce:
+    """
+    Config.footer wraps its text as "\\n\\n---\\n*{text}*", and this repository's
+    example .ai-repo-manager.yml — "Place this file in your repo root" — set the
+    footer to an already-wrapped value. Every repo that copied it ended its
+    comments with "---\\n*\\n\\n---\\n*🤖 ...**", as this repository's own PR
+    reports did.
+    """
+
+    @staticmethod
+    def _footer(value):
+        from app.core.config import Config
+
+        cfg = Config.__new__(Config)
+        cfg.get = lambda *keys, default=None: value
+        return Config.footer.fget(cfg)
+
+    @pytest.mark.parametrize(
+        "configured",
+        [
+            "🤖 GitHub Autopilot — AI-powered repo management",
+            "\n\n---\n*🤖 GitHub Autopilot — AI-powered repo management*",
+            "*🤖 GitHub Autopilot — AI-powered repo management*",
+            "---\n🤖 GitHub Autopilot — AI-powered repo management",
+        ],
+    )
+    def test_every_form_renders_the_same_footer(self, configured):
+        assert (
+            self._footer(configured)
+            == "\n\n---\n*🤖 GitHub Autopilot — AI-powered repo management*"
+        )
+
+    def test_bold_is_left_alone(self):
+        assert self._footer("**Bot**") == "\n\n---\n***Bot***"
+
+    @pytest.mark.parametrize("configured", ["", "   ", "---", None])
+    def test_an_empty_footer_renders_nothing(self, configured):
+        assert self._footer(configured) == ""
+
+    def test_the_example_config_is_plain_text(self):
+        import yaml
+
+        from pathlib import Path
+
+        example = yaml.safe_load(
+            (Path(__file__).resolve().parent.parent / ".ai-repo-manager.yml").read_text()
+        )
+        assert not example["bot"]["footer"].lstrip().startswith(("---", "*", "\n"))

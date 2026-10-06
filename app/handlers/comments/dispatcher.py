@@ -10,7 +10,8 @@ import threading
 import time
 import logging
 
-from .constants import ALL_COMMANDS, USER_CMD_LIMIT, USER_CMD_WINDOW
+from ._client import gh_get
+from .constants import ALL_COMMANDS, PR_DIFF_CONTEXT_CHARS, USER_CMD_LIMIT, USER_CMD_WINDOW
 
 log = logging.getLogger(__name__)
 
@@ -22,18 +23,48 @@ _local_cmd_lock = threading.Lock()
 _LOCAL_CMD_MAX_KEYS = 5000
 
 
+# Text a command in which is not an instruction to the bot: a fenced block, an
+# inline code span, or a quoted line. The bot's own PR report says "Use
+# `/gaps` ... or `/test`", so quote-replying it ran a command nobody typed, and
+# pasting a log or snippet that mentions a command did the same.
+_FENCED_RE = re.compile(r"```.*?(?:```|\Z)|~~~.*?(?:~~~|\Z)", re.S)
+_INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
+_QUOTE_LINE_RE = re.compile(r"(?m)^[ \t]*>.*$")
+
+
+def _strip_non_instructions(body: str) -> str:
+    body = _FENCED_RE.sub(" ", body)
+    body = _QUOTE_LINE_RE.sub(" ", body)
+    return _INLINE_CODE_RE.sub(" ", body)
+
+
 def extract_command(body: str) -> str | None:
     """
-    Word-boundary command extraction.
+    Word-boundary command extraction, ignoring quotes and code.
     Longest-match first prevents '/fix' matching inside '/autofix'.
     Negative lookbehind prevents matching substrings like 'prefix'.
     """
-    body_lower = body.lower()
+    body_lower = _strip_non_instructions(body or "").lower()
     # Sort by length descending so /autofix is tried before /fix
     for cmd in sorted(ALL_COMMANDS, key=len, reverse=True):
         if re.search(r"(?<![/\w])" + re.escape(cmd) + r"\b", body_lower):
             return cmd
     return None
+
+
+def command_repeated_by_edit(payload: dict, cmd: str) -> bool:
+    """
+    True when an `edited` comment already held `cmd` before the edit.
+
+    An edit runs a command only if the edit ADDED it. Every edit used to re-run
+    whatever command the comment held — fixing a typo in an old `/release`
+    comment cut another release. Correcting `/fxi` to `/fix` still runs,
+    because the old body held no command.
+    """
+    if payload.get("action") != "edited":
+        return False
+    previous = ((payload.get("changes") or {}).get("body") or {}).get("from") or ""
+    return extract_command(previous) == cmd
 
 
 def check_user_rate_limit(repo: str, author: str) -> bool:
@@ -100,6 +131,35 @@ def augment_with_memory(context: str, repo: str, query: str) -> str:
     except Exception as exc:
         log.debug(f"memory.augment_skipped repo={repo}: {exc}")
     return context
+
+
+def pr_context(repo: str, number: int, issue: dict, token: str, log_ctx) -> str:
+    """
+    A PR's title, description and the start of its diff, or "" on failure.
+
+    These commands were given the title and description only — never the
+    code. `/gaps` analysed the PR's prose, `/test` wrote tests for it, and the
+    PR report recommends both for "a detailed analysis".
+    """
+    try:
+        from app.github.helpers import pr_files
+        from app.handlers.pull_request.analysis import _diff_excerpt
+
+        files = pr_files(repo, number, token, get=gh_get)
+        listing = "\n".join(
+            f"- {f.get('filename', '?')} (+{f.get('additions', 0)} -{f.get('deletions', 0)})"
+            for f in files[:15]
+        )
+        diff = _diff_excerpt(files, PR_DIFF_CONTEXT_CHARS)
+        return (
+            f"Title: {issue.get('title', '')}\n"
+            f"Body: {(issue.get('body') or '')[:500]}\n\n"
+            f"Changed files ({len(files)}):\n{listing}\n\n"
+            f"Diff (start of each file):\n{diff or '(no diff available)'}"
+        )
+    except Exception as exc:
+        log_ctx.warning("pr_context_unavailable", reason=str(exc)[:100])
+        return ""
 
 
 def command_disabled_comment(cmd: str) -> str:

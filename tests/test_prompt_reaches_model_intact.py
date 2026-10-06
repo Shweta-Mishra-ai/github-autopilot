@@ -223,3 +223,48 @@ class TestAutofixNeverCommitsAPartialFile:
             out = autofix.run_autofix("o/r", 1, {"title": "t", "body": "b"}, "tok", "app/x.py")
         apply.assert_not_called()
         assert "can only send files up to" in out
+
+
+class TestAnalysisJudgesTheDiff:
+    """Risk level, title and description were decided from file NAMES."""
+
+    def test_the_analysis_prompt_carries_the_diff(self):
+        from app.handlers.pull_request import analysis
+
+        seen = {}
+
+        def ask(system, user, **kw):
+            seen["user"] = user
+            return {"risk_level": "low", "confidence": 0.1}, MagicMock()
+
+        files = [{"filename": "app/db.py", "patch": "@@ -1 +1 @@\n+q = 'SELECT ' + uid"}]
+        with patch.object(analysis.router, "ask", side_effect=ask):
+            analysis._analyze_pr(
+                {"title": "t", "body": "", "head": {"sha": "s"}}, "o/r", 1, files, "tok",
+                MagicMock(), ConfidenceGate(None), "", MagicMock(), apply_metadata=False,
+            )
+        assert "q = 'SELECT ' + uid" in seen["user"]
+        assert '"confidence": 0.' not in seen["user"]
+
+    def test_a_push_records_risk_but_never_rewrites_the_pr(self):
+        from app.handlers.pull_request import analysis
+
+        gate = MagicMock()
+        gate.evaluate.return_value = {"auto_apply": True, "confidence_note": None}
+        result = {
+            "risk_level": "high", "suggested_title": "feat: x", "description": "d" * 80,
+            "risk_reason": "r", "confidence": 0.99,
+        }
+        with (
+            patch.object(analysis.router, "ask", return_value=(result, MagicMock())),
+            patch.object(analysis, "gh_patch") as gh_patch,
+            patch.object(analysis, "notify_high_risk_pr") as notify,
+            patch("app.core.guardrails.record_pr_risk") as record,
+        ):
+            analysis._analyze_pr(
+                {"title": "t", "body": "", "head": {"sha": "abc"}}, "o/r", 1, [], "tok",
+                MagicMock(), gate, "", MagicMock(), apply_metadata=False,
+            )
+        gh_patch.assert_not_called()
+        notify.assert_not_called()
+        record.assert_called_once_with("o/r", 1, "abc", "high")

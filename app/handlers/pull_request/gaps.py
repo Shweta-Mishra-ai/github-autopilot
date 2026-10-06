@@ -60,6 +60,29 @@ def referenced_by_tests(symbols: list[str], test_patches: list[str]) -> list[str
     return [s for s in symbols if re.search(rf"\b{re.escape(s)}\b", text)]
 
 
+def _reference_line(symbols: list[str], referenced: list[str]) -> str:
+    """
+    The measured headline for the section, or "" when the diff defines no
+    symbols to measure against.
+
+    Deliberately not called coverage: only tests changed in THIS PR are
+    searched, so a function with tests elsewhere in the repository counts as
+    unreferenced, and a name appearing in a test is not proof that every
+    branch runs. The line says both, so nobody reads it as more than it is.
+    """
+    if not symbols:
+        return ""
+    ratio = len(referenced) / len(symbols)
+    emoji = "🟢" if ratio >= 0.8 else "🟡" if ratio >= 0.5 else "🔴"
+    return (
+        f"{emoji} **Changed symbols referenced by this PR's tests: "
+        f"{len(referenced)} of {len(symbols)}**\n"
+        "<sub>Counted by name in the test files this PR changes. Tests already in "
+        "the repository are not searched, and a reference does not prove every "
+        "branch is exercised.</sub>\n\n"
+    )
+
+
 def _excerpt(f: dict) -> str:
     """A diff excerpt under its filename, saying so when it was cut. The
     `### filename` line stays first and alone — the eval stub reads it."""
@@ -153,7 +176,6 @@ gap only for a changed source behaviour that none of these tests reaches.
 Return JSON:
 {{
   "has_gaps": true,
-  "coverage_score": 6,
   "gaps": [
     {{
       "file": "filename.py",
@@ -205,18 +227,14 @@ Only report real gaps. If tests are adequate, set has_gaps to false.""",
             for g in gaps[:5]
         )
 
-        # The model returns this as a number, as a string, or as null. It was
-        # compared straight against 8 and 5, so a non-numeric value raised
-        # TypeError inside this function's try and the whole section — every
-        # gap it had just found included — disappeared behind one log line.
-        try:
-            score = max(0.0, min(10.0, float(r.get("coverage_score", 5))))
-        except (TypeError, ValueError):
-            score = 5.0
-        score_emoji = "🟢" if score >= 8 else "🟡" if score >= 5 else "🔴"
+        # The score is COUNTED, not asked for. It was the model's
+        # "coverage_score", and the prompt's example JSON set that to 6 —
+        # models copy example values, so nearly every PR scored 6/10 whatever
+        # its tests did. What can actually be measured from the diff is how
+        # many of the changed symbols the changed tests mention by name.
+        score_md = _reference_line(symbols, referenced)
 
-        comment = f"""{score_emoji} **Coverage Score: {score:g}/10**
-{r.get("summary", "")}
+        comment = f"""{score_md}{r.get("summary", "")}
 
 ### Gaps Found
 

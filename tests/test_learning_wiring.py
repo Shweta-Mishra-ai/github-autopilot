@@ -53,7 +53,7 @@ class TestMergeRecordsAutofixOutcome:
         pr = {"head": {"sha": "abc", "ref": head_branch}, "base": {"ref": "main"}}
         guard_ok = MagicMock(passed=True)
 
-        with patch.object(publisher, "gh_get", side_effect=[pr, [], {"check_runs": []}]), \
+        with patch.object(publisher, "gh_get", side_effect=[pr, [], {"total_count": 0, "check_runs": []}, {"statuses": []}]), \
              patch.object(publisher, "gh_put", return_value={"merged": True, "sha": "deadbeef1234"}), \
              patch.object(publisher, "gh_delete"), \
              patch("app.core.guardrails.check_pr_auto_merge", return_value=guard_ok), \

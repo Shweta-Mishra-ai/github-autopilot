@@ -193,11 +193,13 @@ def validate_code_review(raw: dict) -> dict:
             "_degraded": True,
         }
 
-    # Score: float 0-10
+    # Score: float 0-10, or None when the model gave none. This defaulted to
+    # 7.0 — "acceptable quality" — so a review with no score at all rendered
+    # as 7/10: the fabricated-result bug is_unusable() exists to prevent.
     score = None
     try:
-        score = float(raw.get("score", 7.0))  # default 7 = acceptable quality
-        score = max(0.0, min(10.0, score))
+        if raw.get("score") is not None:
+            score = max(0.0, min(10.0, float(raw["score"])))
     except (TypeError, ValueError):
         score = None
 

@@ -141,20 +141,31 @@ class TestBatchConfidenceIsRead:
         assert seen == [0.4]
 
 
-class TestScoreZeroSurvives:
-    """`r.get("score") or 8` turned the one score that means "do not merge"
-    into a passing grade."""
+class TestNoInventedScore:
+    """
+    The per-file heading was "Score: N/10", where N was a number the prompt's
+    own example put at 8 and the validator defaulted to 7 when absent. It now
+    states what was actually found.
+    """
 
-    @pytest.mark.parametrize("given,shown", [(0, "0/10"), (2, "2/10"), (7.5, "7.5/10")])
-    def test_score_is_rendered_as_given(self, given, shown):
-        md, _ = _review({"files": [_entry(score=given, issues=[])]})
-        assert f"Score: {shown}" in md
+    @pytest.mark.parametrize("given", [0, 2, 7.5, None, "high"])
+    def test_heading_never_carries_a_mark_out_of_ten(self, given):
+        md, _ = _review({"files": [_entry(score=given)]})
+        assert "/10" not in md
+        assert "1 critical" in md
 
-    def test_a_missing_score_still_falls_back(self):
-        entry = _entry(issues=[])
-        entry.pop("score")
-        md, _ = _review({"files": [entry]})
-        assert "Score: 7/10" in md  # validator's documented default
+    def test_a_clean_file_says_so(self):
+        md, _ = _review({"files": [_entry(issues=[])]})
+        assert "no issues found" in md and "/10" not in md
+
+    def test_counts_are_worst_first_and_hidden_findings_are_disclosed(self):
+        issues = [
+            {"severity": s, "line": "", "issue": f"problem {n}", "fix": ""}
+            for n, s in enumerate(["minor", "critical", "minor", "major", "minor", "minor"])
+        ]
+        md, _ = _review({"files": [_entry(issues=issues)]})
+        assert "1 critical, 1 major, 4 minor" in md
+        assert "2 less severe finding(s) not shown" in md
 
 
 class TestNoCommittableProse:

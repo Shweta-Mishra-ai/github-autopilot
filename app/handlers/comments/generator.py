@@ -12,7 +12,25 @@ from app.ai.hallucination import add_confidence_footer
 from app.ai.guarded import degraded_comment, guarded_ask, is_degraded
 from app.core.sanitizer import wrap_user_content
 
+from .constants import COMMAND_CONTEXT_CHARS
+
 log = logging.getLogger(__name__)
+
+
+def _clip(code, limit: int) -> str:
+    """
+    `code` cut at a line boundary within `limit`, with a visible marker.
+
+    These blocks were sliced to 300-400 characters mid-line and rendered as
+    code — a generated test cut off inside an assertion read as a complete,
+    runnable test. A cut is now said to be a cut.
+    """
+    text = code if isinstance(code, str) else str(code or "")
+    if len(text) <= limit:
+        return text
+    head = text[:limit]
+    head = head[: head.rfind("\n")] if "\n" in head else head
+    return f"{head}\n# … truncated ({len(text) - len(head):,} more characters)"
 
 
 def cmd_fix(ctx_title: str, context: str, repo: str = "") -> str:
@@ -32,7 +50,7 @@ def cmd_fix(ctx_title: str, context: str, repo: str = "") -> str:
         "Senior engineer. Give precise, working fix. JSON only.",
         f"""Fix this issue:
 Title: {ctx_title}
-{wrap_user_content(context[:2000], "ISSUE_CONTEXT")}
+{wrap_user_content(context[:COMMAND_CONTEXT_CHARS], "ISSUE_CONTEXT")}
 {f"Repo conventions (learned from previously accepted fixes):{learned}" if learned else ""}
 
 Return JSON:
@@ -68,7 +86,7 @@ def cmd_explain(context: str) -> str:
     try:
         text, _ = router.ask_text(
             "Senior engineer. Explain clearly in plain English.",
-            f"Explain this:\n{wrap_user_content(context[:2000], 'ISSUE_CONTEXT')}",
+            f"Explain this:\n{wrap_user_content(context[:COMMAND_CONTEXT_CHARS], 'ISSUE_CONTEXT')}",
             task="explain",
         )
     except Exception as exc:
@@ -88,7 +106,7 @@ def cmd_improve(context: str) -> str:
     r, _ = guarded_ask(
         "Staff engineer. Suggest concrete improvements. JSON only.",
         f"""Suggest improvements for:
-{wrap_user_content(context[:2000], "ISSUE_CONTEXT")}
+{wrap_user_content(context[:COMMAND_CONTEXT_CHARS], "ISSUE_CONTEXT")}
 
 Return JSON:
 {{
@@ -111,7 +129,7 @@ Return JSON:
     for i, imp in enumerate(r.get("improvements", [])[:4], 1):
         lines.append(f"### {i}. `{imp.get('area', '').upper()}` — {imp.get('suggestion', '')}")
         if imp.get("example"):
-            lines.append(f"```\n{imp['example'][:300]}\n```")
+            lines.append(f"```\n{_clip(imp['example'], 1500)}\n```")
     return "\n\n".join(lines)
 
 
@@ -120,7 +138,7 @@ def cmd_test(context: str) -> str:
     r, _ = guarded_ask(
         "Senior QA engineer. Generate tests. JSON only.",
         f"""Write tests for:
-{wrap_user_content(context[:2000], "ISSUE_CONTEXT")}
+{wrap_user_content(context[:COMMAND_CONTEXT_CHARS], "ISSUE_CONTEXT")}
 
 Return JSON:
 {{
@@ -143,7 +161,7 @@ Return JSON:
         lines.append(
             f"### `{t.get('name', 'test')}` ({t.get('type', 'unit')})\n"
             f"*{t.get('desc', '')}*\n"
-            f"```python\n{t.get('code', '')[:400]}\n```"
+            f"```python\n{_clip(t.get('code', ''), 3000)}\n```"
         )
     return "\n\n".join(lines)
 
@@ -153,7 +171,7 @@ def cmd_docs(context: str) -> str:
     r, _ = guarded_ask(
         "Technical writer. Generate documentation. JSON only.",
         f"""Generate docs for:
-{wrap_user_content(context[:2000], "ISSUE_CONTEXT")}
+{wrap_user_content(context[:COMMAND_CONTEXT_CHARS], "ISSUE_CONTEXT")}
 
 Return JSON:
 {{
@@ -182,7 +200,7 @@ def cmd_refactor(context: str) -> str:
     r, _ = guarded_ask(
         "Principal engineer. Suggest refactoring. JSON only.",
         f"""Suggest refactoring for:
-{wrap_user_content(context[:2500], "ISSUE_CONTEXT")}
+{wrap_user_content(context[:COMMAND_CONTEXT_CHARS], "ISSUE_CONTEXT")}
 
 Return JSON:
 {{
@@ -207,9 +225,9 @@ Return JSON:
     for i, ref in enumerate(r.get("refactors", [])[:4], 1):
         lines.append(f"### {i}. `{ref.get('type', '').upper()}` — {ref.get('description', '')}")
         if ref.get("before"):
-            lines.append(f"**Before:**\n```\n{ref['before'][:300]}\n```")
+            lines.append(f"**Before:**\n```\n{_clip(ref['before'], 1500)}\n```")
         if ref.get("after"):
-            lines.append(f"**After:**\n```\n{ref['after'][:300]}\n```")
+            lines.append(f"**After:**\n```\n{_clip(ref['after'], 1500)}\n```")
         lines.append(f"✅ **Benefit:** {ref.get('benefit', '')}")
     return "\n\n".join(lines)
 
@@ -219,7 +237,7 @@ def cmd_gaps(context: str) -> str:
     r, _ = guarded_ask(
         "Senior QA engineer. Identify test gaps. JSON only.",
         f"""Analyze this code for test coverage gaps:
-{wrap_user_content(context[:2500], "ISSUE_CONTEXT")}
+{wrap_user_content(context[:COMMAND_CONTEXT_CHARS], "ISSUE_CONTEXT")}
 
 Return JSON:
 {{
@@ -253,7 +271,7 @@ def cmd_perf(context: str) -> str:
     r, _ = guarded_ask(
         "Performance engineer. Analyze code for performance issues. JSON only.",
         f"""Analyze for performance problems:
-{wrap_user_content(context[:2500], "ISSUE_CONTEXT")}
+{wrap_user_content(context[:COMMAND_CONTEXT_CHARS], "ISSUE_CONTEXT")}
 
 Return JSON:
 {{
@@ -288,7 +306,7 @@ Return JSON:
             f"\n### {i}. `{issue.get('location', '')}` "
             f"— {issue.get('current_complexity', '')}\n"
             f"**Problem:** {issue.get('issue', '')}\n\n"
-            f"**Fix:**\n```python\n{issue.get('fix', '')[:400]}\n```\n"
+            f"**Fix:**\n```python\n{_clip(issue.get('fix', ''), 2000)}\n```\n"
             f"**Improvement:** {issue.get('improvement', '')}\n"
         )
 

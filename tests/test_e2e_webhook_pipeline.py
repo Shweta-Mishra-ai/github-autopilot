@@ -291,7 +291,8 @@ class TestPullRequestOpened:
         body = sticky["body"]
         for section in ("Analysis", "Code review", "Test coverage", "Risk Level:** `HIGH`"):
             assert section in body, f"missing {section!r}"
-        assert "Coverage Score: 4/10" in body, "a string coverage_score lost the section"
+        assert "bind params" in body, "a string coverage_score lost the section"
+        assert "Coverage Score" not in body, "the model's own score must not be published"
         assert len([c for c in world.comments[repo] if MARKER in c["body"]]) == 1
 
     def _metadata_edits(self, world, **repo_kw):

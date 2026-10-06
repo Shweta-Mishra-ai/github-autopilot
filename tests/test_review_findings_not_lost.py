@@ -288,6 +288,39 @@ class TestGapSectionSurvivesItsOwnInput:
         out = self._gaps({**self.BASE, "coverage_score": score}, log=log)
         assert "cover the raise" in out, f"section lost for coverage_score={score!r}"
         assert log.error.call_count == 0
+        # Whatever the model claims, it is not published as a score.
+        assert "/10" not in out and "Coverage Score" not in out
+
+    def test_the_headline_is_counted_from_the_diff(self):
+        src = {
+            "filename": "app/calc.py",
+            "status": "modified",
+            "patch": "@@ -1,0 +1,4 @@\n+def add_tax(x):\n+    return x\n+def strip_tax(x):\n+    return x",
+        }
+        test = {
+            "filename": "tests/test_calc.py",
+            "status": "modified",
+            "patch": "@@ -1,0 +1,2 @@\n+def test_add():\n+    assert add_tax(1) == 1",
+        }
+        payload = {
+            **self.BASE,
+            "gaps": [{"file": "app/calc.py", "function": "strip_tax", "risk": "high",
+                      "suggested_test": "cover strip_tax"}],
+        }
+        out = self._gaps(payload, files=[src, test])
+        assert "Changed symbols referenced by this PR's tests: 1 of 2" in out
+        assert "Tests already in the repository are not searched" in out
+
+    def test_the_prompt_offers_no_example_score_to_copy(self):
+        seen = {}
+
+        def ask(system, user, **kw):
+            seen["user"] = user
+            return {"has_gaps": False}, MagicMock()
+
+        with patch.object(gaps_mod.router, "ask", side_effect=ask):
+            gaps_mod._detect_test_gaps({}, "o/r", 1, FILES, "t", _cfg(), MagicMock())
+        assert "coverage_score" not in seen["user"]
 
     def test_gap_against_a_file_not_in_the_pr_is_dropped(self):
         out = self._gaps(

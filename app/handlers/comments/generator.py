@@ -59,7 +59,7 @@ Return JSON:
   "fix": "working code or commit fixes",
   "explanation": "why this fix works",
   "test": "test to verify fix",
-  "confidence": 0.85
+  "confidence": "a number from 0.0 to 1.0: how sure you are this fix is right"
 }}""",
         task="fix_command",
         response_type="fix",

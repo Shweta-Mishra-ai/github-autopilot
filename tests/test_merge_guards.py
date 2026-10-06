@@ -2,7 +2,7 @@
 /merge guard regressions. Each was reproduced against the code before the fix.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from app.core.guardrails import check_pr_auto_merge
 from app.handlers.comments import publisher

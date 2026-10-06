@@ -197,7 +197,6 @@ class TestAutofixNeverCommitsAPartialFile:
         assert fixed.startswith(current)
 
     def test_a_file_too_large_is_refused_not_cut(self):
-        from app.handlers import autofix
 
         current = self._file(10_000)
         fixed, user = self._apply(current)

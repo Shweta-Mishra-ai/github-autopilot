@@ -157,7 +157,7 @@ def check_auto_label(issue_or_pr: dict, labels: list, config) -> GuardrailResult
 
 
 def check_pr_title_update(pr: dict, config) -> GuardrailResult:
-    if not config.get("pull_requests", "auto_polish_title", default=True):
+    if not config.get("pull_requests", "auto_polish_title", default=False):
         return GuardrailResult(False, "Title auto-polish disabled")
     current_title = pr.get("title", "")
     if not current_title:

@@ -38,16 +38,25 @@ def _strip_non_instructions(body: str) -> str:
     return _INLINE_CODE_RE.sub(" ", body)
 
 
+# A command must open a line, optionally after an @mention of the bot. It
+# used to match anywhere, so prose ran commands: "See /release for details"
+# cut a release, "I ran /test locally" generated tests.
+_LINE_START = r"(?m)^[ \t]*(?:@[\w-]+(?:\[bot\])?[ \t,:]+)?"
+
+
 def extract_command(body: str) -> str | None:
     """
-    Word-boundary command extraction, ignoring quotes and code.
-    Longest-match first prevents '/fix' matching inside '/autofix'.
-    Negative lookbehind prevents matching substrings like 'prefix'.
+    The command a comment issues, or None.
+
+    A command counts only at the start of a line (after an optional
+    @mention), and never inside a quote or code. Longest-match first prevents
+    '/fix' matching inside '/autofix'; the trailing word boundary stops
+    '/fix' matching '/fixture'.
     """
     body_lower = _strip_non_instructions(body or "").lower()
     # Sort by length descending so /autofix is tried before /fix
     for cmd in sorted(ALL_COMMANDS, key=len, reverse=True):
-        if re.search(r"(?<![/\w])" + re.escape(cmd) + r"\b", body_lower):
+        if re.search(_LINE_START + re.escape(cmd) + r"\b", body_lower):
             return cmd
     return None
 

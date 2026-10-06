@@ -25,7 +25,9 @@
 Post any command as a comment on a GitHub issue or pull request. The bot reads the comment, identifies the command, checks permissions, and responds within 30 seconds.
 
 **Triggering rules:**
-- The command must appear anywhere in the comment body (beginning, middle, or end)
+- The command must start a line of the comment (optionally after an `@mention` of the bot). A command mentioned mid-sentence — "see /release for details" — is not run
+- Commands inside quoted lines (`>`), inline code or code blocks are ignored, so quoting or pasting text that mentions a command never runs it
+- Editing a comment runs a command only if the edit added it — fixing a typo elsewhere in an old `/release` comment does not release again
 - Commands are case-insensitive: `/Fix` works the same as `/fix`
 - Only the first recognised command in a comment is processed
 - The bot processes `issue_comment` events — comments on issues AND pull requests both work

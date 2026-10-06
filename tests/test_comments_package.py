@@ -135,9 +135,11 @@ class TestCommandExtraction:
         from app.handlers.comments.dispatcher import extract_command
         assert extract_command("/rollback 3 confirm") == "/rollback"
 
-    def test_command_in_middle_of_text(self):
+    def test_command_in_middle_of_text_does_not_run(self):
+        """Prose mentioning a command is not an instruction to run it."""
         from app.handlers.comments.dispatcher import extract_command
-        assert extract_command("Please /merge this PR when ready") == "/merge"
+        assert extract_command("Please /merge this PR when ready") is None
+        assert extract_command("Ready.\n/merge") == "/merge"
 
     def test_multiple_commands_first_wins(self):
         """When multiple commands present, longest match in sorted order wins."""

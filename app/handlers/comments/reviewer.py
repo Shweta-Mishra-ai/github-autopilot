@@ -7,10 +7,12 @@ Plus shared helpers: _bump_version, _fetch_commits_since_tag.
 
 from __future__ import annotations
 
+import datetime
 import logging
 import re
 
 from app.github.client import GitHubError
+from app.core.sanitizer import wrap_user_content
 from app.github.helpers import fmt_error
 from ._client import gh_get, router  # noqa: F401  (re-exported: tests patch these names)
 
@@ -80,32 +82,36 @@ def cmd_health(repo: str, token: str) -> str:
     """Repo health grade: issues, PRs, license, description."""
     try:
         repo_data = gh_get(f"/repos/{repo}", token)
-        all_issues = gh_get(f"/repos/{repo}/issues?state=open&per_page=50", token)
-        open_prs = gh_get(f"/repos/{repo}/pulls?state=open&per_page=20", token)
-
-        open_issues = [i for i in all_issues if "pull_request" not in i]
+        # Counted, not sampled. This listed 50 issues and 20 PRs and counted
+        # the lists, so any repository past those sizes had its numbers
+        # silently capped — and pull requests used up the issue page's slots.
+        # The repository's own open_issues_count includes PRs, so subtract the
+        # PR total the search API reports.
+        prs = gh_get(f"/search/issues?q=repo:{repo}+type:pr+state:open&per_page=1", token)
+        n_prs = int((prs or {}).get("total_count", 0)) if isinstance(prs, dict) else 0
+        n_issues = max(0, int(repo_data.get("open_issues_count", 0) or 0) - n_prs)
         score = 100
         findings: list[str] = []
         recommendations: list[str] = []
 
-        if len(open_issues) > 20:
+        if n_issues > 20:
             score -= 15
-            findings.append(f"🔴 {len(open_issues)} open issues")
+            findings.append(f"🔴 {n_issues} open issues")
             recommendations.append("Triage and close old issues")
-        elif len(open_issues) > 10:
+        elif n_issues > 10:
             score -= 7
-            findings.append(f"🟡 {len(open_issues)} open issues")
+            findings.append(f"🟡 {n_issues} open issues")
         else:
-            findings.append(f"✅ {len(open_issues)} open issues")
+            findings.append(f"✅ {n_issues} open issues")
 
-        if len(open_prs) > 10:
+        if n_prs > 10:
             score -= 10
-            findings.append(f"🔴 {len(open_prs)} open PRs")
-        elif len(open_prs) > 5:
+            findings.append(f"🔴 {n_prs} open PRs")
+        elif n_prs > 5:
             score -= 5
-            findings.append(f"🟡 {len(open_prs)} open PRs")
+            findings.append(f"🟡 {n_prs} open PRs")
         else:
-            findings.append(f"✅ {len(open_prs)} open PRs")
+            findings.append(f"✅ {n_prs} open PRs")
 
         if not repo_data.get("license"):
             score -= 8
@@ -237,7 +243,7 @@ def cmd_ci(context: str, repo: str = "", token: str = "") -> str:
                 f"Status: {latest.get('conclusion', 'unknown')}\n"
                 f"URL: {latest.get('html_url', '')}\n"
                 f"Commit: {latest.get('head_sha', '')[:12]}\n"
-                f"Message: {latest.get('head_commit', {}).get('message', '')[:200]}"
+                f"Message: {(latest.get('head_commit') or {}).get('message', '')[:200]}"
             )
         except Exception as exc:
             return (
@@ -250,20 +256,33 @@ def cmd_ci(context: str, repo: str = "", token: str = "") -> str:
             "Paste the error log after `/ci`:\n```\n/ci\n<error log here>\n```"
         )
 
+    # With no log pasted, all there is to go on is the run's metadata —
+    # workflow name, branch, commit message. The prompt demanded an "exact
+    # reason" anyway, so the model supplied one. It is now told what it has,
+    # and the reply says the analysis is metadata-only.
+    metadata_only = not (context or "").strip()
+    limits = (
+        "Only run METADATA is available below — no log output. If the root cause "
+        'cannot be determined from it, set root_cause to "Unknown without the log" '
+        "and make the fix the steps to find it.\n\n"
+        if metadata_only
+        else ""
+    )
+
     try:
         from app.ai.guarded import degraded_comment, guarded_ask, is_degraded
 
         r, _verdict = guarded_ask(
             "DevOps expert. Analyze CI failures precisely. JSON only.",
-            f"""Analyze this CI failure:
-{ci_context[:3000]}
+            f"""Analyze this CI failure.
+{limits}{wrap_user_content(ci_context[:3000], "CI_CONTEXT")}
 
 Return JSON:
 {{
-  "root_cause": "exact reason in one sentence",
+  "root_cause": "the reason, in one sentence",
   "fix": "step-by-step commands to fix",
   "prevention": "how to prevent in future",
-  "confidence": 0.85
+  "confidence": "a number from 0.0 to 1.0: how sure you are of the root cause"
 }}""",
             task="ci_analysis",
             response_type="ci",
@@ -280,11 +299,19 @@ Return JSON:
         # and the blanket handler below replaced all of it with "CI Analysis
         # Failed". Omit the line rather than lose the analysis, and rather than
         # print a percentage the model never gave.
+        #
+        # No default either: `r.get("confidence", 0.85)` printed "85%" for a
+        # model that gave no confidence at all.
         try:
-            conf = max(0.0, min(1.0, float(r.get("confidence", 0.85))))
+            conf = max(0.0, min(1.0, float(r["confidence"])))
             conf_line = f"\n\n*Confidence: {int(conf * 100)}%*"
-        except (TypeError, ValueError):
+        except (KeyError, TypeError, ValueError):
             conf_line = ""
+        if metadata_only:
+            conf_line += (
+                "\n\n> ℹ️ Based on the run's metadata only — no log was available. "
+                "Paste the failing output after `/ci` for a grounded analysis."
+            )
 
         return (
             f"## 🔴 CI Failure Analysis\n\n"
@@ -436,7 +463,7 @@ Format:
 ### Fixed
 - ...
 
-Skip empty sections. Use today's date.""",
+Skip empty sections. Today's date is {datetime.datetime.now(datetime.timezone.utc).date().isoformat()}.""",
             task="changelog",
         )
 

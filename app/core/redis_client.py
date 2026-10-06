@@ -25,6 +25,17 @@ _client = None
 _client_lock = threading.RLock()
 
 
+def _redis_host(url: str) -> str:
+    """host:port from a Redis URL, never its credentials."""
+    from urllib.parse import urlsplit
+
+    try:
+        parts = urlsplit(url)
+        return f"{parts.hostname or '?'}:{parts.port or 6379}"
+    except ValueError:
+        return "?"
+
+
 def get_redis() -> "redis_lib.Redis | _FakeRedis":
     """
     Returns a Redis client backed by a shared connection pool.
@@ -65,7 +76,9 @@ def get_redis() -> "redis_lib.Redis | _FakeRedis":
             )
             _client = redis_lib.Redis(connection_pool=_pool)
             _client.ping()
-            log.info(f"redis.connected url={redis_url[:30]}...")
+            # Host only. This logged the first 30 characters of the URL, which
+            # for rediss://default:<password>@host is most of the password.
+            log.info(f"redis.connected host={_redis_host(redis_url)}")
         except Exception as e:
             if _IS_PRODUCTION:
                 raise RuntimeError(

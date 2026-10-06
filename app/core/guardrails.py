@@ -189,7 +189,9 @@ def check_repo_rate_limit(repo: str) -> GuardrailResult:
         import os
 
         limit = int(os.environ.get("REPO_DAILY_AI_LIMIT", "150"))
-        today = datetime.date.today().isoformat()
+        today = (
+            datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+        )  # UTC, as the reset message says
         key = f"limit:{repo}:ai_calls:{today}"
         r = get_redis()
         count = int(r.get(key) or 0)
@@ -209,7 +211,9 @@ def increment_repo_usage(repo: str):
         import datetime
 
         r = get_redis()
-        today = datetime.date.today().isoformat()
+        today = (
+            datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+        )  # UTC, as the reset message says
         key = f"limit:{repo}:ai_calls:{today}"
         r.incr(key)
         r.expire(key, 86400)

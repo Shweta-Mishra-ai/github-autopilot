@@ -170,15 +170,20 @@ class TestAnalyzePR:
         mod = _import_mcp()
         with patch('app.github.auth.get_installation_token', return_value="tok"), \
              patch('app.github.client.gh_get', return_value={"title": "PR"}), \
+             patch('app.github.helpers.pr_files', return_value=[
+                    {"filename": "app/db.py", "patch": "@@ -1 +1 @@\n+q = 'SELECT ' + uid"}]), \
              patch('app.ai.router.router.ask', return_value=({
-                    "grade": "A", "summary": "Good PR",
+                    "summary": "Good PR",
                     "security_issues": [], "test_gaps": [],
                     "improvements": [], "recommendation": "approve",
-                }, MagicMock())):
+                }, MagicMock())) as ask:
                     result = mod._handle_analyze_pr({
                         "repo": "o/r", "pr_number": 1, "installation_id": 123
                     })
-        assert "Grade:** A" in result
+        assert "Good PR" in result and "approve" in result
+        prompt = ask.call_args.args[1]
+        assert "q = 'SELECT ' + uid" in prompt, "the model must be shown the diff"
+        assert "7.5" not in prompt and "B+" not in prompt
 
 
 class TestFixIssue:
@@ -315,17 +320,20 @@ class TestGetRepoHealth:
 
     def test_successful_health(self):
         mod = _import_mcp()
+        def gh(path, token):
+            if path == "/repos/o/r":
+                return {"license": {"name": "MIT"}, "description": "d"}
+            return []
+
         with patch('app.github.auth.get_installation_token', return_value="tok"), \
-             patch('app.ai.router.router.ask', return_value=({
-                 "grade": "B", "score": 7.5,
-                 "top_issues": ["low coverage"],
-                 "quick_wins": ["add CI badge"],
-             }, MagicMock())):
+             patch('app.handlers.comments.gh_get', side_effect=gh), \
+             patch('app.ai.router.router.ask') as ask:
                 result = mod._handle_get_repo_health({
                     "repo": "o/r", "installation_id": 123
                 })
-        assert "Grade:** B" in result
-        assert "7.5" in result
+        # Computed from the repository's real data, with no model involved.
+        ask.assert_not_called()
+        assert "100/100" in result and "MIT" in result
 
 
 class TestRunCommand:

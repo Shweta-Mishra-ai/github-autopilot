@@ -82,7 +82,7 @@ def handle(payload: dict):
 
         r, _verdict = guarded_ask(
             "Senior DevOps engineer. Analyze CI failures concisely. JSON only.",
-            f'Analyze this CI failure and suggest a fix:\n\n{failure_context}\n\nReturn JSON:\n{{\n  "root_cause": "one sentence — exact reason",\n  "category": "test_failure|build_error|lint_error|dependency|timeout|other",\n  "fix": "concrete steps to fix — 2-4 bullet points",\n  "is_flaky": false,\n  "confidence": 0.8\n}}',
+            f'Analyze this CI failure and suggest a fix:\n\n{failure_context}\n\nReturn JSON:\n{{\n  "root_cause": "one sentence — exact reason",\n  "category": "test_failure|build_error|lint_error|dependency|timeout|other",\n  "fix": "concrete steps to fix — 2-4 bullet points",\n  "is_flaky": false,\n  "confidence": "a number from 0.0 to 1.0: how sure you are of the root cause"\n}}',
             task="ci_analysis",
             response_type="ci",
         )

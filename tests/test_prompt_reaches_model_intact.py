@@ -267,3 +267,53 @@ class TestAnalysisJudgesTheDiff:
         gh_patch.assert_not_called()
         notify.assert_not_called()
         record.assert_called_once_with("o/r", 1, "abc", "high")
+
+
+class TestAutofixPlansAgainstTheFile:
+    def _run(self, target_file, gh_get):
+        from app.handlers import autofix
+
+        prompts = []
+
+        def provider_ask(system, user, *a, **k):
+            prompts.append(user)
+            raise RuntimeError("captured")
+
+        with (
+            patch.object(router_mod.router, "_select_provider") as sel,
+            patch.object(autofix, "gh_get", side_effect=gh_get),
+        ):
+            sel.return_value.ask.side_effect = provider_ask
+            out = autofix.run_autofix("o/r", 1, {"title": "t", "body": "b"}, "tok", target_file)
+        return out, prompts
+
+    def test_a_named_file_is_read_before_planning_and_shown_to_the_planner(self):
+        import base64
+
+        src = "def total(items):\n    return sum(i.price for i in items)\n"
+        content = {"content": base64.b64encode(src.encode()).decode(), "sha": "s"}
+        _, prompts = self._run("app/cart.py", lambda path, tok: content)
+        assert prompts, "no plan was requested"
+        assert "return sum(i.price for i in items)" in prompts[0]
+        assert len(prompts[0]) <= MAX_USER_CHARS
+
+    def test_a_blocked_file_is_refused_before_it_is_read(self):
+        def gh_get(path, tok):
+            raise AssertionError(f"read {path} — a blocked file must never be fetched")
+
+        out, prompts = self._run(".env", gh_get)
+        assert "Autofix" in out and prompts == []
+
+    def test_the_apply_step_may_decline_a_plan_that_does_not_fit(self):
+        from app.handlers import autofix
+
+        seen = {}
+
+        def ask(system, user, **kw):
+            seen["user"] = user
+            return {"fixed_content": "x = 1\n"}, MagicMock(total_tokens=0)
+
+        with patch.object(autofix.router, "ask", side_effect=ask):
+            autofix._apply_fix("x = 1\n", {"patch": "p", "problem": "boom"}, "t")
+        assert "PROBLEM: boom" in seen["user"]
+        assert "return the file exactly as given" in seen["user"]

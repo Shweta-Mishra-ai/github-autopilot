@@ -283,7 +283,7 @@ bot:
 
 pull_requests:
   enabled: true
-  auto_polish_title: true       # Rewrites vague PR titles
+  auto_polish_title: false      # Rewrite non-conventional PR titles (default off)
   auto_fill_description: true   # Fills empty PR descriptions
   code_review: true             # Posts code quality review on every PR
   detect_test_gaps: true        # Detects missing test coverage

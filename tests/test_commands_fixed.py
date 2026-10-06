@@ -59,18 +59,10 @@ ALL_COMMANDS = sorted({
 })
 
 
-def _extract_command(body: str):
-    """Fixed word-boundary extractor (the new implementation)."""
-    body_lower = body.lower()
-    for cmd in ALL_COMMANDS:
-        if re.search(r'(?<![/\w])' + re.escape(cmd) + r'\b', body_lower):
-            return cmd
-    return None
-
-
-def _old_extract_command(body: str):
-    """Old buggy substring extractor."""
-    return next((c for c in ALL_COMMANDS if c in body.lower()), None)
+# These tests used to exercise a COPY of the extractor defined here in the
+# test file, so they passed whatever the application did. They now test the
+# real one.
+from app.handlers.comments.dispatcher import extract_command as _extract_command  # noqa: E402
 
 
 def _mock_llm(resp=None, tokens=50):
@@ -93,7 +85,10 @@ class TestCommandMatching:
         assert _extract_command("/fix the crash") == "/fix"
 
     def test_release_matches_correctly(self):
-        assert _extract_command("please /release now") == "/release"
+        assert _extract_command("/release now") == "/release"
+
+    def test_release_mentioned_in_prose_does_not_run(self):
+        assert _extract_command("please /release now") is None
 
     def test_runtests_matches_correctly(self):
         assert _extract_command("/runtests please") == "/runtests"
@@ -109,8 +104,15 @@ class TestCommandMatching:
     def test_inline_text_after_command(self):
         assert _extract_command("/health check now") == "/health"
 
-    def test_command_in_middle_of_sentence(self):
-        assert _extract_command("please run /runtests on this branch") == "/runtests"
+    def test_command_in_middle_of_sentence_does_not_run(self):
+        """Prose that mentions a command is not an instruction."""
+        assert _extract_command("please run /runtests on this branch") is None
+
+    def test_command_after_a_mention_runs(self):
+        assert _extract_command("@github-autopilot /runtests") == "/runtests"
+
+    def test_command_on_a_later_line_runs(self):
+        assert _extract_command("Looks good.\n/runtests") == "/runtests"
 
     def test_no_command_returns_none(self):
         assert _extract_command("just a normal comment") is None
@@ -134,9 +136,12 @@ class TestCommandMatching:
         # The new extractor must correctly get /autofix
         assert _extract_command("/autofix the null pointer") == "/autofix"
 
-    def test_prefixed_slash_not_confused(self):
-        """'/release' in URL should still match."""
-        assert _extract_command("See /release for details") == "/release"
+    def test_a_reference_to_a_command_does_not_run_it(self):
+        """This used to cut a release."""
+        assert _extract_command("See /release for details") is None
+
+    def test_fixture_is_not_fix(self):
+        assert _extract_command("/fixture update") is None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

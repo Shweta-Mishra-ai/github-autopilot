@@ -85,10 +85,54 @@ class TestSilenceWhenNothingToSay:
                 ),
             ),
             patch.object(pr_mod, "upsert_sticky") as sticky,
+            patch.object(pr_mod, "update_sticky_if_present", return_value=None) as refresh,
         ):
             pr_mod.handle(_payload("synchronize"))
 
-        assert sticky.call_count == 0
+        assert sticky.call_count == 0, "a clean push must never create a comment"
+        refresh.assert_called_once()
+
+    def test_a_clean_push_refreshes_a_report_that_listed_findings(self):
+        """It used to return early, leaving the previous report's findings —
+        now fixed — on display as if still open."""
+        from app.github.sticky import MARKER_PR_REPORT, update_sticky_if_present
+
+        with (
+            patch("app.github.sticky.find_sticky", return_value=77),
+            patch("app.github.sticky.gh_patch", return_value={"id": 77}) as patch_fn,
+            patch("app.github.sticky.gh_post") as post,
+        ):
+            assert update_sticky_if_present("o/r", 1, "t", MARKER_PR_REPORT, "now clean")
+        patch_fn.assert_called_once()
+        post.assert_not_called()
+
+    def test_refresh_never_creates_a_comment(self):
+        from app.github.sticky import MARKER_PR_REPORT, update_sticky_if_present
+
+        with (
+            patch("app.github.sticky.find_sticky", return_value=None),
+            patch("app.github.sticky.gh_post") as post,
+        ):
+            assert update_sticky_if_present("o/r", 1, "t", MARKER_PR_REPORT, "x") is None
+        post.assert_not_called()
+
+
+class TestRejectedInputIsReportedNotSwallowed:
+    def test_a_rejected_diff_produces_a_report_telling_a_human_to_look(self):
+        from app.core.sanitizer import InjectionRejected
+
+        with (
+            patch.object(pr_mod, "get_installation_token", return_value="tok"),
+            patch.object(pr_mod, "load_config", return_value=_cfg()),
+            patch.object(pr_mod, "gh_get", return_value=[]),
+            patch.object(pr_mod.router, "ask", side_effect=InjectionRejected("DELIM_INJ")),
+            patch.object(pr_mod.router, "ask_text", side_effect=InjectionRejected("DELIM_INJ")),
+            patch.object(pr_mod, "upsert_sticky") as sticky,
+        ):
+            pr_mod.handle(_payload("opened"))
+
+        body = sticky.call_args.args[4]
+        assert "refused" in body and "Review it manually" in body
 
 
 class TestReportAssembly:

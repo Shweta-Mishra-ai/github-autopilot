@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 
+from app.core.sanitizer import InjectionRejected
 from app.ai.router import router
 from app.ai.validator import is_unusable
 
@@ -248,6 +249,8 @@ Only report real gaps. If tests are adequate, set has_gaps to false.""",
         log.done(f"test_gaps_found: {len(gaps)}")
         return comment
 
+    except InjectionRejected:
+        raise  # handle() reports it; swallowing it here hid it
     except Exception as e:
         log.error(f"Test gap detection failed: {e}")
         return ""

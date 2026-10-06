@@ -96,16 +96,20 @@ class TestHandleRouting:
             mock_analyze.assert_called_once()
             mock_sum.assert_called_once()
 
-    def test_synchronize_skips_analyze(self):
+    def test_synchronize_analyses_the_new_head_without_touching_metadata(self):
+        """The risk record auto-merge reads is keyed by head SHA, so every head
+        needs one; the title/description rewrite stays first-look only."""
         with patch("app.handlers.pull_request.get_installation_token", return_value="tok"), \
              patch("app.handlers.pull_request.load_config", return_value=_mock_config()), \
              patch("app.handlers.pull_request.gh_get", return_value=[]), \
              patch("app.handlers.pull_request._analyze_pr", return_value="") as mock_analyze, \
+             patch("app.handlers.pull_request._build_pr_summary", return_value=""), \
              patch("app.handlers.pull_request._review_code", return_value=("", [])), \
              patch("app.handlers.pull_request._detect_test_gaps", return_value=""):
             from app.handlers.pull_request import handle
             handle(_pr(action="synchronize"))
-            mock_analyze.assert_not_called()
+            mock_analyze.assert_called_once()
+            assert mock_analyze.call_args.kwargs["apply_metadata"] is False
 
     def test_code_review_disabled_skips_review(self):
         with patch("app.handlers.pull_request.get_installation_token", return_value="tok"), \

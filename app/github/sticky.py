@@ -83,3 +83,19 @@ def upsert_sticky(repo: str, issue_number: int, token: str, marker: str, body: s
             log.warning(f"sticky.patch_failed id={existing} — posting fresh: {e}")
 
     return gh_post(f"/repos/{repo}/issues/{issue_number}/comments", token, {"body": body})
+
+
+def update_sticky_if_present(
+    repo: str, issue_number: int, token: str, marker: str, body: str
+) -> dict | None:
+    """
+    PATCH the existing sticky and return it, or return None when there is
+    none. Never creates one: for an update with nothing new to flag, where a
+    fresh comment would be noise but a stale one would be wrong.
+    """
+    if marker not in body:
+        body = f"{body}\n\n{marker}"
+    existing = find_sticky(repo, issue_number, token, marker)
+    if existing is None:
+        return None
+    return gh_patch(f"/repos/{repo}/issues/comments/{existing}", token, {"body": body})

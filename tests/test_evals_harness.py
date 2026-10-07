@@ -388,26 +388,33 @@ class TestGapHarnessWiring:
             "gaps-happy-path-tested-error-branch-not",
         }, failed
 
-    def test_a_model_that_always_reports_gaps_fails_the_quiet_cases(self, monkeypatch):
-        """Scored on what is published: a noisy model that names a real
-        untested-looking line on the PR's own file gets through, and the quiet
-        case must then fail."""
-        verdict = {
-            "has_gaps": True,
-            "gaps": [
-                {
-                    "file": "app/billing/discount.py",
-                    "function": "apply_discount",
-                    "risk": "high",
-                    "untested_line": "return round(total * (1 - percent / 100), 2)",
-                    "suggested_test": "test it",
-                }
-            ],
-            "summary": "needs tests",
-        }
-        results, _ = self._run(monkeypatch, verdict)
-        failed = {r.case_id for r in results if not r.passed}
-        assert "gaps-fully-tested-change-stays-quiet" in failed, failed
+    def test_a_model_that_always_reports_gaps_is_filtered_where_tests_exist(self, monkeypatch):
+        """Scored on what is published. A noisy model that names a real line of
+        already-tested code is not believed — "return round(...)" and the
+        guard's own `raise` are both exercised by the tests in that PR, and
+        neither is provable as a gap — so the tested quiet cases stay quiet.
+        A case with no tests at all has nothing to prove against, which is why
+        the docstring-only case is not in this list."""
+        for line in (
+            "return round(total * (1 - percent / 100), 2)",
+            'raise ValueError("percent must be between 0 and 100")',
+        ):
+            verdict = {
+                "has_gaps": True,
+                "gaps": [
+                    {
+                        "file": "app/billing/discount.py",
+                        "function": "apply_discount",
+                        "risk": "high",
+                        "untested_line": line,
+                        "suggested_test": "test it",
+                    }
+                ],
+                "summary": "needs tests",
+            }
+            results, _ = self._run(monkeypatch, verdict)
+            passed = {r.case_id for r in results if r.passed}
+            assert "gaps-fully-tested-change-stays-quiet" in passed, line
 
     def test_a_vague_gap_on_a_tested_function_is_never_published(self, monkeypatch):
         """The same noisy model, but unable to name a line: filtered out."""

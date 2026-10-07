@@ -386,30 +386,25 @@ def run_gaps_cases() -> tuple[list, list]:
             _print_blocked(case["id"])
             continue
 
-        # Score what the bot PUBLISHES, not the model's first answer. Gap
-        # claims are now checked against the tests before anything is posted
-        # (gaps._verify_against_tests), so the raw verdict and the published
-        # one can differ — and the published one is what a reviewer reads.
-        # The raw verdict is still printed: a model that keeps claiming gaps
-        # which the check then refutes is worth seeing.
+        # Score what the bot PUBLISHES, not the model's first answer. A gap
+        # the model proposes in already-tested code is published only when
+        # the diff proves it (gaps._proof_of_gap), so the raw verdict and the
+        # published one can differ — and the published one is what a reviewer
+        # reads. The model's own claims are printed whenever the two differ or
+        # a case fails, so the outcome is never a guess about what it said.
         published = {"has_gaps": bool((output or "").strip())}
-        if bool(verdict.get("has_gaps")) != published["has_gaps"]:
-            print(f"    (model said has_gaps={bool(verdict.get('has_gaps'))}; "
-                  f"published has_gaps={published['has_gaps']})")
-        # Every later call is the verifier re-checking a claimed gap. Show what
-        # it answered when a case expected silence and got gaps, so a failure
-        # explains itself instead of being guessed at.
-        if published["has_gaps"] and case.get("expect_gaps") is False:
+        claimed_gaps = bool(verdict.get("has_gaps"))
+        if claimed_gaps != published["has_gaps"]:
+            print(f"    (model said has_gaps={claimed_gaps}; published has_gaps={published['has_gaps']})")
+        if claimed_gaps != (case.get("expect_gaps") is True) or published["has_gaps"] != (
+            case.get("expect_gaps") is True
+        ):
             for g in verdict.get("gaps") or []:
                 if isinstance(g, dict):
                     print(
                         f"    claimed: {g.get('function')} | line: {str(g.get('untested_line'))[:80]!r}"
                         f" | {str(g.get('suggested_test'))[:120]}"
                     )
-            for v in captured[1:]:
-                print(f"    verifier: {json.dumps(v)[:300]}")
-            if len(captured) == 1:
-                print("    verifier: not called (no claimed gap names a symbol the tests reference)")
         result = score_output(output, case, structured=published)
         results.append(result)
         _print_case(result)

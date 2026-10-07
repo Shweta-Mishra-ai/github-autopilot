@@ -1,6 +1,10 @@
 """
-A claimed test gap on code the PR's tests already call is checked once more,
-and dropped only on proof: a named test and a quoted line that really exist.
+A test gap in code the PR's tests already call is published only with a fact
+the diff can prove — the model proposes a line, it does not get to decide.
+
+Asking the model whether its own claim was covered was measured on the live
+evals: it said "not covered" for tests that plainly cover the code, every
+time. So the proof is checked in code, and costs no extra AI call.
 """
 
 from unittest.mock import MagicMock, patch
@@ -8,159 +12,118 @@ from unittest.mock import MagicMock, patch
 from app.handlers.pull_request import gaps as gaps_mod
 
 SRC = {
-    "filename": "app/billing/discount.py",
-    "status": "added",
-    "patch": "@@ -0,0 +1,4 @@\n+def apply_discount(total, percent):\n"
-    "+    if percent < 0 or percent > 100:\n+        raise ValueError('bad')\n"
-    "+    return round(total * (1 - percent / 100), 2)\n",
+    "filename": "app/net/retry.py",
+    "status": "modified",
+    "patch": "@@ -1,2 +1,8 @@\n def call_with_retry(fn, attempts=3, on_giveup=None):\n"
+    "-    return fn()\n+    last = None\n+    for attempt in range(attempts):\n"
+    "+        try:\n+            return fn()\n+        except TimeoutError as exc:\n"
+    "+            last = exc\n+    if on_giveup is not None:\n+        on_giveup(last)\n"
+    "+    raise last\n",
 }
-TESTS = {
-    "filename": "tests/test_discount.py",
-    "status": "added",
-    "patch": "@@ -0,0 +1,6 @@\n+def test_applies_percentage():\n"
-    "+    assert apply_discount(200.0, 10) == 180.0\n+\n"
-    "+def test_rejects_out_of_range_percent():\n"
-    "+    with pytest.raises(ValueError):\n+        apply_discount(10.0, 101)\n",
+TESTS_NO_FAILURE_ASSERTED = {
+    "filename": "tests/test_retry.py",
+    "status": "modified",
+    "patch": "@@ -1,2 +1,4 @@\n from app.net.retry import call_with_retry\n"
+    "+def test_returns_result():\n+    assert call_with_retry(lambda: 42) == 42\n",
 }
-CLAIM = {
-    "has_gaps": True,
-    "summary": "s",
-    "gaps": [
-        {
-            "file": "app/billing/discount.py",
-            "function": "apply_discount",
-            "risk": "high",
-            "untested_line": "raise ValueError('bad')",
-            "suggested_test": "test that an out-of-range percent raises ValueError",
-        }
-    ],
+TESTS_ASSERT_FAILURE = {
+    "filename": "tests/test_retry.py",
+    "status": "modified",
+    "patch": "@@ -1,2 +1,6 @@\n from app.net.retry import call_with_retry\n"
+    "+def test_returns_result():\n+    assert call_with_retry(lambda: 42) == 42\n"
+    "+def test_gives_up():\n+    with pytest.raises(TimeoutError):\n"
+    "+        call_with_retry(boom, on_giveup=print)\n",
 }
 
 
-def _run(verdict, files=(SRC, TESTS)):
+def _gap(line, function="call_with_retry"):
+    return {
+        "file": "app/net/retry.py",
+        "function": function,
+        "risk": "high",
+        "untested_line": line,
+        "suggested_test": "exhaust the attempts",
+    }
+
+
+def _run(gap, files):
+    claim = {"has_gaps": True, "summary": "s", "gaps": [gap]}
     calls = []
 
     def ask(system, user, **kw):
         calls.append(user)
-        return (CLAIM if len(calls) == 1 else verdict), MagicMock()
+        return claim, MagicMock()
 
     with patch.object(gaps_mod.router, "ask", side_effect=ask):
         out = gaps_mod._detect_test_gaps({}, "o/r", 1, list(files), "t", MagicMock(), MagicMock())
     return out, calls
 
 
-class TestRefutedOnlyOnProof:
-    def test_a_claim_the_tests_cover_is_dropped(self):
-        out, calls = _run(
-            {
-                "covered": True,
-                "test": "test_rejects_out_of_range_percent",
-                "line": "apply_discount(10.0, 101)",
-            }
-        )
-        assert out == "", "a gap the PR's own tests cover must not be published"
-        assert len(calls) == 2 and "test_rejects_out_of_range_percent" in calls[1]
-
-    def test_an_invented_test_name_is_not_believed(self):
-        out, _ = _run({"covered": True, "test": "test_does_not_exist", "line": "apply_discount(10.0, 101)"})
+class TestAGapInATestedFunctionNeedsProof:
+    def test_a_raise_is_a_gap_when_no_test_asserts_failure(self):
+        out, calls = _run(_gap("raise last"), [SRC, TESTS_NO_FAILURE_ASSERTED])
         assert "Gaps Found" in out
+        assert "no test in this PR asserts that anything raises" in out
+        assert len(calls) == 1, "proof is checked in code, not by asking the model again"
 
-    def test_a_quote_not_in_the_tests_is_not_believed(self):
-        out, _ = _run(
-            {"covered": True, "test": "test_rejects_out_of_range_percent", "line": "assert raises_for(-1)"}
-        )
-        assert "Gaps Found" in out
-
-    def test_not_covered_keeps_the_gap(self):
-        out, _ = _run({"covered": False, "test": "", "line": ""})
-        assert "Gaps Found" in out
-
-    def test_an_unreferenced_function_is_not_rechecked(self):
-        out, calls = _run({"covered": True}, files=(SRC,))
-        assert "Gaps Found" in out and len(calls) == 1
-
-    def test_a_failed_check_keeps_the_gap(self):
-        def ask(system, user, **kw):
-            if "claims this behaviour has no test" in user:
-                raise RuntimeError("provider down")
-            return CLAIM, MagicMock()
-
-        with patch.object(gaps_mod.router, "ask", side_effect=ask):
-            out = gaps_mod._detect_test_gaps({}, "o/r", 1, [SRC, TESTS], "t", MagicMock(), MagicMock())
-        assert "Gaps Found" in out
-
-
-class TestRealWorldAnswerShapes:
-    """The formats models actually use, which an exact-string check refused."""
-
-    def test_a_parametrised_test_name_and_a_diff_prefixed_quote_still_prove_coverage(self):
-        out, _ = _run(
-            {
-                "covered": "true",
-                "test": "tests/test_discount.py::test_rejects_out_of_range_percent(bad)",
-                "line": "+        apply_discount(10.0, 101)",
-            }
-        )
+    def test_a_raise_is_not_a_gap_when_a_test_asserts_failure(self):
+        out, _ = _run(_gap("raise last"), [SRC, TESTS_ASSERT_FAILURE])
         assert out == ""
 
-    def test_a_function_field_with_decoration_is_still_rechecked(self):
-        claim = {
-            **CLAIM,
-            "gaps": [{**CLAIM["gaps"][0], "function": "apply_discount() — error branch"}],
-        }
-        calls = []
+    def test_an_optional_parameter_no_test_names_is_a_gap(self):
+        out, _ = _run(_gap("on_giveup(last)"), [SRC, TESTS_NO_FAILURE_ASSERTED])
+        assert "Gaps Found" in out and "`on_giveup`" in out
 
-        def ask(system, user, **kw):
-            calls.append(user)
-            if len(calls) == 1:
-                return claim, MagicMock()
-            return (
-                {
-                    "covered": True,
-                    "test": "test_rejects_out_of_range_percent",
-                    "line": "apply_discount(10.0, 101)",
-                },
-                MagicMock(),
-            )
-
-        with patch.object(gaps_mod.router, "ask", side_effect=ask):
-            out = gaps_mod._detect_test_gaps({}, "o/r", 1, [SRC, TESTS], "t", MagicMock(), MagicMock())
-        assert len(calls) == 2, "the decorated name must still trigger the check"
+    def test_an_optional_parameter_a_test_sets_is_not_a_gap(self):
+        out, _ = _run(_gap("on_giveup(last)"), [SRC, TESTS_ASSERT_FAILURE])
         assert out == ""
 
+    def test_a_line_that_proves_nothing_is_not_published(self):
+        """'Add another input' is a claim no diff can confirm."""
+        out, _ = _run(_gap("last = exc"), [SRC, TESTS_NO_FAILURE_ASSERTED])
+        assert out == ""
 
-class TestATestedFunctionNeedsAnUntestedLine:
-    """Asking the model again did not stop its false gaps (it answered "not
-    covered" for plainly covered code on every stay-quiet eval case). So a gap
-    in a function the PR's tests call must name the changed line no test
-    reaches — a claim that cannot is not published."""
-
-    def _claim(self, **gap):
-        return {**CLAIM, "gaps": [{**CLAIM["gaps"][0], **gap}]}
-
-    def _run_claim(self, claim, files=(SRC, TESTS)):
-        calls = []
-
-        def ask(system, user, **kw):
-            calls.append(user)
-            return (claim if len(calls) == 1 else {"covered": False}), MagicMock()
-
-        with patch.object(gaps_mod.router, "ask", side_effect=ask):
-            out = gaps_mod._detect_test_gaps({}, "o/r", 1, list(files), "t", MagicMock(), MagicMock())
-        return out, calls
+    def test_a_line_that_is_not_in_the_diff_is_not_published(self):
+        out, _ = _run(_gap("raise ImaginaryError()"), [SRC, TESTS_NO_FAILURE_ASSERTED])
+        assert out == ""
 
     def test_no_line_means_no_gap(self):
-        out, calls = self._run_claim(self._claim(untested_line=""))
-        assert out == "" and len(calls) == 1, "dropped before any extra AI call"
-
-    def test_a_line_that_is_not_in_the_diff_means_no_gap(self):
-        out, _ = self._run_claim(self._claim(untested_line="if total is None: return 0"))
+        out, _ = _run(_gap(""), [SRC, TESTS_NO_FAILURE_ASSERTED])
         assert out == ""
 
-    def test_a_real_untested_line_is_kept(self):
-        out, _ = self._run_claim(self._claim(untested_line="+        raise ValueError('bad')"))
+    def test_the_function_field_may_be_decorated(self):
+        out, _ = _run(_gap("raise last", "call_with_retry() — give-up branch"), [SRC, TESTS_NO_FAILURE_ASSERTED])
         assert "Gaps Found" in out
 
-    def test_an_untested_function_needs_no_line(self):
-        out, _ = self._run_claim(self._claim(untested_line=""), files=(SRC,))
+
+class TestAnUntestedFunctionNeedsNoLine:
+    def test_no_test_mentions_it(self):
+        out, _ = _run(_gap(""), [SRC])
         assert "Gaps Found" in out
+
+    def test_a_removed_test_is_not_a_reference(self):
+        deleted = {
+            "filename": "tests/test_retry.py",
+            "status": "modified",
+            "patch": "@@ -1,3 +1,1 @@\n-def test_old():\n-    assert call_with_retry(f) == 1\n+x = 1\n",
+        }
+        out, _ = _run(_gap(""), [SRC, deleted])
+        assert "Gaps Found" in out
+
+
+class TestOptionalParams:
+    def test_defaults_only_and_not_self_or_varargs(self):
+        patch_ = "@@ -0,0 +1,2 @@\n+def f(self, a, b=1, *args, c: int = 2, **kw):\n+    pass\n"
+        assert gaps_mod._optional_params(patch_, "f") == ["b", "c"]
+
+    def test_defaults_containing_commas_and_calls(self):
+        patch_ = "@@ -0,0 +1,2 @@\n+def f(a, opts=dict(x=1, y=2), flag=False):\n+    pass\n"
+        assert gaps_mod._optional_params(patch_, "f") == ["opts", "flag"]
+
+    def test_a_signature_spread_over_lines(self):
+        patch_ = "@@ -0,0 +1,4 @@\n+def f(\n+    a,\n+    retries=3,\n+):\n+    pass\n"
+        assert gaps_mod._optional_params(patch_, "f") == ["retries"]
+
+    def test_javascript_has_no_python_defaults_and_does_not_crash(self):
+        patch_ = "@@ -0,0 +1,2 @@\n+function f(a, b) {\n+  return a;\n+}\n"
+        assert gaps_mod._optional_params(patch_, "f") == []

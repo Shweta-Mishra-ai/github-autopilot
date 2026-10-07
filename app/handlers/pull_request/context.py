@@ -38,12 +38,24 @@ def _changed_lines(patch: str) -> list[int]:
 
 
 def _python_ranges(source: str, changed: list[int]) -> list[tuple[int, int]] | None:
-    """The innermost function or class enclosing each changed line, or None
-    when the source does not parse (the caller falls back to windows)."""
+    """
+    The module's imports, plus the innermost function or class enclosing each
+    changed line; None when the source does not parse (the caller falls back
+    to windows).
+
+    The imports are there because "X is not defined" is the commonest false
+    positive a reviewer makes when it can see a function but not the top of
+    its file.
+    """
     try:
         tree = ast.parse(source)
     except (SyntaxError, ValueError, RecursionError, MemoryError):
         return None
+    imports = [
+        (n.lineno, n.end_lineno or n.lineno)
+        for n in tree.body
+        if isinstance(n, (ast.Import, ast.ImportFrom))
+    ]
     scopes = [
         (n.lineno, n.end_lineno or n.lineno)
         for n in ast.walk(tree)
@@ -59,7 +71,7 @@ def _python_ranges(source: str, changed: list[int]) -> list[tuple[int, int]] | N
         if end - start > MAX_FUNCTION_LINES:
             start, end = max(start, ln - WINDOW * 2), min(end, ln + WINDOW * 2)
         ranges.append((start, end))
-    return ranges
+    return imports + ranges
 
 
 def _merge(ranges: list[tuple[int, int]], last: int) -> list[tuple[int, int]]:

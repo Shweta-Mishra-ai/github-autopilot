@@ -291,7 +291,7 @@
       "functions": 0,
       "classes": 0,
       "is_package": true,
-      "fan_in": 1,
+      "fan_in": 2,
       "fan_out": 0,
       "external_deps": []
     },
@@ -481,7 +481,7 @@
       "functions": 14,
       "classes": 0,
       "is_package": false,
-      "fan_in": 2,
+      "fan_in": 4,
       "fan_out": 1,
       "external_deps": [
         "app",
@@ -905,12 +905,12 @@
       "id": "app.handlers.autofix",
       "path": "app/handlers/autofix.py",
       "layer": "handlers",
-      "loc": 608,
-      "functions": 13,
+      "loc": 631,
+      "functions": 14,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 6,
+      "fan_out": 7,
       "external_deps": [
         "app",
         "base64",
@@ -1032,7 +1032,7 @@
       "id": "app.handlers.comments.publisher",
       "path": "app/handlers/comments/publisher.py",
       "layer": "handlers",
-      "loc": 504,
+      "loc": 488,
       "functions": 5,
       "classes": 0,
       "is_package": false,
@@ -1135,12 +1135,12 @@
       "id": "app.handlers.pull_request",
       "path": "app/handlers/pull_request/__init__.py",
       "layer": "handlers",
-      "loc": 308,
+      "loc": 313,
       "functions": 1,
       "classes": 0,
       "is_package": true,
       "fan_in": 2,
-      "fan_out": 20,
+      "fan_out": 21,
       "external_deps": [
         "__future__",
         "app"
@@ -1180,7 +1180,7 @@
       "id": "app.handlers.pull_request.context",
       "path": "app/handlers/pull_request/context.py",
       "layer": "handlers",
-      "loc": 120,
+      "loc": 132,
       "functions": 5,
       "classes": 0,
       "is_package": false,
@@ -1198,8 +1198,8 @@
       "id": "app.handlers.pull_request.gaps",
       "path": "app/handlers/pull_request/gaps.py",
       "layer": "handlers",
-      "loc": 355,
-      "functions": 7,
+      "loc": 373,
+      "functions": 8,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
@@ -1227,6 +1227,23 @@
       ]
     },
     {
+      "id": "app.handlers.pull_request.outcomes",
+      "path": "app/handlers/pull_request/outcomes.py",
+      "layer": "handlers",
+      "loc": 57,
+      "functions": 1,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 3,
+      "external_deps": [
+        "__future__",
+        "app",
+        "contextlib",
+        "re"
+      ]
+    },
+    {
       "id": "app.handlers.pull_request.report",
       "path": "app/handlers/pull_request/report.py",
       "layer": "handlers",
@@ -1245,12 +1262,12 @@
       "id": "app.handlers.pull_request.review",
       "path": "app/handlers/pull_request/review.py",
       "layer": "handlers",
-      "loc": 542,
-      "functions": 7,
+      "loc": 575,
+      "functions": 8,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 11,
+      "fan_out": 12,
       "external_deps": [
         "__future__",
         "app"
@@ -1365,11 +1382,11 @@
       "id": "app.intelligence.memory",
       "path": "app/intelligence/memory.py",
       "layer": "intelligence",
-      "loc": 328,
-      "functions": 15,
+      "loc": 358,
+      "functions": 16,
       "classes": 1,
       "is_package": false,
-      "fan_in": 5,
+      "fan_in": 7,
       "fan_out": 2,
       "external_deps": [
         "__future__",
@@ -2088,6 +2105,11 @@
     },
     {
       "source": "app.handlers.autofix",
+      "target": "app.core.learning",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.autofix",
       "target": "app.core.sanitizer",
       "kind": "import"
     },
@@ -2688,6 +2710,11 @@
     },
     {
       "source": "app.handlers.pull_request",
+      "target": "app.handlers.pull_request.outcomes",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
       "target": "app.handlers.pull_request.report",
       "kind": "import"
     },
@@ -2782,6 +2809,21 @@
       "kind": "import"
     },
     {
+      "source": "app.handlers.pull_request.outcomes",
+      "target": "app.core",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request.outcomes",
+      "target": "app.core.learning",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request.outcomes",
+      "target": "app.intelligence.memory",
+      "kind": "runtime"
+    },
+    {
       "source": "app.handlers.pull_request.review",
       "target": "app.ai.hallucination",
       "kind": "runtime"
@@ -2835,6 +2877,11 @@
       "source": "app.handlers.pull_request.review",
       "target": "app.handlers.pull_request.grounding",
       "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.review",
+      "target": "app.intelligence.memory",
+      "kind": "runtime"
     },
     {
       "source": "app.handlers.push",
@@ -3248,9 +3295,9 @@
     }
   ],
   "stats": {
-    "modules": 96,
-    "edges": 326,
-    "total_loc": 24453,
+    "modules": 97,
+    "edges": 332,
+    "total_loc": 24615,
     "layers": [
       "ai",
       "core",
@@ -3306,6 +3353,12 @@
         "fan_out": 1
       },
       {
+        "id": "app.intelligence.memory",
+        "loc": 358,
+        "fan_in": 7,
+        "fan_out": 2
+      },
+      {
         "id": "app.ai.providers.base",
         "loc": 348,
         "fan_in": 7,
@@ -3316,12 +3369,6 @@
         "loc": 521,
         "fan_in": 4,
         "fan_out": 1
-      },
-      {
-        "id": "app.core.sanitizer",
-        "loc": 180,
-        "fan_in": 13,
-        "fan_out": 0
       }
     ],
     "collisions": {},

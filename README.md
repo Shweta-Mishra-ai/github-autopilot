@@ -288,11 +288,11 @@ Reported cost in local mode is always `0`.
 <!-- autopilot:stats:start -->
 | | |
 |---|---|
-| Modules | 96 |
-| Lines of code | 24,453 |
+| Modules | 97 |
+| Lines of code | 24,613 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 326 |
+| Internal imports | 332 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>
@@ -402,7 +402,7 @@ graph LR
     ai["ai<br/>16 modules"]
     core["core<br/>25 modules"]
     github["github<br/>8 modules"]
-    handlers["handlers<br/>25 modules"]
+    handlers["handlers<br/>26 modules"]
     intelligence["intelligence<br/>7 modules"]
     mcp["mcp<br/>4 modules"]
     other["other<br/>6 modules"]

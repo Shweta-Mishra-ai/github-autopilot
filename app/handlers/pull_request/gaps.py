@@ -135,8 +135,8 @@ def _verify_against_tests(gaps, referenced, source_files, test_files, log) -> li
 
     kept, checked = [], 0
     for g in gaps:
-        name = str(g.get("function", ""))
-        if name not in referenced or checked >= MAX_VERIFIED_GAPS:
+        name = _referenced_symbol(g, referenced)
+        if not name or checked >= MAX_VERIFIED_GAPS:
             kept.append(g)
             continue
         checked += 1
@@ -164,21 +164,37 @@ The complete tests changed in this PR:
             kept.append(g)
             continue
 
-        covered = str((v or {}).get("covered", "")).strip().lower() == "true"
-        test_name = str((v or {}).get("test", "")).strip()
-        quoted = _norm(str((v or {}).get("line", "")))
-        proven = (
-            covered
-            and re.fullmatch(r"\w+", test_name or "-") is not None
-            and re.search(rf"\bdef {re.escape(test_name)}\b", tests_text) is not None
-            and len(quoted) >= 6
-            and quoted in tests_norm
+        covered = str((v or {}).get("covered", "")).strip().lower() in ("true", "yes")
+        # Models answer "test_x", "test_x(bad)", "def test_x" or "tests/t.py::test_x".
+        # A path like tests/test_x.py::test_y holds several "test" words; the
+        # one that counts is the one the tests actually define.
+        candidates = re.findall(r"\btest\w*", str((v or {}).get("test", "")))
+        test_name = next(
+            (c for c in candidates if re.search(rf"\bdef {re.escape(c)}\b", tests_text)), ""
         )
-        if proven:
-            log.info(f"test_gaps.refuted function={name} by={test_name}")
-        else:
+        quoted = _norm(str((v or {}).get("line", "")).lstrip("+").strip())
+        proven = covered and bool(test_name) and len(quoted) >= 6 and quoted in tests_norm
+        log.info(
+            f"test_gaps.verify function={name} covered={covered} test={test_name!r} "
+            f"quote_found={quoted in tests_norm} -> {'refuted' if proven else 'kept'}"
+        )
+        if not proven:
             kept.append(g)
     return kept
+
+
+def _referenced_symbol(gap: dict, referenced) -> str:
+    """
+    The tested symbol a gap is about, or "". Models write the function field
+    as "apply_discount", "apply_discount()", "apply_discount (error branch)"
+    or leave it out and name it in the suggestion — an exact-string lookup
+    skipped the check for all but the first.
+    """
+    text = f"{gap.get('function', '')} {gap.get('suggested_test', '')}"
+    for symbol in referenced:
+        if re.search(rf"\b{re.escape(symbol)}\b", text):
+            return symbol
+    return ""
 
 
 def _excerpt(f: dict) -> str:

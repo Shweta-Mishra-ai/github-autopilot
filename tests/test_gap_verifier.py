@@ -87,3 +87,42 @@ class TestRefutedOnlyOnProof:
         with patch.object(gaps_mod.router, "ask", side_effect=ask):
             out = gaps_mod._detect_test_gaps({}, "o/r", 1, [SRC, TESTS], "t", MagicMock(), MagicMock())
         assert "Gaps Found" in out
+
+
+class TestRealWorldAnswerShapes:
+    """The formats models actually use, which an exact-string check refused."""
+
+    def test_a_parametrised_test_name_and_a_diff_prefixed_quote_still_prove_coverage(self):
+        out, _ = _run(
+            {
+                "covered": "true",
+                "test": "tests/test_discount.py::test_rejects_out_of_range_percent(bad)",
+                "line": "+        apply_discount(10.0, 101)",
+            }
+        )
+        assert out == ""
+
+    def test_a_function_field_with_decoration_is_still_rechecked(self):
+        claim = {
+            **CLAIM,
+            "gaps": [{**CLAIM["gaps"][0], "function": "apply_discount() — error branch"}],
+        }
+        calls = []
+
+        def ask(system, user, **kw):
+            calls.append(user)
+            if len(calls) == 1:
+                return claim, MagicMock()
+            return (
+                {
+                    "covered": True,
+                    "test": "test_rejects_out_of_range_percent",
+                    "line": "apply_discount(10.0, 101)",
+                },
+                MagicMock(),
+            )
+
+        with patch.object(gaps_mod.router, "ask", side_effect=ask):
+            out = gaps_mod._detect_test_gaps({}, "o/r", 1, [SRC, TESTS], "t", MagicMock(), MagicMock())
+        assert len(calls) == 2, "the decorated name must still trigger the check"
+        assert out == ""

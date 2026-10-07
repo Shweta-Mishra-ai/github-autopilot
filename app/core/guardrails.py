@@ -7,8 +7,10 @@ FIXED (BUG 1): check_title_update → check_pr_title_update
 FIXED (ruff E741 lines 103,104): Renamed ambiguous `l` → `lbl`.
 """
 
-import re
+import contextlib
+import contextvars
 import logging
+import re
 from dataclasses import dataclass
 
 log = logging.getLogger(__name__)
@@ -203,6 +205,31 @@ def check_repo_rate_limit(repo: str) -> GuardrailResult:
     except Exception as e:
         log.debug(f"guardrails.repo_rate_limit_check_failed repo={repo}: {e}")
     return GuardrailResult(True, "OK")
+
+
+# The repository whose event is being handled on this thread, so the router
+# can charge each AI call to it. Set by server._run_handler around a handler.
+# The budget used to be charged once per EVENT, while a pull request event
+# makes three to five AI calls — so REPO_DAILY_AI_LIMIT=150 allowed several
+# hundred calls — and comment, push and CI events were never charged at all.
+_metered_repo: contextvars.ContextVar = contextvars.ContextVar("metered_repo", default="")
+
+
+@contextlib.contextmanager
+def metered(repo: str):
+    """Charge every AI call made inside this block to `repo`."""
+    token = _metered_repo.set(repo or "")
+    try:
+        yield
+    finally:
+        _metered_repo.reset(token)
+
+
+def charge_ai_call() -> None:
+    """Count one AI call against the metered repository, if there is one."""
+    repo = _metered_repo.get()
+    if repo:
+        increment_repo_usage(repo)
 
 
 def increment_repo_usage(repo: str):

@@ -626,37 +626,42 @@ def _run_handler(webhook_event: str, payload: dict, repo: str):
         except Exception as e:
             log.debug(f"installations.record_skipped repo={repo}: {e}")
 
-        if webhook_event == "pull_request":
-            from app.handlers.pull_request import handle
+        # Every AI call a handler makes is charged to this repository's
+        # daily budget as it happens (see guardrails.metered).
+        from app.core.guardrails import metered
 
-            handle(payload)
-
-        elif webhook_event == "issues":
-            from app.handlers.issues import handle
-
-            handle(payload)
-
-        elif webhook_event == "issue_comment":
-            from app.handlers.comments import handle
-
-            handle(payload)
-
-        elif webhook_event == "push":
-            from app.handlers.push import handle
-
-            handle(payload)
-
-        elif webhook_event == "check_run":
-            try:
-                from app.handlers.ci import handle
+        with metered(repo):
+            if webhook_event == "pull_request":
+                from app.handlers.pull_request import handle
 
                 handle(payload)
-            except ImportError:
-                log.debug("ci handler not available — skipping")
 
-        else:
-            log.debug(f"dispatch.unhandled event={webhook_event}")
-            return
+            elif webhook_event == "issues":
+                from app.handlers.issues import handle
+
+                handle(payload)
+
+            elif webhook_event == "issue_comment":
+                from app.handlers.comments import handle
+
+                handle(payload)
+
+            elif webhook_event == "push":
+                from app.handlers.push import handle
+
+                handle(payload)
+
+            elif webhook_event == "check_run":
+                try:
+                    from app.handlers.ci import handle
+
+                    handle(payload)
+                except ImportError:
+                    log.debug("ci handler not available — skipping")
+
+            else:
+                log.debug(f"dispatch.unhandled event={webhook_event}")
+                return
 
         metrics.increment(f"events.{webhook_event}.success")
         log.info(f"dispatch.done event={webhook_event}")

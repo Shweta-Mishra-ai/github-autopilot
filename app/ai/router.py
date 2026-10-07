@@ -109,6 +109,16 @@ def _fit(text: str, max_chars: int) -> str:
     return text[:head] + marker + text[len(text) - tail :]
 
 
+def _charge() -> None:
+    """Charge one AI call to the repository whose event is being handled."""
+    try:
+        from app.core.guardrails import charge_ai_call
+
+        charge_ai_call()
+    except Exception as e:  # accounting must never fail the call
+        log.debug(f"router.charge_failed: {e}")
+
+
 def prompt_budget(*fixed_parts: str, limit: int = MAX_USER_CHARS) -> int:
     """
     Characters left for variable content (diffs, file bodies) once the fixed
@@ -341,6 +351,7 @@ class LLMRouter:
         system = self._sanitize(system, MAX_SYSTEM_CHARS)
         user = self._sanitize(user, MAX_USER_CHARS)
         provider = self._select_provider(task, context_tokens)
+        _charge()
         resp = self._call_provider(provider, system, user, max_tokens, temperature, timeout)
         if isinstance(resp, tuple):
             result, meta = resp
@@ -379,6 +390,7 @@ class LLMRouter:
         system = self._sanitize(system, MAX_SYSTEM_CHARS)
         user = self._sanitize(user, MAX_USER_CHARS)
         provider = self._select_provider(task, context_tokens)
+        _charge()
         text, meta = provider.ask_text(system, user, max_tokens, timeout)
 
         if meta.error:

@@ -239,12 +239,12 @@
       "id": "app.ai.router",
       "path": "app/ai/router.py",
       "layer": "ai",
-      "loc": 722,
-      "functions": 7,
+      "loc": 734,
+      "functions": 8,
       "classes": 1,
       "is_package": false,
-      "fan_in": 14,
-      "fan_out": 14,
+      "fan_in": 15,
+      "fan_out": 15,
       "external_deps": [
         "app",
         "datetime",
@@ -403,14 +403,16 @@
       "id": "app.core.guardrails",
       "path": "app/core/guardrails.py",
       "layer": "core",
-      "loc": 271,
-      "functions": 11,
+      "loc": 298,
+      "functions": 13,
       "classes": 1,
       "is_package": false,
-      "fan_in": 7,
+      "fan_in": 9,
       "fan_out": 1,
       "external_deps": [
         "app",
+        "contextlib",
+        "contextvars",
         "dataclasses",
         "datetime",
         "logging",
@@ -903,12 +905,12 @@
       "id": "app.handlers.autofix",
       "path": "app/handlers/autofix.py",
       "layer": "handlers",
-      "loc": 549,
-      "functions": 12,
+      "loc": 608,
+      "functions": 13,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 5,
+      "fan_out": 6,
       "external_deps": [
         "app",
         "base64",
@@ -978,7 +980,7 @@
       "id": "app.handlers.comments.dispatcher",
       "path": "app/handlers/comments/dispatcher.py",
       "layer": "handlers",
-      "loc": 247,
+      "loc": 256,
       "functions": 13,
       "classes": 0,
       "is_package": false,
@@ -1117,7 +1119,7 @@
       "id": "app.handlers.issues",
       "path": "app/handlers/issues.py",
       "layer": "handlers",
-      "loc": 288,
+      "loc": 290,
       "functions": 2,
       "classes": 0,
       "is_package": false,
@@ -1133,7 +1135,7 @@
       "id": "app.handlers.pull_request",
       "path": "app/handlers/pull_request/__init__.py",
       "layer": "handlers",
-      "loc": 306,
+      "loc": 308,
       "functions": 1,
       "classes": 0,
       "is_package": true,
@@ -1541,12 +1543,12 @@
       "id": "server",
       "path": "server.py",
       "layer": "other",
-      "loc": 822,
+      "loc": 827,
       "functions": 30,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 32,
+      "fan_out": 33,
       "external_deps": [
         "app",
         "flask",
@@ -1792,6 +1794,11 @@
     },
     {
       "source": "app.ai.router",
+      "target": "app.core.guardrails",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.router",
       "target": "app.core.health_check",
       "kind": "runtime"
     },
@@ -2034,6 +2041,11 @@
       "source": "app.handlers.autofix",
       "target": "app.ai.router",
       "kind": "import"
+    },
+    {
+      "source": "app.handlers.autofix",
+      "target": "app.ai.router",
+      "kind": "runtime"
     },
     {
       "source": "app.handlers.autofix",
@@ -3017,6 +3029,11 @@
     },
     {
       "source": "server",
+      "target": "app.core.guardrails",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
       "target": "app.core.health_check",
       "kind": "runtime"
     },
@@ -3173,8 +3190,8 @@
   ],
   "stats": {
     "modules": 94,
-    "edges": 318,
-    "total_loc": 23907,
+    "edges": 321,
+    "total_loc": 24023,
     "layers": [
       "ai",
       "core",
@@ -3195,9 +3212,9 @@
       },
       {
         "id": "app.ai.router",
-        "loc": 722,
-        "fan_in": 14,
-        "fan_out": 14
+        "loc": 734,
+        "fan_in": 15,
+        "fan_out": 15
       },
       {
         "id": "app.github.client",
@@ -3224,6 +3241,12 @@
         "fan_out": 1
       },
       {
+        "id": "app.core.guardrails",
+        "loc": 298,
+        "fan_in": 9,
+        "fan_out": 1
+      },
+      {
         "id": "app.ai.providers.base",
         "loc": 348,
         "fan_in": 7,
@@ -3240,12 +3263,6 @@
         "loc": 180,
         "fan_in": 13,
         "fan_out": 0
-      },
-      {
-        "id": "app.ai.circuit_breaker",
-        "loc": 179,
-        "fan_in": 13,
-        "fan_out": 1
       }
     ],
     "collisions": {},

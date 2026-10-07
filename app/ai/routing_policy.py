@@ -66,13 +66,28 @@ COST_PER_1K = {
 MAX_SYSTEM_CHARS = 3_000
 MAX_USER_CHARS = 8_000
 
+
 # Per-provider prompt size. MAX_USER_CHARS exists to protect Groq's free-tier
 # daily token budget (80k tokens/day on the 70B model), and it is the hard
 # ceiling on how much code a review can see. Gemini's free tier allows ten
 # times that (DAILY_LIMITS above), so a review routed there may send three
 # times the code. Override with GEMINI_PROMPT_CHARS.
+def _env_chars(name: str, default: int) -> int:
+    """
+    A positive character count from the environment, or `default`.
+
+    Read at import, so it must never raise: a typo such as "24k" in this
+    setting would otherwise stop the whole app from starting.
+    """
+    try:
+        value = int(os.environ.get(name, "") or default)
+    except ValueError:
+        return default
+    return value if value >= MAX_USER_CHARS else default
+
+
 PROVIDER_PROMPT_CHARS: dict[str, int] = {
-    "gemini": int(os.environ.get("GEMINI_PROMPT_CHARS", "24000") or 24000),
+    "gemini": _env_chars("GEMINI_PROMPT_CHARS", 24_000),
 }
 
 

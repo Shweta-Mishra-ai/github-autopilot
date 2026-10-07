@@ -243,7 +243,7 @@
       "functions": 8,
       "classes": 1,
       "is_package": false,
-      "fan_in": 16,
+      "fan_in": 15,
       "fan_out": 15,
       "external_deps": [
         "app",
@@ -1198,12 +1198,12 @@
       "id": "app.handlers.pull_request.gaps",
       "path": "app/handlers/pull_request/gaps.py",
       "layer": "handlers",
-      "loc": 401,
-      "functions": 9,
+      "loc": 409,
+      "functions": 12,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 5,
+      "fan_out": 4,
       "external_deps": [
         "__future__",
         "app",
@@ -2785,11 +2785,6 @@
     },
     {
       "source": "app.handlers.pull_request.gaps",
-      "target": "app.ai.router",
-      "kind": "runtime"
-    },
-    {
-      "source": "app.handlers.pull_request.gaps",
       "target": "app.ai.validator",
       "kind": "import"
     },
@@ -3296,8 +3291,8 @@
   ],
   "stats": {
     "modules": 97,
-    "edges": 332,
-    "total_loc": 24658,
+    "edges": 331,
+    "total_loc": 24666,
     "layers": [
       "ai",
       "core",
@@ -3319,7 +3314,7 @@
       {
         "id": "app.ai.router",
         "loc": 751,
-        "fan_in": 16,
+        "fan_in": 15,
         "fan_out": 15
       },
       {

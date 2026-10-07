@@ -1198,8 +1198,8 @@
       "id": "app.handlers.pull_request.gaps",
       "path": "app/handlers/pull_request/gaps.py",
       "layer": "handlers",
-      "loc": 373,
-      "functions": 8,
+      "loc": 401,
+      "functions": 9,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
@@ -3297,7 +3297,7 @@
   "stats": {
     "modules": 97,
     "edges": 332,
-    "total_loc": 24615,
+    "total_loc": 24643,
     "layers": [
       "ai",
       "core",

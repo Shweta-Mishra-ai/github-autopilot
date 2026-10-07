@@ -30,6 +30,7 @@ CLAIM = {
             "file": "app/billing/discount.py",
             "function": "apply_discount",
             "risk": "high",
+            "untested_line": "raise ValueError('bad')",
             "suggested_test": "test that an out-of-range percent raises ValueError",
         }
     ],
@@ -126,3 +127,40 @@ class TestRealWorldAnswerShapes:
             out = gaps_mod._detect_test_gaps({}, "o/r", 1, [SRC, TESTS], "t", MagicMock(), MagicMock())
         assert len(calls) == 2, "the decorated name must still trigger the check"
         assert out == ""
+
+
+class TestATestedFunctionNeedsAnUntestedLine:
+    """Asking the model again did not stop its false gaps (it answered "not
+    covered" for plainly covered code on every stay-quiet eval case). So a gap
+    in a function the PR's tests call must name the changed line no test
+    reaches — a claim that cannot is not published."""
+
+    def _claim(self, **gap):
+        return {**CLAIM, "gaps": [{**CLAIM["gaps"][0], **gap}]}
+
+    def _run_claim(self, claim, files=(SRC, TESTS)):
+        calls = []
+
+        def ask(system, user, **kw):
+            calls.append(user)
+            return (claim if len(calls) == 1 else {"covered": False}), MagicMock()
+
+        with patch.object(gaps_mod.router, "ask", side_effect=ask):
+            out = gaps_mod._detect_test_gaps({}, "o/r", 1, list(files), "t", MagicMock(), MagicMock())
+        return out, calls
+
+    def test_no_line_means_no_gap(self):
+        out, calls = self._run_claim(self._claim(untested_line=""))
+        assert out == "" and len(calls) == 1, "dropped before any extra AI call"
+
+    def test_a_line_that_is_not_in_the_diff_means_no_gap(self):
+        out, _ = self._run_claim(self._claim(untested_line="if total is None: return 0"))
+        assert out == ""
+
+    def test_a_real_untested_line_is_kept(self):
+        out, _ = self._run_claim(self._claim(untested_line="+        raise ValueError('bad')"))
+        assert "Gaps Found" in out
+
+    def test_an_untested_function_needs_no_line(self):
+        out, _ = self._run_claim(self._claim(untested_line=""), files=(SRC,))
+        assert "Gaps Found" in out

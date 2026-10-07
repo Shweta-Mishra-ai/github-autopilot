@@ -116,12 +116,13 @@ def _verify_against_tests(gaps, referenced, source_files, test_files, log) -> li
     tested in the same diff (gaps-fully-tested-change-stays-quiet,
     gaps-refactor-covered-by-updated-tests, failing on main nightly).
 
-    So a gap against a symbol the PR's tests DO reference is put back to the
-    model as a single question, with the complete tests: is this exact
-    behaviour exercised? A "covered" answer is believed only if the test it
-    names and the line it quotes are really in the test diff — the same rule
-    as the review's grounding check. Anything else keeps the gap: silence is
-    the costlier mistake to make on a guess.
+    So a gap against a symbol the PR's tests DO reference must first quote the
+    changed source line no test reaches; one that cannot is dropped. A gap
+    that can is put back to the model as a single question, with the complete
+    tests: is this exact behaviour exercised? A "covered" answer is believed
+    only if the test it names and the line it quotes are really in the test
+    diff — the same rule as the review's grounding check. Anything else keeps
+    the gap.
     """
     from app.ai.router import prompt_budget
 
@@ -136,7 +137,23 @@ def _verify_against_tests(gaps, referenced, source_files, test_files, log) -> li
     kept, checked = [], 0
     for g in gaps:
         name = _referenced_symbol(g, referenced)
-        if not name or checked >= MAX_VERIFIED_GAPS:
+        if not name:
+            kept.append(g)  # nothing in this PR tests it: no evidence needed
+            continue
+        # Evidence first, and free. For a function the PR's tests already
+        # call, a gap must point at the changed line no test reaches. Asking
+        # the model again whether the tests cover its own claim did not work —
+        # on all three stay-quiet eval cases it answered "not covered" for
+        # tests that plainly are — so a claim that cannot name a real line
+        # ("add more edge-case tests") is not published at all.
+        quoted = _norm(str(g.get("untested_line") or "").lstrip("+").strip())
+        added = _added_lines(by_file.get(str(g.get("file", "")), ""))
+        if len(quoted) < 4 or not any(
+            quoted in line or line in quoted for line in added if len(line) >= 4
+        ):
+            log.info(f"test_gaps.no_untested_line function={name} -> dropped")
+            continue
+        if checked >= MAX_VERIFIED_GAPS:
             kept.append(g)
             continue
         checked += 1
@@ -181,6 +198,14 @@ The complete tests changed in this PR:
         if not proven:
             kept.append(g)
     return kept
+
+
+def _added_lines(patch: str) -> list[str]:
+    return [
+        _norm(raw[1:])
+        for raw in (patch or "").splitlines()
+        if raw.startswith("+") and not raw.startswith("+++")
+    ]
 
 
 def _referenced_symbol(gap: dict, referenced) -> str:
@@ -295,11 +320,16 @@ Return JSON:
       "file": "filename.py",
       "function": "function_name",
       "risk": "high|medium|low",
+      "untested_line": "the exact changed source line no test reaches, copied from the diff",
       "suggested_test": "describe the test to add"
     }}
   ],
   "summary": "brief overall assessment"
 }}
+
+A gap in a function this PR's tests already call must name, in
+`untested_line`, the changed line of that function that no test reaches. If
+you cannot point to such a line, it is not a gap.
 
 Only report real gaps. If tests are adequate, set has_gaps to false.""",
             task="gaps",

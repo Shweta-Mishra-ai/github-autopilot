@@ -254,4 +254,4 @@ class TestNoDeadValidatorFields:
         out = validate_code_review(
             {"issues": [{"severity": "critical", "line": "12", "issue": "x", "fix": "y"}]}
         )
-        assert set(out["issues"][0]) == {"severity", "line", "issue", "fix"}
+        assert set(out["issues"][0]) == {"severity", "line", "code", "issue", "fix"}

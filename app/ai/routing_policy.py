@@ -66,6 +66,21 @@ COST_PER_1K = {
 MAX_SYSTEM_CHARS = 3_000
 MAX_USER_CHARS = 8_000
 
+# Per-provider prompt size. MAX_USER_CHARS exists to protect Groq's free-tier
+# daily token budget (80k tokens/day on the 70B model), and it is the hard
+# ceiling on how much code a review can see. Gemini's free tier allows ten
+# times that (DAILY_LIMITS above), so a review routed there may send three
+# times the code. Override with GEMINI_PROMPT_CHARS.
+PROVIDER_PROMPT_CHARS: dict[str, int] = {
+    "gemini": int(os.environ.get("GEMINI_PROMPT_CHARS", "24000") or 24000),
+}
+
+
+def prompt_chars_for(provider_key: str) -> int:
+    """The user-prompt size limit for one provider."""
+    return PROVIDER_PROMPT_CHARS.get(provider_key, MAX_USER_CHARS)
+
+
 # ── Quality tiers ────────────────────────────────────────────────────────────
 # "basic" providers are fine for fast tasks (labels, lint) but produce visibly
 # weaker code reviews/fixes. Ollama counts as "high": running local is an

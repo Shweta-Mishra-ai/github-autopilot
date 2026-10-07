@@ -220,6 +220,9 @@ def validate_code_review(raw: dict) -> dict:
             {
                 "severity": sev,
                 "line": _str(item.get("line", ""), 20),
+                # The quoted line, which grounding.ground_finding() checks
+                # against the diff. Read there, so not a dead field.
+                "code": _str(item.get("code", ""), 300),
                 "issue": _str(item.get("issue", ""), 300),
                 "fix": _str(item.get("fix", ""), 500),
             }

@@ -239,7 +239,7 @@
       "id": "app.ai.router",
       "path": "app/ai/router.py",
       "layer": "ai",
-      "loc": 734,
+      "loc": 751,
       "functions": 8,
       "classes": 1,
       "is_package": false,
@@ -257,8 +257,8 @@
       "id": "app.ai.routing_policy",
       "path": "app/ai/routing_policy.py",
       "layer": "ai",
-      "loc": 136,
-      "functions": 7,
+      "loc": 151,
+      "functions": 8,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
@@ -272,7 +272,7 @@
       "id": "app.ai.validator",
       "path": "app/ai/validator.py",
       "layer": "ai",
-      "loc": 247,
+      "loc": 250,
       "functions": 8,
       "classes": 0,
       "is_package": false,
@@ -832,7 +832,7 @@
       "functions": 6,
       "classes": 0,
       "is_package": false,
-      "fan_in": 1,
+      "fan_in": 3,
       "fan_out": 0,
       "external_deps": [
         "__future__",
@@ -1177,6 +1177,24 @@
       ]
     },
     {
+      "id": "app.handlers.pull_request.context",
+      "path": "app/handlers/pull_request/context.py",
+      "layer": "handlers",
+      "loc": 120,
+      "functions": 5,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 1,
+      "external_deps": [
+        "__future__",
+        "app",
+        "ast",
+        "base64",
+        "logging"
+      ]
+    },
+    {
       "id": "app.handlers.pull_request.gaps",
       "path": "app/handlers/pull_request/gaps.py",
       "layer": "handlers",
@@ -1186,6 +1204,22 @@
       "is_package": false,
       "fan_in": 1,
       "fan_out": 4,
+      "external_deps": [
+        "__future__",
+        "app",
+        "re"
+      ]
+    },
+    {
+      "id": "app.handlers.pull_request.grounding",
+      "path": "app/handlers/pull_request/grounding.py",
+      "layer": "handlers",
+      "loc": 103,
+      "functions": 4,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 1,
       "external_deps": [
         "__future__",
         "app",
@@ -1211,12 +1245,12 @@
       "id": "app.handlers.pull_request.review",
       "path": "app/handlers/pull_request/review.py",
       "layer": "handlers",
-      "loc": 468,
+      "loc": 541,
       "functions": 7,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 9,
+      "fan_out": 11,
       "external_deps": [
         "__future__",
         "app"
@@ -2713,6 +2747,11 @@
       "kind": "runtime"
     },
     {
+      "source": "app.handlers.pull_request.context",
+      "target": "app.github.patch_parser",
+      "kind": "import"
+    },
+    {
       "source": "app.handlers.pull_request.gaps",
       "target": "app.ai.router",
       "kind": "import"
@@ -2730,6 +2769,11 @@
     {
       "source": "app.handlers.pull_request.gaps",
       "target": "app.handlers.pull_request.classify",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.grounding",
+      "target": "app.github.patch_parser",
       "kind": "import"
     },
     {
@@ -2775,6 +2819,16 @@
     {
       "source": "app.handlers.pull_request.review",
       "target": "app.handlers.pull_request.classify",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.review",
+      "target": "app.handlers.pull_request.context",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.review",
+      "target": "app.handlers.pull_request.grounding",
       "kind": "import"
     },
     {
@@ -3189,9 +3243,9 @@
     }
   ],
   "stats": {
-    "modules": 94,
-    "edges": 321,
-    "total_loc": 24023,
+    "modules": 96,
+    "edges": 325,
+    "total_loc": 24354,
     "layers": [
       "ai",
       "core",
@@ -3212,7 +3266,7 @@
       },
       {
         "id": "app.ai.router",
-        "loc": 734,
+        "loc": 751,
         "fan_in": 15,
         "fan_out": 15
       },

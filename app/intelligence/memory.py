@@ -272,6 +272,36 @@ def recall(repo: str, query: str, top_k: int = DEFAULT_TOP_K) -> list[MemoryItem
         return []
 
 
+def preferences(repo: str, limit: int = 8) -> list[str]:
+    """
+    The repository's most recent maintainer preferences (`/ignore` and the
+    like), newest first — every one, not just those that share words with a
+    query. A preference such as "ignore line-length nitpicks on test files"
+    applies to every review, and recall() would only surface it on a diff that
+    happened to mention line length.
+
+    Respects the same privacy switch as recall_context(): [] when injection
+    into prompts is not allowed.
+    """
+    if not repo or not injection_allowed():
+        return []
+    try:
+        from app.core.redis_client import get_redis
+
+        raws = get_redis().lrange(_key(repo), 0, MEMORY_RECALL_SCAN - 1) or []
+        out = []
+        for raw in raws:
+            item = MemoryItem.from_json(raw)
+            if item and item.kind == "preference" and item.text:
+                out.append(item.text)
+                if len(out) >= limit:
+                    break
+        return out
+    except Exception as e:
+        log.debug(f"memory.preferences_failed repo={repo}: {e}")
+        return []
+
+
 def recall_context(repo: str, query: str, top_k: int = DEFAULT_TOP_K) -> str:
     """
     Formatted memory block for prompt injection — but ONLY when injection_allowed()

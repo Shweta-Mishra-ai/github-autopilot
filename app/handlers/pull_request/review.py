@@ -147,6 +147,27 @@ def _plan_review(
     return [], []
 
 
+# Room the preferences may take in the review prompt.
+MAX_PREFERENCE_CHARS = 600
+
+
+def _maintainer_preferences(repo: str) -> str:
+    """Stored maintainer preferences as a bullet list, or "". Never raises."""
+    try:
+        from app.intelligence.memory import preferences
+
+        lines, size = [], 0
+        for text in preferences(repo):
+            line = f"- {text[:200]}"
+            if size + len(line) > MAX_PREFERENCE_CHARS:
+                break
+            lines.append(line)
+            size += len(line) + 1
+        return "\n".join(lines)
+    except Exception:
+        return ""
+
+
 def _finding_counts(issues: list) -> str:
     """'1 critical, 2 minor' — or 'no issues found'. Worst first."""
     counts: dict[str, int] = {}
@@ -249,6 +270,18 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
     valid_files = [f for f in files if f.get("patch") and not _is_generated(f.get("filename", ""))]
     sorted_files = sorted(valid_files, key=_review_sort_key, reverse=True)
     context_part = f"\n\n{context[:600]}\n" if context else "\n"
+
+    # The maintainers' standing preferences. `/ignore` has always replied
+    # "The bot will take this preference into account during future reviews"
+    # — and the review never read memory, so it never did.
+    prefs = _maintainer_preferences(repo)
+    if prefs:
+        context_part += (
+            "\nThis repository's maintainers have asked the review to follow these "
+            "preferences; do not report anything they exclude:\n"
+            + wrap_user_content(prefs, "PREFERENCES")
+            + "\n"
+        )
 
     # Size the prompt for the provider the review will actually reach. Gemini
     # allows three times Groq's prompt; routing the review there as a "long"

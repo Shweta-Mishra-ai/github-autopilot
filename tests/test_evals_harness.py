@@ -389,14 +389,17 @@ class TestGapHarnessWiring:
         }, failed
 
     def test_a_model_that_always_reports_gaps_fails_the_quiet_cases(self, monkeypatch):
+        """Scored on what is published: a noisy model that names a real
+        untested-looking line on the PR's own file gets through, and the quiet
+        case must then fail."""
         verdict = {
             "has_gaps": True,
-            "coverage_score": 3,
             "gaps": [
                 {
                     "file": "app/billing/discount.py",
                     "function": "apply_discount",
                     "risk": "high",
+                    "untested_line": "return round(total * (1 - percent / 100), 2)",
                     "suggested_test": "test it",
                 }
             ],
@@ -405,7 +408,24 @@ class TestGapHarnessWiring:
         results, _ = self._run(monkeypatch, verdict)
         failed = {r.case_id for r in results if not r.passed}
         assert "gaps-fully-tested-change-stays-quiet" in failed, failed
-        assert "gaps-refactor-covered-by-updated-tests" in failed, failed
+
+    def test_a_vague_gap_on_a_tested_function_is_never_published(self, monkeypatch):
+        """The same noisy model, but unable to name a line: filtered out."""
+        verdict = {
+            "has_gaps": True,
+            "gaps": [
+                {
+                    "file": "app/billing/discount.py",
+                    "function": "apply_discount",
+                    "risk": "high",
+                    "suggested_test": "add more edge-case tests",
+                }
+            ],
+            "summary": "needs tests",
+        }
+        results, _ = self._run(monkeypatch, verdict)
+        passed = {r.case_id for r in results if r.passed}
+        assert "gaps-fully-tested-change-stays-quiet" in passed
 
     def test_a_provider_that_never_answers_is_blocked_not_scored(self, monkeypatch):
         """A silent provider and a correct "no gaps" both render "". Counting

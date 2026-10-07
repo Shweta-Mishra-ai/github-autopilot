@@ -400,8 +400,12 @@ def run_gaps_cases() -> tuple[list, list]:
         # it answered when a case expected silence and got gaps, so a failure
         # explains itself instead of being guessed at.
         if published["has_gaps"] and case.get("expect_gaps") is False:
-            gap_names = [g.get("function") for g in (verdict.get("gaps") or []) if isinstance(g, dict)]
-            print(f"    claimed gaps: {gap_names}")
+            for g in verdict.get("gaps") or []:
+                if isinstance(g, dict):
+                    print(
+                        f"    claimed: {g.get('function')} | line: {str(g.get('untested_line'))[:80]!r}"
+                        f" | {str(g.get('suggested_test'))[:120]}"
+                    )
             for v in captured[1:]:
                 print(f"    verifier: {json.dumps(v)[:300]}")
             if len(captured) == 1:

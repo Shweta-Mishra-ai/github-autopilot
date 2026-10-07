@@ -371,7 +371,17 @@ def run_gaps_cases() -> tuple[list, list]:
             _print_blocked(case["id"])
             continue
 
-        result = score_output(output, case, structured=verdict)
+        # Score what the bot PUBLISHES, not the model's first answer. Gap
+        # claims are now checked against the tests before anything is posted
+        # (gaps._verify_against_tests), so the raw verdict and the published
+        # one can differ — and the published one is what a reviewer reads.
+        # The raw verdict is still printed: a model that keeps claiming gaps
+        # which the check then refutes is worth seeing.
+        published = {"has_gaps": bool((output or "").strip())}
+        if bool(verdict.get("has_gaps")) != published["has_gaps"]:
+            print(f"    (model said has_gaps={bool(verdict.get('has_gaps'))}; "
+                  f"published has_gaps={published['has_gaps']})")
+        result = score_output(output, case, structured=published)
         results.append(result)
         _print_case(result)
     return results, blocked

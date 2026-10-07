@@ -258,7 +258,19 @@ def run_review_cases() -> tuple[list, list]:
         files = [{"filename": case["filename"], "patch": case["patch"]}]
         pr = {"head": {"sha": "eval0000"}}
 
-        def _run(pr=pr, files=files, cfg=cfg, captured=captured):
+        # The whole file at the head commit, when the case supplies it — the
+        # review fetches it to show the model the code around the change.
+        # Without a `source` the fetch fails, as it would for a deleted file,
+        # and the review runs on the diff alone.
+        def _contents(path, token, _case=case):
+            import base64
+
+            if "source" not in _case:
+                raise RuntimeError("no source in this eval case")
+            body = _case["source"].encode()
+            return {"encoding": "base64", "size": len(body), "content": base64.b64encode(body).decode()}
+
+        def _run(pr=pr, files=files, cfg=cfg, captured=captured, _contents=_contents):
             # _review_code RETURNS the review; its own docstring says "This
             # function posts nothing itself." The harness captured gh_post and
             # threw the return value away, so `captured` was always empty and
@@ -272,7 +284,10 @@ def run_review_cases() -> tuple[list, list]:
             # empty, and a list shared across attempts would score the second
             # try's review joined to the first try's.
             captured.clear()
-            with patch("app.handlers.pull_request.review.gh_post", side_effect=_capture):
+            with (
+                patch("app.handlers.pull_request.review.gh_post", side_effect=_capture),
+                patch("app.handlers.pull_request.review.gh_get", side_effect=_contents),
+            ):
                 markdown, inline = _review_code(
                     pr, "eval/repo", 1, files, "tok", cfg, MagicMock(), "", MagicMock()
                 )
@@ -381,6 +396,16 @@ def run_gaps_cases() -> tuple[list, list]:
         if bool(verdict.get("has_gaps")) != published["has_gaps"]:
             print(f"    (model said has_gaps={bool(verdict.get('has_gaps'))}; "
                   f"published has_gaps={published['has_gaps']})")
+        # Every later call is the verifier re-checking a claimed gap. Show what
+        # it answered when a case expected silence and got gaps, so a failure
+        # explains itself instead of being guessed at.
+        if published["has_gaps"] and case.get("expect_gaps") is False:
+            gap_names = [g.get("function") for g in (verdict.get("gaps") or []) if isinstance(g, dict)]
+            print(f"    claimed gaps: {gap_names}")
+            for v in captured[1:]:
+                print(f"    verifier: {json.dumps(v)[:300]}")
+            if len(captured) == 1:
+                print("    verifier: not called (no claimed gap names a symbol the tests reference)")
         result = score_output(output, case, structured=published)
         results.append(result)
         _print_case(result)

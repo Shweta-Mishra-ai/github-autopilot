@@ -378,7 +378,7 @@ class TestGapHarnessWiring:
     def test_a_provider_that_answers_blocks_nothing(self, monkeypatch):
         results, blocked = self._run(monkeypatch, {"has_gaps": False, "gaps": [], "summary": "ok"})
         assert blocked == [], f"harness saw no verdict for {blocked}"
-        assert len(results) == 4
+        assert len(results) == _gap_case_count()
 
     def test_a_model_that_always_says_no_gaps_fails_the_loud_cases(self, monkeypatch):
         results, _ = self._run(monkeypatch, {"has_gaps": False, "gaps": [], "summary": "ok"})
@@ -424,5 +424,10 @@ class TestGapHarnessWiring:
         with patch.object(router_mod.LLMRouter, "ask", raising_ask):
             results, blocked = ev.run_gaps_cases()
 
-        assert len(blocked) == 4, (results, blocked)
+        assert len(blocked) == _gap_case_count(), (results, blocked)
         assert results == []
+
+
+def _gap_case_count() -> int:
+    """Read, not hard-coded: adding a case must not mean editing a test."""
+    return len(json.loads((_ROOT / "evals" / "cases" / "gaps_cases.json").read_text(encoding="utf-8")))

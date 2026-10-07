@@ -79,6 +79,11 @@ class TestSurroundingCode:
         assert "def load(path):" in out
         assert "def unrelated" not in out
 
+    def test_python_includes_the_imports(self):
+        """'X is not defined' is the commonest false positive without them."""
+        out = surrounding_code(SOURCE, "app/cfg.py", SOURCE_PATCH, 5000)
+        assert out.splitlines()[0].endswith("import os")
+
     def test_lines_carry_their_real_numbers(self):
         out = surrounding_code(SOURCE, "app/cfg.py", SOURCE_PATCH, 5000)
         assert "     9       except OSError:" in out.splitlines()
@@ -217,3 +222,48 @@ class TestGeminiGetsTheBiggerPrompt:
             gb.return_value.is_available.return_value = True
             router_mod.router._try_fallback("s", big, 100, 0.2, 10, "gemini")
         assert len(sent["user"]) <= MAX_USER_CHARS and sent["user"].endswith("SCHEMA")
+
+
+class TestIgnorePreferencesReachTheReview:
+    """`/ignore` promised reviews would follow it; the review never read memory."""
+
+    def _prompt_with_memory(self, monkeypatch, allow="1"):
+        from app.intelligence import memory
+
+        monkeypatch.setenv("MEMORY_ALLOW_CLOUD", allow)
+        repo = "o/prefs-" + allow
+        memory.clear(repo)
+        memory.remember(repo, "Ignored rule set by @lead: line-length nitpicks on test files", kind="preference")
+        memory.remember(repo, "Issue #4 triaged as bug/high", kind="pattern")
+        files = [{"filename": "app/cfg.py", "patch": SOURCE_PATCH, "status": "modified"}]
+        seen = {}
+        provider = MagicMock()
+        provider.provider_key = "groq_70b"
+
+        def ask(system, user, *a, **k):
+            seen["user"] = user
+            raise RuntimeError("captured")
+
+        provider.ask.side_effect = ask
+        with (
+            patch.object(router_mod.router, "_select_provider", return_value=provider),
+            patch.object(review, "gh_get", side_effect=RuntimeError("no network")),
+        ):
+            try:
+                review._review_code(
+                    {"head": {"sha": "s"}}, repo, 1, files, "t", _cfg(),
+                    ConfidenceGate(None), "", MagicMock(),
+                )
+            except RuntimeError:
+                pass
+        return seen["user"]
+
+    def test_a_stored_preference_is_in_the_review_prompt(self, monkeypatch):
+        user = self._prompt_with_memory(monkeypatch)
+        assert "line-length nitpicks on test files" in user
+        assert "<PREFERENCES>" in user
+        assert "triaged as bug" not in user, "only preferences, not every memory"
+
+    def test_the_privacy_switch_keeps_them_out(self, monkeypatch):
+        user = self._prompt_with_memory(monkeypatch, allow="0")
+        assert "line-length nitpicks" not in user

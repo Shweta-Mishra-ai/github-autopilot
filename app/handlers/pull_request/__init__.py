@@ -46,6 +46,7 @@ from .classify import (
     _review_sort_key,
 )
 from .gaps import _detect_test_gaps
+from .outcomes import record_autofix_outcome
 from .report import _build_pr_report
 from .review import _post_inline_review, _review_code
 
@@ -94,6 +95,10 @@ SKIP_AUTHORS = {
 
 def handle(payload: dict):
     action = payload.get("action")
+    if action == "closed":
+        # Before the bot-author check: autofix PRs are the bot's own.
+        record_autofix_outcome(payload)
+        return
     if action not in ("opened", "reopened", "synchronize"):
         return
 

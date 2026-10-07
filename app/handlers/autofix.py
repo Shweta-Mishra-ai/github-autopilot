@@ -316,6 +316,29 @@ def run_autofix(
         f"**To create a PR:** reply `/apply {branch}`\n"
         f"**To discard:** reply `/rollback` or just close this issue\n\n"
         f"> ⚠️ AI-generated fix — please review the diff before applying."
+        f"{_track_record(repo)}"
+    )
+
+
+def _track_record(repo: str) -> str:
+    """
+    How this repository has actually treated the bot's autofix PRs, once there
+    is enough history to say anything (three outcomes). The model's confidence
+    above is its own claim; this is what the maintainers did with the last
+    ones. "" when there is too little history or it cannot be read.
+    """
+    try:
+        from app.core.learning import get_learning_summary
+
+        s = get_learning_summary(repo)
+        merged, closed = int(s.get("autofix_merged", 0)), int(s.get("autofix_closed", 0))
+    except Exception:
+        return ""
+    if merged + closed < 3:
+        return ""
+    return (
+        f"\n\n> 📊 Track record here: {merged} autofix PR(s) merged, "
+        f"{closed} closed without merging."
     )
 
 

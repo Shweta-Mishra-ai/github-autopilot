@@ -28,6 +28,7 @@ from app.ai.routing_policy import (
     DAILY_LIMITS,
     MAX_SYSTEM_CHARS,
     MAX_USER_CHARS,
+    prompt_chars_for,
     PROVIDER_TIER,
     QUALITY_SENSITIVE_TASK_TYPES,
     TASK_MAP,
@@ -326,6 +327,18 @@ class LLMRouter:
 
         raise AllProvidersDown()
 
+    def prompt_limit(self, task: str) -> int:
+        """
+        How many characters of user prompt `task` will be allowed, for the
+        provider it would be routed to now. Lets a caller size its content to
+        the provider instead of to the smallest one. Falls back to the default
+        limit when no provider is available — the call will fail anyway.
+        """
+        try:
+            return prompt_chars_for(self._select_provider(task).provider_key)
+        except Exception:
+            return MAX_USER_CHARS
+
     def _call_provider(
         self,
         provider: LLMProvider,
@@ -349,8 +362,8 @@ class LLMRouter:
         context_tokens: int = 0,
     ) -> tuple[dict, LLMResponse]:
         system = self._sanitize(system, MAX_SYSTEM_CHARS)
-        user = self._sanitize(user, MAX_USER_CHARS)
         provider = self._select_provider(task, context_tokens)
+        user = self._sanitize(user, prompt_chars_for(provider.provider_key))
         _charge()
         resp = self._call_provider(provider, system, user, max_tokens, temperature, timeout)
         if isinstance(resp, tuple):
@@ -388,8 +401,8 @@ class LLMRouter:
         context_tokens: int = 0,
     ) -> tuple[str, LLMResponse]:
         system = self._sanitize(system, MAX_SYSTEM_CHARS)
-        user = self._sanitize(user, MAX_USER_CHARS)
         provider = self._select_provider(task, context_tokens)
+        user = self._sanitize(user, prompt_chars_for(provider.provider_key))
         _charge()
         text, meta = provider.ask_text(system, user, max_tokens, timeout)
 
@@ -439,7 +452,10 @@ class LLMRouter:
                 continue
             if not get_breaker(p.provider_key).is_available():
                 continue
-            result, meta = p.ask(system, user, max_tokens, temperature, timeout)
+            # Fitted again: a prompt sized for a larger provider would
+            # otherwise reach this one over its limit.
+            fitted = _fit(user, prompt_chars_for(p.provider_key))
+            result, meta = p.ask(system, fitted, max_tokens, temperature, timeout)
             meta.used_fallback = True
             if not meta.error:
                 return result, meta
@@ -452,7 +468,8 @@ class LLMRouter:
                 continue
             if not get_breaker(p.provider_key).is_available():
                 continue
-            text, meta = p.ask_text(system, user, max_tokens, timeout)
+            fitted = _fit(user, prompt_chars_for(p.provider_key))
+            text, meta = p.ask_text(system, fitted, max_tokens, timeout)
             meta.used_fallback = True
             if not meta.error:
                 return text, meta

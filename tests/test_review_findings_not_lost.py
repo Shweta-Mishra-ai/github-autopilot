@@ -533,14 +533,15 @@ class TestReviewFalsePositiveSources:
     """Four ways the review said something untrue about the code, none of which
     involved the model being wrong."""
 
-    def test_a_moved_anchor_gets_no_commit_button(self):
+    def test_an_unproven_line_is_never_pinned_to_a_neighbour(self):
         """
-        `nearest_commentable` may move a finding up to five lines to reach a
-        line GitHub accepts. A ```suggestion REPLACES the line it sits on, so on
-        a moved anchor the button commits the fix over a different statement —
-        presented by GitHub as a reviewed patch.
+        `nearest_commentable` used to move a finding up to five lines to reach a
+        line GitHub accepts — usually a different statement, presented on the
+        diff as a claim about it. A finding is now placed only on a line it is
+        shown to be about; one with a wrong number and no quote goes in the
+        report, marked unverified, with its fix and no commit button.
         """
-        # Only line 1 is commentable; the model reports line 4.
+        # Only line 1 is commentable; the model reports line 4 and quotes nothing.
         md, inline = _review(
             {
                 "files": [
@@ -557,12 +558,60 @@ class TestReviewFalsePositiveSources:
                 ]
             }
         )
-        assert len(inline) == 1
-        body = inline[0]["body"]
-        assert inline[0]["line"] == 1, "expected the anchor to have moved"
-        assert "```suggestion" not in body, "committable suggestion built on a moved anchor"
-        assert "size = min(size, MAX)" in body, "the fix must still be shown"
-        assert "Reported at line 4" in body, "the drift must be stated, not hidden"
+        assert inline == [], "an unproven line must not get an inline comment"
+        assert "unbounded read" in md and "unverified" in md
+        assert "size = min(size, MAX)" in md, "the fix must still be shown"
+        assert "```suggestion" not in md
+
+    def test_a_correct_quote_moves_the_finding_to_its_real_line(self):
+        """The common model error: right code, wrong number. The quote fixes it."""
+        patch_ = "@@ -10,2 +10,3 @@ def page(items):\n start = 0\n+end = start + size + 1\n return items\n"
+        files = [{"filename": "app/a.py", "patch": patch_, "status": "modified"}]
+        batch = {
+            "files": [
+                _entry(
+                    issues=[
+                        {
+                            "severity": "major",
+                            "line": "2",  # counted from the hunk, as models do
+                            "code": "end = start + size + 1",
+                            "issue": "off by one",
+                            "fix": "end = start + size",
+                        }
+                    ]
+                )
+            ]
+        }
+        with patch.object(pr_mod.router, "ask", return_value=(batch, MagicMock())):
+            _md, inline = pr_mod._review_code(
+                {"head": {"sha": "s"}}, "o/r", 1, files, "t", _cfg(),
+                ConfidenceGate(None), "", MagicMock(),
+            )
+        assert len(inline) == 1 and inline[0]["line"] == 11
+        assert "```suggestion" in inline[0]["body"], "anchored exactly, so the button is safe"
+
+    def test_a_quote_of_code_not_in_the_diff_is_withheld_and_counted(self):
+        md, inline = _review(
+            {
+                "files": [
+                    _entry(
+                        issues=[
+                            {
+                                "severity": "critical",
+                                "line": "1",
+                                "code": "cursor.execute(query % user_input)",
+                                "issue": "SQL injection",
+                                "fix": "parameterise",
+                            }
+                        ]
+                    )
+                ]
+            }
+        )
+        assert inline == []
+        assert "1 withheld" in md, "the heading must say a finding was withheld"
+        assert "no issues found · 1 withheld" in md
+        assert "SQL injection" in md, "withheld is listed, never silently dropped"
 
     def test_an_exact_anchor_still_gets_a_commit_button(self):
         _md, inline = _review(

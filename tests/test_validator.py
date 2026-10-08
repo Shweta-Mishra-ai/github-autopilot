@@ -160,9 +160,9 @@ class TestCodeReviewValidator:
 
     def test_missing_fields_use_safe_defaults(self):
         result = validate_code_review({})
-        # Default score is 7.0 — reasonable quality baseline
-        # Better than 0.0 which caused confusing "0/10" displays
-        assert result["score"] == 7.0
+        # No score given means no score — not 7.0. A default "acceptable"
+        # score published a mark the model never gave.
+        assert result["score"] is None
         assert result["issues"] == []
 
     def test_non_integer_score_handled(self):

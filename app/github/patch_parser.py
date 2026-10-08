@@ -59,6 +59,54 @@ def commentable_lines(patch: str) -> CommentableLines:
     return lines
 
 
+def numbered_patch(patch: str, max_chars: int | None = None) -> tuple[str, bool]:
+    """
+    `patch` with each new-file line prefixed by its line number, cut on a line
+    boundary to at most `max_chars`. Returns (text, was_cut).
+
+        @@ -10,3 +10,4 @@ def load():
+           10   cfg = read()
+           11 + if cfg is None:
+           12 +     raise ConfigError
+              -     return {}
+
+    The review asks the model which line each finding is on. Given a raw
+    unified diff it had to count forward from the `@@` header itself, which it
+    does badly — and nearest_commentable() then snapped the guess onto any
+    commentable line within five, so a finding could land on a different
+    statement and the "anchor rate" the confidence gate trusts would still
+    read 100%. Printing the numbers makes the answer something it reads off
+    the page rather than computes.
+    """
+    out: list[str] = []
+    size = 0
+    cut = False
+    new_ln = 0
+    in_hunk = False
+    for raw in (patch or "").splitlines():
+        m = _HUNK_RE.match(raw)
+        if m:
+            new_ln = int(m.group(1))
+            in_hunk = True
+            line = raw
+        elif not in_hunk or raw.startswith("\\"):
+            line = raw
+        elif raw.startswith("+"):
+            line = f"{new_ln:>6} + {raw[1:]}"
+            new_ln += 1
+        elif raw.startswith("-"):
+            line = f"{'':>6} - {raw[1:]}"
+        else:
+            line = f"{new_ln:>6}   {raw[1:] if raw.startswith(' ') else raw}"
+            new_ln += 1
+        if max_chars is not None and size + len(line) + 1 > max_chars:
+            cut = True
+            break
+        out.append(line)
+        size += len(line) + 1
+    return "\n".join(out), cut
+
+
 def parse_line_ref(ref) -> int | None:
     """
     Extract the first line number from an AI line reference.

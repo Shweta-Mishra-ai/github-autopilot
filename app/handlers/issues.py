@@ -79,13 +79,15 @@ def handle(payload: dict):
     # Per-repo daily AI budget. check_repo_rate_limit()/increment_repo_usage()
     # existed with zero callers, so REPO_DAILY_AI_LIMIT did nothing and a
     # single busy repository could drain the whole free-tier LLM quota.
-    from app.core.guardrails import check_repo_rate_limit, increment_repo_usage
+    from app.core.guardrails import check_repo_rate_limit
 
     budget = check_repo_rate_limit(repo)
     if not budget.passed:
         log.warning(f"issues.rate_limited repo={repo}: {budget.reason}")
         return
-    increment_repo_usage(repo)
+    # Each AI call this event makes is charged as it happens (router →
+    # guardrails.charge_ai_call); this check only refuses to START work
+    # once today's budget is spent.
 
     # Archived repositories are read-only by intent. check_archived_repo()
     # existed with zero callers, so the bot commented, labelled and reviewed

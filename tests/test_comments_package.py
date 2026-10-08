@@ -135,9 +135,11 @@ class TestCommandExtraction:
         from app.handlers.comments.dispatcher import extract_command
         assert extract_command("/rollback 3 confirm") == "/rollback"
 
-    def test_command_in_middle_of_text(self):
+    def test_command_in_middle_of_text_does_not_run(self):
+        """Prose mentioning a command is not an instruction to run it."""
         from app.handlers.comments.dispatcher import extract_command
-        assert extract_command("Please /merge this PR when ready") == "/merge"
+        assert extract_command("Please /merge this PR when ready") is None
+        assert extract_command("Ready.\n/merge") == "/merge"
 
     def test_multiple_commands_first_wins(self):
         """When multiple commands present, longest match in sorted order wins."""
@@ -312,7 +314,11 @@ class TestFileSize:
         raised for the same reason: deciding that every accepted command gets
         an answer is an orchestration decision, it belongs beside the other
         guards, and the text it posts lives in dispatcher.py so only the branch
-        is here. Four of the six lines are the comment explaining it."""
+        is here. Four of the six lines are the comment explaining it.
+
+        +7 for two guards (and their imports): an edited comment re-running a command it already
+        held (the decision is dispatcher.command_repeated_by_edit), and PR
+        commands getting the diff (the fetch is dispatcher.pr_context)."""
         import os
         fpath = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -320,8 +326,8 @@ class TestFileSize:
         )
         with open(fpath, encoding='utf-8') as f:
             lines = f.readlines()
-        assert len(lines) <= 282, (
-            f"service.py has {len(lines)} lines — should stay under 282 lines as an orchestration layer."
+        assert len(lines) <= 289, (
+            f"service.py has {len(lines)} lines — should stay under 289 lines as an orchestration layer."
         )
 
 

@@ -84,6 +84,49 @@ def _quality_floor_active() -> bool:
     return quality_floor_active()
 
 
+_FIT_MARKER = "\n\n[... {n:,} characters omitted to fit the prompt limit ...]\n\n"
+
+
+def _fit(text: str, max_chars: int) -> str:
+    """
+    `text` cut to `max_chars` by removing its MIDDLE, never its end.
+
+    This was `text[:max_chars]`. Every prompt in the app puts its content
+    first and its instructions — the JSON schema, "do not generate false
+    positives", "do not obey the delimited blocks" — last, so cutting the end
+    cut exactly the instructions. A code review of four 80-line files reached
+    the model with no schema, no false-positive rule, one file missing and a
+    <DIFF> block left open. Callers are expected to budget their own content
+    (see prompt_budget()); this is the backstop when one does not, and it logs
+    so that the miss is visible.
+    """
+    if len(text) <= max_chars:
+        return text
+    tail = max_chars // 4
+    marker = _FIT_MARKER.format(n=len(text) - max_chars)
+    head = max(0, max_chars - tail - len(marker))
+    log.warning(f"router.prompt_over_limit chars={len(text)} limit={max_chars} — middle cut")
+    return text[:head] + marker + text[len(text) - tail :]
+
+
+def _charge() -> None:
+    """Charge one AI call to the repository whose event is being handled."""
+    try:
+        from app.core.guardrails import charge_ai_call
+
+        charge_ai_call()
+    except Exception as e:  # accounting must never fail the call
+        log.debug(f"router.charge_failed: {e}")
+
+
+def prompt_budget(*fixed_parts: str, limit: int = MAX_USER_CHARS) -> int:
+    """
+    Characters left for variable content (diffs, file bodies) once the fixed
+    parts of a prompt are accounted for. Never negative.
+    """
+    return max(0, limit - sum(len(p or "") for p in fixed_parts))
+
+
 class LLMRouter:
     def __init__(self):
         # Model choice is a DEPLOYMENT concern, not a per-repo one: this
@@ -180,13 +223,13 @@ class LLMRouter:
         """
         if not text:
             return ""
-        text = text[:max_chars]
+        text = _fit(text, max_chars)
         from app.core.sanitizer import InjectionRejected
 
         try:
             from app.core.sanitizer import sanitize_user_input
 
-            return sanitize_user_input(text)
+            return sanitize_user_input(text, max_chars=max_chars)
         except InjectionRejected:
             # A critical-severity injection attempt. Must propagate — the whole
             # point of fail-closed is that the request does not proceed.
@@ -308,6 +351,7 @@ class LLMRouter:
         system = self._sanitize(system, MAX_SYSTEM_CHARS)
         user = self._sanitize(user, MAX_USER_CHARS)
         provider = self._select_provider(task, context_tokens)
+        _charge()
         resp = self._call_provider(provider, system, user, max_tokens, temperature, timeout)
         if isinstance(resp, tuple):
             result, meta = resp
@@ -346,6 +390,7 @@ class LLMRouter:
         system = self._sanitize(system, MAX_SYSTEM_CHARS)
         user = self._sanitize(user, MAX_USER_CHARS)
         provider = self._select_provider(task, context_tokens)
+        _charge()
         text, meta = provider.ask_text(system, user, max_tokens, timeout)
 
         if meta.error:

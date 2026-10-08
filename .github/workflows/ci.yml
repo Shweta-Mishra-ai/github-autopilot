@@ -211,11 +211,20 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Configure the server the way production is
+        # Through redis-py, which requirements.txt already installs. This used
+        # to `apt-get install redis-tools` for redis-cli, and `apt-get update`
+        # hung on the runner until the job's 10-minute timeout cancelled it —
+        # twice in a row on PR #110 (2026-10-07), before a single test ran.
+        timeout-minutes: 2
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq redis-tools
-          redis-cli -h 127.0.0.1 -p 6379 config set maxmemory-policy noeviction
-          echo -n "policy: "
-          redis-cli -h 127.0.0.1 -p 6379 config get maxmemory-policy | tail -1
+          python - <<'PY'
+          import redis
+          r = redis.Redis(host="127.0.0.1", port=6379, socket_timeout=5)
+          r.config_set("maxmemory-policy", "noeviction")
+          policy = r.config_get("maxmemory-policy")["maxmemory-policy"]
+          print("policy:", policy)
+          assert policy == "noeviction", policy
+          PY
 
       - name: Run the integration suite
         env:

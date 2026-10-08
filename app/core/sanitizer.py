@@ -19,7 +19,20 @@ _INJECTION_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"forget\s+(all\s+)?previous", re.I), "INSTR_INJ"),
     (re.compile(r"disregard\s+(all\s+)?previous", re.I), "INSTR_INJ"),
     (re.compile(r"you\s+are\s+now\b", re.I), "ROLE_INJ"),
-    (re.compile(r"act\s+as\s+(a|an|the)\b", re.I), "ROLE_INJ"),
+    # Addressed to the model ("you should act as a", or a sentence opening
+    # with "Act as a") — not any occurrence. The bare phrase is ordinary
+    # English in code and docs ("the cache will act as a proxy"), and this
+    # pattern REWRITES what it matches: the code reviewer was shown
+    # "[ROLE_INJ] proxy" in place of the author's line and could report the
+    # mangled text as a bug the author never wrote.
+    (
+        re.compile(
+            r"(?:\byou\s+(?:should\s+|must\s+|will\s+|can\s+|to\s+|now\s+)?|(?:^|[.!?:]\s+)(?:now\s+)?)"
+            r"act\s+as\s+(a|an|the)\b",
+            re.I,
+        ),
+        "ROLE_INJ",
+    ),
     (re.compile(r"pretend\s+(you\s+are|to\s+be)\b", re.I), "ROLE_INJ"),
     (re.compile(r"your\s+new\s+(role|persona|identity)\s+is", re.I), "ROLE_INJ"),
     (re.compile(r"jailbreak", re.I), "JAILBREAK"),
@@ -28,8 +41,12 @@ _INJECTION_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"<\s*/?\s*instructions?\s*>", re.I), "XML_INJ"),
     (re.compile(r"\[INST\]", re.I), "DELIM_INJ"),
     (re.compile(r"<<SYS>>", re.I), "DELIM_INJ"),
-    (re.compile(r"###\s*System", re.I), "DELIM_INJ"),
-    (re.compile(r"###\s*Human", re.I), "DELIM_INJ"),
+    # The chat-template turn markers are "### System:" and "### Human:". The
+    # colon is what makes it one: without it this rejected — fail-closed, the
+    # whole request — any README diff with a "### System Requirements"
+    # heading, so the PR got no review and no report at all.
+    (re.compile(r"###\s*System\s*:", re.I), "DELIM_INJ"),
+    (re.compile(r"###\s*Human\s*:", re.I), "DELIM_INJ"),
     (re.compile(r"reveal\s+(your\s+)?(system\s+)?prompt", re.I), "EXFIL"),
     (re.compile(r"show\s+me\s+your\s+(instructions?|prompt)", re.I), "EXFIL"),
     (re.compile(r"print\s+your\s+(system|initial)\s+prompt", re.I), "EXFIL"),

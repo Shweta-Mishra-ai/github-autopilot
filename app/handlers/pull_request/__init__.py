@@ -28,14 +28,14 @@ from __future__ import annotations
 from app.github.auth import get_installation_token
 from app.github.client import gh_get, gh_post, gh_put, GitHubError
 from app.github.notifications import notify_high_risk_pr, notify_pr_opened
-from app.github.sticky import MARKER_PR_REPORT, upsert_sticky
+from app.github.sticky import MARKER_PR_REPORT, update_sticky_if_present, upsert_sticky
 from app.ai.router import router
 from app.ai.validator import is_unusable, validate_pr_analysis, validate_code_review
 from app.core.config import load_config
 from app.core.logger import EventLogger
 from app.core.confidence import ConfidenceGate
 from app.core.guardrails import check_pr_title_update
-from app.core.sanitizer import wrap_user_content
+from app.core.sanitizer import InjectionRejected, wrap_user_content
 
 from .analysis import _analyze_pr, _build_pr_summary
 from .classify import (
@@ -128,13 +128,15 @@ def handle(payload: dict):
 
     # Per-repo daily AI budget — see issues.py for why this exists. A PR event
     # can trigger several LLM calls, so it is metered like any other.
-    from app.core.guardrails import check_repo_rate_limit, increment_repo_usage
+    from app.core.guardrails import check_repo_rate_limit
 
     budget = check_repo_rate_limit(repo)
     if not budget.passed:
         log.warning(f"pr.rate_limited repo={repo}: {budget.reason}")
         return
-    increment_repo_usage(repo)
+    # Each AI call this event makes is charged as it happens (router →
+    # guardrails.charge_ai_call); this check only refuses to START work
+    # once today's budget is spent.
 
     # Archived repositories are read-only by intent. check_archived_repo()
     # existed with zero callers, so the bot commented, labelled and reviewed
@@ -198,23 +200,84 @@ def handle(payload: dict):
         except Exception as e:
             log.debug(f"notify_pr_opened skipped: {e}")
 
-        analysis_md = _analyze_pr(pr, repo, pr_number, files, token, config, gate, context, log)
-        summary_md = _build_pr_summary(pr, repo, pr_number, files, token, config, log)
+    # Analysis and summary run on EVERY head, not only on open. Run only on
+    # open, they had two consequences: each push rewrote the sticky without
+    # its Analysis and Summary sections, and the risk level auto-merge reads
+    # (keyed by head SHA) was never recorded for any head after the first —
+    # so /merge refused every PR that had been pushed to, telling the user to
+    # re-open it, which did not run the analysis either. Rewriting the title
+    # and description, and the high-risk alert, stay first-look only.
+    #
+    # A section whose input the sanitiser rejects outright is reported, not
+    # dropped. The rejection used to escape handle() entirely, so a PR whose
+    # body or diff carried a critical injection pattern got no report at all
+    # — the one PR that most needs a human to look was the one the bot went
+    # quiet on.
+    rejected: list[str] = []
+
+    def _guarded(section, fn, default):
+        try:
+            return fn()
+        except InjectionRejected as e:
+            log.warning(f"pr.{section}_input_rejected: {e}")
+            rejected.append(section)
+            return default
+
+    analysis_md = _guarded(
+        "analysis",
+        lambda: _analyze_pr(
+            pr,
+            repo,
+            pr_number,
+            files,
+            token,
+            config,
+            gate,
+            context,
+            log,
+            apply_metadata=(action == "opened"),
+        ),
+        "",
+    )
+    summary_md = _guarded(
+        "summary",
+        lambda: _build_pr_summary(pr, repo, pr_number, files, token, config, log),
+        "",
+    )
 
     if config.get("pull_requests", "code_review", default=True):
-        review_md, inline_comments = _review_code(
-            pr, repo, pr_number, files, token, config, gate, context, log
+        review_md, inline_comments = _guarded(
+            "code review",
+            lambda: _review_code(pr, repo, pr_number, files, token, config, gate, context, log),
+            ("", []),
         )
 
     if config.get("pull_requests", "detect_test_gaps", default=True):
-        gaps_md = _detect_test_gaps(pr, repo, pr_number, files, token, config, log)
+        gaps_md = _guarded(
+            "test gaps",
+            lambda: _detect_test_gaps(pr, repo, pr_number, files, token, config, log),
+            "",
+        )
 
-    # Silence. A re-push with a clean review and no gaps produces no comment
-    # at all — the previous sticky already says what the bot thinks, and
-    # "still fine" is not worth a notification to every subscriber.
+    if rejected:
+        notice = (
+            "> ⚠️ **Automated "
+            + ", ".join(rejected)
+            + " refused.** This PR's title, description or diff contains text "
+            "matching a prompt-injection pattern, so it was not sent to the model. "
+            "Review it manually."
+        )
+        review_md = f"{notice}\n\n{review_md}".strip()
+
     if not any([analysis_md, summary_md, review_md, gaps_md]):
         log.info("pr.nothing_to_report — staying silent")
         return
+
+    # A push with nothing to flag never CREATES a comment — "still fine" is not
+    # worth a notification to every subscriber. But it must still EDIT the
+    # existing report (an edit notifies nobody): this used to return here, so
+    # a push that fixed every finding left the report listing them as open.
+    edit_only = action == "synchronize" and not (review_md or gaps_md)
 
     # Line-anchored findings still go through the Reviews API: they land on
     # the diff itself, which is the one place bot output is unambiguously
@@ -230,6 +293,14 @@ def handle(payload: dict):
 
     body = _build_pr_report(analysis_md, summary_md, review_md, gaps_md, pr, files)
     try:
+        if edit_only:
+            if update_sticky_if_present(
+                repo, pr_number, token, MARKER_PR_REPORT, body + config.footer
+            ):
+                log.done("pr_report_refreshed")
+            else:
+                log.info("pr.nothing_to_flag — no report to refresh, staying silent")
+            return
         upsert_sticky(repo, pr_number, token, MARKER_PR_REPORT, body + config.footer)
         log.done("pr_report_upserted")
     except GitHubError as e:

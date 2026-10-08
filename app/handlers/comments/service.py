@@ -9,18 +9,20 @@ from app.core.config import load_config
 from app.core.logger import EventLogger
 from app.github.auth import get_installation_token
 from app.github.client import GitHubError
-from ._client import gh_post
 from app.github.helpers import fmt_error
 
-from .constants import SKIP_AUTHORS
+from ._client import gh_post
+from .constants import DIFF_CONTEXT_COMMANDS, SKIP_AUTHORS
 from .dispatcher import (
     augment_with_memory,
     check_user_rate_limit,
+    command_repeated_by_edit,
     command_disabled_comment,
     empty_response_comment,
     extract_command,
     is_providers_down,
     make_degraded_response,
+    pr_context,
 )
 
 log = logging.getLogger(__name__)
@@ -61,6 +63,9 @@ def handle_comment_event(payload: dict) -> None:
     # ── Command detection ─────────────────────────────────────────────────
     cmd = extract_command(body)
     if not cmd:
+        return
+
+    if command_repeated_by_edit(payload, cmd):
         return
 
     log_ctx = EventLogger("comments", repo=repo, issue=issue_number, cmd=cmd, author=author)
@@ -121,6 +126,8 @@ def handle_comment_event(payload: dict) -> None:
 
     # ── Context building & Memory ─────────────────────────────────────────
     context = f"Title: {issue.get('title', '')}\nBody: {(issue.get('body') or '')[:1500]}"
+    if "pull_request" in issue and cmd in DIFF_CONTEXT_COMMANDS:
+        context = pr_context(repo, issue_number, issue, token, log_ctx) or context
     context = augment_with_memory(context, repo, f"{issue.get('title', '')} {cmd_args}".strip())
 
     # ── Dispatch ──────────────────────────────────────────────────────────

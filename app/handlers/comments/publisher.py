@@ -18,6 +18,32 @@ from ._client import gh_get, gh_post, gh_put, gh_patch, gh_delete, router  # noq
 log = logging.getLogger(__name__)
 
 
+_CHECK_PAGES = 5
+
+
+def _all_check_runs(repo: str, sha: str, token: str) -> tuple[list, bool]:
+    """
+    Every check run on `sha`, and whether that is provably all of them.
+
+    One unpaginated GET returns GitHub's default of 30, so on a repository
+    with more checks than that a failing 31st was never seen. Returns
+    (runs, False) when the runs fetched fall short of `total_count` — the
+    caller must refuse rather than merge on a partial picture.
+    """
+    runs: list = []
+    total = 0
+    for page in range(1, _CHECK_PAGES + 1):
+        data = gh_get(f"/repos/{repo}/commits/{sha}/check-runs?per_page=100&page={page}", token)
+        if not isinstance(data, dict):
+            return runs, False
+        batch = data.get("check_runs") or []
+        total = int(data.get("total_count", len(batch)) or 0)
+        runs.extend(batch)
+        if len(runs) >= total or len(batch) < 100:
+            break
+    return runs, len(runs) >= total
+
+
 def cmd_merge(
     repo: str,
     issue_number: int,
@@ -32,7 +58,7 @@ def cmd_merge(
 
     try:
         pr = gh_get(f"/repos/{repo}/pulls/{issue_number}", token)
-        reviews = gh_get(f"/repos/{repo}/pulls/{issue_number}/reviews", token)
+        reviews = gh_get(f"/repos/{repo}/pulls/{issue_number}/reviews?per_page=100", token)
         # A PR whose source fork was deleted carries a null `head`. This
         # raised inside cmd_merge's try/except, so the user was told "Merge
         # failed" with a TypeError rather than the real reason.
@@ -43,11 +69,18 @@ def cmd_merge(
                 "## 🚫 Cannot Merge\n\n**Reason:** this PR has no head commit — "
                 "its source branch or fork was deleted."
             )
-        check_runs = gh_get(f"/repos/{repo}/commits/{commit_sha}/check-runs", token)
+        checks, complete = _all_check_runs(repo, commit_sha, token)
+        if not complete:
+            return (
+                "## 🚫 Cannot Merge\n\n**Reason:** could not read every check run on "
+                f"`{commit_sha[:8]}`, so it cannot be shown that they all passed."
+            )
+        status = gh_get(f"/repos/{repo}/commits/{commit_sha}/status?per_page=100", token)
+        statuses = status.get("statuses", []) if isinstance(status, dict) else []
 
         from app.core.guardrails import check_pr_auto_merge
 
-        guard = check_pr_auto_merge(pr, check_runs.get("check_runs", []), reviews, config)
+        guard = check_pr_auto_merge(pr, checks, reviews, config, statuses=statuses)
         if not guard.passed:
             return f"## 🚫 Cannot Merge\n\n**Reason:** {guard.reason}"
 
@@ -59,6 +92,10 @@ def cmd_merge(
             {
                 "commit_title": f"feat: merge {head_branch} via /merge by @{author}",
                 "merge_method": "merge",
+                # Merge exactly the commit the checks above were read for.
+                # Without it, a commit pushed between the check and the merge
+                # was merged unchecked; with it, GitHub refuses (409) instead.
+                "sha": commit_sha,
             },
         )
 
@@ -85,8 +122,13 @@ def cmd_merge(
             except Exception:
                 pass  # audit failure must not block the merge
 
-            with contextlib.suppress(Exception):
-                gh_delete(f"/repos/{repo}/git/refs/heads/{head_branch}", token)
+            # Only a branch that lives in THIS repository. A fork PR's head
+            # branch is in the fork; deleting `heads/<its name>` here deleted
+            # whatever same-named branch this repository happened to have.
+            head_repo = (head.get("repo") or {}).get("full_name", "")
+            if head_branch and head_repo == repo:
+                with contextlib.suppress(Exception):
+                    gh_delete(f"/repos/{repo}/git/refs/heads/{head_branch}", token)
 
             # Learning loop: merging a bot-authored autofix branch is the
             # strongest acceptance signal we get.

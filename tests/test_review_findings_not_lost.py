@@ -141,20 +141,31 @@ class TestBatchConfidenceIsRead:
         assert seen == [0.4]
 
 
-class TestScoreZeroSurvives:
-    """`r.get("score") or 8` turned the one score that means "do not merge"
-    into a passing grade."""
+class TestNoInventedScore:
+    """
+    The per-file heading was "Score: N/10", where N was a number the prompt's
+    own example put at 8 and the validator defaulted to 7 when absent. It now
+    states what was actually found.
+    """
 
-    @pytest.mark.parametrize("given,shown", [(0, "0/10"), (2, "2/10"), (7.5, "7.5/10")])
-    def test_score_is_rendered_as_given(self, given, shown):
-        md, _ = _review({"files": [_entry(score=given, issues=[])]})
-        assert f"Score: {shown}" in md
+    @pytest.mark.parametrize("given", [0, 2, 7.5, None, "high"])
+    def test_heading_never_carries_a_mark_out_of_ten(self, given):
+        md, _ = _review({"files": [_entry(score=given)]})
+        assert "/10" not in md
+        assert "1 critical" in md
 
-    def test_a_missing_score_still_falls_back(self):
-        entry = _entry(issues=[])
-        entry.pop("score")
-        md, _ = _review({"files": [entry]})
-        assert "Score: 7/10" in md  # validator's documented default
+    def test_a_clean_file_says_so(self):
+        md, _ = _review({"files": [_entry(issues=[])]})
+        assert "no issues found" in md and "/10" not in md
+
+    def test_counts_are_worst_first_and_hidden_findings_are_disclosed(self):
+        issues = [
+            {"severity": s, "line": "", "issue": f"problem {n}", "fix": ""}
+            for n, s in enumerate(["minor", "critical", "minor", "major", "minor", "minor"])
+        ]
+        md, _ = _review({"files": [_entry(issues=issues)]})
+        assert "1 critical, 1 major, 4 minor" in md
+        assert "2 less severe finding(s) not shown" in md
 
 
 class TestNoCommittableProse:
@@ -277,6 +288,39 @@ class TestGapSectionSurvivesItsOwnInput:
         out = self._gaps({**self.BASE, "coverage_score": score}, log=log)
         assert "cover the raise" in out, f"section lost for coverage_score={score!r}"
         assert log.error.call_count == 0
+        # Whatever the model claims, it is not published as a score.
+        assert "/10" not in out and "Coverage Score" not in out
+
+    def test_the_headline_is_counted_from_the_diff(self):
+        src = {
+            "filename": "app/calc.py",
+            "status": "modified",
+            "patch": "@@ -1,0 +1,4 @@\n+def add_tax(x):\n+    return x\n+def strip_tax(x):\n+    return x",
+        }
+        test = {
+            "filename": "tests/test_calc.py",
+            "status": "modified",
+            "patch": "@@ -1,0 +1,2 @@\n+def test_add():\n+    assert add_tax(1) == 1",
+        }
+        payload = {
+            **self.BASE,
+            "gaps": [{"file": "app/calc.py", "function": "strip_tax", "risk": "high",
+                      "suggested_test": "cover strip_tax"}],
+        }
+        out = self._gaps(payload, files=[src, test])
+        assert "Changed symbols referenced by this PR's tests: 1 of 2" in out
+        assert "Tests already in the repository are not searched" in out
+
+    def test_the_prompt_offers_no_example_score_to_copy(self):
+        seen = {}
+
+        def ask(system, user, **kw):
+            seen["user"] = user
+            return {"has_gaps": False}, MagicMock()
+
+        with patch.object(gaps_mod.router, "ask", side_effect=ask):
+            gaps_mod._detect_test_gaps({}, "o/r", 1, FILES, "t", _cfg(), MagicMock())
+        assert "coverage_score" not in seen["user"]
 
     def test_gap_against_a_file_not_in_the_pr_is_dropped(self):
         out = self._gaps(

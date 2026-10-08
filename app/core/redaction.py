@@ -18,12 +18,22 @@ _FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
 _INDENTED_BLOCK_RE = re.compile(r"(?m)^(?: {4}|\t).*$")
 
 _CODE_PLACEHOLDER = "[code omitted]"
-_SECRET_PLACEHOLDER = "[REDACTED]"
 
-# Leading unmasked run of a redacted match, e.g. "ghp_" from
-# "ghp_********************aaaa". Anything shorter than 4 chars is too generic
-# to substitute on without risking collateral damage to ordinary prose.
-_PREFIX_RE = re.compile(r"[^*.]+")
+# What is masked on a line the scanner flagged: a quoted value, the password in
+# `scheme://user:password@`, the value after `=` or `:`, and any long
+# token-shaped run. Applied ONLY to flagged lines, so ordinary prose survives.
+_LINE_MASKS = (
+    (re.compile(r"(['\"])[^'\"]{4,}\1"), r"\1[REDACTED]\1"),
+    (re.compile(r"(://[^:@/\s]+:)[^@\s]+@"), r"\1[REDACTED]@"),
+    (re.compile(r"([=:]\s*)(?!\[REDACTED\])[^\s'\"]{6,}"), r"\1[REDACTED]"),
+    (re.compile(r"(?<![\w\[])[A-Za-z0-9_\-/+=.]{16,}"), "[REDACTED]"),
+)
+
+
+def _mask_line(line: str) -> str:
+    for pattern, repl in _LINE_MASKS:
+        line = pattern.sub(repl, line)
+    return line
 
 
 def redact(text: str | None) -> str:
@@ -34,6 +44,12 @@ def redact(text: str | None) -> str:
     failure must not take down the command that triggered the write. The
     structural strip (fences, indented blocks) runs first and unconditionally,
     so even if the secret scan fails the bulk of any code body is already gone.
+
+    A line the scanner flags has every value-shaped part masked. This used to
+    substitute on the first four characters of the scanner's REDACTED match
+    up to the next space, which for `password = "…"` replaced `pass` + `word`
+    and left the value, and skipped matches of 12 characters or fewer
+    entirely — while the memory record said the text had been redacted.
     """
     if not text:
         return ""
@@ -44,16 +60,16 @@ def redact(text: str | None) -> str:
     try:
         from app.security.enhanced_secrets import scan_diff
 
+        lines = text.split("\n")
         # scan_diff only inspects lines beginning with "+", so present each
-        # line as a diff addition.
-        as_diff = "\n".join(f"+{line}" for line in text.splitlines())
-        for finding in scan_diff(as_diff):
-            # redacted_match looks like "ghp_********************aaaa" — the
-            # leading run before the mask is the only part we can match on.
-            prefix = _PREFIX_RE.match(finding.redacted_match or "")
-            token = prefix.group(0) if prefix else ""
-            if len(token) >= 4:
-                text = re.sub(re.escape(token) + r"\S*", _SECRET_PLACEHOLDER, text)
+        # line as a diff addition. With no hunk header, a finding's line
+        # number is its position here.
+        as_diff = "\n".join(f"+{line}" for line in lines)
+        flagged = {f.line_number for f in scan_diff(as_diff)}
+        for n in flagged:
+            if 1 <= n <= len(lines):
+                lines[n - 1] = _mask_line(lines[n - 1])
+        text = "\n".join(lines)
     except Exception:
         pass  # structural strip above already ran
 
@@ -97,6 +113,13 @@ _WEBHOOK_PATH_RES = (
     re.compile(r"(?i)(https?://hooks\.slack\.com/services/)\S+"),
     re.compile(r"(?i)(https?://(?:ptb\.|canary\.)?discord(?:app)?\.com/api/webhooks/)\S+"),
     re.compile(r"(?i)(https?://[\w.-]*webhook\.office\.com/webhookb2/)\S+"),
+    # urllib3's "Max retries exceeded with url: …" quotes only the PATH, so
+    # the host-anchored patterns above never matched the commonest failure
+    # message, and the full webhook secret was logged — and, from the rich
+    # senders, returned to /notify and posted into a GitHub comment.
+    re.compile(r"((?<![\w/])/services/)T[A-Z0-9]+/B[A-Z0-9]+/\S+"),
+    re.compile(r"((?<![\w/])/api/webhooks/)\d+/\S+"),
+    re.compile(r"((?<![\w/])/webhookb2/)\S+"),
 )
 
 

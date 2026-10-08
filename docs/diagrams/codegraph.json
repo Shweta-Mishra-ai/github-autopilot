@@ -606,8 +606,8 @@
       "id": "app.core.redaction",
       "path": "app/core/redaction.py",
       "layer": "core",
-      "loc": 116,
-      "functions": 2,
+      "loc": 139,
+      "functions": 3,
       "classes": 0,
       "is_package": false,
       "fan_in": 4,
@@ -1278,14 +1278,15 @@
       "path": "app/handlers/push.py",
       "layer": "handlers",
       "loc": 524,
-      "functions": 11,
+      "functions": 12,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 14,
+      "fan_out": 13,
       "external_deps": [
         "app",
         "base64",
+        "hashlib",
         "logging",
         "re"
       ]
@@ -1353,7 +1354,7 @@
       "functions": 5,
       "classes": 0,
       "is_package": false,
-      "fan_in": 2,
+      "fan_in": 1,
       "fan_out": 0,
       "external_deps": [
         "logging",
@@ -1523,8 +1524,8 @@
       "id": "app.security.enhanced_secrets",
       "path": "app/security/enhanced_secrets.py",
       "layer": "security",
-      "loc": 898,
-      "functions": 22,
+      "loc": 1015,
+      "functions": 25,
       "classes": 1,
       "is_package": false,
       "fan_in": 4,
@@ -2935,11 +2936,6 @@
     },
     {
       "source": "app.handlers.push",
-      "target": "app.intelligence.embeddings",
-      "kind": "runtime"
-    },
-    {
-      "source": "app.handlers.push",
       "target": "app.security.dependencies",
       "kind": "import"
     },
@@ -3291,8 +3287,8 @@
   ],
   "stats": {
     "modules": 97,
-    "edges": 331,
-    "total_loc": 24666,
+    "edges": 330,
+    "total_loc": 24806,
     "layers": [
       "ai",
       "core",
@@ -3324,16 +3320,16 @@
         "fan_out": 2
       },
       {
+        "id": "app.security.enhanced_secrets",
+        "loc": 1015,
+        "fan_in": 4,
+        "fan_out": 0
+      },
+      {
         "id": "app.github.notifications",
         "loc": 527,
         "fan_in": 8,
         "fan_out": 4
-      },
-      {
-        "id": "app.security.enhanced_secrets",
-        "loc": 898,
-        "fan_in": 4,
-        "fan_out": 0
       },
       {
         "id": "app.core.config",

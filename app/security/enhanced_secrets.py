@@ -30,9 +30,12 @@ log = logging.getLogger(__name__)
 PATTERNS: list[tuple[str, str, str, bool]] = [
     # AWS
     ("AWS Access Key ID", r"\bAKIA[0-9A-Z]{16}\b", "critical", False),
+    # Quoted or not: `aws_secret_access_key = <40>` (~/.aws/credentials) and
+    # `AWS_SECRET_ACCESS_KEY=<40>` (.env) were both missed when this required
+    # quotes around the value.
     (
         "AWS Secret Access Key",
-        r"(?i)aws.{0,20}secret.{0,20}['\"][0-9a-zA-Z/+]{40}['\"]",
+        r"(?i)aws.{0,20}secret[^=:\n]{0,20}[=:]\s*['\"]?[0-9a-zA-Z/+]{40}(?![0-9a-zA-Z/+])",
         "critical",
         True,
     ),
@@ -88,7 +91,7 @@ PATTERNS: list[tuple[str, str, str, bool]] = [
     ),
     (
         "Slack Webhook",
-        r"https://hooks\.slack\.com/services/T[A-Z0-9]{8}/B[A-Z0-9]{8}/[a-zA-Z0-9]{24}",
+        r"https://hooks\.slack\.com/services/T[A-Z0-9]{8,12}/B[A-Z0-9]{8,12}/[a-zA-Z0-9]{24}",
         "high",
         False,
     ),
@@ -145,11 +148,24 @@ PATTERNS: list[tuple[str, str, str, bool]] = [
         "high",
         False,
     ),
+    # `postgres://` (Heroku/Render DATABASE_URL), `mongodb+srv://` (Atlas) and
+    # the TLS schemes were missed: only the five bare scheme names matched.
     (
         "Connection String",
-        r"(?i)(mongodb|postgresql|mysql|redis|amqp)://[^@\s]+:[^@\s]+@",
+        r"(?i)\b(mongodb(?:\+srv)?|postgres(?:ql)?|mysql|rediss?|amqps?)://[^@\s:/]+:[^@\s]+@",
         "critical",
         False,
+    ),
+    # A .env line with an unquoted value. Every other keyword pattern needs
+    # quotes, so `API_SECRET=…` in the commonest place secrets are kept was
+    # found only by luck. Anchored to an UPPER_CASE key on its own line, and
+    # entropy-gated, so code such as `token = make_token(user)` cannot match.
+    (
+        "Env File Secret",
+        r"^\s*(?:export\s+)?[A-Z][A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|PASSWD|API_KEY|APIKEY|PRIVATE_KEY)"
+        r"[A-Z0-9_]*\s*=\s*[^\s'\"#]{16,}\s*$",
+        "high",
+        True,
     ),
 ]
 
@@ -333,8 +349,25 @@ def _looks_random(s: str) -> bool:
 
 
 def _redact(matched: str) -> str:
-    """Safely redact a matched secret — never logs full value."""
-    if len(matched) <= 12:
+    """
+    Safely redact a matched secret — never logs the value.
+
+    A bare token (`ghp_…`, `AKIA…`) keeps its first and last four characters,
+    which identify which credential to rotate. A keyword-anchored match keeps
+    only the keyword: the old rule kept the last four characters of the whole
+    match, and for `password = "…"` or `mysql://root:…@` those were the last
+    three characters of the password plus its closing quote or `@`.
+    """
+    quoted = re.search(r"(['\"])([^'\"]+)\1", matched)
+    if quoted:
+        return matched[: quoted.start(2)][:40] + "****" + matched[quoted.end(2) :][:2]
+    userinfo = re.match(r"([a-z+]+://[^:@/\s]+:)[^@\s]+@", matched, re.IGNORECASE)
+    if userinfo:
+        return userinfo.group(1) + "****@"
+    assigned = re.match(r"(.*?[=:]\s*)\S+\s*$", matched, re.S)
+    if assigned:
+        return assigned.group(1).lstrip()[:40] + "****"
+    if len(matched) < 20:
         return "***"
     return matched[:4] + ("*" * min(len(matched) - 8, 20)) + matched[-4:]
 
@@ -371,6 +404,63 @@ _STRUCTURAL_NON_SECRETS = (
     re.compile(r"^iVBORw0KGgo"),  # PNG magic bytes, base64-encoded
     re.compile(r"^/9j/"),  # JPEG magic bytes, base64-encoded
 )
+
+
+# Names that sit where a keyword pattern expects a value: an environment
+# variable's NAME (`TOKEN_ENV_VAR = "GITHUB_PERSONAL_ACCESS_TOKEN"`), a dotted
+# class path (`"rest_framework.authtoken.TokenAuthentication"`), a header name
+# (`"X-Goog-Api-Key-Override-Header"`). Each passed the randomness gate and
+# opened a "Rotate ALL exposed credentials NOW" issue. Letters only: a value
+# with digits in it is not ruled out by these.
+_IDENTIFIER_SHAPES = (
+    re.compile(r"^[A-Z]+(?:_[A-Z]+)+$"),
+    re.compile(r"^[a-z]+(?:_[a-z]+)+$"),
+    re.compile(r"^[a-z]+(?:[A-Z][a-z]+)+$"),
+    re.compile(r"^[A-Za-z_]+(?:\.[A-Za-z_]+)+$"),
+    re.compile(r"^[A-Za-z]+(?:-[A-Za-z]+){2,}$"),
+)
+
+
+# A connection string's password that is a stand-in or a stock default, not a
+# credential anyone issued: `<password>`, `${DB_PASS}`, `…`, `postgres:postgres`.
+_DEFAULT_PASSWORDS = frozenset(
+    {
+        "password",
+        "pass",
+        "passwd",
+        "secret",
+        "changeme",
+        "example",
+        "postgres",
+        "root",
+        "admin",
+        "user",
+        "test",
+        "guest",
+        "mysql",
+        "redis",
+        "mongo",
+        "default",
+    }
+)
+
+
+def _connection_password_is_placeholder(matched: str) -> bool:
+    m = re.search(r"://[^:@/\s]+:([^@\s]+)@", matched)
+    if not m:
+        return False
+    pw = m.group(1)
+    return (
+        len(pw) < 4
+        or bool(re.fullmatch(r"[<{\[(].*[>}\])]|\$\{?\w+\}?|%\(?\w+\)?s?|[x*.…]+", pw, re.I))
+        or "…" in pw
+        or pw.lower() in _DEFAULT_PASSWORDS
+    )
+
+
+def _is_identifier(value: str) -> bool:
+    v = value.strip().strip("'\"")
+    return any(p.match(v) for p in _IDENTIFIER_SHAPES)
 
 
 def _is_structural_non_secret(value: str) -> bool:
@@ -625,6 +715,8 @@ def _is_false_positive(value: str, word_rules: bool = True) -> bool:
     """
     if _is_structural_non_secret(value):
         return True
+    if word_rules and any(_is_identifier(v) for v in _candidate_values(value)[1:]):
+        return True
     has_material = _has_key_material(value)
     if _matches_known_placeholder(value, word_rules=not has_material):
         return True
@@ -699,6 +791,32 @@ def is_low_signal_path(file_path: str) -> bool:
     return is_example_path(file_path) or is_prose_path(file_path)
 
 
+_HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+
+
+def _new_file_line_numbers(lines: list[str]) -> list[int]:
+    """
+    For each line of a patch, its line number in the new file (meaningful for
+    `+` lines). Without a hunk header — a bare snippet — the position in the
+    text is the best there is. The report used the position in the PATCH,
+    so a token on file line 102 was reported on "line 4".
+    """
+    numbers, current, seen_hunk = [], 0, False
+    for index, line in enumerate(lines, 1):
+        hunk = _HUNK.match(line)
+        if hunk:
+            current, seen_hunk = int(hunk.group(1)), True
+            numbers.append(current)
+            continue
+        if not seen_hunk:
+            numbers.append(index)
+            continue
+        numbers.append(current)
+        if line.startswith("+") or line.startswith(" ") or line == "":
+            current += 1
+    return numbers
+
+
 def scan_diff(diff: str, file_path: str = "") -> list[SecretFinding]:
     """
     Scan a git diff for secrets. Returns list of SecretFinding.
@@ -733,6 +851,7 @@ def scan_diff(diff: str, file_path: str = "") -> list[SecretFinding]:
     findings: list[SecretFinding] = []
     seen_matches: set[str] = set()  # Deduplicate within same diff
     lines = diff.splitlines()
+    file_lines = _new_file_line_numbers(lines)
 
     for lineno, line in enumerate(lines, 1):
         # Only scan added lines (git diff format: lines starting with +)
@@ -741,9 +860,12 @@ def scan_diff(diff: str, file_path: str = "") -> list[SecretFinding]:
 
         content = line[1:]  # Remove leading +
 
-        # Skip test/example lines
-        if _is_test_line(content):
-            continue
+        # A line that SAYS it is a test or an example. This used to skip the
+        # line before any pattern ran, so `GITHUB_TOKEN = "ghp_…"  # test
+        # token for CI` and `AKIA…  # example from prod config` were never
+        # reported. A comment is not evidence about a vendor-prefixed token;
+        # it only discounts the weak, keyword-anchored patterns below.
+        test_line = _is_test_line(content)
 
         # ── Pattern matching ──────────────────────────────────────────────
         for name, pattern, severity, entropy_required in PATTERNS:
@@ -751,6 +873,8 @@ def scan_diff(diff: str, file_path: str = "") -> list[SecretFinding]:
             # credential on their own are trusted. The keyword-anchored ones
             # are exactly the noise these paths were excluded for.
             if low_signal and entropy_required:
+                continue
+            if test_line and entropy_required:
                 continue
             match = re.search(pattern, content)
             if not match:
@@ -760,6 +884,9 @@ def scan_diff(diff: str, file_path: str = "") -> list[SecretFinding]:
 
             # Skip duplicates within same diff
             if matched in seen_matches:
+                continue
+
+            if name == "Connection String" and _connection_password_is_placeholder(matched):
                 continue
 
             # Skip false positives. `entropy_required` marks the patterns with
@@ -781,7 +908,13 @@ def scan_diff(diff: str, file_path: str = "") -> list[SecretFinding]:
             # sitting in the same position — not to find secrets on its own.
             if entropy_required:
                 value_match = re.search(r"['\"]([^'\"]{16,})['\"]", matched)
-                check_str = value_match.group(1) if value_match else matched
+                bare = re.search(r"[=:]\s*([^\s'\"]{16,})\s*$", matched)
+                if value_match:
+                    check_str = value_match.group(1)
+                elif bare:
+                    check_str = bare.group(1)
+                else:
+                    check_str = matched
                 if not _looks_random(check_str):
                     continue  # Not random enough → placeholder or example
 
@@ -789,7 +922,7 @@ def scan_diff(diff: str, file_path: str = "") -> list[SecretFinding]:
             findings.append(
                 SecretFinding(
                     pattern_name=name,
-                    line_number=lineno,
+                    line_number=file_lines[lineno - 1],
                     severity=severity,
                     redacted_match=_redact(matched),
                     file_path=file_path,
@@ -799,7 +932,7 @@ def scan_diff(diff: str, file_path: str = "") -> list[SecretFinding]:
             )
             log.warning(
                 f"secret.detected pattern={name} severity={severity} "
-                f"line={lineno} file={file_path or 'unknown'}"
+                f"line={file_lines[lineno - 1]} file={file_path or 'unknown'}"
             )
 
         # ── Entropy-only detection (catch novel secrets) ──────────────────
@@ -811,8 +944,8 @@ def scan_diff(diff: str, file_path: str = "") -> list[SecretFinding]:
         # source of noise these paths were excluded for, so it is the one
         # detector that stays off there while the identifiable patterns above
         # keep running.
-        line_matched = any(f.line_number == lineno for f in findings)
-        if not line_matched and not low_signal:
+        line_matched = any(f.line_number == file_lines[lineno - 1] for f in findings)
+        if not line_matched and not low_signal and not test_line:
             tokens = re.findall(r"['\"]([a-zA-Z0-9+/=_\-]{20,})['\"]", content)
             for token in tokens:
                 if token in seen_matches:
@@ -834,7 +967,7 @@ def scan_diff(diff: str, file_path: str = "") -> list[SecretFinding]:
                     findings.append(
                         SecretFinding(
                             pattern_name="High Entropy String (unclassified)",
-                            line_number=lineno,
+                            line_number=file_lines[lineno - 1],
                             severity="medium",
                             redacted_match=_redact(token),
                             file_path=file_path,

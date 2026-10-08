@@ -28,8 +28,14 @@ log = logging.getLogger(__name__)
 # ── Cache (5-minute TTL, thread-safe) ────────────────────────────────────────
 _config_cache: dict[str, tuple] = {}  # {repo: (Config, timestamp)}
 _config_lock = threading.RLock()  # RLock: reentrant so invalidate can be called inside load
-_config_fetching: set = set()  # repos currently being fetched (thundering herd guard)
+# repo -> Event set when its in-flight fetch finishes (thundering herd guard).
+_config_fetching: dict = {}
 _CONFIG_TTL = 300  # 5 minutes in seconds
+# How long a config that could not be READ (as opposed to one that does not
+# exist) stands in. Short, so a transient error is retried soon.
+_CONFIG_ERROR_TTL = 30
+# How long a concurrent caller waits for an in-flight fetch of the same repo.
+_CONFIG_WAIT_SECONDS = 10
 
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
@@ -148,8 +154,16 @@ def _validate_config(data: dict) -> dict:
     Validate and sanitize user config values.
     Bad values → warning logged → default used. Never crashes.
     """
+    # A section written with nothing under it (`push:` with only commented
+    # children) is YAML null. `data.get("push", {})` returned that None, the
+    # next `.get` raised, and load_config fell back to DEFAULTS for the WHOLE
+    # file — `bot: {enabled: false}` and every maintainer_only entry ignored.
+    for key, default in DEFAULTS.items():
+        if isinstance(default, dict) and key in data and data[key] is None:
+            data[key] = {}
+
     # ── Confidence thresholds: must be float 0.0-1.0 ────────────────────────
-    raw_thresholds = data.get("confidence", {}).get("thresholds", {})
+    raw_thresholds = (data.get("confidence") or {}).get("thresholds") or {}
     if isinstance(raw_thresholds, dict):
         clean: dict = {}
         for k, v in raw_thresholds.items():
@@ -170,10 +184,12 @@ def _validate_config(data: dict) -> dict:
         data.setdefault("confidence", {})["thresholds"] = clean
 
     # ── max_files_reviewed: must be int 1-20 ────────────────────────────────
-    mfr = data.get("pull_requests", {}).get("max_files_reviewed")
+    mfr = (data.get("pull_requests") or {}).get("max_files_reviewed")
     if mfr is not None:
         try:
             mfr = int(mfr)
+            # Written back: a quoted "5" passed int() and stayed a string.
+            data.setdefault("pull_requests", {})["max_files_reviewed"] = mfr
             if not (1 <= mfr <= 20):
                 log.warning(f"config.invalid max_files_reviewed={mfr} (must be 1–20) — using 6")
                 data.setdefault("pull_requests", {})["max_files_reviewed"] = 6
@@ -182,10 +198,13 @@ def _validate_config(data: dict) -> dict:
             data.setdefault("pull_requests", {})["max_files_reviewed"] = 6
 
     # ── create_issue_threshold: must be int 1-20 ────────────────────────────
-    cit = data.get("push", {}).get("create_issue_threshold")
+    cit = (data.get("push") or {}).get("create_issue_threshold")
     if cit is not None:
         try:
             cit = int(cit)
+            # Written back: `"5"` stayed a string and the push handler's
+            # `len(bad_commits) < "5"` raised TypeError.
+            data.setdefault("push", {})["create_issue_threshold"] = cit
             if not (1 <= cit <= 20):
                 log.warning(f"config.invalid create_issue_threshold={cit} (must be 1–20) — using 3")
                 data.setdefault("push", {})["create_issue_threshold"] = 3
@@ -272,8 +291,12 @@ class Config:
         return cmd.lstrip("/") in {str(c).lstrip("/") for c in enabled}
 
     def is_maintainer_only(self, cmd: str) -> bool:
+        # Entries normalised like command_enabled's: `maintainer_only: ["/fix"]`
+        # restricted nothing, because "/fix" was compared with "fix".
         mo = self.get("commands", "permissions", "maintainer_only", default=[])
-        return cmd.lstrip("/") in mo
+        if not isinstance(mo, list):
+            return False
+        return cmd.lstrip("/") in {str(c).lstrip("/") for c in mo}
 
     @property
     def footer(self) -> str:
@@ -327,12 +350,21 @@ def load_config(repo: str, token: str) -> Config:
                 return cached_config
 
         # Thundering herd guard: if another thread is already fetching this
-        # repo's config, return defaults rather than pile-on with a 2nd fetch.
-        if repo in _config_fetching:
-            log.debug(f"config.fetch_in_progress repo={repo} — returning defaults")
-            return Config({})
+        # repo's config, WAIT for it. This returned Config({}) instead — the
+        # defaults — so an event arriving alongside another for the same repo
+        # ran with bot.enabled true and no maintainer_only restrictions, on a
+        # repo whose config said otherwise.
+        in_flight = _config_fetching.get(repo)
+        if in_flight is None:
+            _config_fetching[repo] = threading.Event()
 
-        _config_fetching.add(repo)
+    if in_flight is not None:
+        in_flight.wait(_CONFIG_WAIT_SECONDS)
+        with _config_lock:
+            if repo in _config_cache:
+                return _config_cache[repo][0]
+        log.warning(f"config.concurrent_fetch_timed_out repo={repo} — using defaults")
+        return Config({})
 
     # Cache miss — fetch from GitHub (outside lock so other repos aren't blocked)
     try:
@@ -365,16 +397,39 @@ def load_config(repo: str, token: str) -> Config:
             parsed = {}
 
         config = Config(parsed)
+        cached_at = now
         log.info(f"config.loaded repo={repo}")
 
     except Exception as e:
-        log.debug(f"config.using_defaults repo={repo} reason={e}")
-        config = Config({})
+        # No config file is a legitimate state: defaults, cached normally.
+        # Anything else (a 5xx, a network error, bad base64) means the config
+        # could not be READ, which is not evidence it is empty. That used to
+        # cache Config({}) for the full five minutes, ignoring the repo's kill
+        # switch and command restrictions after one transient 502. The last
+        # good config is kept when there is one; otherwise defaults stand in
+        # only briefly.
+        missing = getattr(e, "status_code", None) == 404
+        with _config_lock:
+            previous = _config_cache.get(repo)
+        if missing or previous is None:
+            config = Config({})
+            if missing:
+                log.debug(f"config.not_found repo={repo} — using defaults")
+            else:
+                log.warning(
+                    f"config.unreadable repo={repo}: {e} — defaults for {_CONFIG_ERROR_TTL}s"
+                )
+        else:
+            config = previous[0]
+            log.warning(f"config.unreadable repo={repo}: {e} — keeping the last loaded config")
+        cached_at = now if missing else now - (_CONFIG_TTL - _CONFIG_ERROR_TTL)
 
     with _config_lock:
-        _config_fetching.discard(repo)
+        done = _config_fetching.pop(repo, None)
         _prune_config_cache(now)
-        _config_cache[repo] = (config, now)
+        _config_cache[repo] = (config, cached_at)
+    if done is not None:
+        done.set()
 
     return config
 
@@ -404,9 +459,13 @@ def invalidate_config_cache(repo: str = None):
     with _config_lock:
         if repo:
             _config_cache.pop(repo, None)
-            _config_fetching.discard(repo)
+            done = _config_fetching.pop(repo, None)
+            if done is not None:
+                done.set()
             log.debug(f"config.cache_invalidated repo={repo}")
         else:
             _config_cache.clear()
+            for done in _config_fetching.values():
+                done.set()
             _config_fetching.clear()
         log.debug("config.cache_invalidated all")

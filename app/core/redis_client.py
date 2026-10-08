@@ -4,6 +4,7 @@ app/core/redis_client.py — Thread-safe Redis singleton; fails loud in producti
 
 from __future__ import annotations
 
+from app.core.env import env_int
 import os
 import logging
 import threading
@@ -167,7 +168,7 @@ def is_redis_available() -> bool:
         return False
 
 
-REDIS_MEMORY_WARN_PCT = int(os.environ.get("REDIS_MEMORY_WARN_PCT", "80"))
+REDIS_MEMORY_WARN_PCT = env_int("REDIS_MEMORY_WARN_PCT", 80, minimum=1, maximum=100)
 
 
 def redis_memory_status() -> dict:

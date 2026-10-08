@@ -21,7 +21,11 @@ def _paged(total: int, marker_at: int | None, per_page: int = 100):
         pages.append(page)
         start = (page - 1) * per_page
         return [
-            {"id": 1000 + i, "body": MARKER_PR_REPORT if i == marker_at else "human comment"}
+            {
+                "id": 1000 + i,
+                "body": MARKER_PR_REPORT if i == marker_at else "human comment",
+                "user": {"type": "Bot" if i == marker_at else "User"},
+            }
             for i in range(start, min(start + per_page, total))
         ]
 
@@ -32,7 +36,7 @@ class TestFindSticky:
     def test_finds_comment_bearing_the_marker(self):
         comments = [
             {"id": 1, "body": "unrelated human comment"},
-            {"id": 2, "body": f"## Report\n{MARKER_PR_REPORT}"},
+            {"id": 2, "body": f"## Report\n{MARKER_PR_REPORT}", "user": {"type": "Bot"}},
         ]
         with patch("app.github.sticky.gh_get", return_value=comments):
             assert find_sticky("o/r", 5, "t", MARKER_PR_REPORT) == 2
@@ -161,3 +165,26 @@ class TestUpsertSticky:
         ):
             upsert_sticky("o/r", 5, "t", MARKER_PR_REPORT, "body")
         post.assert_called_once()
+
+
+
+class TestOnlyTheAppsOwnCommentIsTheSticky:
+    """Anyone could paste the marker into a comment; the bot then PATCHed its
+    report into that comment, which its author could edit (2026-10-08 audit)."""
+
+    def test_a_human_comment_carrying_the_marker_is_ignored(self):
+        comments = [
+            {"id": 1, "body": f"planted {MARKER_PR_REPORT}", "user": {"type": "User", "login": "mallory"}},
+            {"id": 2, "body": f"## Report\n{MARKER_PR_REPORT}", "user": {"type": "Bot"}},
+        ]
+        with patch("app.github.sticky.gh_get", return_value=comments):
+            assert find_sticky("o/r", 5, "t", MARKER_PR_REPORT) == 2
+
+    def test_another_apps_comment_is_ignored_when_the_app_id_is_known(self, monkeypatch):
+        monkeypatch.setenv("GITHUB_APP_ID", "111")
+        comments = [
+            {"id": 1, "body": MARKER_PR_REPORT, "user": {"type": "Bot"}, "performed_via_github_app": {"id": 999}},
+            {"id": 2, "body": MARKER_PR_REPORT, "user": {"type": "Bot"}, "performed_via_github_app": {"id": 111}},
+        ]
+        with patch("app.github.sticky.gh_get", return_value=comments):
+            assert find_sticky("o/r", 5, "t", MARKER_PR_REPORT) == 2

@@ -148,6 +148,20 @@ class TestEncryptedBackup:
         with pytest.raises(InvalidToken):
             memory_backup.import_encrypted(blob)
 
+    def test_an_empty_memory_never_overwrites_a_backup(self, monkeypatch):
+        """known_repos() is [] when Redis errors, and a wiped Redis is empty:
+        both used to upload {"repos": {}} over the good backup."""
+        from unittest.mock import patch
+
+        from app.core import memory_backup
+
+        monkeypatch.setenv("MEMORY_BACKUP_KEY", memory_backup.generate_key())
+        assert memory_backup.export_encrypted(["nobody/never-stored"]) is None
+        with patch("app.intelligence.memory.known_repos", return_value=[]), \
+             patch.object(memory_backup, "gh_put", create=True) as put:
+            assert memory_backup.backup_to_github("o/b", "mem.bin", "tok") is False
+        put.assert_not_called()
+
     def test_export_none_when_unconfigured(self):
         from app.core import memory_backup
 

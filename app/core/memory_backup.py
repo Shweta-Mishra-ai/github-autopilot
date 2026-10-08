@@ -83,10 +83,21 @@ def export_encrypted(repos: list[str] | None = None) -> bytes | None:
         from app.intelligence.memory import known_repos
 
         repos = repos if repos is not None else known_repos()
+        dumped = _dump_repos(repos)
+        # Nothing to back up is never worth uploading. known_repos() returns
+        # [] when Redis errors, and a Redis wiped mid-life (no boot restore)
+        # is empty too: either way the scheduled backup encrypted
+        # {"repos": {}}, overwrote the good backup with it, reported success,
+        # and the next boot restored zero repositories.
+        if not any(dumped.values()):
+            log.warning(
+                "memory_backup.nothing_to_export — refusing to overwrite a backup with an empty one"
+            )
+            return None
         envelope = {
             "version": BACKUP_VERSION,
             "created_at": int(time.time()),
-            "repos": _dump_repos(repos),
+            "repos": dumped,
         }
         plaintext = json.dumps(envelope, separators=(",", ":")).encode("utf-8")
         token = _fernet().encrypt(plaintext)

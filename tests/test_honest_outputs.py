@@ -90,3 +90,13 @@ class TestRedisUrlNeverLogged:
             "cache.example:6380"
         )
         assert "s3cr3t" not in redis_client._redis_host("redis://u:s3cr3t@h")
+
+
+def test_no_redis_url_prefix_is_logged_anywhere():
+    """get_redis() was fixed to log the host only; get_redis_blocking() still
+    logged redis_url[:30] — most of the password for rediss://default:…@host."""
+    import pathlib
+    import re
+
+    src = pathlib.Path("app/core/redis_client.py").read_text()
+    assert not re.search(r"redis_url\[", src)

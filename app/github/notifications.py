@@ -408,7 +408,7 @@ def test_discord() -> tuple[bool, str]:
             return True, "Discord notification sent successfully ✅"
         return False, f"Discord returned HTTP {resp.status_code}: {resp.text[:150]}"
     except Exception as e:
-        return False, f"Exception: {e}"
+        return False, f"Exception: {redact_secrets(str(e))}"
 
 
 def send_rich_discord(
@@ -449,7 +449,7 @@ def send_rich_discord(
         return ok, f"HTTP {r.status_code}"
     except Exception as e:
         _count("notifications.discord.failed")
-        return False, str(e)
+        return False, redact_secrets(str(e))
 
 
 def send_rich_slack(
@@ -494,7 +494,7 @@ def send_rich_slack(
         return ok, f"HTTP {r.status_code}"
     except Exception as e:
         _count("notifications.slack.failed")
-        return False, str(e)
+        return False, redact_secrets(str(e))
 
 
 def notify_autofix_created(repo: str, issue_number: int, pr_number: int, pr_url: str):

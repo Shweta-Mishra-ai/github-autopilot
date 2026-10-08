@@ -289,10 +289,10 @@ Reported cost in local mode is always `0`.
 | | |
 |---|---|
 | Modules | 97 |
-| Lines of code | 24,666 |
+| Lines of code | 24,821 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 331 |
+| Internal imports | 330 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>

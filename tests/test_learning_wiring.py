@@ -45,15 +45,21 @@ class TestApplyRecordsAcceptance:
         assert "PR Created" in out  # learning is best-effort, never fatal
 
 
-def _closed(branch, merged, number=99, author="github-autopilot[bot]"):
+_NUMBERS = iter(range(10_000, 20_000))
+
+
+def _closed(branch, merged, number=None, author="github-autopilot[bot]", head_repo="o/r"):
+    # A fresh PR number per call unless one is given: each PR's outcome is
+    # recorded once, so two tests sharing a number would see the second
+    # deduplicated.
     return {
         "action": "closed",
         "pull_request": {
-            "number": number,
+            "number": number if number is not None else next(_NUMBERS),
             "title": "fix: null deref",
             "merged": merged,
-            "head": {"ref": branch},
-            "user": {"login": author},
+            "head": {"ref": branch, "repo": {"full_name": head_repo}},
+            "user": {"login": author, "type": "Bot" if author.endswith("[bot]") else "User"},
         },
         "repository": {"full_name": "o/r"},
         "installation": {"id": 1},
@@ -72,7 +78,7 @@ class TestAutofixOutcomesAreRecordedFromTheClosedEvent:
 
         with patch("app.core.learning.record_autofix_merged") as merged, \
              patch("app.core.learning.record_autofix_closed") as closed:
-            pull_request.handle(_closed("fix/bot-issue-42", merged=True))
+            pull_request.handle(_closed("fix/bot-issue-42", merged=True, number=99))
         merged.assert_called_once_with("o/r", 99, 42)
         closed.assert_not_called()
 
@@ -82,10 +88,43 @@ class TestAutofixOutcomesAreRecordedFromTheClosedEvent:
         with patch("app.core.learning.record_autofix_merged") as merged, \
              patch("app.core.learning.record_autofix_closed") as closed, \
              patch("app.intelligence.memory.remember") as remember:
-            pull_request.handle(_closed("fix/bot-issue-42", merged=False))
-        closed.assert_called_once_with("o/r", 99)
+            pull_request.handle(_closed("fix/bot-issue-42", merged=False, number=98))
+        closed.assert_called_once_with("o/r", 98)
         merged.assert_not_called()
         assert "rejected" in remember.call_args.args[1]
+
+    def test_a_fork_pr_with_an_autofix_branch_name_records_nothing(self):
+        """Anyone could fork, name a branch fix/bot-issue-1, close the PR and
+        count a 'rejected' autofix — and plant its title in repo memory."""
+        from app.handlers import pull_request
+
+        with patch("app.core.learning.record_autofix_closed") as closed, \
+             patch("app.intelligence.memory.remember") as remember:
+            pull_request.handle(_closed("fix/bot-issue-1", merged=False, head_repo="mallory/r"))
+        closed.assert_not_called()
+        remember.assert_not_called()
+
+    def test_a_same_repo_pr_not_opened_by_the_app_records_nothing(self):
+        from app.handlers import pull_request
+
+        with patch("app.core.learning.record_autofix_closed") as closed:
+            pull_request.handle(_closed("fix/bot-issue-1", merged=False, author="alice"))
+        closed.assert_not_called()
+
+    def test_close_reopen_close_counts_once(self):
+        from app.handlers import pull_request
+
+        with patch("app.core.learning.record_autofix_closed") as closed:
+            pull_request.handle(_closed("fix/bot-issue-7", merged=False, number=4242))
+            pull_request.handle(_closed("fix/bot-issue-7", merged=False, number=4242))
+        assert closed.call_count == 1
+
+    def test_a_suffixed_autofix_branch_still_names_its_issue(self):
+        from app.handlers import pull_request
+
+        with patch("app.core.learning.record_autofix_merged") as merged:
+            pull_request.handle(_closed("fix/bot-issue-42-1760000000", merged=True, number=97))
+        merged.assert_called_once_with("o/r", 97, 42)
 
     def test_a_human_branch_records_nothing(self):
         from app.handlers import pull_request

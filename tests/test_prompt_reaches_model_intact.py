@@ -311,9 +311,10 @@ class TestAutofixPlansAgainstTheFile:
 
         def ask(system, user, **kw):
             seen["user"] = user
-            return {"fixed_content": "x = 1\n"}, MagicMock(total_tokens=0)
+            return {"edits": []}, MagicMock(total_tokens=0)
 
         with patch.object(autofix.router, "ask", side_effect=ask):
-            autofix._apply_fix("x = 1\n", {"patch": "p", "problem": "boom"}, "t")
-        assert "PROBLEM: boom" in seen["user"]
+            out, _ = autofix._apply_fix("x = 1\n", {"patch": "p", "problem": "boom"}, "t")
+        assert "<PROBLEM>\nboom\n</PROBLEM>" in seen["user"]
+        assert out == "x = 1\n"
         assert "return the file exactly as given" in seen["user"]

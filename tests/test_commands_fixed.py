@@ -308,8 +308,9 @@ class TestRunAutofix:
         meta = LLMResponse(text="ok", provider="groq", model="llama3", total_tokens=50)
         plan = self._plan(target="app/foo.py")
         fix_resp = {
-            "fixed_content": "def foo():\n    if x is None: return\n    return x.strip()\n",
-            "changed_lines": 1,
+            "edits": [
+                {"find": "    return x.strip()", "replace": "    if x is None: return\n    return x.strip()"}
+            ],
         }
         orig_content = b"def foo():\n    return x.strip()\n"
 

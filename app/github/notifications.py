@@ -92,6 +92,11 @@ _CONFIG_EVENT_KEYS = {
 }
 
 
+# The most recent outcome per channel ("sent" / "failed"). /health used the
+# cumulative counters, so one failure months ago read "failing" forever.
+last_outcome: dict[str, str] = {}
+
+
 def _count(metric: str) -> None:
     """
     Record a delivery outcome.
@@ -100,6 +105,9 @@ def _count(metric: str) -> None:
     log line in a thread nobody reads. Counting makes it visible on /metrics
     and /health, where "notifications stopped arriving" is actually diagnosable.
     """
+    parts = metric.split(".")
+    if len(parts) == 3 and parts[2] in ("sent", "failed"):
+        last_outcome[parts[1]] = parts[2]
     try:
         from app.core.metrics import metrics
 
@@ -408,7 +416,7 @@ def test_discord() -> tuple[bool, str]:
             return True, "Discord notification sent successfully ✅"
         return False, f"Discord returned HTTP {resp.status_code}: {resp.text[:150]}"
     except Exception as e:
-        return False, f"Exception: {e}"
+        return False, f"Exception: {redact_secrets(str(e))}"
 
 
 def send_rich_discord(
@@ -449,7 +457,7 @@ def send_rich_discord(
         return ok, f"HTTP {r.status_code}"
     except Exception as e:
         _count("notifications.discord.failed")
-        return False, str(e)
+        return False, redact_secrets(str(e))
 
 
 def send_rich_slack(
@@ -494,7 +502,7 @@ def send_rich_slack(
         return ok, f"HTTP {r.status_code}"
     except Exception as e:
         _count("notifications.slack.failed")
-        return False, str(e)
+        return False, redact_secrets(str(e))
 
 
 def notify_autofix_created(repo: str, issue_number: int, pr_number: int, pr_url: str):

@@ -28,6 +28,7 @@ from app.ai.routing_policy import (
     DAILY_LIMITS,
     MAX_SYSTEM_CHARS,
     MAX_USER_CHARS,
+    prompt_chars_for,
     PROVIDER_TIER,
     QUALITY_SENSITIVE_TASK_TYPES,
     TASK_MAP,
@@ -110,12 +111,18 @@ def _fit(text: str, max_chars: int) -> str:
 
 
 def _charge() -> None:
-    """Charge one AI call to the repository whose event is being handled."""
-    try:
-        from app.core.guardrails import charge_ai_call
+    """
+    Charge one AI call to the repository whose event is being handled.
+    Raises AIBudgetExceeded when today's budget is spent; any other accounting
+    failure never fails the call.
+    """
+    from app.core.guardrails import AIBudgetExceeded, charge_ai_call
 
+    try:
         charge_ai_call()
-    except Exception as e:  # accounting must never fail the call
+    except AIBudgetExceeded:
+        raise
+    except Exception as e:
         log.debug(f"router.charge_failed: {e}")
 
 
@@ -326,6 +333,18 @@ class LLMRouter:
 
         raise AllProvidersDown()
 
+    def prompt_limit(self, task: str) -> int:
+        """
+        How many characters of user prompt `task` will be allowed, for the
+        provider it would be routed to now. Lets a caller size its content to
+        the provider instead of to the smallest one. Falls back to the default
+        limit when no provider is available — the call will fail anyway.
+        """
+        try:
+            return prompt_chars_for(self._select_provider(task).provider_key)
+        except Exception:
+            return MAX_USER_CHARS
+
     def _call_provider(
         self,
         provider: LLMProvider,
@@ -349,8 +368,8 @@ class LLMRouter:
         context_tokens: int = 0,
     ) -> tuple[dict, LLMResponse]:
         system = self._sanitize(system, MAX_SYSTEM_CHARS)
-        user = self._sanitize(user, MAX_USER_CHARS)
         provider = self._select_provider(task, context_tokens)
+        user = self._sanitize(user, prompt_chars_for(provider.provider_key))
         _charge()
         resp = self._call_provider(provider, system, user, max_tokens, temperature, timeout)
         if isinstance(resp, tuple):
@@ -388,8 +407,8 @@ class LLMRouter:
         context_tokens: int = 0,
     ) -> tuple[str, LLMResponse]:
         system = self._sanitize(system, MAX_SYSTEM_CHARS)
-        user = self._sanitize(user, MAX_USER_CHARS)
         provider = self._select_provider(task, context_tokens)
+        user = self._sanitize(user, prompt_chars_for(provider.provider_key))
         _charge()
         text, meta = provider.ask_text(system, user, max_tokens, timeout)
 
@@ -439,7 +458,10 @@ class LLMRouter:
                 continue
             if not get_breaker(p.provider_key).is_available():
                 continue
-            result, meta = p.ask(system, user, max_tokens, temperature, timeout)
+            # Fitted again: a prompt sized for a larger provider would
+            # otherwise reach this one over its limit.
+            fitted = _fit(user, prompt_chars_for(p.provider_key))
+            result, meta = p.ask(system, fitted, max_tokens, temperature, timeout)
             meta.used_fallback = True
             if not meta.error:
                 return result, meta
@@ -452,7 +474,8 @@ class LLMRouter:
                 continue
             if not get_breaker(p.provider_key).is_available():
                 continue
-            text, meta = p.ask_text(system, user, max_tokens, timeout)
+            fitted = _fit(user, prompt_chars_for(p.provider_key))
+            text, meta = p.ask_text(system, fitted, max_tokens, timeout)
             meta.used_fallback = True
             if not meta.error:
                 return text, meta

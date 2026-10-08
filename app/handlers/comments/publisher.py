@@ -10,6 +10,7 @@ import logging
 import re
 
 import contextlib
+from urllib.parse import quote
 from app.github.client import GitHubError
 from app.github.helpers import fmt_error
 from ._client import gh_get, gh_post, gh_put, gh_patch, gh_delete, router  # noqa: F401  (re-exported: tests patch these names)
@@ -125,32 +126,22 @@ def cmd_merge(
             # Only a branch that lives in THIS repository. A fork PR's head
             # branch is in the fork; deleting `heads/<its name>` here deleted
             # whatever same-named branch this repository happened to have.
+            #
+            # And only a branch this App created (autofix). Any other head
+            # branch is the repository's: GitHub deletes it itself when the
+            # repo enables "automatically delete head branches", and when it
+            # does not, the branch is being kept on purpose — merging
+            # develop -> staging deleted develop, and GitHub then closed every
+            # PR targeting it. The name is quoted: `fix#12` deleted `fix`.
             head_repo = (head.get("repo") or {}).get("full_name", "")
-            if head_branch and head_repo == repo:
+            if head_branch.startswith("fix/bot-issue-") and head_repo == repo:
                 with contextlib.suppress(Exception):
-                    gh_delete(f"/repos/{repo}/git/refs/heads/{head_branch}", token)
+                    gh_delete(f"/repos/{repo}/git/refs/heads/{quote(head_branch, safe='/')}", token)
 
-            # Learning loop: merging a bot-authored autofix branch is the
-            # strongest acceptance signal we get.
-            if head_branch.startswith("fix/bot-issue-"):
-                with contextlib.suppress(Exception):
-                    from app.core.learning import record_autofix_merged
-
-                    m = re.search(r"issue-(\d+)", head_branch)
-                    record_autofix_merged(repo, issue_number, int(m.group(1)) if m else 0)
-
-                # Write it to the brain too. Nothing in the application called
-                # remember() before V7, so the memory store only ever held what
-                # a backup restored into it.
-                with contextlib.suppress(Exception):
-                    from app.intelligence.memory import remember
-
-                    remember(
-                        repo,
-                        f"Accepted fix merged for #{issue_number}: {issue.get('title', '')}",
-                        kind="fix",
-                        meta={"pr": issue_number, "by": author},
-                    )
+            # The learning record for an autofix branch is written from the
+            # PR's `closed` event (pull_request/outcomes.py), which sees every
+            # merge — this button and GitHub's — and every rejection. Writing
+            # it here as well counted a /merge twice.
 
             return (
                 f"## ✅ Merged!\n\n"
@@ -231,7 +222,8 @@ def cmd_apply(
         )
 
         # Learning loop: a maintainer choosing to open a PR from a bot fix IS
-        # the acceptance signal. Feeds get_pattern_summary() → future /fix prompts.
+        # an acceptance signal; it feeds the acceptance rate. Whether the PR is
+        # then merged or rejected is recorded from its `closed` event.
         with contextlib.suppress(Exception):
             from app.core.learning import record_fix_accepted
 

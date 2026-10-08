@@ -56,7 +56,9 @@ CAPABILITIES: tuple[Capability, ...] = (
     Capability("repository metadata", "/repos/{repo}", ("every command",)),
     Capability("issues", "/repos/{repo}/issues?per_page=1", ("triage", "all comment commands")),
     Capability("pull requests", "/repos/{repo}/pulls?per_page=1", ("PR review", "/merge")),
-    Capability("contents", "/repos/{repo}/contents/README.md", ("/autofix", "config", "/security")),
+    # The repository root, not README.md: a 404 for a repo with no README
+    # was reported as a missing permission and "/autofix will not run".
+    Capability("contents", "/repos/{repo}/contents/", ("/autofix", "config", "/security")),
     Capability("actions", "/repos/{repo}/actions/runs?per_page=1", ("/ci", "/runtests")),
     Capability(
         "code scanning",

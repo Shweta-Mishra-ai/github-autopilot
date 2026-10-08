@@ -30,11 +30,26 @@ _LOCAL_CMD_MAX_KEYS = 5000
 _FENCED_RE = re.compile(r"```.*?(?:```|\Z)|~~~.*?(?:~~~|\Z)", re.S)
 _INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
 _QUOTE_LINE_RE = re.compile(r"(?m)^[ \t]*>.*$")
+# Also not instructions: an HTML comment (invisible on GitHub — `<!-- /merge -->`
+# ran /merge) and an indented code block (four spaces or a tab, rendered as
+# code — "Steps I ran:\n\n    /release" cut a release).
+_HTML_COMMENT_RE = re.compile(r"<!--.*?(?:-->|\Z)", re.S)
+_INDENTED_RE = re.compile(r"(?m)^(?: {4,}|\t).*$")
+
+
+def _blank_keeping_lines(m: re.Match) -> str:
+    return "\n" * m.group(0).count("\n")
 
 
 def _strip_non_instructions(body: str) -> str:
-    body = _FENCED_RE.sub(" ", body)
-    body = _QUOTE_LINE_RE.sub(" ", body)
+    """
+    The comment with everything that is not an instruction blanked out, LINE
+    FOR LINE, so a line found here is the same line in the original comment.
+    """
+    body = _FENCED_RE.sub(_blank_keeping_lines, body)
+    body = _HTML_COMMENT_RE.sub(_blank_keeping_lines, body)
+    body = _QUOTE_LINE_RE.sub("", body)
+    body = _INDENTED_RE.sub("", body)
     return _INLINE_CODE_RE.sub(" ", body)
 
 
@@ -42,23 +57,41 @@ def _strip_non_instructions(body: str) -> str:
 # used to match anywhere, so prose ran commands: "See /release for details"
 # cut a release, "I ran /test locally" generated tests.
 _LINE_START = r"(?m)^[ \t]*(?:@[\w-]+(?:\[bot\])?[ \t,:]+)?"
+_COMMAND_AT_LINE_START = re.compile(r"^[ \t]*(?:@[\w-]+(?:\[bot\])?[ \t,:]+)?(/[A-Za-z]+)(?!\w)")
+
+
+def parse_command(body: str) -> tuple[str | None, str]:
+    """
+    (command, arguments) for the FIRST command a comment issues, or (None, "").
+
+    A command counts only at the start of a line (after an optional
+    @mention), and never inside a quote, code or an HTML comment. Its
+    arguments are the rest of THAT line, in their original case.
+
+    Two defects this replaces. The command picked was the LONGEST one found
+    anywhere, so "/fix" then "/autofix" ran /autofix, while the documentation
+    says the first command is the one processed. And the arguments were
+    sliced from the first raw occurrence of the command text in the whole
+    body — which could be inside a quote, a code block, prose or a longer
+    word: "Running /rollback 2 confirm is scary…\n/rollback" gave /rollback
+    the arguments "2 confirm is scary…", and "Our /circleci job fails\n/ci"
+    gave /ci "rcleci job fails".
+    """
+    original = (body or "").split("\n")
+    for i, line in enumerate(_strip_non_instructions(body or "").split("\n")):
+        m = _COMMAND_AT_LINE_START.match(line)
+        if not m or m.group(1).lower() not in ALL_COMMANDS:
+            continue
+        source = original[i] if i < len(original) else line
+        om = _COMMAND_AT_LINE_START.match(source)
+        args = source[om.end() :] if om else line[m.end() :]
+        return m.group(1).lower(), args.strip()
+    return None, ""
 
 
 def extract_command(body: str) -> str | None:
-    """
-    The command a comment issues, or None.
-
-    A command counts only at the start of a line (after an optional
-    @mention), and never inside a quote or code. Longest-match first prevents
-    '/fix' matching inside '/autofix'; the trailing word boundary stops
-    '/fix' matching '/fixture'.
-    """
-    body_lower = _strip_non_instructions(body or "").lower()
-    # Sort by length descending so /autofix is tried before /fix
-    for cmd in sorted(ALL_COMMANDS, key=len, reverse=True):
-        if re.search(_LINE_START + re.escape(cmd) + r"\b", body_lower):
-            return cmd
-    return None
+    """The command a comment issues, or None. See parse_command."""
+    return parse_command(body)[0]
 
 
 def command_repeated_by_edit(payload: dict, cmd: str) -> bool:

@@ -378,7 +378,7 @@ class TestGapHarnessWiring:
     def test_a_provider_that_answers_blocks_nothing(self, monkeypatch):
         results, blocked = self._run(monkeypatch, {"has_gaps": False, "gaps": [], "summary": "ok"})
         assert blocked == [], f"harness saw no verdict for {blocked}"
-        assert len(results) == 4
+        assert len(results) == _gap_case_count()
 
     def test_a_model_that_always_says_no_gaps_fails_the_loud_cases(self, monkeypatch):
         results, _ = self._run(monkeypatch, {"has_gaps": False, "gaps": [], "summary": "ok"})
@@ -388,24 +388,51 @@ class TestGapHarnessWiring:
             "gaps-happy-path-tested-error-branch-not",
         }, failed
 
-    def test_a_model_that_always_reports_gaps_fails_the_quiet_cases(self, monkeypatch):
+    def test_a_model_that_always_reports_gaps_is_filtered_where_tests_exist(self, monkeypatch):
+        """Scored on what is published. A noisy model that names a real line of
+        already-tested code is not believed — "return round(...)" and the
+        guard's own `raise` are both exercised by the tests in that PR, and
+        neither is provable as a gap — so the tested quiet cases stay quiet.
+        A case with no tests at all has nothing to prove against, which is why
+        the docstring-only case is not in this list."""
+        for line in (
+            "return round(total * (1 - percent / 100), 2)",
+            'raise ValueError("percent must be between 0 and 100")',
+        ):
+            verdict = {
+                "has_gaps": True,
+                "gaps": [
+                    {
+                        "file": "app/billing/discount.py",
+                        "function": "apply_discount",
+                        "risk": "high",
+                        "untested_line": line,
+                        "suggested_test": "test it",
+                    }
+                ],
+                "summary": "needs tests",
+            }
+            results, _ = self._run(monkeypatch, verdict)
+            passed = {r.case_id for r in results if r.passed}
+            assert "gaps-fully-tested-change-stays-quiet" in passed, line
+
+    def test_a_vague_gap_on_a_tested_function_is_never_published(self, monkeypatch):
+        """The same noisy model, but unable to name a line: filtered out."""
         verdict = {
             "has_gaps": True,
-            "coverage_score": 3,
             "gaps": [
                 {
                     "file": "app/billing/discount.py",
                     "function": "apply_discount",
                     "risk": "high",
-                    "suggested_test": "test it",
+                    "suggested_test": "add more edge-case tests",
                 }
             ],
             "summary": "needs tests",
         }
         results, _ = self._run(monkeypatch, verdict)
-        failed = {r.case_id for r in results if not r.passed}
-        assert "gaps-fully-tested-change-stays-quiet" in failed, failed
-        assert "gaps-refactor-covered-by-updated-tests" in failed, failed
+        passed = {r.case_id for r in results if r.passed}
+        assert "gaps-fully-tested-change-stays-quiet" in passed
 
     def test_a_provider_that_never_answers_is_blocked_not_scored(self, monkeypatch):
         """A silent provider and a correct "no gaps" both render "". Counting
@@ -424,5 +451,10 @@ class TestGapHarnessWiring:
         with patch.object(router_mod.LLMRouter, "ask", raising_ask):
             results, blocked = ev.run_gaps_cases()
 
-        assert len(blocked) == 4, (results, blocked)
+        assert len(blocked) == _gap_case_count(), (results, blocked)
         assert results == []
+
+
+def _gap_case_count() -> int:
+    """Read, not hard-coded: adding a case must not mean editing a test."""
+    return len(json.loads((_ROOT / "evals" / "cases" / "gaps_cases.json").read_text(encoding="utf-8")))

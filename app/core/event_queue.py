@@ -32,8 +32,10 @@ MEMORY SAFETY (free tier: 512MB app / 25MB Redis)
 FAILURE MODES (all explicit, all observable via metrics)
   Redis down       → enqueue() returns UNAVAILABLE → caller falls back to
                      direct thread-pool dispatch (degraded, not broken).
-  Queue full       → FULL → 503 → GitHub redelivers (up to ~1h of retries).
-  Handler crashes  → event requeued once (attempts+1), then dead-lettered.
+  Queue full       → FULL → 503. GitHub does NOT redeliver on its own; the
+                     dedup key is released so a manual redelivery runs.
+  Transient error  → handler returns RETRY → requeued once, then dead-lettered.
+  Handler failure  → handler returns FAILED → dead-lettered at once.
   Process killed   → events in evq:processing requeued on next boot.
 
 FIXED: consumers were logging a spurious "queue.consumer_error ... Timeout
@@ -51,9 +53,9 @@ FIXED: consumers were logging a spurious "queue.consumer_error ... Timeout
 
 from __future__ import annotations
 
+from app.core.env import env_int
 import json
 import logging
-import os
 import threading
 import time
 from typing import Callable
@@ -72,11 +74,24 @@ PENDING_KEY = "evq:pending"
 PROCESSING_KEY = "evq:processing"
 DEAD_KEY = "evq:dead"
 
-MAX_QUEUE_LEN = int(os.environ.get("EVENT_QUEUE_MAX_LEN", "200"))
-MAX_ENVELOPE_BYTES = int(os.environ.get("EVENT_QUEUE_MAX_ITEM_BYTES", str(512 * 1024)))
+MAX_QUEUE_LEN = env_int("EVENT_QUEUE_MAX_LEN", 200, minimum=1)
+MAX_ENVELOPE_BYTES = env_int("EVENT_QUEUE_MAX_ITEM_BYTES", 512 * 1024, minimum=1024)
 MAX_ATTEMPTS = 2  # first run + one retry, then dead-letter
+# How long a consumer waits before requeueing an event whose handler hit a
+# transient failure (GitHub 5xx, rate limit, provider outage).
+RETRY_DELAY_SECONDS = 30
+
+
+class HandlerOutcome:
+    """What a handler reports back to the consumer. None counts as OK."""
+
+    OK = "ok"
+    RETRY = "retry"  # transient: requeue once, then dead-letter
+    FAILED = "failed"  # not transient: dead-letter now, where it can be seen
+
+
 DEAD_MAX = 50  # keep at most 50 dead envelopes for debugging
-CONSUMER_COUNT = int(os.environ.get("EVENT_QUEUE_CONSUMERS", "2"))
+CONSUMER_COUNT = env_int("EVENT_QUEUE_CONSUMERS", 2, minimum=0)
 BLOCK_SECONDS = 5  # BLMOVE timeout — also the shutdown responsiveness bound
 
 # ── Enqueue results (sentinels, not exceptions) ───────────────────────────────
@@ -199,14 +214,49 @@ def _consume_once(handler: Callable[[str, dict, str], None]) -> bool:
         return False
     try:
         env = json.loads(raw)
-        handler(env.get("event", ""), env.get("payload") or {}, env.get("repo", "unknown"))
-        metrics.increment("queue.consumed")
+        outcome = handler(
+            env.get("event", ""), env.get("payload") or {}, env.get("repo", "unknown")
+        )
+        _settle(r, env, outcome)
     finally:
-        # Remove from processing even if handler raised: _run_handler swallows
-        # everything except truly fatal errors, and a fatal error would be
-        # retried forever otherwise.
+        # Remove from processing even if handler raised: a fatal error would
+        # be retried forever otherwise.
         r.lrem(PROCESSING_KEY, 1, raw)
     return True
+
+
+def _dead_letter(r, env: dict, why: str) -> None:
+    metrics.increment("queue.dead")
+    r.lpush(DEAD_KEY, json.dumps({**env, "why": why[:200]}, separators=(",", ":")))
+    r.ltrim(DEAD_KEY, 0, DEAD_MAX - 1)
+    log.warning(f"queue.dead_letter id={env.get('id')} event={env.get('event')} why={why[:120]}")
+
+
+def _settle(r, env: dict, outcome) -> None:
+    """
+    Act on a handler's outcome.
+
+    The envelope used to be removed whatever happened: the handler swallows
+    every exception, so a transient GitHub 5xx, a secondary rate limit or a
+    provider outage dropped the event for good — counted as `queue.consumed`,
+    logged as "GitHub will retry", when GitHub had already been given a 202
+    and never would. A transient failure is now requeued once after a short
+    wait; anything else goes to the dead-letter list, where it can be seen.
+    """
+    if outcome in (None, HandlerOutcome.OK):
+        metrics.increment("queue.consumed")
+        return
+    if outcome == HandlerOutcome.RETRY:
+        env["attempts"] = int(env.get("attempts", 0)) + 1
+        if env["attempts"] < MAX_ATTEMPTS:
+            _stop.wait(RETRY_DELAY_SECONDS)  # returns early on shutdown
+            metrics.increment("queue.retried")
+            r.lpush(PENDING_KEY, json.dumps(env, separators=(",", ":")))
+            log.info(f"queue.retry_scheduled id={env.get('id')} event={env.get('event')}")
+            return
+        _dead_letter(r, env, "transient failure persisted after retry")
+        return
+    _dead_letter(r, env, "handler failed")
 
 
 def _consume_loop(handler: Callable[[str, dict, str], None], worker_id: int) -> None:

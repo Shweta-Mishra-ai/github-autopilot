@@ -88,23 +88,23 @@ class TestMemoryWrites:
 
 
 class TestWriteSitesAreWired:
-    def test_merge_of_bot_branch_records_a_memory(self):
-        from app.handlers.comments import publisher
+    def test_a_closed_autofix_pr_records_a_memory(self):
+        from app.handlers import pull_request
 
-        with (
-            patch.object(
-                publisher,
-                "gh_get",
-                return_value={"head": {"sha": "s", "ref": "fix/bot-issue-7"}, "base": {"ref": "main"}},
-            ),
-            patch.object(publisher, "gh_put", return_value={"merged": True, "sha": "abc123"}),
-            patch.object(publisher, "gh_delete"),
-            patch("app.core.guardrails.check_pr_auto_merge", return_value=MagicMock(passed=True)),
-            patch("app.intelligence.memory.remember") as remember,
-        ):
-            publisher.cmd_merge(
-                "o/r", 9, {"pull_request": {}, "title": "fix null deref"}, "tok", "dev", MagicMock()
-            )
+        payload = {
+            "action": "closed",
+            "pull_request": {
+                "number": 9,
+                "title": "fix null deref",
+                "merged": True,
+                "head": {"ref": "fix/bot-issue-7", "repo": {"full_name": "o/r"}},
+                "user": {"login": "github-autopilot[bot]", "type": "Bot"},
+            },
+            "repository": {"full_name": "o/r"},
+            "installation": {"id": 1},
+        }
+        with patch("app.intelligence.memory.remember") as remember:
+            pull_request.handle(payload)
         remember.assert_called()
 
     def test_apply_records_a_memory(self):

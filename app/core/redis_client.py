@@ -4,6 +4,7 @@ app/core/redis_client.py — Thread-safe Redis singleton; fails loud in producti
 
 from __future__ import annotations
 
+from app.core.env import env_int
 import os
 import logging
 import threading
@@ -140,7 +141,7 @@ def get_redis_blocking() -> "redis_lib.Redis | _FakeRedis":
             )
             _blocking_client = redis_lib.Redis(connection_pool=_blocking_pool)
             _blocking_client.ping()
-            log.info(f"redis.blocking_connected url={redis_url[:30]}...")
+            log.info(f"redis.blocking_connected host={_redis_host(redis_url)}")
         except Exception as e:
             if _IS_PRODUCTION:
                 raise RuntimeError(
@@ -167,7 +168,7 @@ def is_redis_available() -> bool:
         return False
 
 
-REDIS_MEMORY_WARN_PCT = int(os.environ.get("REDIS_MEMORY_WARN_PCT", "80"))
+REDIS_MEMORY_WARN_PCT = env_int("REDIS_MEMORY_WARN_PCT", 80, minimum=1, maximum=100)
 
 
 def redis_memory_status() -> dict:

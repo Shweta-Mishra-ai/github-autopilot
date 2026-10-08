@@ -14,15 +14,19 @@ FIXED (Sprint 8): _scan_secrets was missing dedup entirely.
      was never called inside _scan_secrets. Result: every push containing
      the same secret created a duplicate security issue.
 
-     Fix: Deduplicate per unique set of secret patterns (1h TTL).
-     Key = "secret_findings:{repo}:{sorted_pattern_hash}" so:
-       - Same secrets on the same repo within 1h → one issue only.
-       - New/different secrets always create a fresh issue.
-       - TTL is intentionally short (1h) so repeated leaks after a window
-         are still caught and reported.
+     Fix: Deduplicate per FINDING (file, pattern, redacted value; 1h TTL),
+     so the same secret pushed again inside the hour is reported once, and a
+     different secret is always reported — appended to the open alert issue
+     (_open_secret_issue) rather than opening another.
+
+     The dedup key used to be per repo ("push_reported:{repo}:secret_scan"),
+     which contradicted all of the above: after one alert, every other secret
+     pushed to that repo in the next hour was dropped with an info log and
+     never re-scanned. Found by the 2026-10-08 audit.
 """
 
 import base64
+import hashlib
 import logging
 import re
 
@@ -31,7 +35,11 @@ from app.github.client import gh_get, gh_post, GitHubError
 from app.github.notifications import notify_secret_detected
 from app.core.config import load_config
 from app.core.logger import EventLogger
-from app.security.enhanced_secrets import scan_diff, format_findings as format_secret_findings
+from app.security.enhanced_secrets import (
+    format_findings as format_secret_findings,
+    is_example_path,
+    scan_diff,
+)
 from app.security.dependencies import (
     scan_requirements_txt,
     get_actionable_findings,
@@ -93,6 +101,10 @@ def handle(payload: dict) -> None:
     pusher = payload.get("pusher", {}).get("name", "")
     commits = payload.get("commits", [])
     ref = payload.get("ref", "")
+    # The repository's real default branch. This was `ref in (main, master)`,
+    # so a repo whose default is `develop` or `trunk` never got the
+    # default-branch scans, and a stray `master` in a `main` repo did.
+    default_branch = payload["repository"].get("default_branch") or "main"
 
     log = EventLogger("push", repo=repo)
 
@@ -130,6 +142,7 @@ def handle(payload: dict) -> None:
 
     config = load_config(repo, token)
     latest_sha = commits[-1].get("id", "") if commits else ""
+    branch = ref[len("refs/heads/") :]
 
     # Helper, not a raw get(): it also honours the bot.enabled kill switch.
     if not config.push_enabled():
@@ -138,7 +151,7 @@ def handle(payload: dict) -> None:
     # Secret scan runs on ALL branches (secrets are dangerous everywhere).
     # Dependency + commit lint only run on default branch by default,
     # but can be extended via config push.scan_all_branches = true.
-    is_default_branch = ref in ("refs/heads/main", "refs/heads/master")
+    is_default_branch = branch == default_branch
     scan_all = config.get("push", "scan_all_branches", default=False)
     run_full_scan = is_default_branch or scan_all
 
@@ -149,10 +162,10 @@ def handle(payload: dict) -> None:
     # Dep scan + commit lint: default branch only (or all if scan_all_branches=true)
     if run_full_scan:
         if config.get("push", "scan_dependencies", default=True):
-            _scan_dependencies(repo, commits, token, config, log)
+            _scan_dependencies(repo, commits, token, config, log, ref=latest_sha)
 
         if config.get("push", "enforce_conventional_commits", default=True):
-            _lint_commits(repo, commits, token, config, log)
+            _lint_commits(repo, commits, token, config, log, branch=branch)
 
         # Writes the replacement message rather than only naming the problem.
         # Runs on the same branches as the lint it complements, and is its own
@@ -172,8 +185,6 @@ def handle(payload: dict) -> None:
             from app.handlers.readme import maybe_update_readme
 
             maybe_update_readme(repo, commits, token, config, log)
-
-    _index_changed_files(repo, commits, token, latest_sha, log)
 
 
 # ── Dedup ──────────────────────────────────────────────────────────────────────
@@ -208,28 +219,19 @@ def _already_reported(repo: str, report_type: str, ttl_seconds: int = 86400) -> 
 # ── Secret scan ────────────────────────────────────────────────────────────────
 
 
-# Paths that legitimately contain example/dummy secrets — scanning them only
-# produces false-positive "secret detected" issues (the scanner's own fixtures,
-# .env.example, docs snippets).
-_SECRET_SCAN_SKIP = (
-    ".env.example",
-    ".env.sample",
-    ".env.template",
-)
-_SECRET_SCAN_SKIP_DIRS = ("tests/", "test/", "fixtures/", "examples/", "docs/")
-
-
 def _skip_secret_scan(filename: str) -> bool:
-    """True if the file is a test/example/docs path where dummy secrets are expected."""
-    if not filename:
-        return False
-    fn = filename.lower()
-    base = fn.rsplit("/", 1)[-1]
-    if base in _SECRET_SCAN_SKIP or base.endswith(".example"):
-        return True
-    if base.startswith("test_") or base.endswith("_test.py"):
-        return True
-    return any(d in fn for d in _SECRET_SCAN_SKIP_DIRS)
+    """
+    True for a file whose purpose is to hold stand-in values (a test, a
+    fixture, an `.example`), as the scanner itself defines them.
+
+    This had its own list, matched as substrings: "test/" skipped
+    `app/contest/config.py` and `infra/protest/keys.env`, "docs/" skipped
+    `src/mydocs/creds.py`, and `docs/` and `examples/` were skipped outright —
+    overriding the scanner, which deliberately still scans documentation with
+    its high-specificity patterns, because a real token pasted into a README
+    is one of the commonest ways a credential leaks.
+    """
+    return is_example_path(filename)
 
 
 # Only these open a GitHub issue. medium/low are logged — the same policy the
@@ -285,14 +287,52 @@ def _scan_secrets(repo, commits, token, config, log) -> None:
         )
         return
 
-    if _already_reported(repo, "secret_scan", ttl_seconds=_SECRET_DEDUP_TTL):
+    fresh = _unreported_secrets(repo, actionable)
+    if not fresh:
         log.info(f"push.secret_scan_dedup repo={repo} findings={len(actionable)}")
         return
 
     try:
-        _open_secret_issue(repo, token, actionable, log, config)
+        _open_secret_issue(repo, token, fresh, log, config)
     except Exception as e:
         log.error(f"Failed to post secret alert: {e}")
+
+
+def _secret_fingerprint(finding) -> str:
+    """One secret in one file. Built from the redacted value: the raw value
+    is never stored, not even hashed."""
+    raw = f"{finding.file_path}|{finding.pattern_name}|{finding.redacted_match}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:24]
+
+
+def _unreported_secrets(repo: str, findings: list) -> list:
+    """
+    The findings not already alerted on inside _SECRET_DEDUP_TTL — the same
+    secret in several commits of one push, or pushed again after a rebase, is
+    reported once; a different secret always is.
+
+    Fails closed like _already_reported: with Redis down nothing is reported,
+    and that is metered, rather than every push opening a duplicate.
+    """
+    try:
+        from app.core.redis_client import get_redis
+
+        r = get_redis()
+        fresh, seen = [], set()
+        for f in findings:
+            fp = _secret_fingerprint(f)
+            if fp in seen:
+                continue
+            seen.add(fp)
+            if r.set(f"push_secret_seen:{repo}:{fp}", "1", nx=True, ex=_SECRET_DEDUP_TTL):
+                fresh.append(f)
+        return fresh
+    except Exception as e:
+        from app.core.metrics import metrics
+
+        metrics.increment("dedup.redis_unavailable")
+        _log.warning(f"push.secret_dedup_unavailable repo={repo}: {e} — suppressing report")
+        return []
 
 
 def _open_secret_issue(repo: str, token: str, findings: list, log, config=None) -> None:
@@ -349,7 +389,7 @@ def _open_secret_issue(repo: str, token: str, findings: list, log, config=None) 
 # ── Dependency scan ────────────────────────────────────────────────────────────
 
 
-def _scan_dependencies(repo, commits, token, config, log) -> None:
+def _scan_dependencies(repo, commits, token, config, log, ref: str = "") -> None:
     """
     Sprint 2 fix:
     - Only HIGH/CRITICAL findings create GitHub issues
@@ -365,7 +405,11 @@ def _scan_dependencies(repo, commits, token, config, log) -> None:
 
     for dep_file in dep_files:
         try:
-            file_data = gh_get(f"/repos/{repo}/contents/{dep_file}", token)
+            # At the pushed commit. Without ?ref= this read the DEFAULT
+            # branch, so a feature-branch change to requirements.txt (with
+            # scan_all_branches) was judged by a file it had not changed.
+            path = f"/repos/{repo}/contents/{dep_file}" + (f"?ref={ref}" if ref else "")
+            file_data = gh_get(path, token)
             content = base64.b64decode(file_data["content"]).decode("utf-8")
             all_findings = scan_requirements_txt(content)
 
@@ -413,7 +457,7 @@ def _scan_dependencies(repo, commits, token, config, log) -> None:
 # ── Commit lint ────────────────────────────────────────────────────────────────
 
 
-def _lint_commits(repo, commits, token, config, log) -> None:
+def _lint_commits(repo, commits, token, config, log, branch: str = "") -> None:
     bad_commits = []
     for commit in commits:
         msg = commit.get("message", "").split("\n")[0].strip()
@@ -455,7 +499,10 @@ type(scope): description
             f"/repos/{repo}/issues",
             token,
             {
-                "title": (f"⚡ {len(bad_commits)} non-conventional commits pushed to main"),
+                "title": (
+                    f"⚡ {len(bad_commits)} non-conventional commits pushed to "
+                    f"{branch or 'the default branch'}"
+                ),
                 "body": body,
                 "labels": ["commit-convention", "help wanted ⚠️"],
             },
@@ -463,54 +510,6 @@ type(scope): description
         log.done(f"Commit lint issue created: {len(bad_commits)} bad commits")
     except GitHubError as e:
         log.error(f"Failed to create lint issue: {e}")
-
-
-# ── File indexing ──────────────────────────────────────────────────────────────
-
-
-def _index_changed_files(repo, commits, token, latest_sha, log) -> None:
-    """Index changed files into vector DB — silent."""
-    try:
-        from app.intelligence.embeddings import embed_file
-
-        changed_files: set[str] = set()
-        for commit in commits:
-            changed_files.update(commit.get("added", []))
-            changed_files.update(commit.get("modified", []))
-
-        indexable = [
-            f
-            for f in changed_files
-            if f.endswith((".py", ".md", ".yml", ".yaml", ".json", ".txt"))
-            and not f.startswith("tests/")
-        ]
-
-        if not indexable:
-            return
-
-        indexed = 0
-        failed = 0
-        for filepath in indexable[:10]:
-            try:
-                file_data = gh_get(f"/repos/{repo}/contents/{filepath}", token)
-                content = base64.b64decode(file_data["content"]).decode("utf-8")
-                if embed_file(repo, filepath, content, latest_sha):
-                    indexed += 1
-            except Exception as e:
-                # Optional feature — never fatal — but make the failure observable
-                # instead of silent, so a repo that never indexes is diagnosable.
-                failed += 1
-                log.debug(f"intelligence.index_skip file={filepath}: {e}")
-
-        if indexed > 0:
-            log.info(f"intelligence.indexed {indexed}/{len(indexable)} files")
-        if failed:
-            from app.core.metrics import metrics
-
-            metrics.increment("intelligence.index_failed")
-
-    except Exception as e:
-        log.debug(f"Intelligence indexing skipped: {e}")
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────

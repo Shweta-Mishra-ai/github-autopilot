@@ -14,6 +14,7 @@ the marker is invisible to readers but trivially greppable for us.
 from __future__ import annotations
 
 import logging
+import os
 
 from app.github.client import gh_get, gh_patch, gh_post
 
@@ -26,6 +27,21 @@ MARKER_CI_REPORT = "<!-- github-autopilot:ci-report -->"
 # where a fresh comment is the honest outcome anyway.
 MAX_COMMENT_PAGES = 5
 PER_PAGE = 100
+
+
+def _posted_by_this_app(comment: dict) -> bool:
+    """
+    True for a comment this App wrote. The marker alone proved nothing: anyone
+    can paste `<!-- github-autopilot:pr-report -->` into a comment, and the
+    bot then PATCHed its report into THAT comment — which its author could
+    edit afterwards — and, being older than the real one, it was found first
+    on every update.
+    """
+    app = comment.get("performed_via_github_app") or {}
+    app_id = os.environ.get("GITHUB_APP_ID", "").strip()
+    if app and app_id:
+        return str(app.get("id", "")) == app_id
+    return (comment.get("user") or {}).get("type") == "Bot"
 
 
 def find_sticky(repo: str, issue_number: int, token: str, marker: str) -> int | None:
@@ -54,7 +70,7 @@ def find_sticky(repo: str, issue_number: int, token: str, marker: str) -> int | 
                 return None
 
             for c in comments:
-                if marker in (c.get("body") or ""):
+                if marker in (c.get("body") or "") and _posted_by_this_app(c):
                     return c.get("id")
 
             if len(comments) < PER_PAGE:

@@ -283,3 +283,48 @@ class TestTheDoctorReportsEvidence:
         for cap in CAPABILITIES:
             assert cap.enables, f"{cap.name} does not say what it enables"
             assert "{repo}" in cap.path
+
+
+class TestDoctorWithoutAToken:
+    """With METRICS_AUTH_TOKEN unset the doctor was public — including repo
+    probes that mint an installation token (2026-10-08 audit)."""
+
+    def test_a_repo_probe_is_refused(self, client, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, "METRICS_TOKEN", "")
+        r = client.get("/setup/doctor?repo=o/r&installation_id=1")
+        assert r.status_code == 403 and "METRICS_AUTH_TOKEN" in r.get_json()["error"]
+
+    def test_the_settings_report_still_works(self, client, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, "METRICS_TOKEN", "")
+        assert client.get("/setup/doctor").status_code == 400  # no repo: settings only
+
+
+class TestSigtermExits:
+    def test_the_previous_handler_is_chained(self, monkeypatch):
+        from unittest.mock import MagicMock
+
+        import server
+
+        prev = MagicMock()
+        monkeypatch.setattr(server, "_previous_sigterm", prev)
+        monkeypatch.setattr(server, "shutdown", lambda wait=True: None)
+        monkeypatch.setattr("app.core.event_queue.stop_consumers", lambda: None)
+        server._handle_sigterm(15, None)
+        prev.assert_called_once_with(15, None)
+
+    def test_with_no_previous_handler_it_exits(self, monkeypatch):
+        import signal
+
+        import pytest
+
+        import server
+
+        monkeypatch.setattr(server, "_previous_sigterm", signal.SIG_DFL)
+        monkeypatch.setattr(server, "shutdown", lambda wait=True: None)
+        monkeypatch.setattr("app.core.event_queue.stop_consumers", lambda: None)
+        with pytest.raises(SystemExit):
+            server._handle_sigterm(15, None)

@@ -258,7 +258,19 @@ def run_review_cases() -> tuple[list, list]:
         files = [{"filename": case["filename"], "patch": case["patch"]}]
         pr = {"head": {"sha": "eval0000"}}
 
-        def _run(pr=pr, files=files, cfg=cfg, captured=captured):
+        # The whole file at the head commit, when the case supplies it — the
+        # review fetches it to show the model the code around the change.
+        # Without a `source` the fetch fails, as it would for a deleted file,
+        # and the review runs on the diff alone.
+        def _contents(path, token, _case=case):
+            import base64
+
+            if "source" not in _case:
+                raise RuntimeError("no source in this eval case")
+            body = _case["source"].encode()
+            return {"encoding": "base64", "size": len(body), "content": base64.b64encode(body).decode()}
+
+        def _run(pr=pr, files=files, cfg=cfg, captured=captured, _contents=_contents):
             # _review_code RETURNS the review; its own docstring says "This
             # function posts nothing itself." The harness captured gh_post and
             # threw the return value away, so `captured` was always empty and
@@ -272,7 +284,10 @@ def run_review_cases() -> tuple[list, list]:
             # empty, and a list shared across attempts would score the second
             # try's review joined to the first try's.
             captured.clear()
-            with patch("app.handlers.pull_request.review.gh_post", side_effect=_capture):
+            with (
+                patch("app.handlers.pull_request.review.gh_post", side_effect=_capture),
+                patch("app.handlers.pull_request.review.gh_get", side_effect=_contents),
+            ):
                 markdown, inline = _review_code(
                     pr, "eval/repo", 1, files, "tok", cfg, MagicMock(), "", MagicMock()
                 )
@@ -371,7 +386,26 @@ def run_gaps_cases() -> tuple[list, list]:
             _print_blocked(case["id"])
             continue
 
-        result = score_output(output, case, structured=verdict)
+        # Score what the bot PUBLISHES, not the model's first answer. A gap
+        # the model proposes in already-tested code is published only when
+        # the diff proves it (gaps._proof_of_gap), so the raw verdict and the
+        # published one can differ — and the published one is what a reviewer
+        # reads. The model's own claims are printed whenever the two differ or
+        # a case fails, so the outcome is never a guess about what it said.
+        published = {"has_gaps": bool((output or "").strip())}
+        claimed_gaps = bool(verdict.get("has_gaps"))
+        if claimed_gaps != published["has_gaps"]:
+            print(f"    (model said has_gaps={claimed_gaps}; published has_gaps={published['has_gaps']})")
+        if claimed_gaps != (case.get("expect_gaps") is True) or published["has_gaps"] != (
+            case.get("expect_gaps") is True
+        ):
+            for g in verdict.get("gaps") or []:
+                if isinstance(g, dict):
+                    print(
+                        f"    claimed: {g.get('function')} | line: {str(g.get('untested_line'))[:80]!r}"
+                        f" | {str(g.get('suggested_test'))[:120]}"
+                    )
+        result = score_output(output, case, structured=published)
         results.append(result)
         _print_case(result)
     return results, blocked

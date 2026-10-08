@@ -161,3 +161,12 @@ class TestBackwardsCompatibleReExports:
         import app.ai.router as R
 
         assert getattr(R, name) is getattr(P, name)
+
+
+class TestGeminiPromptCharsSetting:
+    """Read at import: a bad value must fall back, never stop the app."""
+
+    @pytest.mark.parametrize("raw,expected", [("30000", 30000), ("24k", 24000), ("", 24000), ("100", 24000)])
+    def test_parsing(self, monkeypatch, raw, expected):
+        monkeypatch.setenv("GEMINI_PROMPT_CHARS", raw)
+        assert P._env_chars("GEMINI_PROMPT_CHARS", 24000) == expected

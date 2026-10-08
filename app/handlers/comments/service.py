@@ -6,6 +6,7 @@ import logging
 
 from app.core.authorization import check_command_permission
 from app.core.config import load_config
+from app.core.guardrails import budget_refusal, reset_budget_refusal
 from app.core.logger import EventLogger
 from app.github.auth import get_installation_token
 from app.github.client import GitHubError
@@ -19,7 +20,7 @@ from .dispatcher import (
     command_repeated_by_edit,
     command_disabled_comment,
     empty_response_comment,
-    extract_command,
+    parse_command,
     is_providers_down,
     make_degraded_response,
     pr_context,
@@ -61,7 +62,7 @@ def handle_comment_event(payload: dict) -> None:
         return
 
     # ── Command detection ─────────────────────────────────────────────────
-    cmd = extract_command(body)
+    cmd, cmd_args = parse_command(body)
     if not cmd:
         return
 
@@ -121,9 +122,6 @@ def handle_comment_event(payload: dict) -> None:
         )
         return
 
-    idx = body.lower().find(cmd)  # slice ORIGINAL body so args keep their case
-    cmd_args = body[idx + len(cmd) :].strip() if idx != -1 else ""
-
     # ── Context building & Memory ─────────────────────────────────────────
     context = f"Title: {issue.get('title', '')}\nBody: {(issue.get('body') or '')[:1500]}"
     if "pull_request" in issue and cmd in DIFF_CONTEXT_COMMANDS:
@@ -135,6 +133,7 @@ def handle_comment_event(payload: dict) -> None:
     from app.ai.router import last_model_disclosure, reset_last_call
 
     reset_last_call()
+    reset_budget_refusal()
     response = _dispatch(
         cmd=cmd,
         cmd_args=cmd_args,
@@ -147,6 +146,10 @@ def handle_comment_event(payload: dict) -> None:
         config=config,
         log_ctx=log_ctx,
     )
+    # The router refuses AI calls once today's budget is spent; commands word
+    # failures their own way, which would hide that reason.
+    if budget_refusal():
+        response = f"## ⏳ AI Budget Reached\n\n{budget_refusal()}"
 
     # Reached only after the comment carried a real command the author was
     # allowed to run — so somebody is waiting for an answer. This used to

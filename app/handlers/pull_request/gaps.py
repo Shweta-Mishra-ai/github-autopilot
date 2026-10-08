@@ -84,6 +84,147 @@ def _reference_line(symbols: list[str], referenced: list[str]) -> str:
     )
 
 
+def _norm(text: str) -> str:
+    return re.sub(r"\s+", " ", (text or "").strip())
+
+
+# What a test says when it checks that code fails on purpose.
+_ASSERTS_FAILURE = re.compile(
+    r"\braises\s*\(|\bassertRaises(?:Regex)?\b|\btoThrow\w*\b|\.throws\s*\(|\brejects\b|\bexcept\b"
+)
+# A signature as it appears in a diff, possibly across lines.
+_SIGNATURE = re.compile(
+    r"(?:\bdef\s+(\w+)\s*\((.*?)\)\s*(?:->[^:]*)?:|\bfunction\s+(\w+)\s*\(([^)]*)\))", re.S
+)
+_IGNORED_PARAMS = {"self", "cls", "args", "kwargs"}
+
+
+def _added_lines(patch: str) -> list[str]:
+    return [
+        _norm(raw[1:])
+        for raw in (patch or "").splitlines()
+        if raw.startswith("+") and not raw.startswith("+++")
+    ]
+
+
+def _live_text(patch: str) -> str:
+    """The patch as the file reads after the change: added and context lines."""
+    return "\n".join(
+        raw[1:] for raw in (patch or "").splitlines() if raw[:1] in ("+", " ") and raw[:3] != "+++"
+    )
+
+
+def _optional_params(patch: str, function: str) -> list[str]:
+    """
+    Parameters with a default value in the signature(s) this patch shows —
+    those of `function` when it is among them, else of every signature.
+
+    Only optional ones: a required parameter is passed positionally by every
+    test ("display_name(user)" never names `user`), so its absence from the
+    tests proves nothing. An optional one that no test mentions is a switch no
+    test ever sets.
+    """
+    found: dict[str, list[str]] = {}
+    for m in _SIGNATURE.finditer(_live_text(patch)):
+        name, params = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
+        out, depth, current = [], 0, ""
+        for ch in params + ",":
+            if ch in "([{":
+                depth += 1
+            elif ch in ")]}":
+                depth -= 1
+            if ch == "," and depth == 0:
+                if "=" in current:
+                    ident = re.match(r"\s*\**(\w+)", current)
+                    if ident and ident.group(1) not in _IGNORED_PARAMS:
+                        out.append(ident.group(1))
+                current = ""
+            else:
+                current += ch
+        found[name] = out
+    chosen = found.get(function) if function in found else None
+    return chosen if chosen is not None else [p for ps in found.values() for p in ps]
+
+
+def _proof_of_gap(gap: dict, source_patch: str, tests_text: str) -> str:
+    """
+    The checkable reason a gap in a function the PR's tests already call is
+    real, or "" when there is none.
+
+    A model cannot be trusted to say whether a test reaches a line: shown tests
+    that plainly cover a change, it still reports "more edge cases" (and asked
+    a second time, it said "not covered" again — measured on the live evals).
+    So the model only PROPOSES a line, and the gap is published only when one
+    of these facts about the tests holds, each decidable from the diff alone:
+
+      - the line raises, and no test in the PR asserts that anything fails;
+      - the line uses an optional parameter that no test in the PR ever names.
+
+    Anything else — "this line might need another input" — is not provable and
+    is not published.
+    """
+    quoted = _norm(str(gap.get("untested_line") or "").lstrip("+").strip())
+    if len(quoted) < 4:
+        return ""
+    added = [line for line in _added_lines(source_patch) if len(line) >= 4]
+    if not any(quoted in line or line in quoted for line in added):
+        return ""  # not a line this PR added
+
+    if re.match(r"(?:raise|throw)\b", quoted) and not _ASSERTS_FAILURE.search(tests_text):
+        return "no test in this PR asserts that anything raises"
+
+    function = re.sub(r"\W.*", "", str(gap.get("function") or "").strip())
+    for param in _optional_params(source_patch, function):
+        if re.search(rf"\b{re.escape(param)}\b", quoted) and not re.search(
+            rf"\b{re.escape(param)}\b", tests_text
+        ):
+            return f"no test in this PR sets the optional parameter `{param}`"
+    return ""
+
+
+def _verify_against_tests(gaps, referenced, source_files, test_files, log) -> list:
+    """
+    Gaps worth publishing.
+
+    A gap in a function no test in this PR mentions needs no proof beyond
+    that. A gap in a function the tests DO call is published only with a
+    `_proof_of_gap`; the gap is annotated with it (`proof`) so the report says
+    why. Everything else is dropped — evals showed the model reporting such
+    gaps on changes whose every branch is tested in the same diff.
+    """
+    if not gaps:
+        return gaps
+    tests_text = "\n".join(_live_text(f.get("patch") or "") for f in test_files)
+    by_file = {f.get("filename", ""): f.get("patch") or "" for f in source_files}
+
+    kept = []
+    for g in gaps:
+        name = _referenced_symbol(g, referenced)
+        if not name:
+            kept.append(g)  # nothing in this PR tests it: no evidence needed
+            continue
+        proof = _proof_of_gap(g, by_file.get(str(g.get("file", "")), ""), tests_text)
+        if not proof:
+            log.info(f"test_gaps.unproven function={name} -> dropped")
+            continue
+        kept.append({**g, "proof": proof})
+    return kept
+
+
+def _referenced_symbol(gap: dict, referenced) -> str:
+    """
+    The tested symbol a gap is about, or "". Models write the function field
+    as "apply_discount", "apply_discount()", "apply_discount (error branch)"
+    or leave it out and name it in the suggestion — an exact-string lookup
+    skipped the check for all but the first.
+    """
+    text = f"{gap.get('function', '')} {gap.get('suggested_test', '')}"
+    for symbol in referenced:
+        if re.search(rf"\b{re.escape(symbol)}\b", text):
+            return symbol
+    return ""
+
+
 def _excerpt(f: dict) -> str:
     """A diff excerpt under its filename, saying so when it was cut. The
     `### filename` line stays first and alone — the eval stub reads it."""
@@ -182,11 +323,16 @@ Return JSON:
       "file": "filename.py",
       "function": "function_name",
       "risk": "high|medium|low",
+      "untested_line": "the changed source line you think no test reaches, copied exactly from the diff",
       "suggested_test": "describe the test to add"
     }}
   ],
   "summary": "brief overall assessment"
 }}
+
+Every gap needs an `untested_line`: it is checked against the diff and the
+tests before anything is published. Look first at error and give-up branches
+(raise, throw) and at optional parameters that no test sets.
 
 Only report real gaps. If tests are adequate, set has_gaps to false.""",
             task="gaps",
@@ -212,8 +358,9 @@ Only report real gaps. If tests are adequate, set has_gaps to false.""",
         known = [g for g in gaps if str(g.get("file", "")) in changed]
         if len(known) != len(gaps):
             log.warning(f"test_gaps.unknown_file_skipped n={len(gaps) - len(known)}")
-        gaps = known
+        gaps = _verify_against_tests(known, referenced, source_files, test_files, log)
         if not gaps:
+            log.info("test_gaps.all_claims_refuted_by_tests", pr=pr_number)
             return ""
 
         VALID_RISK = {"high", "medium", "low"}
@@ -235,6 +382,11 @@ Only report real gaps. If tests are adequate, set has_gaps to false.""",
         # many of the changed symbols the changed tests mention by name.
         score_md = _reference_line(symbols, referenced)
 
+        proofs = "\n".join(
+            f"- `{g.get('function', '?')}`: {g['proof']}" for g in gaps[:5] if g.get("proof")
+        )
+        why_md = f"\n**Why these are reported**\n{proofs}\n" if proofs else ""
+
         comment = f"""{score_md}{r.get("summary", "")}
 
 ### Gaps Found
@@ -242,7 +394,7 @@ Only report real gaps. If tests are adequate, set has_gaps to false.""",
 | File | Function | Risk | Suggested Test |
 |------|----------|------|----------------|
 {gaps_md}
-
+{why_md}
 > 💡 Use `/gaps` for a detailed analysis, or `/test` to generate the missing tests.
 """
 

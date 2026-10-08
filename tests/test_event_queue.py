@@ -178,3 +178,134 @@ class TestStatsAndLifecycle:
         finally:
             eq.stop_consumers(timeout=6.0)
         assert eq.queue_stats()["consumers"] == 0
+
+
+# ── outcomes (2026-10-08 audit) ───────────────────────────────────────────────
+
+
+class TestHandlerOutcomes:
+    """The envelope was removed whatever the handler did, so a transient
+    GitHub 5xx or rate limit dropped the event for good."""
+
+    def test_retry_requeues_once_then_dead_letters(self, fake_redis, monkeypatch):
+        monkeypatch.setattr(eq, "RETRY_DELAY_SECONDS", 0)
+        eq.enqueue("push", {}, "o/r", "d1")
+        assert eq._consume_once(lambda *a: eq.HandlerOutcome.RETRY) is True
+        assert fake_redis.llen(eq.PENDING_KEY) == 1, "requeued for one retry"
+        assert eq._consume_once(lambda *a: eq.HandlerOutcome.RETRY) is True
+        assert fake_redis.llen(eq.PENDING_KEY) == 0
+        assert fake_redis.llen(eq.DEAD_KEY) == 1
+        assert fake_redis.llen(eq.PROCESSING_KEY) == 0
+
+    def test_failed_goes_straight_to_dead_letter(self, fake_redis):
+        eq.enqueue("push", {}, "o/r", "d1")
+        eq._consume_once(lambda *a: eq.HandlerOutcome.FAILED)
+        assert fake_redis.llen(eq.DEAD_KEY) == 1
+        assert fake_redis.llen(eq.PENDING_KEY) == 0
+
+    def test_ok_and_none_are_consumed(self, fake_redis):
+        eq.enqueue("push", {}, "o/r", "d1")
+        eq.enqueue("push", {}, "o/r", "d2")
+        eq._consume_once(lambda *a: eq.HandlerOutcome.OK)
+        eq._consume_once(lambda *a: None)
+        assert fake_redis.llen(eq.DEAD_KEY) == 0
+        assert fake_redis.llen(eq.PENDING_KEY) == 0
+
+
+class TestRunHandlerClassifiesFailures:
+    def _run(self, exc):
+        from unittest.mock import patch
+
+        import server
+
+        with patch("app.handlers.push.handle", side_effect=exc):
+            return server._run_handler("push", {}, "o/r")
+
+    def test_github_5xx_is_transient(self):
+        from app.github.client import GitHubError
+
+        assert self._run(GitHubError("boom", 502)) == eq.HandlerOutcome.RETRY
+
+    def test_rate_limit_exhausted_is_transient(self):
+        from app.github.rate_limit import GitHubRateLimitExhausted
+
+        assert self._run(GitHubRateLimitExhausted("x")) == eq.HandlerOutcome.RETRY
+
+    def test_secondary_rate_limit_is_transient(self):
+        from app.github.client import GitHubSecondaryRateLimitError
+
+        exc = GitHubSecondaryRateLimitError.__new__(GitHubSecondaryRateLimitError)
+        GitHubError_init = Exception.__init__
+        GitHubError_init(exc, "secondary")
+        exc.status_code = 403
+        exc.retry_after = 60
+        assert self._run(exc) == eq.HandlerOutcome.RETRY
+
+    def test_a_bug_is_failed_not_retried(self):
+        assert self._run(KeyError("x")) == eq.HandlerOutcome.FAILED
+
+    def test_a_404_is_not_transient(self):
+        from app.github.client import GitHubError
+
+        assert self._run(GitHubError("nope", 404)) == eq.HandlerOutcome.FAILED
+
+    def test_errors_are_counted_where_health_reads_them(self):
+        from app.core.metrics import metrics
+
+        before = metrics.get("events.error")
+        self._run(KeyError("x"))
+        assert metrics.get("events.error") == before + 1
+
+
+class TestA503ReleasesTheDedupKey:
+    """The key was set before enqueue; on 503 it stayed, and GitHub's (manual)
+    redelivery with the same delivery id was answered 'duplicate — skipped'."""
+
+    def test_redelivery_after_a_full_queue_is_processed(self, fake_redis):
+        from app.core import idempotency
+
+        fp = idempotency.make_fingerprint("delivery-1", "push", {"repository": {"full_name": "o/r"}})
+        assert idempotency.is_duplicate(fp) is False
+        idempotency.forget(fp)
+        assert idempotency.is_duplicate(fp) is False, "the redelivery must run"
+        assert idempotency.is_duplicate(fp) is True
+
+
+class TestInstallationRegistry:
+    """Installation events have no repository: 'unknown' was registered as one,
+    and uninstalls were never forgotten (2026-10-08 audit)."""
+
+    def _run(self, event, payload):
+        from unittest.mock import patch
+
+        import server
+
+        with patch("app.core.installations.remember_installation") as remember, \
+             patch("app.core.installations.forget_installation") as forget, \
+             patch("app.core.installations.touch"):
+            server._track_installations(event, payload, payload.get("repository", {}).get("full_name", "unknown"))
+        return remember, forget
+
+    def test_an_installation_event_never_registers_unknown(self):
+        remember, _ = self._run("installation", {"action": "new_permissions_accepted", "installation": {"id": 9}})
+        remember.assert_not_called()
+
+    def test_uninstall_forgets_its_repositories(self):
+        _, forget = self._run("installation", {
+            "action": "deleted", "installation": {"id": 9},
+            "repositories": [{"full_name": "o/a"}, {"full_name": "o/b"}],
+        })
+        assert [c.args[0] for c in forget.call_args_list] == ["o/a", "o/b"]
+
+    def test_repositories_added_and_removed(self):
+        remember, forget = self._run("installation_repositories", {
+            "action": "added", "installation": {"id": 9},
+            "repositories_added": [{"full_name": "o/new"}],
+            "repositories_removed": [{"full_name": "o/old"}],
+        })
+        remember.assert_called_once_with("o/new", 9)
+        forget.assert_called_once_with("o/old")
+
+    def test_an_ordinary_event_registers_its_repo(self):
+        remember, _ = self._run("push", {"repository": {"full_name": "o/r"}, "installation": {"id": 9}})
+        remember.assert_called_once_with("o/r", 9)

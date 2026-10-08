@@ -139,7 +139,13 @@ class World:
 
         def post_comment(r):
             self._next_id += 1
-            c = {"id": self._next_id, "body": r["body"]["body"]}
+            # As GitHub returns it: a comment posted with an installation
+            # token is authored by the App's bot account.
+            c = {
+                "id": self._next_id,
+                "body": r["body"]["body"],
+                "user": {"login": "github-autopilot[bot]", "type": "Bot"},
+            }
             thread.append(c)
             gh.route(
                 "PATCH",

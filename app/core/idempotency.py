@@ -87,6 +87,19 @@ def is_duplicate(fingerprint: str) -> bool:
     return _is_duplicate_local(fingerprint)
 
 
+def forget(fingerprint: str) -> None:
+    """
+    Release a fingerprint recorded by is_duplicate(), for an event that was
+    seen but NOT accepted (the server answered 503). Never raises.
+    """
+    _seen_local.pop(fingerprint, None)
+    try:
+        if is_redis_available():
+            get_redis().delete(f"idem:{fingerprint}")
+    except Exception as e:
+        log.warning(f"idempotency.forget_failed fingerprint={fingerprint}: {e}")
+
+
 def _enter_fallback(reason: str) -> None:
     """Log the transition into memory-only dedup, once per episode."""
     global _in_fallback

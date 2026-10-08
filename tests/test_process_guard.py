@@ -97,9 +97,9 @@ class TestTheVerdict:
         assert state == "ok"
 
     def test_two_processes_warn(self, shared_redis):
-        for pid in (201, 202):
-            with patch.object(os, "getpid", return_value=pid):
-                pg.register_this_process()
+        # One other process; verdict() registers this one itself.
+        with patch.object(os, "getpid", return_value=201):
+            pg.register_this_process()
         state, message = pg.verdict()
         assert state == "warn"
         assert "2 web processes" in message

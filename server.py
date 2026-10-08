@@ -34,6 +34,10 @@ def make_fingerprint(*a, **kw):
     return idempotency.make_fingerprint(*a, **kw)
 
 
+def forget(*a, **kw):
+    return idempotency.forget(*a, **kw)
+
+
 def dispatch(*a, **kw):
     return thread_pool.dispatch(*a, **kw)
 
@@ -114,6 +118,13 @@ def _authorized(req) -> bool:
 # ── Graceful shutdown ───────────────────────────────────────────────────────
 
 
+# The handler this one replaces. Gunicorn installs its worker's exit handler
+# before importing the app, so installing ours REPLACED it: the worker drained
+# and then kept running until the graceful timeout SIGKILLed it, and under
+# `python server.py` the process kept serving after SIGTERM.
+_previous_sigterm = signal.getsignal(signal.SIGTERM)
+
+
 def _handle_sigterm(signum, frame):
     log.info("server.sigterm_received — draining queue consumers + thread pool")
     from app.core.event_queue import stop_consumers
@@ -121,6 +132,10 @@ def _handle_sigterm(signum, frame):
     stop_consumers()
     shutdown(wait=True)
     log.info("server.graceful_shutdown_complete")
+    if callable(_previous_sigterm):
+        _previous_sigterm(signum, frame)  # gunicorn's worker exit
+    else:
+        raise SystemExit(0)
 
 
 signal.signal(signal.SIGTERM, _handle_sigterm)
@@ -284,6 +299,18 @@ def setup_doctor():
     """
     if not _authorized(request):
         return jsonify({"error": "Unauthorized"}), 401
+    # With no METRICS_AUTH_TOKEN, _authorized() lets everyone through, which
+    # is fine for the settings report but not for a repository probe: that
+    # mints an installation token and reports what the App may do on any
+    # repository the caller names, private ones included. The docstring
+    # promised it was gated; without a token, it was public.
+    if not METRICS_TOKEN and (request.args.get("repo") or request.args.get("installation_id")):
+        return jsonify(
+            {
+                "error": "Repository probes need METRICS_AUTH_TOKEN to be set, "
+                "and the request to carry it as a Bearer token."
+            }
+        ), 403
 
     from app.core.preflight import (
         diagnose,
@@ -578,7 +605,11 @@ def webhook():
         return jsonify({"status": "queued"}), 202
 
     if eq == EnqueueResult.FULL:
-        # Bounded queue full → 503 so GitHub redelivers later.
+        # Bounded queue full → 503. GitHub does not redeliver on its own, so
+        # the dedup key recorded above is released: it used to stay set for
+        # 24 hours, and a manual redelivery (same delivery id) was then
+        # answered "duplicate — skipped" and never processed at all.
+        forget(fingerprint)
         metrics.increment("events.dropped")
         return jsonify({"error": "Server busy — please retry", "retry_after": 30}), 503
 
@@ -587,6 +618,7 @@ def webhook():
 
     # Saturated pool → 503 so GitHub retries automatically
     if is_saturated(result):
+        forget(fingerprint)  # see the FULL branch above
         metrics.increment("events.dropped")
         log.error(
             f"dispatch.saturated event={webhook_event} repo={repo} "
@@ -607,8 +639,14 @@ def webhook():
 # ── Dispatch ───────────────────────────────────────────────────────────────
 
 
-def _run_handler(webhook_event: str, payload: dict, repo: str):
-    """Runs inside the thread pool. All errors caught — never crashes pool."""
+def _run_handler(webhook_event: str, payload: dict, repo: str) -> str:
+    """
+    Runs inside the thread pool or a queue consumer. All errors caught —
+    never crashes either. Returns a HandlerOutcome so the queue can retry a
+    transient failure instead of dropping the event.
+    """
+    from app.core.event_queue import HandlerOutcome
+
     try:
         log.info(f"dispatch.start event={webhook_event} repo={repo}")
 
@@ -617,12 +655,7 @@ def _run_handler(webhook_event: str, payload: dict, repo: str):
         # schedule rather than in response to an event (the 15-day security
         # sweep) had no credential for any repository at all.
         try:
-            from app.core.installations import remember_installation, touch
-
-            inst = (payload.get("installation") or {}).get("id", 0)
-            if repo and inst:
-                remember_installation(repo, inst)
-                touch(repo)
+            _track_installations(webhook_event, payload, repo)
         except Exception as e:
             log.debug(f"installations.record_skipped repo={repo}: {e}")
 
@@ -661,24 +694,77 @@ def _run_handler(webhook_event: str, payload: dict, repo: str):
 
             else:
                 log.debug(f"dispatch.unhandled event={webhook_event}")
-                return
+                return HandlerOutcome.OK
 
         metrics.increment(f"events.{webhook_event}.success")
         log.info(f"dispatch.done event={webhook_event}")
+        return HandlerOutcome.OK
 
     except Exception as e:
-        from app.github.client import GitHubSecondaryRateLimitError
-
-        if isinstance(e, GitHubSecondaryRateLimitError):
+        metrics.increment(f"events.{webhook_event}.error")
+        metrics.increment("events.error")
+        if _is_transient(e):
             log.warning(
-                f"dispatch.secondary_rate_limit event={webhook_event} repo={repo} "
-                f"retry_after={e.retry_after}s — dropping, GitHub will retry"
+                f"dispatch.transient event={webhook_event} repo={repo}: "
+                f"{type(e).__name__}: {e} — will retry once if queued"
             )
-            metrics.increment("events.secondary_rate_limited")
-        else:
-            log.error(f"dispatch.error event={webhook_event} repo={repo}: {e}")
-            log.error(traceback.format_exc())
-            metrics.increment(f"events.{webhook_event}.error")
+            return HandlerOutcome.RETRY
+        log.error(f"dispatch.error event={webhook_event} repo={repo}: {e}")
+        log.error(traceback.format_exc())
+        return HandlerOutcome.FAILED
+
+
+def _track_installations(webhook_event: str, payload: dict, repo: str) -> None:
+    """
+    Keep the installation registry in step with GitHub.
+
+    `installation` and `installation_repositories` events carry no
+    `repository`, so `repo` arrived here as "unknown" and was registered as a
+    repository — which the maintenance sweep then scanned and reported as a
+    failure every cycle. And forget_installation() had no caller: an
+    uninstalled repository stayed in the registry until its entry expired.
+    """
+    from app.core.installations import forget_installation, remember_installation, touch
+
+    inst = (payload.get("installation") or {}).get("id", 0)
+    action = payload.get("action", "")
+    if webhook_event == "installation":
+        names = [r.get("full_name", "") for r in payload.get("repositories") or []]
+        for name in filter(None, names):
+            if action in ("deleted", "suspend"):
+                forget_installation(name)
+            elif action in ("created", "unsuspend") and inst:
+                remember_installation(name, inst)
+        return
+    if webhook_event == "installation_repositories":
+        for r in payload.get("repositories_removed") or []:
+            if r.get("full_name"):
+                forget_installation(r["full_name"])
+        for r in payload.get("repositories_added") or []:
+            if r.get("full_name") and inst:
+                remember_installation(r["full_name"], inst)
+        return
+    if repo and repo != "unknown" and inst:
+        remember_installation(repo, inst)
+        touch(repo)
+
+
+def _is_transient(e: Exception) -> bool:
+    """A failure that the same event can succeed after, a little later."""
+    import requests
+
+    from app.ai.circuit_breaker import AllProvidersDown
+    from app.github.client import GitHubError
+    from app.github.rate_limit import GitHubRateLimitExhausted
+
+    if isinstance(e, (GitHubRateLimitExhausted, AllProvidersDown, requests.ConnectionError, requests.Timeout)):
+        return True
+    if isinstance(e, GitHubError):
+        # Secondary rate limits are 403s with their own type.
+        return e.status_code in (429, 502, 503, 504) or e.status_code >= 500 or (
+            type(e).__name__ == "GitHubSecondaryRateLimitError"
+        )
+    return False
 
 
 def _dispatch(webhook_event: str, payload: dict, repo: str):
@@ -751,7 +837,7 @@ def _notification_status() -> dict:
     `configured: false` means no webhook URL is set for that channel — the most
     common reason notifications "stop working", and previously invisible.
     """
-    from app.github.notifications import discord_enabled, slack_enabled
+    from app.github.notifications import discord_enabled, last_outcome, slack_enabled
 
     out = {}
     for channel, configured in (
@@ -764,7 +850,15 @@ def _notification_status() -> dict:
             "configured": configured,
             "sent": sent,
             "failed": failed,
-            "status": "ok" if configured and not failed else ("failing" if failed else "off"),
+            # The latest delivery decides: a channel that failed once and has
+            # delivered since is working.
+            "status": (
+                "off"
+                if not configured
+                else "failing"
+                if last_outcome.get(channel) == "failed"
+                else "ok"
+            ),
         }
     return out
 

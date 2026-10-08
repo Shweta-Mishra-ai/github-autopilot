@@ -20,12 +20,12 @@ Thread model:
   - If workers > 1 is ever needed: move to Redis Queue (see archive/).
 """
 
+from app.core.env import env_int
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor, Future
 from typing import Callable
 
-import os
 
 log = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ def is_saturated(result) -> bool:
 # On Render free tier (512MB RAM, 0.5 CPU), >10 concurrent LLM calls
 # will hit OOM or timeout. Keep conservative.
 # gunicorn runs --workers 1, so this singleton is process-wide and safe.
-MAX_DISPATCH_WORKERS = int(os.environ.get("MAX_DISPATCH_WORKERS", "6"))
+MAX_DISPATCH_WORKERS = env_int("MAX_DISPATCH_WORKERS", 6, minimum=1)
 _QUEUE_MAXSIZE = 50  # Pending work items; beyond this → 503 to GitHub
 
 _pool: ThreadPoolExecutor | None = None

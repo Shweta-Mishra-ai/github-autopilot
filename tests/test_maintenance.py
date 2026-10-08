@@ -405,3 +405,28 @@ class TestRepoIndexIsASet:
 
         with patch("app.core.redis_client.get_redis", side_effect=Exception("down")):
             assert M.known_repos() == []
+
+
+class TestEveryRepoIsEventuallyScanned:
+    """The sweep took sorted()[:25] every cycle (2026-10-08 audit)."""
+
+    def test_successive_cycles_cover_every_repository(self, monkeypatch):
+        from app.core import maintenance
+
+        class KV(dict):
+            def get(self, k):
+                return super().get(k)
+
+            def set(self, k, v, **kw):
+                self[k] = v
+                return True
+
+        kv = KV()
+        monkeypatch.setattr("app.core.redis_client.get_redis", lambda: kv)
+        ordered = [(f"o/r{i:02d}", i) for i in range(60)]
+        seen = set()
+        for _ in range(3):
+            batch = maintenance._this_cycles_batch(ordered)
+            assert len(batch) == maintenance.MAX_REPOS_PER_RUN
+            seen.update(r for r, _ in batch)
+        assert seen == {r for r, _ in ordered}

@@ -92,6 +92,11 @@ _CONFIG_EVENT_KEYS = {
 }
 
 
+# The most recent outcome per channel ("sent" / "failed"). /health used the
+# cumulative counters, so one failure months ago read "failing" forever.
+last_outcome: dict[str, str] = {}
+
+
 def _count(metric: str) -> None:
     """
     Record a delivery outcome.
@@ -100,6 +105,9 @@ def _count(metric: str) -> None:
     log line in a thread nobody reads. Counting makes it visible on /metrics
     and /health, where "notifications stopped arriving" is actually diagnosable.
     """
+    parts = metric.split(".")
+    if len(parts) == 3 and parts[2] in ("sent", "failed"):
+        last_outcome[parts[1]] = parts[2]
     try:
         from app.core.metrics import metrics
 

@@ -166,6 +166,31 @@ def scan_repo(repo: str, installation_id: int) -> dict:
     return record
 
 
+_CURSOR_KEY = "maintenance:cursor"
+
+
+def _this_cycles_batch(ordered: list) -> list:
+    """
+    Up to MAX_REPOS_PER_RUN repositories, continuing where the last cycle
+    stopped. This was `sorted(...)[:25]` — the same first 25 every cycle, so
+    on a deployment with more, the rest were never scanned, while the comment
+    said they were "picked up on the next cycle".
+    """
+    n = len(ordered)
+    if n <= MAX_REPOS_PER_RUN:
+        return ordered
+    start = 0
+    try:
+        from app.core.redis_client import get_redis
+
+        r = get_redis()
+        start = int(r.get(_CURSOR_KEY) or 0) % n
+        r.set(_CURSOR_KEY, str((start + MAX_REPOS_PER_RUN) % n))
+    except Exception as e:
+        log.debug(f"maintenance.cursor_unavailable: {e}")
+    return (ordered[start:] + ordered[:start])[:MAX_REPOS_PER_RUN]
+
+
 def run_pass() -> dict:
     """
     One maintenance cycle: scan every known repository, then back up memory.
@@ -179,7 +204,7 @@ def run_pass() -> dict:
     installs = known_installations()
     scanned: list[dict] = []
 
-    for repo, inst in sorted(installs.items())[:MAX_REPOS_PER_RUN]:
+    for repo, inst in _this_cycles_batch(sorted(installs.items())):
         scanned.append(scan_repo(repo, inst))
 
     findings = sum(s["critical"] for s in scanned)

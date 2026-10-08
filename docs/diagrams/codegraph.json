@@ -360,7 +360,7 @@
       "id": "app.core.config",
       "path": "app/core/config.py",
       "layer": "core",
-      "loc": 413,
+      "loc": 472,
       "functions": 5,
       "classes": 1,
       "is_package": false,
@@ -379,21 +379,36 @@
       ]
     },
     {
+      "id": "app.core.env",
+      "path": "app/core/env.py",
+      "layer": "core",
+      "loc": 32,
+      "functions": 1,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 3,
+      "fan_out": 0,
+      "external_deps": [
+        "__future__",
+        "logging",
+        "os"
+      ]
+    },
+    {
       "id": "app.core.event_queue",
       "path": "app/core/event_queue.py",
       "layer": "core",
-      "loc": 284,
-      "functions": 7,
-      "classes": 1,
+      "loc": 334,
+      "functions": 9,
+      "classes": 2,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 2,
+      "fan_out": 3,
       "external_deps": [
         "__future__",
         "app",
         "json",
         "logging",
-        "os",
         "threading",
         "time",
         "typing"
@@ -442,8 +457,8 @@
       "id": "app.core.idempotency",
       "path": "app/core/idempotency.py",
       "layer": "core",
-      "loc": 134,
-      "functions": 5,
+      "loc": 147,
+      "functions": 6,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
@@ -510,8 +525,8 @@
       "id": "app.core.maintenance",
       "path": "app/core/maintenance.py",
       "layer": "core",
-      "loc": 316,
-      "functions": 12,
+      "loc": 341,
+      "functions": 13,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
@@ -531,7 +546,7 @@
       "id": "app.core.memory_backup",
       "path": "app/core/memory_backup.py",
       "layer": "core",
-      "loc": 353,
+      "loc": 364,
       "functions": 13,
       "classes": 0,
       "is_package": false,
@@ -570,7 +585,7 @@
       "id": "app.core.preflight",
       "path": "app/core/preflight.py",
       "layer": "core",
-      "loc": 310,
+      "loc": 312,
       "functions": 5,
       "classes": 4,
       "is_package": false,
@@ -588,7 +603,7 @@
       "id": "app.core.process_guard",
       "path": "app/core/process_guard.py",
       "layer": "core",
-      "loc": 142,
+      "loc": 154,
       "functions": 4,
       "classes": 0,
       "is_package": false,
@@ -622,14 +637,15 @@
       "id": "app.core.redis_client",
       "path": "app/core/redis_client.py",
       "layer": "core",
-      "loc": 510,
+      "loc": 511,
       "functions": 6,
       "classes": 1,
       "is_package": false,
       "fan_in": 29,
-      "fan_out": 0,
+      "fan_out": 1,
       "external_deps": [
         "__future__",
+        "app",
         "fnmatch",
         "logging",
         "os",
@@ -700,11 +716,11 @@
       "classes": 1,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 0,
+      "fan_out": 1,
       "external_deps": [
+        "app",
         "concurrent",
         "logging",
-        "os",
         "threading",
         "typing"
       ]
@@ -713,7 +729,7 @@
       "id": "app.core.webhook_security",
       "path": "app/core/webhook_security.py",
       "layer": "core",
-      "loc": 521,
+      "loc": 525,
       "functions": 16,
       "classes": 0,
       "is_package": false,
@@ -809,7 +825,7 @@
       "id": "app.github.notifications",
       "path": "app/github/notifications.py",
       "layer": "github",
-      "loc": 527,
+      "loc": 535,
       "functions": 20,
       "classes": 0,
       "is_package": false,
@@ -844,9 +860,9 @@
       "id": "app.github.rate_limit",
       "path": "app/github/rate_limit.py",
       "layer": "github",
-      "loc": 269,
+      "loc": 295,
       "functions": 10,
-      "classes": 0,
+      "classes": 1,
       "is_package": false,
       "fan_in": 3,
       "fan_out": 1,
@@ -865,8 +881,8 @@
       "id": "app.github.sticky",
       "path": "app/github/sticky.py",
       "layer": "github",
-      "loc": 102,
-      "functions": 3,
+      "loc": 118,
+      "functions": 4,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
@@ -874,7 +890,8 @@
       "external_deps": [
         "__future__",
         "app",
-        "logging"
+        "logging",
+        "os"
       ]
     },
     {
@@ -1600,8 +1617,8 @@
       "id": "server",
       "path": "server.py",
       "layer": "other",
-      "loc": 827,
-      "functions": 30,
+      "loc": 921,
+      "functions": 33,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
@@ -1612,6 +1629,7 @@
         "hmac",
         "logging",
         "os",
+        "requests",
         "signal",
         "time",
         "traceback"
@@ -1621,7 +1639,7 @@
       "id": "worker",
       "path": "worker.py",
       "layer": "other",
-      "loc": 66,
+      "loc": 71,
       "functions": 1,
       "classes": 0,
       "is_package": false,
@@ -1906,6 +1924,11 @@
     },
     {
       "source": "app.core.event_queue",
+      "target": "app.core.env",
+      "kind": "import"
+    },
+    {
+      "source": "app.core.event_queue",
       "target": "app.core.metrics",
       "kind": "import"
     },
@@ -2025,6 +2048,11 @@
       "kind": "runtime"
     },
     {
+      "source": "app.core.redis_client",
+      "target": "app.core.env",
+      "kind": "import"
+    },
+    {
       "source": "app.core.snapshot",
       "target": "app.core.redis_client",
       "kind": "import"
@@ -2037,6 +2065,11 @@
     {
       "source": "app.core.snapshot",
       "target": "app.github.client",
+      "kind": "import"
+    },
+    {
+      "source": "app.core.thread_pool",
+      "target": "app.core.env",
       "kind": "import"
     },
     {
@@ -3306,9 +3339,9 @@
     }
   ],
   "stats": {
-    "modules": 97,
-    "edges": 333,
-    "total_loc": 25069,
+    "modules": 98,
+    "edges": 336,
+    "total_loc": 25427,
     "layers": [
       "ai",
       "core",
@@ -3323,9 +3356,9 @@
     "hotspots": [
       {
         "id": "app.core.redis_client",
-        "loc": 510,
+        "loc": 511,
         "fan_in": 29,
-        "fan_out": 0
+        "fan_out": 1
       },
       {
         "id": "app.ai.router",
@@ -3347,7 +3380,7 @@
       },
       {
         "id": "app.github.notifications",
-        "loc": 527,
+        "loc": 535,
         "fan_in": 8,
         "fan_out": 4
       },
@@ -3359,7 +3392,7 @@
       },
       {
         "id": "app.core.config",
-        "loc": 413,
+        "loc": 472,
         "fan_in": 7,
         "fan_out": 1
       },

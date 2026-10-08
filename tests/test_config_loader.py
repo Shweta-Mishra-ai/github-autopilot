@@ -195,13 +195,15 @@ class TestCaching:
 
 class TestThunderingHerd:
     """N threads missing the cache at once used to make N identical GitHub
-    requests for the same file. Only the first fetches now; the rest take
-    defaults and let the cache warm."""
+    requests for the same file. Only the first fetches now, and the others
+    WAIT for it — they used to take the defaults, which ignored the repo's
+    kill switch and maintainer_only restrictions."""
 
-    def test_a_second_thread_does_not_pile_on(self):
+    def test_a_second_thread_does_not_pile_on_and_gets_the_real_config(self):
         started = threading.Event()
         release = threading.Event()
         paths: list[str] = []
+        result: dict = {}
 
         def slow_get(path, token):
             paths.append(path)
@@ -215,13 +217,52 @@ class TestThunderingHerd:
             assert started.wait(timeout=5), "the first fetch never started"
 
             # Second caller arrives mid-fetch.
-            second = load_config("o/r", "tok")
-
+            second = threading.Thread(target=lambda: result.update(cfg=load_config("o/r", "tok")))
+            second.start()
+            time.sleep(0.05)
             release.set()
             first.join(timeout=5)
+            second.join(timeout=5)
 
         assert len(paths) == 1, f"{len(paths)} concurrent fetches for one repo"
-        assert isinstance(second, Config)
+        assert result["cfg"].get("pull_requests", "code_review") is False, (
+            "the concurrent caller must see the repo's config, not the defaults"
+        )
+
+    def test_an_empty_section_does_not_discard_the_kill_switch(self):
+        ctx, _ = _serving("bot:\n  enabled: false\npush:\n")
+        with ctx:
+            cfg = load_config("o/r", "tok")
+        assert cfg.bot_enabled() is False
+
+    def test_a_transient_error_keeps_the_last_good_config(self):
+        ctx, _ = _serving("bot:\n  enabled: false\n")
+        with ctx:
+            load_config("o/r", "tok")
+        # Expire it, then fail the refetch with a 502.
+        cfg_obj, _ts = config_mod._config_cache["o/r"]
+        config_mod._config_cache["o/r"] = (cfg_obj, 0)
+        from app.github.client import GitHubError
+
+        with patch("app.github.client.gh_get", side_effect=GitHubError("bad gateway", 502)):
+            cfg = load_config("o/r", "tok")
+        assert cfg.bot_enabled() is False
+
+    def test_a_transient_error_with_no_history_is_retried_soon(self):
+        from app.github.client import GitHubError
+
+        with patch("app.github.client.gh_get", side_effect=GitHubError("bad gateway", 502)):
+            load_config("o/r", "tok")
+        _cfg, cached_at = config_mod._config_cache["o/r"]
+        assert time.time() - cached_at >= config_mod._CONFIG_TTL - config_mod._CONFIG_ERROR_TTL - 1
+
+    def test_a_quoted_number_is_stored_as_a_number(self):
+        cfg = Config({"push": {"create_issue_threshold": "5"}})
+        assert cfg.get("push", "create_issue_threshold") == 5
+
+    def test_maintainer_only_entries_may_carry_a_slash(self):
+        cfg = Config({"commands": {"permissions": {"maintainer_only": ["/fix"]}}})
+        assert cfg.is_maintainer_only("/fix") and cfg.is_maintainer_only("fix")
 
     def test_the_sentinel_is_released_even_when_the_fetch_fails(self):
         """A repo left in the in-flight set would never be fetched again — it

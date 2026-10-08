@@ -225,11 +225,71 @@ def metered(repo: str):
         _metered_repo.reset(token)
 
 
+class AIBudgetExceeded(RuntimeError):
+    """Today's AI budget for the metered repository is spent."""
+
+
+# Set when the router refused a call for budget during the current handler,
+# so the handler can say so instead of a generic failure. Per thread/context.
+_budget_refusal: contextvars.ContextVar = contextvars.ContextVar("budget_refusal", default="")
+
+
+def budget_refusal() -> str:
+    """The refusal message if an AI call was refused for budget in this context."""
+    return _budget_refusal.get()
+
+
+def reset_budget_refusal() -> None:
+    _budget_refusal.set("")
+
+
+def _daily_limit() -> int:
+    import os
+
+    try:
+        return max(0, int(os.environ.get("REPO_DAILY_AI_LIMIT", "150")))
+    except ValueError:
+        return 150
+
+
 def charge_ai_call() -> None:
-    """Count one AI call against the metered repository, if there is one."""
+    """
+    Count one AI call against the metered repository, and refuse it — raise
+    AIBudgetExceeded — when that would exceed today's budget.
+
+    The budget used to be checked only when a pull request or issue event
+    STARTED, and slash commands never checked it at all: on a public repo any
+    commenter could keep running /improve and /test after REPO_DAILY_AI_LIMIT
+    was reached, and the documentation called the limit "shared across all
+    commands". Every AI call passes through here, so this is where it holds.
+
+    Fails open when the counter cannot be read (Redis down), as the start-of-
+    event check always has: the budget is a cost control, not a security gate.
+    """
     repo = _metered_repo.get()
-    if repo:
-        increment_repo_usage(repo)
+    if not repo:
+        return
+    limit = _daily_limit()
+    try:
+        from app.core.redis_client import get_redis
+        import datetime
+
+        r = get_redis()
+        today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+        key = f"limit:{repo}:ai_calls:{today}"
+        count = int(r.incr(key))
+        r.expire(key, 86400)
+    except Exception as e:
+        log.debug(f"guardrails.charge_failed repo={repo}: {e}")
+        return
+    if count > limit:
+        with contextlib.suppress(Exception):
+            r.decr(key)  # a refused call is not a used one
+        message = (
+            f"Daily AI call limit ({limit}) for this repository reached. Resets at midnight UTC."
+        )
+        _budget_refusal.set(message)
+        raise AIBudgetExceeded(message)
 
 
 def increment_repo_usage(repo: str):

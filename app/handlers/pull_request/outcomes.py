@@ -31,6 +31,24 @@ def record_autofix_outcome(payload: dict) -> bool:
 
     repo = (payload.get("repository") or {}).get("full_name", "")
     number = pr.get("number", 0)
+
+    # The branch name alone proved nothing: anyone could open a PR from a
+    # fork branch named `fix/bot-issue-1`, close it, and count a rejected
+    # autofix — and have their PR title written into repository memory,
+    # which is later recalled into prompts. A real autofix PR is opened by
+    # this App (/apply) from a branch in this repository.
+    head_repo = ((pr.get("head") or {}).get("repo") or {}).get("full_name", "")
+    if head_repo != repo or (pr.get("user") or {}).get("type") != "Bot":
+        return False
+
+    # Once per PR: closing, reopening and closing again is one outcome.
+    try:
+        from app.core.redis_client import get_redis
+
+        if not get_redis().set(f"autofix_outcome:{repo}:{number}", "1", nx=True, ex=86400 * 365):
+            return False
+    except Exception:
+        return False  # unrecordable now; better uncounted than counted twice
     m = re.search(r"issue-(\d+)", branch)
     issue = int(m.group(1)) if m else 0
     title = str(pr.get("title") or "")[:150]

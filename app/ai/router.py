@@ -111,12 +111,18 @@ def _fit(text: str, max_chars: int) -> str:
 
 
 def _charge() -> None:
-    """Charge one AI call to the repository whose event is being handled."""
-    try:
-        from app.core.guardrails import charge_ai_call
+    """
+    Charge one AI call to the repository whose event is being handled.
+    Raises AIBudgetExceeded when today's budget is spent; any other accounting
+    failure never fails the call.
+    """
+    from app.core.guardrails import AIBudgetExceeded, charge_ai_call
 
+    try:
         charge_ai_call()
-    except Exception as e:  # accounting must never fail the call
+    except AIBudgetExceeded:
+        raise
+    except Exception as e:
         log.debug(f"router.charge_failed: {e}")
 
 

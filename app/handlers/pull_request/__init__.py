@@ -163,8 +163,13 @@ def handle(payload: dict):
         from app.github.helpers import pr_files
 
         files = pr_files(repo, pr_number, token, get=gh_get)
-    except Exception:
-        files = []
+    except Exception as e:
+        # Nothing below can be judged without the diff. This used to carry on
+        # with no files: the risk analysis ran on the title alone, recorded a
+        # risk level for this head that auto-merge then trusted, and the
+        # report said "Files: 0 · +0 −0". The next push runs it again.
+        log.error(f"pr.files_unavailable — not analysed: {e}")
+        return
 
     context = ""
     try:
@@ -219,6 +224,11 @@ def handle(payload: dict):
     # — the one PR that most needs a human to look was the one the bot went
     # quiet on.
     rejected: list[str] = []
+    # A section that FAILED is reported too. Only InjectionRejected was
+    # caught: a provider outage (AllProvidersDown) or the daily AI budget
+    # running out mid-event escaped handle(), nothing was written, and on a
+    # push the old report kept showing the previous head's findings as current.
+    failed: list[str] = []
 
     def _guarded(section, fn, default):
         try:
@@ -226,6 +236,19 @@ def handle(payload: dict):
         except InjectionRejected as e:
             log.warning(f"pr.{section}_input_rejected: {e}")
             rejected.append(section)
+            return default
+        except Exception as e:
+            from app.ai.circuit_breaker import AllProvidersDown
+            from app.core.guardrails import AIBudgetExceeded
+
+            log.error(f"pr.{section}_failed: {type(e).__name__}: {e}")
+            if isinstance(e, AIBudgetExceeded):
+                why = str(e)
+            elif isinstance(e, AllProvidersDown):
+                why = "the AI providers were unavailable"
+            else:
+                why = f"it failed ({type(e).__name__})"
+            failed.append(f"{section} — {why}")
             return default
 
     analysis_md = _guarded(
@@ -272,6 +295,10 @@ def handle(payload: dict):
             "matching a prompt-injection pattern, so it was not sent to the model. "
             "Review it manually."
         )
+        review_md = f"{notice}\n\n{review_md}".strip()
+
+    if failed:
+        notice = "> ⚠️ **Not run on this commit:** " + "; ".join(failed) + "."
         review_md = f"{notice}\n\n{review_md}".strip()
 
     if not any([analysis_md, summary_md, review_md, gaps_md]):

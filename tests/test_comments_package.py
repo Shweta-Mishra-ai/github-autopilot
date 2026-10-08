@@ -318,7 +318,11 @@ class TestFileSize:
 
         +7 for two guards (and their imports): an edited comment re-running a command it already
         held (the decision is dispatcher.command_repeated_by_edit), and PR
-        commands getting the diff (the fetch is dispatcher.pr_context)."""
+        commands getting the diff (the fetch is dispatcher.pr_context).
+
+        +3 for the daily AI budget: the router refuses calls once it is spent
+        (guardrails.charge_ai_call), and the reply must say so rather than
+        report the command's own generic failure."""
         import os
         fpath = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -326,8 +330,8 @@ class TestFileSize:
         )
         with open(fpath, encoding='utf-8') as f:
             lines = f.readlines()
-        assert len(lines) <= 289, (
-            f"service.py has {len(lines)} lines — should stay under 289 lines as an orchestration layer."
+        assert len(lines) <= 292, (
+            f"service.py has {len(lines)} lines — should stay under 292 lines as an orchestration layer."
         )
 
 

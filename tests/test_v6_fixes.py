@@ -589,8 +589,8 @@ class TestAutofixFlow(unittest.TestCase):
         fixed    = "line1\nfixed_line2\nline3\n"
         preview  = _make_diff_preview(original, fixed, "app/foo.py")
         self.assertIn("```diff", preview)
-        self.assertIn("- line2", preview)
-        self.assertIn("+ fixed_line2", preview)
+        self.assertIn("-line2", preview)
+        self.assertIn("+fixed_line2", preview)
 
     def test_workflow_injection_detected(self):
         from app.handlers.autofix import _contains_workflow_syntax

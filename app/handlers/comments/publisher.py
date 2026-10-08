@@ -10,6 +10,7 @@ import logging
 import re
 
 import contextlib
+from urllib.parse import quote
 from app.github.client import GitHubError
 from app.github.helpers import fmt_error
 from ._client import gh_get, gh_post, gh_put, gh_patch, gh_delete, router  # noqa: F401  (re-exported: tests patch these names)
@@ -125,10 +126,17 @@ def cmd_merge(
             # Only a branch that lives in THIS repository. A fork PR's head
             # branch is in the fork; deleting `heads/<its name>` here deleted
             # whatever same-named branch this repository happened to have.
+            #
+            # And only a branch this App created (autofix). Any other head
+            # branch is the repository's: GitHub deletes it itself when the
+            # repo enables "automatically delete head branches", and when it
+            # does not, the branch is being kept on purpose — merging
+            # develop -> staging deleted develop, and GitHub then closed every
+            # PR targeting it. The name is quoted: `fix#12` deleted `fix`.
             head_repo = (head.get("repo") or {}).get("full_name", "")
-            if head_branch and head_repo == repo:
+            if head_branch.startswith("fix/bot-issue-") and head_repo == repo:
                 with contextlib.suppress(Exception):
-                    gh_delete(f"/repos/{repo}/git/refs/heads/{head_branch}", token)
+                    gh_delete(f"/repos/{repo}/git/refs/heads/{quote(head_branch, safe='/')}", token)
 
             # The learning record for an autofix branch is written from the
             # PR's `closed` event (pull_request/outcomes.py), which sees every

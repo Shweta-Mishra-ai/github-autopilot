@@ -178,7 +178,12 @@ Return JSON:
     try:
         from app.core.guardrails import record_pr_risk
 
-        record_pr_risk(repo, pr_number, pr.get("head", {}).get("sha", ""), r.get("risk_level", ""))
+        # Only a risk the model actually stated. A missing one is displayed as
+        # medium but must not become the recorded risk auto-merge checks.
+        if r.get("risk_measured", True):
+            record_pr_risk(
+                repo, pr_number, pr.get("head", {}).get("sha", ""), r.get("risk_level", "")
+            )
     except Exception as e:
         log.debug(f"record_pr_risk skipped: {e}")
 

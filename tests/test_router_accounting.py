@@ -117,3 +117,76 @@ class TestJsonExtraction:
         from app.ai.providers.base import _extract_json
 
         assert _extract_json('x {"a": 1} y {"b": 2}') == {"a": 1}
+
+
+class TestAudit2Remainder:
+    def test_url_userinfo_is_redacted(self):
+        from app.core.redaction import redact_secrets
+
+        out = redact_secrets("Cannot reach Ollama at http://admin:s3cretpw@gpu.local:11434 — is it running?")
+        assert "s3cretpw" not in out and "admin" not in out and "gpu.local" in out
+
+    def test_the_gatekeeper_timeout_is_honoured(self, monkeypatch):
+        """Ollama forced max(timeout, 120), so GATEKEEPER_TIMEOUT=8 waited 120s."""
+        from unittest.mock import patch
+
+        from app.ai.circuit_breaker import reset_breakers
+        from app.ai.providers.ollama import OllamaProvider
+
+        monkeypatch.setenv("OLLAMA_HOST", "http://localhost:11434")
+        reset_breakers()
+        with patch("app.ai.providers.ollama.http_requests.post", side_effect=RuntimeError("x")) as post:
+            OllamaProvider(min_timeout=0).call_raw(system="s", user="u", max_tokens=8, temperature=0.0, timeout=5)
+            OllamaProvider().call_raw(system="s", user="u", max_tokens=8, temperature=0.0, timeout=5)
+        assert [c.kwargs["timeout"] for c in post.call_args_list] == [5, 120]
+
+    def test_a_config_error_clears_when_that_provider_answers(self, monkeypatch):
+        from app.ai.router import LLMRouter
+
+        monkeypatch.setattr("app.core.redis_client.get_redis", lambda: _KV())
+        r = LLMRouter()
+        r._note_configuration_error("CONFIG_ERROR: the provider rejected GROQ_API_KEY (401)", "groq_70b")
+        assert r.configuration_error()
+        r._log_and_track("explain", LLMResponse(text="x", provider="groq", model="m", total_tokens=1), "groq_8b")
+        assert r.configuration_error(), "a different provider answering proves nothing"
+        r._log_and_track("explain", LLMResponse(text="x", provider="groq", model="m", total_tokens=1), "groq_70b")
+        assert r.configuration_error() == ""
+
+    def test_validators_survive_non_string_fields_and_map_severity_up(self):
+        from app.ai.validator import validate_issue_triage, validate_pr_analysis
+
+        assert validate_pr_analysis({"risk_level": 2, "summary": "s"})["risk_measured"] is False
+        out = validate_pr_analysis({"risk_level": "critical", "summary": "s"})
+        assert out["risk_level"] == "high" and out["risk_measured"] is True
+        assert validate_issue_triage({"priority": ["high"], "needs_info": "false", "type": "bug"})["needs_info"] is False
+
+    def test_quality_floor_refuses_a_small_substitute(self, monkeypatch):
+        from app.ai import model_catalog
+
+        monkeypatch.setenv("LLM_QUALITY_FLOOR", "high")
+        monkeypatch.setattr(model_catalog, "best_model", lambda *a, **k: "openai/gpt-oss-20b")
+        monkeypatch.setattr(model_catalog, "autoheal_enabled", lambda: True)
+        model_catalog._substitutions.clear()
+        assert model_catalog.substitute("groq_70b", "groq", "quality", "openai/gpt-oss-120b") == ""
+
+
+def test_an_invented_file_is_not_plausible_because_of_a_shared_suffix():
+    from app.ai.hallucination import _is_plausible_file
+
+    known = {"app/oauth.py", "app/core/auth.py"}
+    assert _is_plausible_file("core/auth.py", known)
+    assert _is_plausible_file("auth.py", known)
+    assert not _is_plausible_file("auth.py", {"app/oauth.py"})
+    assert not _is_plausible_file("handlers/auth.py", known)
+
+
+def test_local_only_doctor_contacts_no_cloud_catalogue(monkeypatch):
+    from unittest.mock import patch
+
+    from app.ai.router import model_configuration_report
+
+    monkeypatch.setenv("LLM_LOCAL_ONLY", "1")
+    with patch("app.ai.model_catalog.available_models") as fetch:
+        report = model_configuration_report()
+    fetch.assert_not_called()
+    assert "LLM_LOCAL_ONLY" in report["skipped"]

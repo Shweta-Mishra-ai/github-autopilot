@@ -81,7 +81,7 @@
       "id": "app.ai.hallucination",
       "path": "app/ai/hallucination.py",
       "layer": "ai",
-      "loc": 295,
+      "loc": 299,
       "functions": 6,
       "classes": 1,
       "is_package": false,
@@ -114,12 +114,12 @@
       "id": "app.ai.model_catalog",
       "path": "app/ai/model_catalog.py",
       "layer": "ai",
-      "loc": 356,
-      "functions": 12,
+      "loc": 384,
+      "functions": 13,
       "classes": 0,
       "is_package": false,
       "fan_in": 6,
-      "fan_out": 1,
+      "fan_out": 2,
       "external_deps": [
         "app",
         "logging",
@@ -166,7 +166,7 @@
       "id": "app.ai.providers.gemini",
       "path": "app/ai/providers/gemini.py",
       "layer": "ai",
-      "loc": 230,
+      "loc": 232,
       "functions": 2,
       "classes": 1,
       "is_package": false,
@@ -184,12 +184,12 @@
       "id": "app.ai.providers.groq",
       "path": "app/ai/providers/groq.py",
       "layer": "ai",
-      "loc": 273,
+      "loc": 285,
       "functions": 1,
       "classes": 1,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 5,
+      "fan_out": 4,
       "external_deps": [
         "app",
         "logging",
@@ -202,12 +202,12 @@
       "id": "app.ai.providers.ollama",
       "path": "app/ai/providers/ollama.py",
       "layer": "ai",
-      "loc": 153,
+      "loc": 159,
       "functions": 1,
       "classes": 1,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 2,
+      "fan_out": 3,
       "external_deps": [
         "app",
         "logging",
@@ -237,12 +237,12 @@
       "id": "app.ai.router",
       "path": "app/ai/router.py",
       "layer": "ai",
-      "loc": 797,
+      "loc": 822,
       "functions": 9,
       "classes": 1,
       "is_package": false,
       "fan_in": 15,
-      "fan_out": 15,
+      "fan_out": 16,
       "external_deps": [
         "app",
         "datetime",
@@ -259,7 +259,7 @@
       "functions": 9,
       "classes": 0,
       "is_package": false,
-      "fan_in": 2,
+      "fan_in": 3,
       "fan_out": 0,
       "external_deps": [
         "__future__",
@@ -270,8 +270,8 @@
       "id": "app.ai.validator",
       "path": "app/ai/validator.py",
       "layer": "ai",
-      "loc": 252,
-      "functions": 8,
+      "loc": 276,
+      "functions": 10,
       "classes": 0,
       "is_package": false,
       "fan_in": 9,
@@ -619,11 +619,11 @@
       "id": "app.core.redaction",
       "path": "app/core/redaction.py",
       "layer": "core",
-      "loc": 139,
+      "loc": 145,
       "functions": 3,
       "classes": 0,
       "is_package": false,
-      "fan_in": 4,
+      "fan_in": 6,
       "fan_out": 1,
       "external_deps": [
         "__future__",
@@ -639,7 +639,7 @@
       "functions": 6,
       "classes": 1,
       "is_package": false,
-      "fan_in": 28,
+      "fan_in": 27,
       "fan_out": 1,
       "external_deps": [
         "__future__",
@@ -1170,7 +1170,7 @@
       "id": "app.handlers.pull_request.analysis",
       "path": "app/handlers/pull_request/analysis.py",
       "layer": "handlers",
-      "loc": 250,
+      "loc": 255,
       "functions": 3,
       "classes": 0,
       "is_package": false,
@@ -1727,6 +1727,11 @@
     },
     {
       "source": "app.ai.model_catalog",
+      "target": "app.ai.routing_policy",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.model_catalog",
       "target": "app.core.redaction",
       "kind": "runtime"
     },
@@ -1781,11 +1786,6 @@
       "kind": "runtime"
     },
     {
-      "source": "app.ai.providers.groq",
-      "target": "app.core.redis_client",
-      "kind": "import"
-    },
-    {
       "source": "app.ai.providers.ollama",
       "target": "app.ai.circuit_breaker",
       "kind": "import"
@@ -1793,6 +1793,11 @@
     {
       "source": "app.ai.providers.ollama",
       "target": "app.ai.providers.base",
+      "kind": "import"
+    },
+    {
+      "source": "app.ai.providers.ollama",
+      "target": "app.core.redaction",
       "kind": "import"
     },
     {
@@ -1878,6 +1883,11 @@
     {
       "source": "app.ai.router",
       "target": "app.core.health_check",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.router",
+      "target": "app.core.redaction",
       "kind": "runtime"
     },
     {
@@ -3343,8 +3353,8 @@
   ],
   "stats": {
     "modules": 98,
-    "edges": 337,
-    "total_loc": 25500,
+    "edges": 339,
+    "total_loc": 25612,
     "layers": [
       "ai",
       "core",
@@ -3360,14 +3370,14 @@
       {
         "id": "app.core.redis_client",
         "loc": 511,
-        "fan_in": 28,
+        "fan_in": 27,
         "fan_out": 1
       },
       {
         "id": "app.ai.router",
-        "loc": 797,
+        "loc": 822,
         "fan_in": 15,
-        "fan_out": 15
+        "fan_out": 16
       },
       {
         "id": "app.github.client",
@@ -3412,10 +3422,10 @@
         "fan_out": 2
       },
       {
-        "id": "app.ai.providers.base",
-        "loc": 344,
-        "fan_in": 7,
-        "fan_out": 3
+        "id": "app.ai.validator",
+        "loc": 276,
+        "fan_in": 9,
+        "fan_out": 0
       }
     ],
     "collisions": {},

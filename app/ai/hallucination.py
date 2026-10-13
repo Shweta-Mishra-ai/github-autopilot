@@ -290,5 +290,9 @@ def _is_plausible_file(ref: str, known_files: set[str]) -> bool:
     Returns True if the file reference is plausibly related to known files.
     e.g. "auth.py" plausibly refers to "app/auth.py"
     """
-    basename = ref.split("/")[-1]
-    return any(f.endswith(basename) for f in known_files)
+    # On a path-segment boundary, and with the whole reference: "auth.py"
+    # matches "app/auth.py", and "core/auth.py" matches "app/core/auth.py".
+    # A bare suffix test accepted an invented "auth.py" because "app/oauth.py"
+    # ends in those characters, and ignored any directory in the reference.
+    ref = ref.strip().lstrip("./")
+    return any(f == ref or f.endswith("/" + ref) for f in known_files)

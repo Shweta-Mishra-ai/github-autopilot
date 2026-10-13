@@ -37,6 +37,20 @@ def as_text(value: Any, default: str = "") -> str:
     return value if isinstance(value, str) else str(value)
 
 
+def _word(data: dict, key: str, default: str) -> str:
+    """A lowercase enum value. `.lower()` on the raw field raised
+    AttributeError for `{"risk_level": 2}` or `{"priority": ["high"]}`."""
+    val = _get(data, key, default)
+    return val.strip().lower() if isinstance(val, str) else default
+
+
+def _bool(val: Any) -> bool:
+    """`bool("false")` is True; a model writes booleans as strings often."""
+    if isinstance(val, str):
+        return val.strip().lower() in ("true", "yes", "1")
+    return bool(val)
+
+
 def _str(val: Any, max_len: int = 300) -> str:
     """Safe string conversion with length cap."""
     return str(val)[:max_len].strip() if val is not None else ""
@@ -93,9 +107,16 @@ def validate_pr_analysis(raw: dict) -> dict:
             "_degraded": True,
         }
 
-    risk = _get(raw, "risk_level", "medium").lower()
-    if risk not in VALID_RISK:
-        risk = "medium"
+    # A more severe word than the scale has is HIGH, never "medium" — mapping
+    # "critical" down made the gravest answer the least alarming. A missing or
+    # unrecognised value is shown as medium but marked unmeasured, so it is
+    # never recorded as the PR's risk for auto-merge to trust.
+    risk = _word(raw, "risk_level", "")
+    risk_measured = True
+    if risk in ("critical", "severe", "blocker"):
+        risk = "high"
+    elif risk not in VALID_RISK:
+        risk, risk_measured = "medium", False
 
     review_focus = raw.get("review_focus", [])
     if not isinstance(review_focus, list):
@@ -113,6 +134,7 @@ def validate_pr_analysis(raw: dict) -> dict:
         "suggested_title": _str(raw.get("suggested_title") or raw.get("improved_title", ""), 200),
         "description": _str(raw.get("description", ""), 5000),
         "risk_level": risk,
+        "risk_measured": risk_measured,
         "risk_reason": _str(raw.get("risk_reason", ""), 300),
         "review_focus": review_focus,
         "confidence": confidence,
@@ -147,15 +169,17 @@ def validate_issue_triage(raw: dict) -> dict:
             "_degraded": True,
         }
 
-    issue_type = _get(raw, "type", "question").lower()
+    issue_type = _word(raw, "type", "question")
     if issue_type not in VALID_TYPES:
         issue_type = "question"
 
-    priority = _get(raw, "priority", "medium").lower()
+    priority = _word(raw, "priority", "medium")
+    if priority in ("urgent", "blocker", "severe"):
+        priority = "critical"
     if priority not in VALID_PRIORITIES:
         priority = "medium"
 
-    complexity = _get(raw, "complexity", "moderate").lower()
+    complexity = _word(raw, "complexity", "moderate")
     if complexity not in VALID_COMPLEXITY:
         complexity = "moderate"
 
@@ -173,7 +197,7 @@ def validate_issue_triage(raw: dict) -> dict:
         "priority": priority,
         "labels": _list_of_str(raw.get("labels"), max_items=8, max_item_len=50),
         "welcome": _str(raw.get("welcome", "Thanks for reporting this!"), 500),
-        "needs_info": bool(raw.get("needs_info", False)),
+        "needs_info": _bool(raw.get("needs_info", False)),
         "questions": questions,
         "complexity": complexity,
         "time_estimate": time_estimate,

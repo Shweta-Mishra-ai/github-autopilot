@@ -18,6 +18,7 @@ PRIVACY GUARANTEE
   only network call is to OLLAMA_HOST, which you own.
 """
 
+from app.core.redaction import redact_secrets
 import logging
 import os
 
@@ -37,8 +38,13 @@ def is_configured() -> bool:
 
 
 class OllamaProvider(LLMProvider):
-    def __init__(self, model: str = ""):
+    def __init__(self, model: str = "", min_timeout: int = 120):
         self._model = model or DEFAULT_MODEL
+        # Local inference on CPU can be slow, so review-sized calls get at
+        # least this long. The triage gate passes 0: GATEKEEPER_TIMEOUT is
+        # documented as how long the PR handler waits for it, and this floor
+        # turned a configured 8 seconds into 120.
+        self._min_timeout = min_timeout
 
     @property
     def provider_key(self) -> str:
@@ -91,7 +97,7 @@ class OllamaProvider(LLMProvider):
             # Local inference on CPU can be slow — give it more headroom.
             # nosec B113 — a timeout IS set; bandit cannot evaluate max(...).
             r = http_requests.post(  # nosec B113
-                f"{host}/api/chat", json=body, timeout=max(timeout, 120)
+                f"{host}/api/chat", json=body, timeout=max(timeout, self._min_timeout)
             )
 
             try:
@@ -140,7 +146,7 @@ class OllamaProvider(LLMProvider):
                 text="",
                 provider="ollama",
                 model=self._model,
-                error=f"Cannot reach Ollama at {host} — is it running?",
+                error=redact_secrets(f"Cannot reach Ollama at {host} — is it running?"),
             )
         except Exception as e:
             breaker.record_failure(str(e)[:60])
@@ -148,5 +154,5 @@ class OllamaProvider(LLMProvider):
                 text="",
                 provider="ollama",
                 model=self._model,
-                error=str(e)[:200],
+                error=redact_secrets(str(e))[:200],
             )

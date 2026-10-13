@@ -113,7 +113,7 @@ def is_substantive(files: list[dict], title: str = "") -> tuple[bool, str]:
 
         from app.core.sanitizer import wrap_user_content
 
-        provider = OllamaProvider()
+        provider = OllamaProvider(min_timeout=0)
         response = provider.call_raw(
             system=(
                 "You are a triage filter. Answer with one word: SUBSTANTIVE or "

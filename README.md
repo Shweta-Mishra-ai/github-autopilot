@@ -289,7 +289,7 @@ Reported cost in local mode is always `0`.
 | | |
 |---|---|
 | Modules | 98 |
-| Lines of code | 26,218 |
+| Lines of code | 26,168 |
 | Slash commands | 27 |
 | MCP tools | 9 |
 | Internal imports | 349 |
@@ -613,7 +613,10 @@ gets no edits at all — you opt in one region at a time.
 
 Refreshes arrive as a pull request, never as a direct commit to the default
 branch. Set `README_SELF_UPDATE_REPO=owner/repo` to enable it for the
-deployment's own repository.
+deployment's own repository. The regions are rendered from the running code, so
+a refresh is only proposed when that code is the commit that was pushed:
+the deployed revision is read from `AUTOPILOT_DEPLOYED_SHA`, `RENDER_GIT_COMMIT`
+or `RAILWAY_GIT_COMMIT_SHA`, and with none of them set nothing is proposed.
 
 ---
 

@@ -167,6 +167,10 @@ class TestDelivery:
     @pytest.fixture
     def enabled(self, monkeypatch):
         monkeypatch.setenv("README_SELF_UPDATE_REPO", "o/r")
+        monkeypatch.setenv("AUTOPILOT_DEPLOYED_SHA", "abc1234def")
+
+    # The pushed head is the deployed commit unless a test says otherwise.
+    PUSHED = [{"id": "abc1234def"}]
 
     def _readme_response(self, text):
         return {"content": base64.b64encode(text.encode()).decode(), "sha": "blobsha"}
@@ -175,29 +179,29 @@ class TestDelivery:
         """The renderers read the local source tree, so running against an
         arbitrary repository would describe the bot, not that repository."""
         monkeypatch.delenv("README_SELF_UPDATE_REPO", raising=False)
-        assert R.maybe_update_readme("o/r", [], "tok", config, log_ctx) is False
+        assert R.maybe_update_readme("o/r", self.PUSHED, "tok", config, log_ctx) is False
         gh["get"].assert_not_called()
 
     def test_wrong_repo_is_skipped(self, gh, config, log_ctx, monkeypatch):
         monkeypatch.setenv("README_SELF_UPDATE_REPO", "someone/else")
-        assert R.maybe_update_readme("o/r", [], "tok", config, log_ctx) is False
+        assert R.maybe_update_readme("o/r", self.PUSHED, "tok", config, log_ctx) is False
         gh["get"].assert_not_called()
 
     def test_readme_without_markers_is_left_alone(self, gh, enabled, config, log_ctx):
         gh["get"].return_value = self._readme_response("# Plain readme\n")
-        assert R.maybe_update_readme("o/r", [], "tok", config, log_ctx) is False
+        assert R.maybe_update_readme("o/r", self.PUSHED, "tok", config, log_ctx) is False
         gh["put"].assert_not_called()
         gh["post"].assert_not_called()
 
     def test_current_readme_opens_no_pr(self, gh, enabled, config, log_ctx):
         rendered, _ = R.apply_regions(_doc())
         gh["get"].return_value = self._readme_response(rendered)
-        assert R.maybe_update_readme("o/r", [], "tok", config, log_ctx) is False
+        assert R.maybe_update_readme("o/r", self.PUSHED, "tok", config, log_ctx) is False
         gh["post"].assert_not_called()
 
     def test_unreadable_readme_is_not_an_error(self, gh, enabled, config, log_ctx):
         gh["get"].side_effect = GitHubError("Not found", 404)
-        assert R.maybe_update_readme("o/r", [], "tok", config, log_ctx) is False
+        assert R.maybe_update_readme("o/r", self.PUSHED, "tok", config, log_ctx) is False
 
     def test_opens_a_pr_when_regions_drift(self, gh, enabled, config, log_ctx):
         def _route(path, token, *a, **kw):
@@ -214,7 +218,7 @@ class TestDelivery:
         gh["get"].side_effect = _route
         gh["post"].return_value = {"number": 42}
         with patch.object(R, "_recently_proposed", return_value=False):
-            assert R.maybe_update_readme("o/r", [], "tok", config, log_ctx) is True
+            assert R.maybe_update_readme("o/r", self.PUSHED, "tok", config, log_ctx) is True
 
         # A branch ref and a PR, never a commit to the default branch.
         posted = [c.args[0] for c in gh["post"].call_args_list]
@@ -236,13 +240,13 @@ class TestDelivery:
         gh["get"].side_effect = _route
         gh["post"].return_value = {"number": 1}
         with patch.object(R, "_recently_proposed", return_value=False):
-            R.maybe_update_readme("o/r", [], "tok", config, log_ctx)
+            R.maybe_update_readme("o/r", self.PUSHED, "tok", config, log_ctx)
         assert gh["put"].call_args[0][2]["branch"] != "main"
 
     def test_open_pr_blocks_a_second_one(self, gh, enabled, config, log_ctx):
         gh["get"].return_value = self._readme_response(_doc(body_stats="\nSTALE\n"))
         with patch.object(R, "_pr_already_open", return_value=True):
-            assert R.maybe_update_readme("o/r", [], "tok", config, log_ctx) is False
+            assert R.maybe_update_readme("o/r", self.PUSHED, "tok", config, log_ctx) is False
         gh["post"].assert_not_called()
 
     def test_recent_proposal_blocks_a_second_one(self, gh, enabled, config, log_ctx):
@@ -251,12 +255,12 @@ class TestDelivery:
             patch.object(R, "_pr_already_open", return_value=False),
             patch.object(R, "_recently_proposed", return_value=True),
         ):
-            assert R.maybe_update_readme("o/r", [], "tok", config, log_ctx) is False
+            assert R.maybe_update_readme("o/r", self.PUSHED, "tok", config, log_ctx) is False
 
     def test_unexpected_error_never_propagates(self, gh, enabled, config, log_ctx):
         """Runs on the push path beside the secret and dependency scans."""
         gh["get"].side_effect = RuntimeError("boom")
-        assert R.maybe_update_readme("o/r", [], "tok", config, log_ctx) is False
+        assert R.maybe_update_readme("o/r", self.PUSHED, "tok", config, log_ctx) is False
 
 
 class TestGuards:
@@ -433,3 +437,32 @@ class TestRegistryIsSingleSourced:
         from app.core.commands import ALL_COMMANDS, RESTRICTED_COMMANDS
 
         assert set(ALL_COMMANDS) >= RESTRICTED_COMMANDS
+
+
+class TestReadmeRendersOnlyTheDeployedCommit:
+    """A push webhook arrives before the new code is deployed: rendering from
+    the running tree then proposed reverting the pushed README to the old
+    deployment's numbers."""
+
+    def test_a_push_ahead_of_the_deployment_is_skipped(self, monkeypatch):
+        from unittest.mock import MagicMock
+
+        monkeypatch.setenv("README_SELF_UPDATE_REPO", "o/r")
+        monkeypatch.setenv("RENDER_GIT_COMMIT", "olddeploy1234")
+        with patch.object(R, "gh_get") as get:
+            assert R.maybe_update_readme("o/r", [{"id": "newpush5678"}], "t", MagicMock(), MagicMock()) is False
+        get.assert_not_called()
+
+    def test_an_unknown_deployed_revision_is_skipped(self, monkeypatch):
+        from unittest.mock import MagicMock
+
+        monkeypatch.setenv("README_SELF_UPDATE_REPO", "o/r")
+        for var in R._DEPLOYED_SHA_VARS:
+            monkeypatch.delenv(var, raising=False)
+        with patch.object(R, "gh_get") as get:
+            assert R.maybe_update_readme("o/r", [{"id": "abc1234"}], "t", MagicMock(), MagicMock()) is False
+        get.assert_not_called()
+
+    def test_a_short_deployed_sha_matches_the_full_head(self, monkeypatch):
+        monkeypatch.setenv("AUTOPILOT_DEPLOYED_SHA", "abc1234")
+        assert R._renders_the_pushed_commit([{"id": "abc1234def567"}])

@@ -93,11 +93,29 @@ SKIP_AUTHORS = {
 }
 
 
+def _record_merge(payload: dict) -> None:
+    """Feed /report: a merged PR and how long it was open. Never raises."""
+    pr = payload.get("pull_request") or {}
+    if not pr.get("merged"):
+        return
+    try:
+        from app.core.analytics import hours_between, record_pr_merged
+
+        hours = hours_between(pr.get("created_at"), pr.get("merged_at"))
+        if hours is not None:
+            record_pr_merged(payload["repository"]["full_name"], pr.get("number", 0), hours)
+    except Exception as e:
+        import logging
+
+        logging.getLogger(__name__).debug(f"analytics.record_merge_failed: {e}")
+
+
 def handle(payload: dict):
     action = payload.get("action")
     if action == "closed":
         # Before the bot-author check: autofix PRs are the bot's own.
         record_autofix_outcome(payload)
+        _record_merge(payload)
         return
     if action not in ("opened", "reopened", "synchronize"):
         return

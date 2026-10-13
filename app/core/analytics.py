@@ -15,6 +15,16 @@ from app.core import redis_client
 log = logging.getLogger(__name__)
 
 
+def hours_between(start_iso: str, end_iso: str) -> float | None:
+    """Hours between two GitHub ISO timestamps, or None if either is missing."""
+    try:
+        start = datetime.fromisoformat(str(start_iso).replace("Z", "+00:00"))
+        end = datetime.fromisoformat(str(end_iso).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return max(0.0, (end - start).total_seconds() / 3600)
+
+
 def record_pr_merged(repo: str, pr_number: int, hours_open: float):
     _incr(f"analytics:{repo}:prs_merged:{_today()}")
     _lpush(f"analytics:{repo}:pr_merge_hours:{_week()}", hours_open)
@@ -87,14 +97,27 @@ def get_weekly_report(repo: str) -> dict:
 
 
 def format_report_comment(repo: str) -> str:
+    """
+    The weekly report, or "" when nothing has been recorded yet.
+
+    Nothing recorded these figures until 2026-10-08: record_pr_merged,
+    record_issue_closed and record_command_used (except for /report itself)
+    had no callers, so every repository was shown "0 merged" and "Grade F".
+    The code-quality grade is gone: it was an average of review SCORES, and
+    reviews no longer invent a score (counted findings replaced it).
+    """
     d = get_weekly_report(repo)
     prs = d["prs"]
     iss = d["issues"]
-    qual = d["code_quality"]
     bot = d["bot_usage"]
-
-    grade = qual["grade"]
-    g_emoji = {"A": "🟢", "B": "🟡", "C": "🟠", "D": "🔴", "F": "🔴"}.get(grade, "⚪")
+    if not (
+        prs["merged_today"]
+        or prs["avg_merge_hours"]
+        or iss["closed_today"]
+        or iss["avg_close_hours"]
+        or bot["top_commands"]
+    ):
+        return ""
 
     merge_disp = (
         f"{prs['avg_merge_hours']}h" if prs["avg_merge_hours"] < 24 else f"{prs['avg_merge_days']}d"
@@ -125,13 +148,6 @@ def format_report_comment(repo: str) -> str:
 | **Closed Today** | {iss["closed_today"]} |
 | **Avg Resolution** | {close_disp} |
 
-### 🔍 Code Quality
-| Metric | Value |
-|--------|-------|
-| **Avg Review Score** | {qual["avg_review_score"]}/10 |
-| **Grade** | {g_emoji} {grade} |
-| **Reviews This Week** | {qual["reviews_this_week"]} |
-
 ### 🤖 Bot Usage
 | Command | Uses |
 |---------|------|
@@ -150,7 +166,9 @@ def _today() -> str:
 def _week() -> str:
     now = datetime.now(timezone.utc)
     week = now - timedelta(days=now.weekday())
-    return week.strftime("%Y-W%V")
+    # %G (ISO year) with %V (ISO week): %Y-W%V labelled Monday 2024-12-30
+    # "2024-W01", a week that is a year earlier.
+    return week.strftime("%G-W%V")
 
 
 def _incr(key: str, ttl: int = 604800):

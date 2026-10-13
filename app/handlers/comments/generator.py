@@ -429,15 +429,21 @@ def cmd_ignore(repo: str, cmd_args: str, author: str) -> str:
         )
 
     try:
-        from app.intelligence.memory import remember
+        from app.intelligence.memory import remember_status
 
-        stored = remember(
+        status = remember_status(
             repo,
             text=f"Ignored rule / preference set by @{author}: {rule}",
             kind="preference",
             meta={"author": author, "source": "command_ignore"},
         )
-        if stored:
+        if status == "error":
+            return (
+                "## ⚠️ Preference Not Saved\n\n"
+                f'**"{rule}"** could not be stored — repository memory is unavailable '
+                "right now. Please try again later."
+            )
+        if status == "stored":
             return (
                 f"## 🙈 Rule Ignored & Remembered\n\n"
                 f'Recorded repository preference: **"{rule}"**.\n\n'

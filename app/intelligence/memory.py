@@ -187,13 +187,24 @@ def remember(repo: str, text: str, kind: str = "fact", meta: dict | None = None)
     Store one memory. Deduplicates on exact text. Returns True if stored.
     Never raises — memory is an enhancement, not a critical path.
     """
+    return remember_status(repo, text, kind, meta) == "stored"
+
+
+def remember_status(repo: str, text: str, kind: str = "fact", meta: dict | None = None) -> str:
+    """
+    "stored", "duplicate", or "error" (including nothing to store).
+
+    remember() answers False for both a duplicate and a failure, and /ignore
+    told a maintainer whose preference had NOT been saved (Redis down) that
+    it was "already stored in repository memory".
+    """
     from app.core.redaction import redact
 
     # Redact BEFORE anything else: nothing secret-shaped and no code body
     # should ever reach the store, regardless of who called us.
     text = redact((text or "").strip())[:MAX_TEXT_CHARS].strip()
     if not text or not repo:
-        return False
+        return "error"
     if kind not in VALID_KINDS:
         kind = "fact"
 
@@ -216,17 +227,25 @@ def remember(repo: str, text: str, kind: str = "fact", meta: dict | None = None)
         # able to drop the whole thing in one delete.
         digest = hashlib.sha256(text.encode()).hexdigest()[:16]
         if r.sadd(_hash_key(repo), digest) == 0:
-            return False  # identical text already stored
+            return "duplicate"  # identical text already stored
         r.expire(_hash_key(repo), _HASH_TTL)
 
         r.lpush(key, json.dumps(asdict(item), separators=(",", ":")))
+        # Items about to be trimmed take their dedup hashes with them. The
+        # hashes used to outlive them, so an evicted memory could never be
+        # stored again — and the hash set, whose TTL every write refreshed,
+        # grew without bound on an active repository.
+        for raw in r.lrange(key, MEMORY_MAX_ITEMS, -1) or []:
+            old = MemoryItem.from_json(raw)
+            if old:
+                r.srem(_hash_key(repo), hashlib.sha256(old.text.encode()).hexdigest()[:16])
         r.ltrim(key, 0, MEMORY_MAX_ITEMS - 1)  # keep newest N, bound memory
         _index_repo(r, repo)
         log.info(f"memory.remember repo={repo} kind={kind}")
-        return True
+        return "stored"
     except Exception as e:
         log.debug(f"memory.remember_failed repo={repo}: {e}")
-        return False
+        return "error"
 
 
 def remember_decision(repo: str, decision: str, why: str = "", meta: dict | None = None) -> bool:
@@ -288,7 +307,11 @@ def preferences(repo: str, limit: int = 8) -> list[str]:
     try:
         from app.core.redis_client import get_redis
 
-        raws = get_redis().lrange(_key(repo), 0, MEMORY_RECALL_SCAN - 1) or []
+        # The WHOLE list (at most MEMORY_MAX_ITEMS). Preferences share it with
+        # every other memory — issue triage writes one per issue — and reading
+        # only the newest MEMORY_RECALL_SCAN meant that on a busy repository a
+        # preference stopped applying a couple of hundred issues later.
+        raws = get_redis().lrange(_key(repo), 0, -1) or []
         out = []
         for raw in raws:
             item = MemoryItem.from_json(raw)

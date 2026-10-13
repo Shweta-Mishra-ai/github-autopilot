@@ -34,8 +34,26 @@ SKIP_AUTHORS = {
 }
 
 
+def _record_close(payload: dict) -> None:
+    """Feed /report: a closed issue and how long it was open. Never raises."""
+    issue = payload.get("issue") or {}
+    if "pull_request" in issue:
+        return
+    try:
+        from app.core.analytics import hours_between, record_issue_closed
+
+        hours = hours_between(issue.get("created_at"), issue.get("closed_at"))
+        if hours is not None:
+            record_issue_closed(payload["repository"]["full_name"], issue.get("number", 0), hours)
+    except Exception as e:
+        logger.debug(f"analytics.record_close_failed: {e}")
+
+
 def handle(payload: dict):
     action = payload.get("action")
+    if action == "closed":
+        _record_close(payload)
+        return
     if action != "opened":
         return
 

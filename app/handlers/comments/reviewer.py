@@ -338,13 +338,7 @@ def cmd_budget() -> str:
 
 def cmd_report(repo: str) -> str:
     """Show weekly analytics for this repo."""
-    try:
-        from app.core.analytics import record_command_used
-
-        record_command_used(repo, "report")
-    except Exception:
-        pass  # analytics tracking is non-critical
-
+    # Counted by the comment service like every other command.
     try:
         from app.core.analytics import format_report_comment
 

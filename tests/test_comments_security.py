@@ -175,3 +175,22 @@ class TestCmdSecfull:
     def test_failure_is_reported_not_raised(self):
         with patch("app.security.scanner.run_security_scan", side_effect=OSError("x")):
             assert "Security scan failed" in S.cmd_secfull("o/r", "tok")
+
+
+class TestDependencyClaimsAreMeasured:
+    """Found by the 2026-10-08 audit."""
+
+    def test_no_requirements_change_is_not_an_all_clear(self, gh):
+        gh.side_effect = _route([{"filename": "package.json", "patch": "+\"lodash\": \"4.0.0\""}])
+        out = S.cmd_security("o/r", 1, _pr_issue(), "tok")
+        assert "No vulnerable dependencies" not in out and "Dependencies not checked" in out
+
+    def test_a_removed_requirements_file_does_not_abort_the_scan(self, gh):
+        akia = "AKIA" + "Q3EGRJ7XPLMN4WZT"
+        files = [
+            {"filename": "requirements.txt", "status": "removed", "patch": "-requests==2.0"},
+            {"filename": "config.py", "status": "modified", "patch": f"+KEY = '{akia}'"},
+        ]
+        gh.side_effect = _route(files)
+        out = S.cmd_security("o/r", 1, _pr_issue(), "tok")
+        assert "Security scan failed" not in out and "AWS Access Key ID" in out

@@ -211,3 +211,133 @@ class TestAPRSectionThatFailsIsReported:
             pr_mod.handle(self._payload())
         analyze.assert_not_called()
         upsert.assert_not_called()
+
+
+class TestRuntests:
+    def _run(self, workflows, issue=None, pr=None):
+        from unittest.mock import patch
+
+        from app.handlers.comments import integrations as I
+
+        def get(path, token):
+            if path.endswith("/actions/workflows"):
+                return {"workflows": workflows}
+            if "/pulls/" in path:
+                return pr or {}
+            return {"default_branch": "main"}
+
+        with patch.object(I, "gh_get", side_effect=get), patch.object(I, "gh_post") as post:
+            out = I.cmd_runtests("o/r", 5, "tok", issue=issue)
+        return out, post
+
+    def test_a_release_workflow_is_never_the_tests(self):
+        wfs = [{"id": 1, "name": "Release: build & publish to PyPI", "path": ".github/workflows/release.yml"},
+               {"id": 2, "name": "CI", "path": ".github/workflows/ci.yml"}]
+        _, post = self._run(wfs)
+        assert post.call_args[0][0].endswith("/workflows/2/dispatches")
+
+    def test_a_substring_is_not_a_match(self):
+        wfs = [{"id": 1, "name": "Contest scoreboard", "path": ".github/workflows/contest.yml"}]
+        out, post = self._run(wfs)
+        post.assert_not_called()
+        assert "No Test Workflow Found" in out
+
+    def test_a_pr_runs_its_own_branch(self):
+        wfs = [{"id": 2, "name": "CI", "path": ".github/workflows/ci.yml"}]
+        pr = {"head": {"ref": "feature/x", "repo": {"full_name": "o/r"}}}
+        out, post = self._run(wfs, issue={"pull_request": {}}, pr=pr)
+        assert post.call_args[0][2] == {"ref": "feature/x"} and "feature/x" in out
+
+    def test_a_fork_pr_says_it_ran_the_default_branch(self):
+        wfs = [{"id": 2, "name": "CI", "path": ".github/workflows/ci.yml"}]
+        pr = {"head": {"ref": "patch-1", "repo": {"full_name": "someone/fork"}}}
+        out, post = self._run(wfs, issue={"pull_request": {}}, pr=pr)
+        assert post.call_args[0][2] == {"ref": "main"} and "fork" in out
+
+
+class TestReportRecordsWhatItShows:
+    def test_a_merged_pr_is_recorded_with_its_time_to_merge(self):
+        from unittest.mock import patch
+
+        from app.handlers import pull_request
+
+        payload = {"action": "closed", "repository": {"full_name": "o/r"}, "installation": {"id": 1},
+                   "pull_request": {"number": 3, "merged": True, "head": {"ref": "feat"},
+                                    "created_at": "2026-10-01T00:00:00Z", "merged_at": "2026-10-01T06:00:00Z"}}
+        with patch("app.core.analytics.record_pr_merged") as rec:
+            pull_request.handle(payload)
+        rec.assert_called_once_with("o/r", 3, 6.0)
+
+    def test_a_closed_issue_is_recorded(self):
+        from unittest.mock import patch
+
+        from app.handlers import issues
+
+        payload = {"action": "closed", "repository": {"full_name": "o/r"}, "installation": {"id": 1},
+                   "issue": {"number": 9, "created_at": "2026-10-01T00:00:00Z", "closed_at": "2026-10-02T00:00:00Z"}}
+        with patch("app.core.analytics.record_issue_closed") as rec:
+            issues.handle(payload)
+        rec.assert_called_once_with("o/r", 9, 24.0)
+
+    def test_an_empty_report_says_no_data_and_has_no_grade(self, monkeypatch):
+        from app.core import analytics
+
+        monkeypatch.setattr(analytics, "_get_int", lambda k: 0)
+        monkeypatch.setattr(analytics, "_get_list", lambda k: [])
+        monkeypatch.setattr(analytics, "_get_top_commands", lambda repo, top_n=5: {})
+        assert analytics.format_report_comment("o/r") == ""
+        monkeypatch.setattr(analytics, "_get_top_commands", lambda repo, top_n=5: {"fix": 2})
+        out = analytics.format_report_comment("o/r")
+        assert "Grade" not in out and "/fix" in out
+
+    def test_the_iso_week_label(self, monkeypatch):
+        from datetime import datetime, timezone
+
+        from app.core import analytics
+
+        class FakeDT(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return datetime(2024, 12, 30, 12, tzinfo=timezone.utc)
+
+        monkeypatch.setattr(analytics, "datetime", FakeDT)
+        assert analytics._week() == "2025-W01"
+
+
+class TestSummarize:
+    def test_a_deleted_account_does_not_fail_the_summary(self):
+        from unittest.mock import MagicMock, patch
+
+        from app.intelligence import summarizer
+
+        comments = [{"user": None, "body": "first"}, {"user": {"login": "ana"}, "body": "second"}]
+        with patch.object(summarizer.router, "ask_text", return_value=("summary", MagicMock())) as ask:
+            assert summarizer.summarize_issue_thread(comments, {"title": "t"}) == "summary"
+        assert "@?: first" in ask.call_args[0][1]
+
+    def test_the_end_of_a_long_thread_reaches_the_model(self):
+        from unittest.mock import MagicMock, patch
+
+        from app.intelligence import summarizer
+
+        comments = [{"user": {"login": f"u{i}"}, "body": "x" * 400} for i in range(49)]
+        comments.append({"user": {"login": "maintainer"}, "body": "RESOLVED in v2.1"})
+        with patch.object(summarizer.router, "ask_text", return_value=("s", MagicMock())) as ask:
+            summarizer.summarize_issue_thread(comments, {"title": "t"})
+        assert "RESOLVED in v2.1" in ask.call_args[0][1]
+        assert "<THREAD>" in ask.call_args[0][1]
+
+    def test_a_thread_too_long_for_everyone_keeps_the_opening_and_the_end(self):
+        """When 120 characters each still overflow the prompt, the opening
+        comment and the latest ones are kept and the gap is stated."""
+        from unittest.mock import MagicMock, patch
+
+        from app.intelligence import summarizer
+
+        comments = [{"user": {"login": f"u{i}"}, "body": f"c{i}-" + "x" * 400} for i in range(200)]
+        comments[-1]["body"] = "RESOLVED in v2.1"
+        with patch.object(summarizer.router, "ask_text", return_value=("s", MagicMock())) as ask:
+            summarizer.summarize_issue_thread(comments, {"title": "t"})
+        prompt = ask.call_args[0][1]
+        assert "c0-" in prompt and "RESOLVED in v2.1" in prompt
+        assert "omitted for length" in prompt

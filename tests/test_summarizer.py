@@ -118,14 +118,15 @@ class TestSummarizeIssueThread:
         ask_text.return_value = ("Summary text", object())
         assert summarize_issue_thread([], {"title": "Bug"}) == "Summary text"
 
-    def test_thread_is_capped_at_twenty_comments(self, ask_text):
+    def test_every_fetched_comment_is_represented(self, ask_text):
+        """This pinned the old cap of 20 comments — which dropped the end of
+        the thread, usually where the resolution is."""
         comments = [
             {"user": {"login": f"u{i}"}, "body": f"comment-{i}"} for i in range(30)
         ]
         summarize_issue_thread(comments, {"title": "Bug"})
         prompt = _prompt(ask_text)
-        assert "comment-19" in prompt
-        assert "comment-25" not in prompt
+        assert all(f"comment-{i}" in prompt for i in range(30))
 
     def test_missing_user_falls_back_to_placeholder(self, ask_text):
         summarize_issue_thread([{"body": "orphaned"}], {"title": "Bug"})

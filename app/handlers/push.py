@@ -374,6 +374,7 @@ def _open_secret_issue(repo: str, token: str, findings: list, log, config=None) 
             "labels": ["security", "critical"],
         },
     )
+    _record_created(repo, created)
 
     try:
         from app.core.redis_client import get_redis
@@ -439,7 +440,7 @@ def _scan_dependencies(repo, commits, token, config, log, ref: str = "") -> None
                 log.info(f"push.dep_scan_dedup file={dep_file} (HIGH reported in last 24h)")
                 continue
 
-            gh_post(
+            created = gh_post(
                 f"/repos/{repo}/issues",
                 token,
                 {
@@ -448,6 +449,7 @@ def _scan_dependencies(repo, commits, token, config, log, ref: str = "") -> None
                     "labels": ["security", "dependencies"],
                 },
             )
+            _record_created(repo, created)
             log.warning(f"Dep scan: {len(actionable)} HIGH findings in {dep_file}")
 
         except Exception as e:
@@ -495,7 +497,7 @@ type(scope): description
 > ⚡ Use `/apply` to auto-fix commit messages.
 """
     try:
-        gh_post(
+        created = gh_post(
             f"/repos/{repo}/issues",
             token,
             {
@@ -507,12 +509,28 @@ type(scope): description
                 "labels": ["commit-convention", "help wanted ⚠️"],
             },
         )
+        _record_created(repo, created)
         log.done(f"Commit lint issue created: {len(bad_commits)} bad commits")
     except GitHubError as e:
         log.error(f"Failed to create lint issue: {e}")
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
+
+def _record_created(repo: str, created) -> None:
+    """Record an issue this bot opened, so /rollback can close it."""
+    if isinstance(created, dict) and created.get("number"):
+        from app.core.snapshot import record_action
+
+        record_action(
+            repo,
+            {
+                "type": "create_issue",
+                "number": created["number"],
+                "title": created.get("title", ""),
+            },
+        )
 
 
 def _is_conventional(msg: str) -> bool:

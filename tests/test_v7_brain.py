@@ -137,6 +137,9 @@ class TestWriteSitesAreWired:
             ),
             patch.object(publisher, "gh_put", return_value={"merged": True, "sha": "abc123"}),
             patch.object(publisher, "gh_delete"),
+            # The single gh_get mock answers every URL with the PR; reviews
+            # are a list, read by their own paginated helper.
+            patch.object(publisher, "_all_reviews", return_value=[]),
             patch("app.core.guardrails.check_pr_auto_merge", return_value=MagicMock(passed=True)),
             patch("app.intelligence.memory.remember", side_effect=Exception("redis gone")),
         ):

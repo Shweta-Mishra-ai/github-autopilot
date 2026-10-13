@@ -129,6 +129,7 @@ def cmd_notify(
     issue: dict,
     token: str,
     cmd_args: str,
+    config=None,
 ) -> str:
     """Send Discord/Slack notification about this issue or PR."""
     discord_url = os.environ.get("DISCORD_WEBHOOK_URL", "")
@@ -138,6 +139,26 @@ def cmd_notify(
         return (
             "## ⚠️ Notifications Not Configured\n\n"
             "Add `DISCORD_WEBHOOK_URL` or `SLACK_WEBHOOK_URL` to your Render env vars."
+        )
+
+    # The webhooks are deployment-wide, so a repository's own
+    # notifications.discord / .slack: false is the only way it can opt out —
+    # and /notify ignored it, posting a repository that had turned a channel
+    # off into that channel anyway. The automatic notifications honour it.
+    def _repo_allows(channel: str) -> bool:
+        return config is None or bool(config.get("notifications", channel, default=True))
+
+    disabled = [
+        name
+        for name, url, key in (("Discord", discord_url, "discord"), ("Slack", slack_url, "slack"))
+        if url and not _repo_allows(key)
+    ]
+    discord_url = discord_url if _repo_allows("discord") else ""
+    slack_url = slack_url if _repo_allows("slack") else ""
+    if not discord_url and not slack_url:
+        return (
+            "## ℹ️ Notifications Disabled\n\n"
+            f"This repository's `.ai-repo-manager.yml` turns off: {', '.join(disabled)}."
         )
 
     try:

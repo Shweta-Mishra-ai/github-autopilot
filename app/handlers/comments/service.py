@@ -273,7 +273,7 @@ def _dispatch(
             case "/runtests":
                 return P.cmd_runtests(repo, issue_number, token, issue=issue)
             case "/notify":
-                return P.cmd_notify(repo, issue_number, issue, token, cmd_args)
+                return P.cmd_notify(repo, issue_number, issue, token, cmd_args, config)
             case "/security":
                 return SEC.cmd_security(repo, issue_number, issue, token)
             case "/secfull":

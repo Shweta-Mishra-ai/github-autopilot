@@ -139,6 +139,53 @@ def record_bot_action(repo: str, snap_id: str, action: dict):
         log.error(f"snapshot.record_action_failed: {e}")
 
 
+# Bot actions are grouped into one snapshot per repository per hour.
+ACTIVITY_WINDOW = 3600
+
+
+def record_action(repo: str, action: dict) -> None:
+    """
+    Record something the bot did, so /rollback can undo it.
+
+    record_bot_action() existed and nothing called it, and the only snapshot
+    ever taken was /rollback's own safety snapshot — so every rollback
+    reported "Rollback Complete" having undone nothing. Actions are now
+    recorded where the bot writes (issues it opens, labels it adds, PR titles
+    and descriptions it rewrites) into an hourly snapshot created on first
+    use. No GitHub reads: recording must cost nothing on the webhook path.
+    Never raises.
+    """
+    try:
+        r = get_redis()
+        bucket = int(time.time()) // ACTIVITY_WINDOW
+        pointer = f"snapshot_activity:{repo}:{bucket}"
+        new_id = _make_id()
+        if r.set(pointer, new_id, nx=True, ex=ACTIVITY_WINDOW * 2):
+            snap_id = new_id
+            snapshot = {
+                "id": snap_id,
+                "repo": repo,
+                "trigger": "bot_activity",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp_ts": int(time.time()),
+                "state": {},
+            }
+            r.set(f"snapshot:{repo}:{snap_id}", json.dumps(snapshot), ex=SNAPSHOT_TTL)
+            index_key = f"snapshot_index:{repo}"
+            r.lpush(index_key, snap_id)
+            r.ltrim(index_key, 0, MAX_SNAPSHOTS - 1)
+            r.expire(index_key, SNAPSHOT_TTL)
+        else:
+            snap_id = r.get(pointer)
+            snap_id = snap_id.decode() if isinstance(snap_id, bytes) else snap_id
+        if snap_id:
+            record_bot_action(
+                repo, snap_id, {**action, "at": datetime.now(timezone.utc).isoformat()}
+            )
+    except Exception as e:
+        log.error(f"snapshot.record_failed repo={repo}: {e}")
+
+
 def _get_bot_actions(r, repo: str, snap_id: str) -> list:
     """Load bot actions from the atomic list key. Returns newest-first."""
     try:
@@ -181,8 +228,9 @@ def list_snapshots(repo: str) -> list[dict]:
                     "number": len(summaries) + 1,
                     "trigger": snap.get("trigger", "unknown"),
                     "timestamp": snap.get("timestamp", ""),
-                    "issues_count": state.get("open_issues_count", 0),
-                    "prs_count": state.get("open_prs_count", 0),
+                    # None for an activity snapshot, which reads no state.
+                    "issues_count": state.get("open_issues_count"),
+                    "prs_count": state.get("open_prs_count"),
                     "commit": latest_commit[:7] if latest_commit else "—",
                     "bot_actions": len(actions),
                 }
@@ -227,16 +275,22 @@ def format_snapshot_list(repo: str) -> str:
     if not snapshots:
         return (
             "## 📸 No Snapshots Available\n\n"
-            "Snapshots are taken automatically before major bot actions.\n"
-            "No recent snapshots found for this repo."
+            "The bot records the issues it opens, the labels it adds and the PR "
+            "titles and descriptions it rewrites, grouped per hour, so they can "
+            "be undone here.\n\nNothing has been recorded for this repository "
+            "in the last 7 days."
         )
 
     rows = []
     for s in snapshots:
         ts = s["timestamp"][:16].replace("T", " ") if s["timestamp"] else "—"
+        state = (
+            "—"
+            if s["issues_count"] is None
+            else f"{s['issues_count']} issues, {s['prs_count']} PRs"
+        )
         rows.append(
-            f"| **#{s['number']}** | `{s['trigger']}` | {ts} UTC | "
-            f"{s['issues_count']} issues, {s['prs_count']} PRs | "
+            f"| **#{s['number']}** | `{s['trigger']}` | {ts} UTC | {state} | "
             f"`{s['commit']}` | {s['bot_actions']} actions |"
         )
 
@@ -274,7 +328,7 @@ def format_rollback_result(repo: str, snap: dict, restored: list[str], failed: l
 
     result = f"""## ↩️ Rollback Complete
 
-**Restored to snapshot from:** `{snap_ts} UTC`
+**Undid the bot actions recorded in the snapshot from:** `{snap_ts} UTC`
 **Trigger:** `{snap.get("trigger", "unknown")}`
 
 ### Actions Taken

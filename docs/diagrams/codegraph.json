@@ -401,7 +401,7 @@
       "id": "app.core.guardrails",
       "path": "app/core/guardrails.py",
       "layer": "core",
-      "loc": 357,
+      "loc": 368,
       "functions": 16,
       "classes": 2,
       "is_package": false,
@@ -651,7 +651,7 @@
       "functions": 5,
       "classes": 1,
       "is_package": false,
-      "fan_in": 15,
+      "fan_in": 16,
       "fan_out": 0,
       "external_deps": [
         "contextlib",
@@ -664,11 +664,11 @@
       "id": "app.core.snapshot",
       "path": "app/core/snapshot.py",
       "layer": "core",
-      "loc": 289,
-      "functions": 9,
+      "loc": 343,
+      "functions": 10,
       "classes": 0,
       "is_package": false,
-      "fan_in": 1,
+      "fan_in": 4,
       "fan_out": 3,
       "external_deps": [
         "datetime",
@@ -977,7 +977,7 @@
       "id": "app.handlers.comments.generator",
       "path": "app/handlers/comments/generator.py",
       "layer": "handlers",
-      "loc": 458,
+      "loc": 459,
       "functions": 11,
       "classes": 0,
       "is_package": false,
@@ -992,7 +992,7 @@
       "id": "app.handlers.comments.integrations",
       "path": "app/handlers/comments/integrations.py",
       "layer": "handlers",
-      "loc": 220,
+      "loc": 241,
       "functions": 4,
       "classes": 0,
       "is_package": false,
@@ -1009,12 +1009,12 @@
       "id": "app.handlers.comments.publisher",
       "path": "app/handlers/comments/publisher.py",
       "layer": "handlers",
-      "loc": 495,
-      "functions": 5,
+      "loc": 536,
+      "functions": 6,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 12,
+      "fan_out": 13,
       "external_deps": [
         "__future__",
         "contextlib",
@@ -1029,7 +1029,7 @@
       "id": "app.handlers.comments.reviewer",
       "path": "app/handlers/comments/reviewer.py",
       "layer": "handlers",
-      "loc": 477,
+      "loc": 479,
       "functions": 11,
       "classes": 0,
       "is_package": false,
@@ -1092,12 +1092,12 @@
       "id": "app.handlers.issues",
       "path": "app/handlers/issues.py",
       "layer": "handlers",
-      "loc": 364,
+      "loc": 375,
       "functions": 5,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 14,
+      "fan_out": 15,
       "external_deps": [
         "contextlib",
         "logging",
@@ -1123,12 +1123,12 @@
       "id": "app.handlers.pull_request.analysis",
       "path": "app/handlers/pull_request/analysis.py",
       "layer": "handlers",
-      "loc": 268,
+      "loc": 277,
       "functions": 3,
       "classes": 0,
       "is_package": false,
       "fan_in": 3,
-      "fan_out": 10,
+      "fan_out": 11,
       "external_deps": [
         "__future__"
       ]
@@ -1244,12 +1244,12 @@
       "id": "app.handlers.push",
       "path": "app/handlers/push.py",
       "layer": "handlers",
-      "loc": 522,
-      "functions": 12,
+      "loc": 540,
+      "functions": 13,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 13,
+      "fan_out": 14,
       "external_deps": [
         "base64",
         "hashlib",
@@ -2319,6 +2319,11 @@
     },
     {
       "source": "app.handlers.comments.publisher",
+      "target": "app.core.sanitizer",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.publisher",
       "target": "app.core.snapshot",
       "kind": "runtime"
     },
@@ -2609,6 +2614,11 @@
     },
     {
       "source": "app.handlers.issues",
+      "target": "app.core.snapshot",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.issues",
       "target": "app.github.auth",
       "kind": "import"
     },
@@ -2784,6 +2794,11 @@
     },
     {
       "source": "app.handlers.pull_request.analysis",
+      "target": "app.core.snapshot",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request.analysis",
       "target": "app.github.client",
       "kind": "import"
     },
@@ -2940,6 +2955,11 @@
     {
       "source": "app.handlers.push",
       "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.push",
+      "target": "app.core.snapshot",
       "kind": "runtime"
     },
     {
@@ -3335,8 +3355,8 @@
   ],
   "stats": {
     "modules": 98,
-    "edges": 349,
-    "total_loc": 26168,
+    "edges": 353,
+    "total_loc": 26336,
     "layers": [
       "ai",
       "core",
@@ -3374,20 +3394,20 @@
         "fan_out": 0
       },
       {
+        "id": "app.core.sanitizer",
+        "loc": 284,
+        "fan_in": 16,
+        "fan_out": 0
+      },
+      {
         "id": "app.github.notifications",
         "loc": 534,
         "fan_in": 8,
         "fan_out": 4
       },
       {
-        "id": "app.core.sanitizer",
-        "loc": 284,
-        "fan_in": 15,
-        "fan_out": 0
-      },
-      {
         "id": "app.core.guardrails",
-        "loc": 357,
+        "loc": 368,
         "fan_in": 11,
         "fan_out": 1
       },

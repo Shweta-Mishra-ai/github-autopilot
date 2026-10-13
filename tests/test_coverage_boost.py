@@ -167,7 +167,8 @@ def test_publisher_commands(mock_router, mock_gh_delete, mock_gh_put, mock_gh_po
         if "reviews" in url:
             return []
         if "check-runs" in url:
-            return {"check_runs": []}
+            # One passing run: zero checks is refused ("nothing reported yet").
+            return {"check_runs": [{"name": "ci", "conclusion": "success"}], "total_count": 1}
         if "tags" in url:
             return [{"name": "v1.0.0"}]
         if "releases" in url:

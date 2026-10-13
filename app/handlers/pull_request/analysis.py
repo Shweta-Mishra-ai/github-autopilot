@@ -182,6 +182,15 @@ Return JSON:
                 # run. The comment above already said "PATCH".
                 gh_patch(f"/repos/{repo}/pulls/{pr_number}", token, payload)
                 log.done("pr_metadata_updated", fields=",".join(sorted(payload)))
+                # What it was, so /rollback can put it back.
+                undo: dict = {"type": "edit_pr_title", "number": pr_number}
+                if "title" in payload:
+                    undo["old_title"] = pr.get("title") or ""
+                if "body" in payload:
+                    undo["old_body"] = pr.get("body") or ""
+                from app.core.snapshot import record_action
+
+                record_action(repo, undo)
             except Exception as e:
                 log.error(f"PR metadata update failed: {e}")
 

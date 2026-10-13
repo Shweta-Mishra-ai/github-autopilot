@@ -10,8 +10,9 @@ IMPROVED:
 - Similar issues detection to prevent duplicates
 """
 
-import logging
 import contextlib
+import logging
+import re
 
 from app.github.auth import get_installation_token
 from app.github.client import gh_get, gh_post, GitHubError
@@ -134,6 +135,7 @@ def handle(payload: dict):
         with contextlib.suppress(Exception):
             _ensure_labels(repo, token)
 
+    allowed_labels = ", ".join(_TYPE_LABELS.values())
     raw, _meta = router.ask(
         "You are an expert open source maintainer and technical lead. "
         "Triage GitHub issues with precision. Return valid JSON only.",
@@ -163,7 +165,7 @@ Return JSON:
   "priority": "critical|high|medium|low",
   "complexity": "trivial|simple|moderate|complex|epic",
   "time_estimate": "< 1 hour|1-4 hours|1-3 days|1-2 weeks|> 2 weeks",
-  "labels": ["bug 🐛"],
+  "labels": ["zero or more of: {allowed_labels}"],
   "welcome": "2-3 sentence personalized response that acknowledges their specific issue",
   "needs_info": true,
   "questions": ["specific question about reproduction steps", "version/environment info"]
@@ -224,7 +226,7 @@ Return JSON:
     }.get(result["complexity"], "🟡")
 
     # Labels
-    all_labels = result["labels"] + [p_label]
+    all_labels = triage_labels(result["labels"], p_label)
 
     label_guard = check_auto_label(issue, all_labels, config)
     if label_guard.passed:
@@ -281,22 +283,74 @@ Return JSON:
         notify_new_issue(repo=repo, issue_number=issue_number, title=title, labels=all_labels)
 
 
+# The labels this bot manages. Triage applies only these: the model's
+# `labels` list used to be applied verbatim, and adding a label that does not
+# exist makes GitHub CREATE it, so a model answer of "urgent-fix-asap" (or an
+# issue author steering it) added arbitrary labels to the repository.
+BOT_LABELS = [
+    ("priority: critical 🚨", "d93f0b"),
+    ("priority: high 🔥", "e11d48"),
+    ("priority: medium 📌", "f97316"),
+    ("priority: low 💤", "6b7280"),
+    ("bug 🐛", "d73a4a"),
+    ("enhancement ✨", "a2eeef"),
+    ("question ❓", "d876e3"),
+    ("documentation 📚", "0075ca"),
+    ("performance ⚡", "e4e669"),
+    ("security 🔒", "e11d48"),
+    ("good first issue 👋", "7057ff"),
+    ("help wanted 🙏", "008672"),
+]
+
+
+def _label_key(name: str) -> str:
+    """ "bug 🐛", "Bug" and "bug" are the same label to a model."""
+    return re.sub(r"[^a-z: ]", "", str(name).lower()).strip()
+
+
+_TYPE_LABELS = {_label_key(n): n for n, _ in BOT_LABELS if not n.startswith("priority:")}
+
+
+def triage_labels(model_labels: list, priority_label: str) -> list[str]:
+    """The model's labels limited to the bot's own non-priority labels, plus
+    the one priority label the validated priority decided."""
+    out = [_TYPE_LABELS[_label_key(lab)] for lab in model_labels if _label_key(lab) in _TYPE_LABELS]
+    return list(dict.fromkeys([*out, priority_label]))
+
+
+_LABELS_ENSURED_TTL = 24 * 3600
+
+
 def _ensure_labels(repo: str, token: str):
-    LABELS = [
-        ("priority: critical 🚨", "d93f0b"),
-        ("priority: high 🔥", "e11d48"),
-        ("priority: medium 📌", "f97316"),
-        ("priority: low 💤", "6b7280"),
-        ("bug 🐛", "d73a4a"),
-        ("enhancement ✨", "a2eeef"),
-        ("question ❓", "d876e3"),
-        ("documentation 📚", "0075ca"),
-        ("performance ⚡", "e4e669"),
-        ("security 🔒", "e11d48"),
-        ("good first issue 👋", "7057ff"),
-        ("help wanted 🙏", "008672"),
-    ]
-    for name, color in LABELS:
+    """
+    Create the bot's labels that the repository does not have yet.
+
+    This POSTed all twelve on every new issue and relied on the 422 for the
+    ones that existed — twelve writes per issue against the secondary rate
+    limit. It now reads the label list, creates only what is missing, and
+    remembers for a day that the repository is set up.
+    """
+    from app.core.redis_client import get_redis
+
+    key = f"labels_ensured:{repo}"
+    r = None
+    try:
+        r = get_redis()
+        if r.get(key):
+            return
+    except Exception:
+        r = None
+
+    from app.github.client import gh_get_all
+
+    existing = {
+        (lab.get("name") or "").lower()
+        for lab in gh_get_all(f"/repos/{repo}/labels", token)
+        if isinstance(lab, dict)
+    }
+    for name, color in BOT_LABELS:
+        if name.lower() in existing:
+            continue
         try:
             gh_post(f"/repos/{repo}/labels", token, {"name": name, "color": color})
         except GitHubError as e:
@@ -305,3 +359,6 @@ def _ensure_labels(repo: str, token: str):
                 logger.debug(f"Label creation skipped for {name}: {e}")
         except Exception as e:
             logger.warning(f"Unexpected error creating label {name}: {e}")
+    if r is not None:
+        with contextlib.suppress(Exception):
+            r.set(key, "1", ex=_LABELS_ENSURED_TTL)

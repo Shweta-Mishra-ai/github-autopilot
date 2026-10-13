@@ -91,6 +91,17 @@ def check_pr_auto_merge(
             names = ", ".join(c.get("name", "unnamed check") for c in running[:3])
             return GuardrailResult(False, f"Checks still running: {names}")
 
+        # No check run and no status at all is not "passing": it is also what
+        # a commit looks like in the seconds before CI starts, so /merge right
+        # after a push merged before any check had run. A repository with no
+        # CI says so by setting require_passing_checks: false.
+        if not checks and not statuses:
+            return GuardrailResult(
+                False,
+                "No checks or statuses have reported on this commit yet. If this "
+                "repository has no CI, set auto_merge.require_passing_checks: false.",
+            )
+
         # Commit statuses — the older API many CI systems still report
         # through — were never consulted at all.
         bad = [st for st in statuses or [] if st.get("state") in ("failure", "error", "pending")]

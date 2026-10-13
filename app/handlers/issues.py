@@ -236,6 +236,17 @@ Return JSON:
                 token,
                 {"labels": all_labels},
             )
+            # Only labels the author did not set themselves: /rollback removes
+            # what is recorded here.
+            had = {
+                (lab.get("name") if isinstance(lab, dict) else str(lab))
+                for lab in issue.get("labels") or []
+            }
+            added = [lab for lab in all_labels if lab not in had]
+            if added:
+                from app.core.snapshot import record_action
+
+                record_action(repo, {"type": "add_labels", "number": issue_number, "labels": added})
 
     # Build questions section
     q_section = ""

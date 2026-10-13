@@ -205,3 +205,63 @@ class TestRunPrSecurityScan:
         with patch("app.github.client.gh_get", side_effect=fake_gh_get):
             report = run_pr_security_scan("o/r", 1, "tok")
         assert len(report.codeql) == 1
+
+
+class TestAuditRound2Scanner:
+    """One page of 30 alerts, CodeQL's generic level, and the message read
+    from a key the alert does not have."""
+
+    def test_every_page_of_code_scanning_alerts_is_read(self):
+        from unittest.mock import patch
+
+        from app.security.scanner import _scan_codeql
+
+        def fake(path, token):
+            page = int(path.rsplit("page=", 1)[1])
+            n = 100 if page == 1 else 7
+            return [
+                {"rule": {"severity": "warning"}, "most_recent_instance": {"location": {}}}
+                for _ in range(n)
+            ]
+
+        with patch("app.github.client.gh_get", side_effect=fake):
+            out = _scan_codeql("o/r", "t", [], [])
+        assert len(out) == 107
+
+    def test_a_full_last_page_is_reported_as_truncated(self):
+        from unittest.mock import patch
+
+        from app.security.scanner import _scan_dependabot
+
+        alert = {"security_advisory": {"severity": "high", "identifiers": []}}
+        truncated: list = []
+        with patch("app.github.client.gh_get", return_value=[alert] * 100):
+            out = _scan_dependabot("o/r", "t", [], truncated)
+        assert len(out) == 100
+        assert truncated and "Dependabot" in truncated[0]
+
+    def test_security_severity_level_decides_codeql_severity(self):
+        from unittest.mock import patch
+
+        from app.security.scanner import _scan_codeql
+
+        alert = {
+            "rule": {"severity": "error", "security_severity_level": "critical"},
+            "most_recent_instance": {"location": {"path": "a.py"}, "message": {"text": "SQL built from input"}},
+        }
+        with patch("app.github.client.gh_get", return_value=[alert]):
+            out = _scan_codeql("o/r", "t", [], [])
+        assert out[0].severity == "critical"
+        assert out[0].description == "SQL built from input"
+
+    def test_a_forbidden_first_page_is_still_an_unavailable_source(self):
+        from unittest.mock import patch
+
+        from app.github.client import GitHubError
+        from app.security.scanner import run_security_scan
+
+        err = GitHubError("Forbidden: x")
+        err.status_code = 403
+        with patch("app.github.client.gh_get", side_effect=err):
+            report = run_security_scan("o/r", "t")
+        assert report.scanned_nothing

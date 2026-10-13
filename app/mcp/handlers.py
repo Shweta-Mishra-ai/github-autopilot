@@ -199,7 +199,16 @@ def _handle_scan_secrets(args: dict) -> str:
         return "Error: content is required."
 
     try:
-        from app.security.enhanced_secrets import scan_diff, format_findings
+        from app.security.enhanced_secrets import format_findings, is_example_path, scan_diff
+
+        # scan_diff deliberately skips example/template files; saying "no
+        # secrets detected" for content that was never scanned is a false
+        # all-clear.
+        if is_example_path(filename):
+            return (
+                f"ℹ️ Not scanned — `{filename}` is treated as an example/template file, "
+                "which the secret scanner skips. Pass the real filename to scan it."
+            )
 
         # scan_diff reads lines starting with "+" (git diff format).
         # Prefix each line so raw content is fully scanned.
@@ -392,7 +401,6 @@ def _handle_run_command(args: dict) -> str:
     try:
         from app.github.auth import get_installation_token
         from app.github.client import gh_get
-        from app.handlers.comments import _extract_command
         import app.handlers.comments as ch
 
         token = get_installation_token(install_id)
@@ -401,9 +409,10 @@ def _handle_run_command(args: dict) -> str:
         body = (issue.get("body") or "")[:2000]
         full_context = f"{body}\n\n{context}".strip() if context else body
 
-        parsed_cmd = _extract_command(f"{cmd} {context}".strip())
-        if not parsed_cmd:
-            return f"Error: could not parse command '{command}'"
+        # The command is the validated `cmd`. It was re-parsed from
+        # f"{cmd} {context}", so the free-text context took part in choosing
+        # which command ran — the opposite of what the allow-list checked.
+        parsed_cmd = cmd
 
         # Signatures verified against comments.py
         handler_map = {

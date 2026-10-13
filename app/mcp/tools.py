@@ -5,6 +5,14 @@ and handler logic. Imported as MCP_TOOLS by the server and re-exported there
 for backward compatibility.
 """
 
+from app.security.enhanced_secrets import PATTERNS as _SECRET_PATTERNS
+
+# Every tool that reads GitHub needs an installation token, and the handlers
+# refuse a call without one. The schemas for analyze_pr, fix_issue and
+# get_repo_health did not declare it, so an MCP client following the schema
+# could never make a call that succeeded.
+_INSTALLATION_ID = {"type": "integer", "description": "GitHub App installation ID"}
+
 MCP_TOOLS = [
     {
         "name": "analyze_pr",
@@ -23,8 +31,9 @@ MCP_TOOLS = [
                     "enum": ["security", "performance", "quality", "all"],
                     "default": "all",
                 },
+                "installation_id": _INSTALLATION_ID,
             },
-            "required": ["repo", "pr_number"],
+            "required": ["repo", "pr_number", "installation_id"],
         },
     },
     {
@@ -39,15 +48,18 @@ MCP_TOOLS = [
                 "repo": {"type": "string"},
                 "issue_number": {"type": "integer"},
                 "context": {"type": "string", "description": "Extra code context or stack trace"},
+                "installation_id": _INSTALLATION_ID,
             },
-            "required": ["repo", "issue_number"],
+            "required": ["repo", "issue_number", "installation_id"],
         },
     },
     {
         "name": "scan_secrets",
         "description": (
             "Scan a code snippet for exposed secrets and credentials. "
-            "Uses 41 patterns with entropy gating."
+            # Counted, not written down: the hand-typed "41" was already wrong.
+            f"Uses {len(_SECRET_PATTERNS)} patterns with entropy gating. Files "
+            "named as examples or templates (e.g. .env.example) are not scanned."
         ),
         "inputSchema": {
             "type": "object",
@@ -115,8 +127,9 @@ MCP_TOOLS = [
             "type": "object",
             "properties": {
                 "repo": {"type": "string", "description": "owner/repo format"},
+                "installation_id": _INSTALLATION_ID,
             },
-            "required": ["repo"],
+            "required": ["repo", "installation_id"],
         },
     },
     {
@@ -170,7 +183,7 @@ MCP_TOOLS = [
                 "issue_number": {"type": "integer"},
                 "command": {"type": "string", "description": "e.g. /fix, /explain, /security"},
                 "context": {"type": "string"},
-                "installation_id": {"type": "integer", "description": "GitHub App installation ID"},
+                "installation_id": _INSTALLATION_ID,
             },
             "required": ["repo", "issue_number", "command", "installation_id"],
         },

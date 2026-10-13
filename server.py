@@ -524,6 +524,9 @@ def mcp_endpoint():
         body = request.get_json(force=True) or {}
     except Exception:
         return jsonify({"error": {"code": -32700, "message": "Parse error"}}), 400
+    if not isinstance(body, dict):
+        # A JSON array or string parsed fine and then `.get` raised: a 500.
+        return jsonify({"error": {"code": -32600, "message": "Invalid request"}}), 400
 
     resp, status = handle_mcp_request(body.get("method", ""), body.get("params", {}), token)
     return jsonify(resp), status
@@ -757,12 +760,16 @@ def _is_transient(e: Exception) -> bool:
     from app.github.client import GitHubError
     from app.github.rate_limit import GitHubRateLimitExhausted
 
-    if isinstance(e, (GitHubRateLimitExhausted, AllProvidersDown, requests.ConnectionError, requests.Timeout)):
+    if isinstance(
+        e, (GitHubRateLimitExhausted, AllProvidersDown, requests.ConnectionError, requests.Timeout)
+    ):
         return True
     if isinstance(e, GitHubError):
         # Secondary rate limits are 403s with their own type.
-        return e.status_code in (429, 502, 503, 504) or e.status_code >= 500 or (
-            type(e).__name__ == "GitHubSecondaryRateLimitError"
+        return (
+            e.status_code in (429, 502, 503, 504)
+            or e.status_code >= 500
+            or (type(e).__name__ == "GitHubSecondaryRateLimitError")
         )
     return False
 

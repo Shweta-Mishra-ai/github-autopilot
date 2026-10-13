@@ -142,13 +142,16 @@ def _license_section(repo: str, token: str) -> str:
     try:
         import base64
 
-        from app.security.licenses import format_findings, scan_requirements
+        from app.security.licenses import format_findings, scan_requirements_report
 
         raw = gh_get(f"/repos/{repo}/contents/requirements.txt", token)
         if not isinstance(raw, dict) or not raw.get("content"):
             return ""
         content = base64.b64decode(raw["content"]).decode("utf-8", errors="replace")
-        return format_findings(scan_requirements(content))
+        report = scan_requirements_report(content)
+        if not report["total"]:
+            return ""
+        return format_findings(report["findings"], report["total"], report["checked"])
     except Exception as exc:
         log.info(f"security.license_scan_skipped repo={repo}: {exc}")
         return ""

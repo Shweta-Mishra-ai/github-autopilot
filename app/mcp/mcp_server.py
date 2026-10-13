@@ -92,13 +92,16 @@ def _resolve_client(auth_token: str) -> str | None:
     Compares against EVERY candidate (no early exit) so response timing does
     not reveal which key position matched.
     """
-    token = auth_token or ""
+    # Bytes, not str: compare_digest raises TypeError for a str holding any
+    # non-ASCII character, so a header like "Bearer café" was a 500 instead
+    # of a 401.
+    token = (auth_token or "").encode("utf-8", "surrogatepass")
     matched: str | None = None
     legacy = _mcp_api_key()
-    if legacy and hmac.compare_digest(token, legacy):
+    if legacy and hmac.compare_digest(token, legacy.encode("utf-8")):
         matched = "default"
     for name, key in _mcp_named_keys().items():
-        if hmac.compare_digest(token, key) and matched is None:
+        if hmac.compare_digest(token, key.encode("utf-8")) and matched is None:
             matched = name
     return matched
 
@@ -124,8 +127,11 @@ def handle_mcp_request(method: str, params: dict, auth_token: str) -> tuple[dict
         return {"tools": MCP_TOOLS}, 200
 
     if method == "tools/call":
+        params = params if isinstance(params, dict) else {}
         tool_name = params.get("name", "")
-        tool_args = params.get("arguments", {})
+        tool_args = params.get("arguments") or {}
+        if not isinstance(tool_args, dict):
+            return {"error": {"code": -32602, "message": "arguments must be an object"}}, 400
 
         handler = TOOL_HANDLERS.get(tool_name)
         if not handler:

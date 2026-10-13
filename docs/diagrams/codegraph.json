@@ -65,12 +65,12 @@
       "id": "app.ai.guarded",
       "path": "app/ai/guarded.py",
       "layer": "ai",
-      "loc": 181,
+      "loc": 193,
       "functions": 5,
       "classes": 0,
       "is_package": false,
       "fan_in": 5,
-      "fan_out": 6,
+      "fan_out": 8,
       "external_deps": [
         "__future__",
         "app",
@@ -146,7 +146,7 @@
       "id": "app.ai.providers.base",
       "path": "app/ai/providers/base.py",
       "layer": "ai",
-      "loc": 348,
+      "loc": 344,
       "functions": 7,
       "classes": 2,
       "is_package": false,
@@ -166,15 +166,14 @@
       "id": "app.ai.providers.gemini",
       "path": "app/ai/providers/gemini.py",
       "layer": "ai",
-      "loc": 257,
+      "loc": 230,
       "functions": 2,
       "classes": 1,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 4,
+      "fan_out": 3,
       "external_deps": [
         "app",
-        "datetime",
         "logging",
         "os",
         "requests",
@@ -185,7 +184,7 @@
       "id": "app.ai.providers.groq",
       "path": "app/ai/providers/groq.py",
       "layer": "ai",
-      "loc": 308,
+      "loc": 273,
       "functions": 1,
       "classes": 1,
       "is_package": false,
@@ -193,7 +192,6 @@
       "fan_out": 5,
       "external_deps": [
         "app",
-        "datetime",
         "logging",
         "os",
         "requests",
@@ -239,8 +237,8 @@
       "id": "app.ai.router",
       "path": "app/ai/router.py",
       "layer": "ai",
-      "loc": 757,
-      "functions": 8,
+      "loc": 797,
+      "functions": 9,
       "classes": 1,
       "is_package": false,
       "fan_in": 15,
@@ -272,7 +270,7 @@
       "id": "app.ai.validator",
       "path": "app/ai/validator.py",
       "layer": "ai",
-      "loc": 250,
+      "loc": 252,
       "functions": 8,
       "classes": 0,
       "is_package": false,
@@ -422,7 +420,7 @@
       "functions": 16,
       "classes": 2,
       "is_package": false,
-      "fan_in": 10,
+      "fan_in": 11,
       "fan_out": 1,
       "external_deps": [
         "app",
@@ -641,7 +639,7 @@
       "functions": 6,
       "classes": 1,
       "is_package": false,
-      "fan_in": 29,
+      "fan_in": 28,
       "fan_out": 1,
       "external_deps": [
         "__future__",
@@ -675,11 +673,11 @@
       "id": "app.core.sanitizer",
       "path": "app/core/sanitizer.py",
       "layer": "core",
-      "loc": 180,
-      "functions": 3,
+      "loc": 266,
+      "functions": 4,
       "classes": 1,
       "is_package": false,
-      "fan_in": 13,
+      "fan_in": 14,
       "fan_out": 0,
       "external_deps": [
         "contextlib",
@@ -1639,7 +1637,7 @@
       "id": "worker",
       "path": "worker.py",
       "layer": "other",
-      "loc": 71,
+      "loc": 70,
       "functions": 1,
       "classes": 0,
       "is_package": false,
@@ -1699,7 +1697,17 @@
     },
     {
       "source": "app.ai.guarded",
+      "target": "app.core.guardrails",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.guarded",
       "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.guarded",
+      "target": "app.core.sanitizer",
       "kind": "runtime"
     },
     {
@@ -1751,11 +1759,6 @@
       "source": "app.ai.providers.gemini",
       "target": "app.ai.providers.base",
       "kind": "import"
-    },
-    {
-      "source": "app.ai.providers.gemini",
-      "target": "app.core.redis_client",
-      "kind": "runtime"
     },
     {
       "source": "app.ai.providers.groq",
@@ -3340,8 +3343,8 @@
   ],
   "stats": {
     "modules": 98,
-    "edges": 336,
-    "total_loc": 25427,
+    "edges": 337,
+    "total_loc": 25500,
     "layers": [
       "ai",
       "core",
@@ -3357,12 +3360,12 @@
       {
         "id": "app.core.redis_client",
         "loc": 511,
-        "fan_in": 29,
+        "fan_in": 28,
         "fan_out": 1
       },
       {
         "id": "app.ai.router",
-        "loc": 757,
+        "loc": 797,
         "fan_in": 15,
         "fan_out": 15
       },
@@ -3387,8 +3390,14 @@
       {
         "id": "app.core.guardrails",
         "loc": 358,
-        "fan_in": 10,
+        "fan_in": 11,
         "fan_out": 1
+      },
+      {
+        "id": "app.core.sanitizer",
+        "loc": 266,
+        "fan_in": 14,
+        "fan_out": 0
       },
       {
         "id": "app.core.config",
@@ -3404,15 +3413,9 @@
       },
       {
         "id": "app.ai.providers.base",
-        "loc": 348,
+        "loc": 344,
         "fan_in": 7,
         "fan_out": 3
-      },
-      {
-        "id": "app.ai.circuit_breaker",
-        "loc": 179,
-        "fan_in": 14,
-        "fan_out": 1
       }
     ],
     "collisions": {},

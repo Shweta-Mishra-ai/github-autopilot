@@ -58,7 +58,9 @@ def is_unusable(raw: Any) -> bool:
     their defaults and published a fabricated result (e.g. "Score: 7/10 — no
     issues found") for a review that never happened. Treat it as a hard failure.
     """
-    if not isinstance(raw, dict):
+    if not isinstance(raw, dict) or not raw:
+        # An empty object is not an answer: validate_pr_analysis({}) produced
+        # a non-degraded "risk_level: medium, confidence 0.5" from nothing.
         return True
     return bool(raw.get("error")) or ("raw" in raw)
 

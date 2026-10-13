@@ -60,3 +60,14 @@ def test_the_event_time_header_is_read_whatever_its_case():
 
     old = str(int(time.time()) - 10 * 86400)
     assert verify_timestamp({"X-Github-Event-Time": old}) is False
+
+
+def test_importing_worker_does_not_change_the_process_role(monkeypatch):
+    """worker.py set AUTOPILOT_PROCESS_ROLE at import, so any test importing it
+    turned process registration off for the rest of the run (CI, random order)."""
+    import importlib
+    import os
+
+    monkeypatch.delenv("AUTOPILOT_PROCESS_ROLE", raising=False)
+    importlib.import_module("worker")
+    assert "AUTOPILOT_PROCESS_ROLE" not in os.environ

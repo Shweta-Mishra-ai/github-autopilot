@@ -15,9 +15,17 @@ log = logging.getLogger(__name__)
 # Each tuple: (compiled_pattern, replacement_label)
 # Applied in order — stops at first match per pattern (replaces, continues scan).
 _INJECTION_PATTERNS: list[tuple[re.Pattern, str]] = [
-    (re.compile(r"ignore\s+(all\s+)?previous\s+instructions?", re.I), "INSTR_INJ"),
-    (re.compile(r"forget\s+(all\s+)?previous", re.I), "INSTR_INJ"),
-    (re.compile(r"disregard\s+(all\s+)?previous", re.I), "INSTR_INJ"),
+    # "Ignore your previous instructions", "ignore all prior instructions",
+    # "ignore the above instructions" — each slipped past the old pattern,
+    # which allowed only an optional "all" between the verb and "previous".
+    (
+        re.compile(
+            r"(?:ignore|forget|disregard|override)\s+(?:all\s+|any\s+|the\s+|your\s+|of\s+)*"
+            r"(?:previous|prior|above|earlier|preceding)\b(?:\s+(?:instructions?|prompts?|rules?|messages?))?",
+            re.I,
+        ),
+        "INSTR_INJ",
+    ),
     (re.compile(r"you\s+are\s+now\b", re.I), "ROLE_INJ"),
     # Addressed to the model ("you should act as a", or a sentence opening
     # with "Act as a") — not any occurrence. The bare phrase is ordinary
@@ -70,13 +78,90 @@ class InjectionRejected(Exception):
     """Raised when input contains a critical-severity injection attempt."""
 
 
+# Latin look-alikes from Cyrillic and Greek that NFKC leaves alone. Applied to
+# the matching copy only — the text returned is never rewritten by this.
+_CONFUSABLES = str.maketrans(
+    {
+        "а": "a",
+        "е": "e",
+        "о": "o",
+        "р": "p",
+        "с": "c",
+        "у": "y",
+        "х": "x",
+        "і": "i",
+        "ј": "j",
+        "ѕ": "s",
+        "ԁ": "d",
+        "һ": "h",
+        "ӏ": "l",
+        "А": "A",
+        "В": "B",
+        "Е": "E",
+        "К": "K",
+        "М": "M",
+        "Н": "H",
+        "О": "O",
+        "Р": "P",
+        "С": "C",
+        "Т": "T",
+        "Х": "X",
+        "І": "I",
+        "α": "a",
+        "ο": "o",
+        "ρ": "p",
+        "ε": "e",
+        "ι": "i",
+        "κ": "k",
+        "ν": "v",
+        "Α": "A",
+        "Β": "B",
+        "Ε": "E",
+        "Ι": "I",
+        "Κ": "K",
+        "Μ": "M",
+        "Ν": "N",
+        "Ο": "O",
+        "Ρ": "P",
+        "Τ": "T",
+        "Χ": "X",
+    }
+)
+
+# A block wrap_user_content() made: <LABEL> ... </LABEL>, LABEL in SCREAMING_CASE.
+_BLOCK_RE = re.compile(r"<([A-Z][A-Z0-9_]{2,})>(.*?)</\1>", re.S)
+
+
+def _only_inside_blocks(pattern: re.Pattern, probe: str) -> bool:
+    """
+    True when every match of `pattern` lies inside a delimited untrusted block.
+
+    The router sanitises the ASSEMBLED prompt, and diffs reach it wrapped in
+    <DIFF>...</DIFF> under an instruction to analyse, never obey. Rejecting
+    the whole request for a critical pattern anywhere meant any PR touching a
+    prompt template (`<instructions>`), JSX (`<System>`), a Llama chat
+    template (`[INST] <<SYS>>`), a test asserting "reveal your prompt" is
+    refused — or this repository's own sanitizer — got no review at all.
+    Inside a block the text is data, and it is masked like any other hit.
+    Outside one it can only be unwrapped user text, and it is still refused.
+    """
+    spans = [m.span(2) for m in _BLOCK_RE.finditer(probe)]
+    matches = [m.span() for m in pattern.finditer(probe)]
+    return bool(matches) and all(any(a <= s and e <= b for a, b in spans) for s, e in matches)
+
+
 def sanitize_user_input(text: str, max_chars: int = 8_000, fail_closed: bool = True) -> str:
     """
     Sanitize text from user-controlled sources (GitHub webhook payloads).
 
     Defence in depth, in order:
       1. Hard length cap
-      2. NFKC normalisation      — collapses homoglyphs (Cyrillic е → Latin e)
+      2. NFKC normalisation      — folds compatibility forms (ﬁ, ｆｕｌｌｗｉｄｔｈ)
+         + confusable folding   — Cyrillic/Greek look-alikes (е, о, а, ...) in
+                                   the MATCHING copy only. NFKC does NOT fold
+                                   them: it was documented as doing so, and
+                                   "Ignоre previous instructions" (Cyrillic о)
+                                   passed unchanged.
       3. Zero-width stripping    — removes ​-style separators
       4. Whitespace collapse     — so "ignore\\n previous\\n instructions"
                                    cannot slip past a single-space pattern
@@ -100,6 +185,7 @@ def sanitize_user_input(text: str, max_chars: int = 8_000, fail_closed: bool = T
     # so deleting it would fuse the words and defeat the pattern. Substituting
     # a space in the matching copy catches both that and the interleaved form.
     probe = _WHITESPACE_RE.sub(" ", _ZERO_WIDTH_RE.sub(" ", text)).strip()
+    probe = probe.translate(_CONFUSABLES)
     text = _ZERO_WIDTH_RE.sub("", text)
 
     hits = []
@@ -108,7 +194,7 @@ def sanitize_user_input(text: str, max_chars: int = 8_000, fail_closed: bool = T
             continue
         hits.append(label)
 
-        if fail_closed and label in _CRITICAL_LABELS:
+        if fail_closed and label in _CRITICAL_LABELS and not _only_inside_blocks(pattern, probe):
             log.warning(f"sanitizer.injection_rejected label={label}")
             raise InjectionRejected(f"Input rejected: {label}")
 

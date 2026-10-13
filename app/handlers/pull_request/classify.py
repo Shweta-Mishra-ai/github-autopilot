@@ -115,6 +115,13 @@ _TEST_PATH = re.compile(
     r"|(?:^|/)test_[^/]*$"  # test_foo.py
     r"|(?:^|/)[^/]*_test\.[^/.]+$"  # foo_test.go
     r"|(?:^|/)tests?\.[^/.]+$"  # tests.py
+    # The dominant JS/TS naming, and RSpec's. These were classified as
+    # SOURCE: a PR adding pricing.js and pricing.test.js sent the test to the
+    # model as a "changed source file", told it "no test files changed", and
+    # reported the tested function as an untested high-risk gap.
+    r"|(?:^|/)[^/]+\.(?:test|spec)\.[^/]+$"  # foo.test.ts, Button.spec.tsx
+    r"|(?:^|/)spec/"  # spec/ directories
+    r"|(?:^|/)[^/]*_spec\.rb$"  # user_spec.rb
 )
 
 

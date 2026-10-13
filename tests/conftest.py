@@ -471,3 +471,39 @@ def mock_github_client(monkeypatch):
     monkeypatch.setattr("app.github.client.gh_get", mock_get)
     monkeypatch.setattr("app.github.client.gh_post", mock_post)
     return {"get": mock_get, "post": mock_post}
+
+
+# ── No real network in unit tests ────────────────────────────────────────────
+#
+# A unit test that reaches api.github.com is not a unit test: it passes or
+# fails on the network, sends unauthenticated requests from CI, and — because
+# the app treats a failed fetch as "no data" — hides that it ever happened.
+# The 2026-10-08 audit found 51 such calls in the review tests alone (the
+# surrounding-code fetch). Every request to a non-local host now fails at
+# once with ConnectionError, which is exactly the offline path the code
+# already handles. Integration and e2e tests talk to local servers only.
+_LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1", "[::1]")
+
+
+@pytest.fixture(autouse=True)
+def _no_external_network(request, monkeypatch):
+    import requests
+    from urllib.parse import urlparse
+
+    # A module that watches egress at the socket level (and blocks it there
+    # itself) needs requests to reach the socket layer, or its watcher sees
+    # nothing and its control test fails.
+    if request.node.get_closest_marker("socket_egress_watch"):
+        yield
+        return
+
+    original = requests.Session.request
+
+    def guarded(self, method, url, *args, **kwargs):
+        host = urlparse(str(url)).hostname or ""
+        if host not in _LOCAL_HOSTS:
+            raise requests.ConnectionError(f"unit tests may not reach the network: {method} {url}")
+        return original(self, method, url, *args, **kwargs)
+
+    monkeypatch.setattr(requests.Session, "request", guarded)
+    yield

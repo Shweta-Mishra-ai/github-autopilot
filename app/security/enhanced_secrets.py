@@ -850,7 +850,7 @@ def scan_diff(diff: str, file_path: str = "") -> list[SecretFinding]:
 
     findings: list[SecretFinding] = []
     seen_matches: set[str] = set()  # Deduplicate within same diff
-    lines = diff.splitlines()
+    lines = diff.split("\n")  # "\n" only — see patch_parser.diff_lines
     file_lines = _new_file_line_numbers(lines)
 
     for lineno, line in enumerate(lines, 1):

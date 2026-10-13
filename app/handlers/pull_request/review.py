@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from app.ai.router import MAX_USER_CHARS, prompt_budget, router
 from app.ai.validator import is_unusable, validate_code_review
-from app.core.sanitizer import wrap_user_content
+from app.core.sanitizer import one_line, wrap_user_content
 from app.github.client import gh_get, gh_post
 
 from .classify import _is_generated, _review_sort_key
@@ -195,6 +195,41 @@ def _review_completeness(r: dict) -> float:
     return max((_field_completeness(t) for t in texts), default=0.0)
 
 
+def _finding_key(path: str, body: str) -> tuple[str, str]:
+    """A finding's identity across pushes: its file and its headline
+    ("**MAJOR** — the issue"), not its line, which moves as code is added."""
+    first = (body or "").strip().split("\n", 1)[0].strip()
+    return path or "", first
+
+
+def _posted_findings(repo: str, pr_number, token: str, log) -> set:
+    """
+    The findings this App already posted inline on the pull request.
+
+    Every push reviews the whole diff and posted every anchored finding again
+    as a new review, so a finding on a line no later push touched appeared
+    once per push, each copy current. Nothing read the existing comments.
+    An empty set on any failure: posting a duplicate beats losing a finding.
+    """
+    seen: set = set()
+    try:
+        for page in range(1, 6):
+            batch = gh_get(
+                f"/repos/{repo}/pulls/{pr_number}/comments?per_page=100&page={page}", token
+            )
+            if not isinstance(batch, list) or not batch:
+                break
+            for c in batch:
+                if (c.get("user") or {}).get("type") == "Bot":
+                    seen.add(_finding_key(c.get("path", ""), c.get("body", "")))
+            if len(batch) < 100:
+                break
+    except Exception as e:
+        log.debug(f"code_review.existing_comments_unavailable: {e}")
+        return set()
+    return seen
+
+
 def _post_inline_review(pr, repo, pr_number, token, config, inline_comments, log):
     """
     Post line-anchored findings as a real PR Review.
@@ -217,6 +252,16 @@ def _post_inline_review(pr, repo, pr_number, token, config, inline_comments, log
     body is a fixed heading, because the full markdown already goes in the
     sticky report and posting it twice is the noise V7 set out to remove.
     """
+    already = _posted_findings(repo, pr_number, token, log)
+    fresh = [c for c in inline_comments if _finding_key(c["path"], c["body"]) not in already]
+    if len(fresh) < len(inline_comments):
+        log.info(f"code_review.already_posted_skipped n={len(inline_comments) - len(fresh)}")
+    for c in inline_comments:
+        if c not in fresh:
+            c.pop("_fallback_md", None)
+    inline_comments = fresh
+    if not inline_comments:
+        return ""
     fallback_md = [c.pop("_fallback_md", "") for c in inline_comments]
     try:
         gh_post(
@@ -268,6 +313,15 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
 
     max_files = config.get("pull_requests", "max_files_reviewed", default=4)
     valid_files = [f for f in files if f.get("patch") and not _is_generated(f.get("filename", ""))]
+    # GitHub omits `patch` for very large or binary diffs. Those files were
+    # dropped here without a word, so the report read as complete.
+    no_diff = [
+        f.get("filename", "?")
+        for f in files
+        if not f.get("patch")
+        and f.get("status") != "removed"
+        and not _is_generated(f.get("filename", ""))
+    ]
     sorted_files = sorted(valid_files, key=_review_sort_key, reverse=True)
     context_part = f"\n\n{context[:600]}\n" if context else "\n"
 
@@ -305,7 +359,7 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
     for f, budget in zip(reviewable, alloc, strict=True):
         shown, was_cut = numbered_patch(f.get("patch") or "", budget)
         diffs.append(
-            f"### FILE: {f.get('filename', '?')}{_truncation_note(was_cut)}\n"
+            f"### FILE: {one_line(f.get('filename', '?'))}{_truncation_note(was_cut)}\n"
             f"{wrap_user_content(shown, 'DIFF')}"
         )
 
@@ -340,13 +394,21 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
     # diff, fewer than that ever reached the model.
     reviewed_ids = {id(f) for f in reviewable}
     skipped = [f.get("filename", "?") for f in sorted_files if id(f) not in reviewed_ids]
-    coverage_note = ""
+
+    def _names(names: list) -> str:
+        listed = ", ".join(f"`{n}`" for n in names[:8])
+        return listed + (f" and {len(names) - 8} more" if len(names) > 8 else "")
+
+    coverage_notes = []
     if skipped:
-        listed = ", ".join(f"`{n}`" for n in skipped[:8])
-        more = f" and {len(skipped) - 8} more" if len(skipped) > 8 else ""
-        coverage_note = (
+        coverage_notes.append(
             f"_Reviewed {len(reviewable)} of {len(sorted_files)} changed source files. "
-            f"Not reviewed: {listed}{more}._"
+            f"Not reviewed: {_names(skipped)}._"
+        )
+    if no_diff:
+        coverage_notes.append(
+            f"_GitHub returned no diff for {_names(no_diff)} (too large or binary), so "
+            "they were not reviewed._"
         )
 
     by_name = {f["filename"]: f for f in reviewable}
@@ -384,12 +446,21 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
     # does not carry its own.
     batch_confidence = batch.get("confidence")
 
-    for entry in (batch.get("files") or [])[: len(reviewable)]:
+    # Every entry is read. This sliced the list to len(reviewable) BEFORE
+    # dropping invented names, so one bogus entry pushed a real one — with a
+    # critical finding in it — off the end, and nothing said so. A file named
+    # twice is reviewed once (it used to post every comment twice), and a
+    # file sent but not answered is said to be unanswered.
+    answered: set = set()
+    for entry in batch.get("files") or []:
         f = by_name.get(entry.get("file", "")) if isinstance(entry, dict) else None
         if not f:
             # The model named a file that isn't in this PR. Don't render a
             # review for something it invented.
             log.warning(f"code_review.unknown_file_skipped name={str(entry)[:60]}")
+            continue
+        if f["filename"] in answered:
+            log.warning(f"code_review.duplicate_entry_skipped file={f['filename']}")
             continue
 
         filename = f["filename"]
@@ -405,6 +476,7 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
         if r.get("_degraded"):
             log.warning(f"code_review.degraded_skipped file={filename}")
             continue
+        answered.add(filename)
 
         # Ground every finding in the diff before anything is rendered or
         # anchored: a quote that is not a line of this file's diff is a finding
@@ -564,11 +636,17 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
             f"{r.get('summary', '')}\n\n{issues_md}{hidden_md}{withheld_md}{low_confidence}"
         )
 
+    unanswered = [f["filename"] for f in reviewable if f["filename"] not in answered]
+    if unanswered:
+        coverage_notes.append(
+            f"_Sent for review but no usable answer came back for {_names(unanswered)}; "
+            "they are NOT reviewed._"
+        )
+
     if not reviews:
         return "", []
 
-    if coverage_note:
-        reviews.append(coverage_note)
+    reviews.extend(coverage_notes)
 
     log.done(f"code_review_built: {len(reviews)} files, {len(inline_comments)} anchored")
     return "\n\n---\n\n".join(reviews), inline_comments

@@ -31,7 +31,7 @@ from __future__ import annotations
 import logging
 
 from app.ai.guarded import safe_router_ask
-from app.core.sanitizer import wrap_user_content
+from app.core.sanitizer import one_line, wrap_user_content
 from app.github.client import gh_post, GitHubError
 
 log = logging.getLogger(__name__)
@@ -64,6 +64,19 @@ def _is_noise(message: str) -> bool:
         or first.startswith("merge_")
         or not first
     )
+
+
+def _release(repo: str, commits: list[dict]) -> None:
+    """Undo _already_suggested for commits that ended up with no comment."""
+    try:
+        from app.core.redis_client import get_redis
+
+        r = get_redis()
+        for c in commits:
+            if c.get("id"):
+                r.delete(f"commit_msg_suggested:{repo}:{c['id']}")
+    except Exception as e:
+        log.debug(f"commit_message.release_failed repo={repo}: {e}")
 
 
 def _already_suggested(repo: str, sha: str) -> bool:
@@ -104,7 +117,7 @@ def _describe_commit(commit: dict) -> str:
     lines = []
     for label, paths in (("added", added), ("modified", modified), ("removed", removed)):
         for p in paths[:MAX_FILES_IN_PROMPT]:
-            lines.append(f"  {label}: {p}")
+            lines.append(f"  {label}: {one_line(p)}")
     extra = len(added) + len(removed) + len(modified) - len(lines)
     if extra > 0:
         lines.append(f"  ...and {extra} more files")
@@ -134,7 +147,7 @@ def _build_prompt(repo: str, commits: list[dict]) -> str:
         blocks.append(
             f"COMMIT {i} (sha {c.get('id', '')[:7]})\n"
             f"{wrap_user_content(subject, 'ORIGINAL_SUBJECT')}\n"
-            f"Files changed:\n{_describe_commit(c)}"
+            f"Files changed:\n{wrap_user_content(_describe_commit(c), 'FILES')}"
         )
 
     return f"""Rewrite each commit message below in Conventional Commits format.
@@ -235,17 +248,20 @@ def suggest_commit_messages(repo, commits, token, config, log_ctx) -> int:
             max_tokens=800,
         )
 
-        if not isinstance(result, dict) or result.get("_providers_down"):
+        if not isinstance(result, dict) or result.get("_providers_down") or result.get("error"):
             log_ctx.warning("commit_message.providers_down")
+            _release(repo, fresh)
             return 0
 
         suggestions = result.get("suggestions")
         if not isinstance(suggestions, list) or not suggestions:
             log_ctx.warning("commit_message.no_suggestions_returned")
+            _release(repo, fresh)
             return 0
 
         by_short_sha = {c.get("id", "")[:7]: c for c in fresh}
         posted = 0
+        commented: set = set()
 
         for s in suggestions:
             if not isinstance(s, dict):
@@ -260,6 +276,10 @@ def suggest_commit_messages(repo, commits, token, config, log_ctx) -> int:
                 # comment on a commit we never asked about.
                 log_ctx.warning("commit_message.unknown_sha_skipped")
                 continue
+            if commit["id"] in commented:
+                # At most one suggestion per commit, as documented: a model
+                # listing a SHA twice posted two comments on it.
+                continue
 
             original = commit.get("message", "").split("\n")[0].strip()
             try:
@@ -269,9 +289,14 @@ def suggest_commit_messages(repo, commits, token, config, log_ctx) -> int:
                     {"body": _render(repo, s, original) + getattr(config, "footer", "")},
                 )
                 posted += 1
+                commented.add(commit["id"])
             except GitHubError as e:
                 log_ctx.warning(f"commit_message.post_failed sha={commit['id'][:7]}: {e}")
 
+        # The dedup mark was taken before the AI call; a commit that got no
+        # comment (no suggestion for it, or the post failed) is released so a
+        # redelivery can still suggest one. It used to stay marked for 30 days.
+        _release(repo, [c for c in fresh if c.get("id") not in commented])
         if posted:
             log_ctx.done(f"commit_message.suggested count={posted}")
         return posted

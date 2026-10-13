@@ -285,3 +285,37 @@ class TestFailurePatternTracking:
             result = _get_failure_count("org/repo", "pytest")
             assert result == 5
 
+
+
+class TestCiAudit2:
+    """Found by the 2026-10-08 audit."""
+
+    def _run(self, payload, analysis):
+        with patch("app.handlers.ci.get_installation_token", return_value="tok"), \
+             patch("app.handlers.ci.load_config", return_value=_mock_config()), \
+             patch("app.handlers.ci._ci_already_alerted", return_value=False), \
+             patch("app.handlers.ci._release_ci_alert") as release, \
+             patch("app.ai.guarded.safe_router_ask", return_value=(analysis, _meta())), \
+             patch("app.github.sticky.upsert_sticky") as post:
+            from app.handlers.ci import handle
+
+            handle(payload)
+        return post, release
+
+    def test_null_output_fields_do_not_crash(self):
+        payload = _payload(output={"title": None, "summary": None, "text": None})
+        analysis = {"root_cause": "flaky network", "category": "other", "fix": "- retry", "confidence": 0.9}
+        post, _ = self._run(payload, analysis)
+        post.assert_called_once()
+
+    def test_a_fix_given_as_a_list_is_rendered(self):
+        analysis = {"root_cause": "bad import", "category": "build_error",
+                    "fix": ["Install the missing package", "- Pin its version"], "confidence": 0.9}
+        post, _ = self._run(_payload(), analysis)
+        body = post.call_args[0][4]
+        assert "- Install the missing package" in body and "- Pin its version" in body
+
+    def test_is_flaky_false_as_a_string_is_false(self):
+        analysis = {"root_cause": "x", "category": "other", "fix": "- y", "is_flaky": "false", "confidence": 0.9}
+        post, _ = self._run(_payload(), analysis)
+        assert "Possibly flaky" not in post.call_args[0][4]

@@ -235,8 +235,12 @@ def validate_code_review(raw: dict) -> dict:
     if not isinstance(raw_issues, list):
         raw_issues = []
 
+    # Every finding is validated and the list is ordered worst first BEFORE
+    # anything is cut. This took the first ten in the model's order, so a
+    # critical finding listed eleventh was dropped — and not counted in the
+    # "N less severe finding(s) not shown" note, which is computed later.
     clean_issues = []
-    for item in raw_issues[:10]:
+    for item in raw_issues[:50]:
         if not isinstance(item, dict):
             continue
         sev = str(item.get("severity", "minor")).lower()
@@ -253,6 +257,8 @@ def validate_code_review(raw: dict) -> dict:
                 "fix": _str(item.get("fix", ""), 500),
             }
         )
+    _rank = {"critical": 0, "major": 1, "minor": 2, "nit": 3}
+    clean_issues.sort(key=lambda i: _rank[i["severity"]])
 
     confidence = 0.5
     try:

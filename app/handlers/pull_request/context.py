@@ -20,7 +20,7 @@ import ast
 import base64
 import logging
 
-from app.github.patch_parser import commentable_lines
+from app.github.patch_parser import commentable_lines, diff_lines
 
 log = logging.getLogger(__name__)
 
@@ -91,7 +91,7 @@ def surrounding_code(source: str, filename: str, patch: str, budget: int) -> str
     add or no room for it.
     """
     changed = _changed_lines(patch)
-    lines = source.splitlines()
+    lines = diff_lines(source)
     if not changed or not lines or budget <= 0:
         return ""
 

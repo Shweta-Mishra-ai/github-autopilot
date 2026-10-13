@@ -179,8 +179,18 @@ def restore_from_github(target_repo: str, path: str, token: str) -> int:
         from app.github.client import gh_get
 
         data = gh_get(f"/repos/{target_repo}/contents/{path}", token)
-        b64 = (data.get("content") or "").replace("\n", "") if isinstance(data, dict) else ""
+        if not isinstance(data, dict):
+            log.error("memory_backup.github_restore_failed: contents response was not a file")
+            return 0
+        b64 = (data.get("content") or "").replace("\n", "")
+        if not b64 and data.get("size") and data.get("sha"):
+            # The contents API returns an EMPTY `content` for a file over
+            # 1 MB, so a large backup restored nothing, silently. The git
+            # blob API serves the same bytes up to 100 MB.
+            blob = gh_get(f"/repos/{target_repo}/git/blobs/{data['sha']}", token)
+            b64 = (blob.get("content") or "").replace("\n", "") if isinstance(blob, dict) else ""
         if not b64:
+            log.error(f"memory_backup.github_restore_failed: {path} has no content")
             return 0
         token_bytes = base64.b64decode(b64)
         return import_encrypted(token_bytes)

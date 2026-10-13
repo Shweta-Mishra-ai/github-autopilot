@@ -412,12 +412,20 @@ _STRUCTURAL_NON_SECRETS = (
 # (`"X-Goog-Api-Key-Override-Header"`). Each passed the randomness gate and
 # opened a "Rotate ALL exposed credentials NOW" issue. Letters only: a value
 # with digits in it is not ruled out by these.
+#
+# Every segment must itself be word-shaped: lower_snake, UPPER_SNAKE, or
+# camel/Pascal words in which each capital starts a word of 2+ lowercase
+# letters. "Letters with dots" alone also matched random secrets such as
+# `kRxrmiwARtSPrkoRGf.CDyfWzwgtYESweN`: about 1 Azure client secret in 1,600
+# went unreported, which made test_real_secret_is_always_reported flaky.
+_SEG = r"(?:[a-z_]+|[A-Z_]+|_?(?:[A-Z][a-z]{2,}|[a-z]{2,})(?:[A-Z][a-z]{2,})*)"
+_HEADER_WORD = r"(?:[A-Z]+|[A-Z]?[a-z]+)"
 _IDENTIFIER_SHAPES = (
     re.compile(r"^[A-Z]+(?:_[A-Z]+)+$"),
     re.compile(r"^[a-z]+(?:_[a-z]+)+$"),
-    re.compile(r"^[a-z]+(?:[A-Z][a-z]+)+$"),
-    re.compile(r"^[A-Za-z_]+(?:\.[A-Za-z_]+)+$"),
-    re.compile(r"^[A-Za-z]+(?:-[A-Za-z]+){2,}$"),
+    re.compile(r"^[a-z]+(?:[A-Z][a-z]{2,})+$"),
+    re.compile(rf"^{_SEG}(?:\.{_SEG})+$"),
+    re.compile(rf"^{_HEADER_WORD}(?:-{_HEADER_WORD}){{2,}}$"),
 )
 
 
@@ -624,6 +632,20 @@ def _has_key_material(candidate: str) -> bool:
     return False
 
 
+def _typed_words(value: str) -> set[str]:
+    """
+    Like _words(), but only tokens cased the way a person types a word —
+    `your`, `YOUR`, `Your` — never `youR`. A random 24-character password
+    that happened to begin `youR$` was read as the stand-in word "your" and
+    dropped (about 1 in 20,000 generated passwords).
+    """
+    out = set()
+    for tok in re.split(r"[^A-Za-z0-9]+", value):
+        if tok and (tok.islower() or tok.isupper() or tok.istitle() or not tok.isalpha()):
+            out.add(tok.lower())
+    return out
+
+
 def _has_placeholder_word(value: str) -> bool:
     """
     True when the value contains a stand-in WORD.
@@ -639,7 +661,7 @@ def _has_placeholder_word(value: str) -> bool:
     for candidate in _candidate_values(value):
         if _has_key_material(candidate):
             continue
-        words = _words(candidate)
+        words = _typed_words(candidate)
         if any(tok in words for tok in _PLACEHOLDER_WORDS):
             return True
         # Multi-word markers like "not real" once separators are normalised.

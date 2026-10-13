@@ -43,6 +43,11 @@ MIN_INTERVAL_DAYS = 1.0
 # Hourly: fine-grained enough that a 15-day schedule lands the same day, cheap
 # enough to be invisible (one Redis GET per hour per process).
 TICK_SECONDS = 3600
+# The first check comes soon after boot. It slept a full TICK_SECONDS first,
+# so a process restarted more often than hourly — a deploy, or a free-tier
+# instance spun down when idle — never checked at all and the pass never ran.
+# Checking early is safe: claim_due_run() decides whether anything is due.
+FIRST_TICK_SECONDS = 60
 
 _DUE_KEY = "maintenance:due_at"
 _LAST_RUN_KEY = "maintenance:last_run"
@@ -307,8 +312,10 @@ def start_scheduler() -> bool:
     import threading
 
     def _loop() -> None:
+        delay = FIRST_TICK_SECONDS
         while True:
-            time.sleep(TICK_SECONDS)
+            time.sleep(delay)
+            delay = TICK_SECONDS
             try:
                 tick()
             except Exception as e:  # never let the schedule die with one pass

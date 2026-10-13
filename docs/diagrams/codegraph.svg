@@ -432,8 +432,8 @@
 <circle cx="255.0" cy="637.2" r="4.07" fill="#818cf8"/>
 <circle cx="242.1" cy="627.3" r="4.44" fill="#818cf8"/>
 <circle cx="229.9" cy="616.6" r="3.88" fill="#818cf8"/>
-<circle cx="218.3" cy="605.2" r="5.46" fill="#818cf8"/>
-<circle cx="207.4" cy="593.1" r="5.59" fill="#818cf8"/>
+<circle cx="218.3" cy="605.2" r="5.5" fill="#818cf8"/>
+<circle cx="207.4" cy="593.1" r="5.65" fill="#818cf8"/>
 <circle cx="197.3" cy="580.4" r="3.08" fill="#818cf8"/>
 <circle cx="188.0" cy="567.1" r="5.28" fill="#818cf8"/>
 <circle cx="179.4" cy="553.2" r="4.12" fill="#818cf8"/>
@@ -570,7 +570,7 @@
 <line x1="800.0" y1="110.0" x2="1280" y2="110.0" stroke="#1f2937" stroke-width="1"/>
 <text x="800.0" y="133.0" font-size="12" fill="#9ca3af">Modules</text><text x="1280" y="133.0" font-size="12" fill="#e5e7eb" text-anchor="end" font-weight="600">98</text>
 <text x="800.0" y="156.0" font-size="12" fill="#9ca3af">Imports</text><text x="1280" y="156.0" font-size="12" fill="#e5e7eb" text-anchor="end" font-weight="600">353</text>
-<text x="800.0" y="179.0" font-size="12" fill="#9ca3af">Lines of code</text><text x="1280" y="179.0" font-size="12" fill="#e5e7eb" text-anchor="end" font-weight="600">26,336</text>
+<text x="800.0" y="179.0" font-size="12" fill="#9ca3af">Lines of code</text><text x="1280" y="179.0" font-size="12" fill="#e5e7eb" text-anchor="end" font-weight="600">26,375</text>
 <text x="800.0" y="202.0" font-size="12" fill="#9ca3af">Import cycles</text><text x="1280" y="202.0" font-size="12" fill="#22c55e" text-anchor="end" font-weight="600">none</text>
 <text x="800.0" y="225.0" font-size="12" fill="#9ca3af">Unreferenced modules</text><text x="1280" y="225.0" font-size="12" fill="#22c55e" text-anchor="end" font-weight="600">none</text>
 <text x="800.0" y="255.0" font-size="10" fill="#9ca3af" font-weight="600">LAYERS</text>
@@ -586,7 +586,7 @@
 <text x="800.0" y="464.0" font-size="11.5" fill="#e5e7eb">redis_client</text><text x="1280" y="464.0" font-size="11" fill="#9ca3af" text-anchor="end">510 lines · 28 in</text>
 <text x="800.0" y="483.0" font-size="11.5" fill="#e5e7eb">router</text><text x="1280" y="483.0" font-size="11" fill="#9ca3af" text-anchor="end">821 lines · 16 in</text>
 <text x="800.0" y="502.0" font-size="11.5" fill="#e5e7eb">client</text><text x="1280" y="502.0" font-size="11" fill="#9ca3af" text-anchor="end">306 lines · 24 in</text>
-<text x="800.0" y="521.0" font-size="11.5" fill="#e5e7eb">enhanced_secrets</text><text x="1280" y="521.0" font-size="11" fill="#9ca3af" text-anchor="end">1030 lines · 5 in</text>
+<text x="800.0" y="521.0" font-size="11.5" fill="#e5e7eb">enhanced_secrets</text><text x="1280" y="521.0" font-size="11" fill="#9ca3af" text-anchor="end">1052 lines · 5 in</text>
 <text x="800.0" y="540.0" font-size="11.5" fill="#e5e7eb">sanitizer</text><text x="1280" y="540.0" font-size="11" fill="#9ca3af" text-anchor="end">284 lines · 16 in</text>
 <text x="800.0" y="559.0" font-size="11.5" fill="#e5e7eb">notifications</text><text x="1280" y="559.0" font-size="11" fill="#9ca3af" text-anchor="end">534 lines · 8 in</text>
 <text x="800.0" y="578.0" font-size="11.5" fill="#e5e7eb">guardrails</text><text x="1280" y="578.0" font-size="11" fill="#9ca3af" text-anchor="end">368 lines · 11 in</text>

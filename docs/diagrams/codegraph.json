@@ -503,7 +503,7 @@
       "id": "app.core.maintenance",
       "path": "app/core/maintenance.py",
       "layer": "core",
-      "loc": 340,
+      "loc": 347,
       "functions": 13,
       "classes": 0,
       "is_package": false,
@@ -523,7 +523,7 @@
       "id": "app.core.memory_backup",
       "path": "app/core/memory_backup.py",
       "layer": "core",
-      "loc": 363,
+      "loc": 373,
       "functions": 13,
       "classes": 0,
       "is_package": false,
@@ -1481,8 +1481,8 @@
       "id": "app.security.enhanced_secrets",
       "path": "app/security/enhanced_secrets.py",
       "layer": "security",
-      "loc": 1030,
-      "functions": 25,
+      "loc": 1052,
+      "functions": 26,
       "classes": 1,
       "is_package": false,
       "fan_in": 5,
@@ -3356,7 +3356,7 @@
   "stats": {
     "modules": 98,
     "edges": 353,
-    "total_loc": 26336,
+    "total_loc": 26375,
     "layers": [
       "ai",
       "core",
@@ -3389,7 +3389,7 @@
       },
       {
         "id": "app.security.enhanced_secrets",
-        "loc": 1030,
+        "loc": 1052,
         "fan_in": 5,
         "fan_out": 0
       },

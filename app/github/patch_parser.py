@@ -25,6 +25,23 @@ CommentableLines = dict[int, tuple[str, bool]]
 _HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
 
 
+def diff_lines(text: str) -> list[str]:
+    """
+    The lines of a patch or file, split on "\n" ONLY — as git and GitHub
+    count them. str.splitlines() also splits on form feed, \x0b, \x1c-\x1e,
+    \x85, U+2028/U+2029 and a lone \r, so a PEP 8 page break (^L) or a U+2028
+    inside a JS string turned one diff line into two: every later line in the
+    hunk was numbered one too high, and a committable suggestion landed on —
+    and replaced — the wrong line. A trailing \r (CRLF files) is dropped.
+    """
+    if not text:
+        return []
+    lines = text.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    return [ln[:-1] if ln.endswith("\r") else ln for ln in lines]
+
+
 def commentable_lines(patch: str) -> CommentableLines:
     """
     Parse a unified-diff `patch` (as returned by GitHub's files API) into
@@ -37,7 +54,7 @@ def commentable_lines(patch: str) -> CommentableLines:
         return lines
     new_ln = 0
     in_hunk = False
-    for raw in patch.splitlines():
+    for raw in diff_lines(patch):
         m = _HUNK_RE.match(raw)
         if m:
             new_ln = int(m.group(1))
@@ -83,7 +100,7 @@ def numbered_patch(patch: str, max_chars: int | None = None) -> tuple[str, bool]
     cut = False
     new_ln = 0
     in_hunk = False
-    for raw in (patch or "").splitlines():
+    for raw in diff_lines(patch or ""):
         m = _HUNK_RE.match(raw)
         if m:
             new_ln = int(m.group(1))
@@ -201,6 +218,26 @@ _WRAPPERS = (
 )
 
 
+def _is_a_word(s: str) -> bool:
+    """
+    A bare name, `not <name>`, or a lone string: valid Python, never a fix.
+    "Remove", "Delete", "Unnecessary" and "not needed" all parsed, and became
+    one-click suggestions that replace a working line with that word.
+    """
+    try:
+        tree = ast.parse(s)
+    except (SyntaxError, ValueError, MemoryError, RecursionError):
+        return False
+    if len(tree.body) != 1 or not isinstance(tree.body[0], ast.Expr):
+        return False
+    value = tree.body[0].value
+    if isinstance(value, ast.UnaryOp) and isinstance(value.op, ast.Not):
+        value = value.operand
+    return isinstance(value, ast.Name) or (
+        isinstance(value, ast.Constant) and isinstance(value.value, str)
+    )
+
+
 def _looks_like_code(fix: str) -> bool:
     """
     True when `fix` parses as code rather than reading as a sentence about code.
@@ -213,7 +250,7 @@ def _looks_like_code(fix: str) -> bool:
     ships a committable suggestion that breaks the branch.
     """
     s = fix.strip()
-    if not s or s.lower() in _NON_ANSWER:
+    if not s or s.lower() in _NON_ANSWER or _is_a_word(s):
         return False
     for wrap in _WRAPPERS:
         try:

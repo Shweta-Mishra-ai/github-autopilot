@@ -102,6 +102,7 @@ markers = [
     "e2e: end-to-end tests requiring live GitHub credentials",
     "integration: tests requiring live Redis or external services",
     "slow: tests that take more than 2 seconds",
+    "socket_egress_watch: watches and blocks egress at the socket layer itself; exempt from the requests-level network guard",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",

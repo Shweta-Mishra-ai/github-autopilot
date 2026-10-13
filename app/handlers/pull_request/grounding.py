@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import re
 
-from app.github.patch_parser import commentable_lines, parse_line_ref
+from app.github.patch_parser import commentable_lines, diff_lines, parse_line_ref
 
 GROUNDED = "line"
 REMOVED = "removed"
@@ -48,11 +48,10 @@ def _norm(text: str) -> str:
 
 
 def _removed_lines(patch: str) -> list[str]:
-    return [
-        raw[1:]
-        for raw in (patch or "").splitlines()
-        if raw.startswith("-") and not raw.startswith("---")
-    ]
+    # Every "-" line. GitHub's `patch` field carries no `---` file header, so
+    # skipping "---" lines skipped real removed lines — a SQL `-- comment`, a
+    # YAML or Markdown `---` — and a finding about one was withheld as invented.
+    return [raw[1:] for raw in diff_lines(patch or "") if raw.startswith("-")]
 
 
 def _matches(quote: str, content: str) -> bool:

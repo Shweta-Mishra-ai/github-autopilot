@@ -148,10 +148,18 @@ class TestCodeReviewValidator:
         result = validate_code_review({"score": -5})
         assert result["score"] == 0
 
-    def test_issues_truncated_at_10(self):
-        data = {"issues": [{"severity": "minor", "message": f"issue {i}"} for i in range(20)]}
+    def test_issues_are_bounded(self):
+        data = {"issues": [{"severity": "minor", "message": f"issue {i}"} for i in range(80)]}
         result = validate_code_review(data)
-        assert len(result["issues"]) <= 10
+        assert len(result["issues"]) == 50
+
+    def test_a_critical_finding_listed_late_is_kept_and_sorted_first(self):
+        """The first ten were kept in the model's order: a critical eleventh
+        finding was dropped and not even counted as hidden."""
+        data = {"issues": [{"severity": "minor", "issue": f"m{i}"} for i in range(12)]
+                + [{"severity": "critical", "issue": "sql injection"}]}
+        result = validate_code_review(data)
+        assert result["issues"][0]["issue"] == "sql injection"
 
     def test_invalid_severity_replaced_with_minor(self):
         data = {"issues": [{"severity": "apocalyptic", "message": "bad"}]}

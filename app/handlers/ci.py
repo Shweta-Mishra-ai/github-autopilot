@@ -52,10 +52,13 @@ def handle(payload: dict):
     if not config.ci_enabled():
         return
 
-    output = check_run.get("output", {})
-    title = output.get("title", "")
-    summary = output.get("summary", "")[:2000]
-    details = output.get("text", "")[:3000]
+    # GitHub sends these as explicit null (its own documented check_run
+    # payload does), so `.get(key, "")` returned None and `None[:2000]` raised
+    # outside any try: no CI analysis was ever produced for such a run.
+    output = check_run.get("output") or {}
+    title = output.get("title") or ""
+    summary = (output.get("summary") or "")[:2000]
+    details = (output.get("text") or "")[:3000]
 
     pull_requests = check_run.get("pull_requests", [])
     if not pull_requests:
@@ -91,9 +94,10 @@ def handle(payload: dict):
         # in the checks UI; a bot comment that says nothing is pure noise.
         if is_degraded(r):
             log_ctx.warning(f"ci.analysis_degraded pr={pr_number} — no comment posted")
+            _release_ci_alert(repo, pr_number, head_sha)
             return
 
-        category = r.get("category", "other")
+        category = str(r.get("category") or "other")
         cat_emoji = {
             "test_failure": "🧪",
             "build_error": "🏗️",
@@ -104,16 +108,22 @@ def handle(payload: dict):
         }.get(category, "❌")
 
         flaky_note = ""
-        if r.get("is_flaky"):
+        if str(r.get("is_flaky", "")).strip().lower() in ("true", "yes", "1"):
             flaky_note = "\n\n> 🎲 **Possibly flaky** — this might pass on re-run."
 
-        fix_text = r.get("fix", "")
-        if fix_text and not fix_text.startswith("-"):
-            fix_text = "- " + fix_text.replace("\n", "\n- ")
+        # "2-4 bullet points" is naturally answered as a JSON list; that raised
+        # AttributeError on .startswith and lost the analysis.
+        fix = r.get("fix") or ""
+        if isinstance(fix, list):
+            fix_text = "\n".join(f"- {str(x).lstrip('- ').strip()}" for x in fix if str(x).strip())
+        else:
+            fix_text = str(fix)
+            if fix_text and not fix_text.startswith("-"):
+                fix_text = "- " + fix_text.replace("\n", "\n- ")
 
         # Recurring-failure detection: if this same check has now failed 3 times
         # in 24h, surface a pattern alert so maintainers know it isn't a one-off.
-        root_cause = r.get("root_cause", "See details below")
+        root_cause = str(r.get("root_cause") or "See details below")
         pattern_note = ""
         if _track_failure_pattern(repo, check_name, root_cause):
             pattern_note = (
@@ -131,6 +141,10 @@ def handle(payload: dict):
 
     except Exception as e:
         log_ctx.error(f"CI handler failed: {e}")
+        # The dedup key was taken before the analysis. Released, so the next
+        # failing job on this commit can still produce the comment; it used to
+        # silence every other job's alert for the commit too.
+        _release_ci_alert(repo, pr_number, head_sha)
 
 
 _CI_ALERT_TTL = 21600  # 6h — covers a matrix plus a couple of re-runs
@@ -157,6 +171,16 @@ def _ci_already_alerted(repo: str, pr_number: int, head_sha: str) -> bool:
     except Exception as e:
         log.warning(f"ci.dedup_unavailable repo={repo} sha={head_sha[:7]}: {e} — suppressing")
         return True
+
+
+def _release_ci_alert(repo: str, pr_number: int, head_sha: str) -> None:
+    """Undo _ci_already_alerted for a commit whose analysis produced nothing."""
+    try:
+        from app.core.redis_client import get_redis
+
+        get_redis().delete(f"ci_alert:{repo}:{pr_number}:{head_sha}")
+    except Exception as e:
+        log.debug(f"ci.release_failed repo={repo}: {e}")
 
 
 def _track_failure_pattern(repo: str, check_name: str, root_cause: str):

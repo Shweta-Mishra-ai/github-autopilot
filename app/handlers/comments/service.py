@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from app.core.authorization import check_command_permission
+from app.core.analytics import record_command_used
 from app.core.config import load_config
 from app.core.guardrails import budget_refusal, reset_budget_refusal
 from app.core.logger import EventLogger
@@ -71,6 +72,7 @@ def handle_comment_event(payload: dict) -> None:
 
     log_ctx = EventLogger("comments", repo=repo, issue=issue_number, cmd=cmd, author=author)
     log_ctx.info("command_received")
+    record_command_used(repo, cmd.lstrip("/"))  # /report's usage table; never raises
 
     # ── Auth ──────────────────────────────────────────────────────────────
     try:
@@ -269,7 +271,7 @@ def _dispatch(
             case "/release":
                 return P.cmd_release(repo, token, author)
             case "/runtests":
-                return P.cmd_runtests(repo, token)
+                return P.cmd_runtests(repo, issue_number, token, issue=issue)
             case "/notify":
                 return P.cmd_notify(repo, issue_number, issue, token, cmd_args)
             case "/security":

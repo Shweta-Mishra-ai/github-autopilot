@@ -241,7 +241,7 @@
       "functions": 9,
       "classes": 1,
       "is_package": false,
-      "fan_in": 15,
+      "fan_in": 16,
       "fan_out": 16,
       "external_deps": [
         "app",
@@ -297,11 +297,11 @@
       "id": "app.core.analytics",
       "path": "app/core/analytics.py",
       "layer": "core",
-      "loc": 240,
-      "functions": 17,
+      "loc": 258,
+      "functions": 18,
       "classes": 0,
       "is_package": false,
-      "fan_in": 1,
+      "fan_in": 4,
       "fan_out": 2,
       "external_deps": [
         "datetime",
@@ -677,7 +677,7 @@
       "functions": 5,
       "classes": 1,
       "is_package": false,
-      "fan_in": 14,
+      "fan_in": 15,
       "fan_out": 0,
       "external_deps": [
         "contextlib",
@@ -1018,7 +1018,7 @@
       "id": "app.handlers.comments.generator",
       "path": "app/handlers/comments/generator.py",
       "layer": "handlers",
-      "loc": 453,
+      "loc": 459,
       "functions": 11,
       "classes": 0,
       "is_package": false,
@@ -1034,8 +1034,8 @@
       "id": "app.handlers.comments.integrations",
       "path": "app/handlers/comments/integrations.py",
       "layer": "handlers",
-      "loc": 192,
-      "functions": 2,
+      "loc": 221,
+      "functions": 4,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
@@ -1044,7 +1044,8 @@
         "__future__",
         "app",
         "logging",
-        "os"
+        "os",
+        "re"
       ]
     },
     {
@@ -1072,7 +1073,7 @@
       "id": "app.handlers.comments.reviewer",
       "path": "app/handlers/comments/reviewer.py",
       "layer": "handlers",
-      "loc": 484,
+      "loc": 478,
       "functions": 11,
       "classes": 0,
       "is_package": false,
@@ -1090,7 +1091,7 @@
       "id": "app.handlers.comments.security",
       "path": "app/handlers/comments/security.py",
       "layer": "handlers",
-      "loc": 152,
+      "loc": 172,
       "functions": 4,
       "classes": 0,
       "is_package": false,
@@ -1107,12 +1108,12 @@
       "id": "app.handlers.comments.service",
       "path": "app/handlers/comments/service.py",
       "layer": "handlers",
-      "loc": 293,
+      "loc": 295,
       "functions": 3,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 17,
+      "fan_out": 18,
       "external_deps": [
         "__future__",
         "app",
@@ -1139,12 +1140,12 @@
       "id": "app.handlers.issues",
       "path": "app/handlers/issues.py",
       "layer": "handlers",
-      "loc": 290,
-      "functions": 2,
+      "loc": 308,
+      "functions": 3,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 11,
+      "fan_out": 12,
       "external_deps": [
         "app",
         "contextlib",
@@ -1155,15 +1156,16 @@
       "id": "app.handlers.pull_request",
       "path": "app/handlers/pull_request/__init__.py",
       "layer": "handlers",
-      "loc": 340,
-      "functions": 1,
+      "loc": 358,
+      "functions": 2,
       "classes": 0,
       "is_package": true,
       "fan_in": 2,
-      "fan_out": 22,
+      "fan_out": 23,
       "external_deps": [
         "__future__",
-        "app"
+        "app",
+        "logging"
       ]
     },
     {
@@ -1403,8 +1405,8 @@
       "id": "app.intelligence.memory",
       "path": "app/intelligence/memory.py",
       "layer": "intelligence",
-      "loc": 358,
-      "functions": 16,
+      "loc": 381,
+      "functions": 17,
       "classes": 1,
       "is_package": false,
       "fan_in": 7,
@@ -1440,12 +1442,12 @@
       "id": "app.intelligence.summarizer",
       "path": "app/intelligence/summarizer.py",
       "layer": "intelligence",
-      "loc": 145,
+      "loc": 176,
       "functions": 2,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 1,
+      "fan_out": 3,
       "external_deps": [
         "app",
         "logging"
@@ -2517,6 +2519,11 @@
     },
     {
       "source": "app.handlers.comments.service",
+      "target": "app.core.analytics",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.service",
       "target": "app.core.authorization",
       "kind": "import"
     },
@@ -2637,6 +2644,11 @@
     },
     {
       "source": "app.handlers.issues",
+      "target": "app.core.analytics",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.issues",
       "target": "app.core.config",
       "kind": "import"
     },
@@ -2699,6 +2711,11 @@
       "source": "app.handlers.pull_request",
       "target": "app.ai.validator",
       "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.core.analytics",
+      "kind": "runtime"
     },
     {
       "source": "app.handlers.pull_request",
@@ -3076,6 +3093,16 @@
       "kind": "import"
     },
     {
+      "source": "app.intelligence.summarizer",
+      "target": "app.ai.router",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.intelligence.summarizer",
+      "target": "app.core.sanitizer",
+      "kind": "runtime"
+    },
+    {
       "source": "app.mcp",
       "target": "app.mcp.mcp_server",
       "kind": "import"
@@ -3363,8 +3390,8 @@
   ],
   "stats": {
     "modules": 98,
-    "edges": 341,
-    "total_loc": 25842,
+    "edges": 346,
+    "total_loc": 26001,
     "layers": [
       "ai",
       "core",
@@ -3386,7 +3413,7 @@
       {
         "id": "app.ai.router",
         "loc": 822,
-        "fan_in": 15,
+        "fan_in": 16,
         "fan_out": 16
       },
       {
@@ -3408,16 +3435,16 @@
         "fan_out": 4
       },
       {
+        "id": "app.core.sanitizer",
+        "loc": 285,
+        "fan_in": 15,
+        "fan_out": 0
+      },
+      {
         "id": "app.core.guardrails",
         "loc": 358,
         "fan_in": 11,
         "fan_out": 1
-      },
-      {
-        "id": "app.core.sanitizer",
-        "loc": 285,
-        "fan_in": 14,
-        "fan_out": 0
       },
       {
         "id": "app.core.config",
@@ -3427,7 +3454,7 @@
       },
       {
         "id": "app.intelligence.memory",
-        "loc": 358,
+        "loc": 381,
         "fan_in": 7,
         "fan_out": 2
       },

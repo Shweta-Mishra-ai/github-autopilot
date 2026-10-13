@@ -64,22 +64,31 @@ def cmd_security(repo: str, issue_number: int, issue: dict, token: str) -> str:
                 unscannable.append(f.get("filename", "?"))
 
         dep_findings = []
+        dep_scanned = False
+        dep_error = ""
         # The contents API defaults to the repository's default branch. Reading
         # requirements.txt without a ref therefore scanned the *base* file and
         # reported "no vulnerable dependencies" for a PR whose whole change was
         # adding one. Pin the read to the PR head instead.
         head_sha = _pr_head_sha(repo, issue_number, token)
         for f in pr_files:
-            if f.get("filename") != "requirements.txt":
+            # A REMOVED requirements.txt has nothing at the head to read: the
+            # 404 used to abort the whole scan, discarding the secret findings
+            # already computed above.
+            if f.get("filename") != "requirements.txt" or f.get("status") == "removed":
                 continue
             import base64
 
             path = "/repos/{}/contents/requirements.txt".format(repo)
             if head_sha:
                 path += f"?ref={head_sha}"
-            raw = gh_get(path, token)
-            content = base64.b64decode(raw["content"]).decode()
-            dep_findings.extend(scan_requirements_txt(content))
+            try:
+                raw = gh_get(path, token)
+                content = base64.b64decode(raw["content"]).decode()
+                dep_findings.extend(scan_requirements_txt(content))
+                dep_scanned = True
+            except Exception as e:
+                dep_error = f"{type(e).__name__}"
 
         lines = ["## 🔒 Security Scan Results\n"]
         if all_findings:
@@ -95,11 +104,22 @@ def cmd_security(repo: str, issue_number: int, issue: dict, token: str) -> str:
                 f"⚠️ **{len(unscannable)} file(s) not scanned** — GitHub sends no diff for "
                 f"binary files or very large changes: {shown}{more}. Check these by hand.\n"
             )
-        lines.append(
-            format_dep_findings(dep_findings)
-            if dep_findings
-            else "✅ **No vulnerable dependencies** found.\n"
-        )
+        # Only what was measured. "No vulnerable dependencies found" was printed
+        # whether or not anything was scanned — for a PR touching only
+        # package.json, or none of its dependencies at all.
+        if dep_findings:
+            lines.append(format_dep_findings(dep_findings))
+        elif dep_scanned:
+            lines.append("✅ **No vulnerable dependencies** found in `requirements.txt`.\n")
+        elif dep_error:
+            lines.append(
+                f"⚠️ **Dependencies not checked** — `requirements.txt` could not be read ({dep_error}).\n"
+            )
+        else:
+            lines.append(
+                "ℹ️ **Dependencies not checked** — this PR does not change a root "
+                "`requirements.txt`, the only manifest this command checks.\n"
+            )
         return "\n\n".join(lines)
 
     except Exception as exc:

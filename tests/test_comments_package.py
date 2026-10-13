@@ -322,7 +322,10 @@ class TestFileSize:
 
         +3 for the daily AI budget: the router refuses calls once it is spent
         (guardrails.charge_ai_call), and the reply must say so rather than
-        report the command's own generic failure."""
+        report the command's own generic failure.
+
+        +2 for counting every command for /report (analytics.record_command_used
+        had one caller, /report itself, so its usage table only ever listed it)."""
         import os
         fpath = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -330,8 +333,8 @@ class TestFileSize:
         )
         with open(fpath, encoding='utf-8') as f:
             lines = f.readlines()
-        assert len(lines) <= 292, (
-            f"service.py has {len(lines)} lines — should stay under 292 lines as an orchestration layer."
+        assert len(lines) <= 294, (
+            f"service.py has {len(lines)} lines — should stay under 294 lines as an orchestration layer."
         )
 
 

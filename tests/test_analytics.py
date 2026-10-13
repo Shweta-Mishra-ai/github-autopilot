@@ -114,20 +114,22 @@ class TestWeeklyReport:
         assert report["prs"]["merged_today"] == 0
         assert report["prs"]["avg_merge_hours"] == 0.0
 
-    def test_format_report_comment_contains_repo(self):
+    def test_an_empty_store_renders_no_report(self):
+        """With nothing recorded the reply is "No Data Yet" (cmd_report), not
+        a table of zeros under a failing grade."""
         from app.core.analytics import format_report_comment
         mock_r = self._mock_redis_empty()
         with patch("app.core.redis_client.get_redis", return_value=mock_r):
-            comment = format_report_comment("test/repo")
-        assert "test/repo" in comment
-        assert "##" in comment
+            assert format_report_comment("test/repo") == ""
 
-    def test_format_report_comment_has_grade(self):
-        from app.core.analytics import format_report_comment
-        mock_r = self._mock_redis_empty()
-        with patch("app.core.redis_client.get_redis", return_value=mock_r):
-            comment = format_report_comment("test/repo")
-        assert "Grade" in comment
+    def test_a_report_with_data_names_the_repo_and_has_no_grade(self):
+        from app.core import analytics
+        with patch.object(analytics, "_get_top_commands", return_value={"fix": 3}), \
+             patch.object(analytics, "_get_int", return_value=0), \
+             patch.object(analytics, "_get_list", return_value=[]):
+            comment = analytics.format_report_comment("test/repo")
+        assert "test/repo" in comment and "##" in comment
+        assert "Grade" not in comment, "reviews no longer produce a score to grade"
 
     def test_redis_failure_returns_defaults(self):
         from app.core.analytics import get_weekly_report

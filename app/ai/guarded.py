@@ -48,8 +48,20 @@ def safe_router_ask(
         log.error(f"router.all_providers_down task={task} retry_in={exc.retry_in_seconds}s")
         return {"_providers_down": True, "_retry_in": exc.retry_in_seconds}, None
     except Exception as exc:
+        # {} used to be returned here. It has no "error", so is_unusable()
+        # passed it and the hallucination check then reported
+        # "low_confidence" — "the generated review did not pass the
+        # reliability check, please retry" — for a request that never reached
+        # a model and would fail the same way on every retry.
+        from app.core.guardrails import AIBudgetExceeded
+        from app.core.sanitizer import InjectionRejected
+
         log.error(f"router.ask failed task={task}: {exc}")
-        return {}, None
+        if isinstance(exc, InjectionRejected):
+            return {"error": "input_rejected", "_reason": "input_rejected"}, None
+        if isinstance(exc, AIBudgetExceeded):
+            return {"error": str(exc), "_reason": "budget"}, None
+        return {"error": type(exc).__name__, "_reason": "error"}, None
 
 
 # One alert per outage, not one per affected request. A total provider outage

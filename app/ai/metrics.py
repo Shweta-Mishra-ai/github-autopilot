@@ -46,7 +46,7 @@ def get_usage_today() -> dict:
     Returns per-provider usage for today.
     FIXED: renamed `r` → `redis_client`, added inner try/except per provider.
     """
-    today = datetime.date.today().isoformat()
+    today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
     result = {}
 
     try:
@@ -90,7 +90,7 @@ def format_budget_comment() -> str:
 
     usage = get_usage_today()
     breakers = status_all()
-    today = datetime.date.today().strftime("%B %d, %Y")
+    today = datetime.datetime.now(datetime.timezone.utc).date().strftime("%B %d, %Y")
 
     lines = [f"## 💰 LLM Budget — {today}\n"]
 
@@ -161,7 +161,7 @@ def record_call(provider_key: str, tokens: int):
         if tokens <= 0:
             return
         redis_client = get_redis()  # FIXED: was `r`
-        today = datetime.date.today().isoformat()
+        today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
         for k in (
             f"llm:tokens:{provider_key}:{today}",
             f"llm:requests:{provider_key}:{today}",

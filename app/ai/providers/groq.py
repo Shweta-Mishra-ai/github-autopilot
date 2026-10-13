@@ -1,13 +1,8 @@
 """
 app/ai/providers/groq.py
-V5 — Fixed token tracking.
-
-FIXES vs V4:
-  1. TOKEN COUNTER BUG: _track() used r.incr(tokens_key) which always adds 1,
-     not the actual token count. Replaced with r.incrby(tokens_key, total_tokens).
-     The /budget command now shows real token usage instead of a request count.
-  2. REQUEST COUNTER separated from token counter: tokens tracked via incrby,
-     requests tracked via incr(1) — both correct.
+Usage (requests, tokens, cost) is counted once, by the router, under this
+provider's key — see LLMRouter._log_and_track. This module used to count it
+too, which doubled Gemini's figures and split Groq's across two keys.
 """
 
 import logging
@@ -25,7 +20,6 @@ from app.ai.providers.base import (
     substituted_model,
     throttle_pause,
 )
-from app.core.redis_client import get_redis
 
 log = logging.getLogger(__name__)
 
@@ -246,7 +240,6 @@ class GroqProvider(LLMProvider):
             text = data["choices"][0]["message"]["content"]
 
             breaker.record_success()
-            self._track(t_tok)
 
             return LLMResponse(
                 text=text,
@@ -276,32 +269,3 @@ class GroqProvider(LLMProvider):
                 model=model,
                 error=err[:200],
             )
-
-    def _track(self, total_tokens: int):
-        """
-        Track token + request usage in Redis for /budget command.
-
-        FIXED: tokens key now uses incrby(total_tokens) instead of incr(1).
-        The old code incremented the token counter by 1 per call regardless
-        of how many tokens were consumed, making /budget data meaningless.
-        """
-        try:
-            import datetime
-
-            if total_tokens <= 0:
-                return
-            r = get_redis()
-            today = datetime.date.today().isoformat()
-
-            # Tokens: add actual count
-            tok_key = f"llm:tokens:{self.provider_key}:{today}"
-            r.incrby(tok_key, total_tokens)
-            r.expire(tok_key, 86400)
-
-            # Requests: always +1 per call
-            req_key = f"llm:requests:{self.provider_key}:{today}"
-            r.incr(req_key)
-            r.expire(req_key, 86400)
-
-        except Exception as e:
-            log.debug(f"groq.track_usage_failed provider={self.provider_key}: {e}")

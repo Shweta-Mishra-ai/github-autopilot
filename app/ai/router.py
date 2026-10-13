@@ -110,6 +110,13 @@ def _fit(text: str, max_chars: int) -> str:
     return text[:head] + marker + text[len(text) - tail :]
 
 
+def _utc_today() -> str:
+    """Today's date in UTC — the day the usage counters and /budget reset on.
+    date.today() is the HOST's local date, which on a non-UTC host rolled the
+    counters over at the wrong time and disagreed with the guardrails."""
+    return datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+
+
 def _charge() -> None:
     """
     Charge one AI call to the repository whose event is being handled.
@@ -211,14 +218,25 @@ class LLMRouter:
         return self._openrouter
 
     def _usage_pct(self, provider_key: str) -> float:
+        """
+        The larger of today's request share and token share. Only requests
+        were read: for groq_70b the binding limit is 80k TOKENS a day against
+        5,000 requests, so at 79k tokens and 30 requests this said 0.6% and
+        kept routing there until the provider started answering 429.
+        """
         try:
             from app.core.redis_client import get_redis
 
             r = get_redis()
-            today = datetime.date.today().isoformat()
-            used = int(r.get(f"llm:requests:{provider_key}:{today}") or 0)
-            limit = DAILY_LIMITS.get(provider_key, {}).get("requests", 9999)
-            return used / limit if limit else 0.0
+            today = _utc_today()
+            limits = DAILY_LIMITS.get(provider_key, {})
+            shares = []
+            for kind in ("requests", "tokens"):
+                limit = limits.get(kind, 0)
+                if limit:
+                    used = int(r.get(f"llm:{kind}:{provider_key}:{today}") or 0)
+                    shares.append(used / limit)
+            return max(shares, default=0.0)
         except Exception:
             return 0.0
 
@@ -386,15 +404,22 @@ class LLMRouter:
         if meta.error:
             log.warning(f"router.primary_failed provider={meta.provider} error={meta.error}")
             self._note_configuration_error(meta.error)
+            # The provider's own key, not meta.provider: Groq reports "groq"
+            # while its slots are "groq_70b"/"groq_8b", so the skip below never
+            # matched and the slot that just failed was called again first —
+            # another 45s timeout, and two breaker failures per request.
+            served_by = provider.provider_key
             fallback = self._try_fallback(
-                system, user, max_tokens, temperature, timeout, meta.provider, task
+                system, user, max_tokens, temperature, timeout, served_by, task
             )
             if fallback:
-                result, meta = fallback
+                result, meta, served_by = fallback
             else:
                 raise AllProvidersDown()
+        else:
+            served_by = provider.provider_key
 
-        self._log_and_track(task, meta)
+        self._log_and_track(task, meta, served_by)
         return result, meta
 
     def ask_text(
@@ -412,17 +437,16 @@ class LLMRouter:
         _charge()
         text, meta = provider.ask_text(system, user, max_tokens, timeout)
 
+        served_by = provider.provider_key
         if meta.error:
             self._note_configuration_error(meta.error)
-            fallback = self._try_fallback_text(
-                system, user, max_tokens, timeout, meta.provider, task
-            )
+            fallback = self._try_fallback_text(system, user, max_tokens, timeout, served_by, task)
             if fallback:
-                text, meta = fallback
+                text, meta, served_by = fallback
             else:
                 raise AllProvidersDown()
 
-        self._log_and_track(task, meta)
+        self._log_and_track(task, meta, served_by)
         return text, meta
 
     def _fallback_candidates(self, task: str = "standard") -> list:
@@ -464,7 +488,7 @@ class LLMRouter:
             result, meta = p.ask(system, fitted, max_tokens, temperature, timeout)
             meta.used_fallback = True
             if not meta.error:
-                return result, meta
+                return result, meta, p.provider_key
         return None
 
     def _try_fallback_text(self, system, user, max_tokens, timeout, failed_key, task="standard"):
@@ -478,17 +502,33 @@ class LLMRouter:
             text, meta = p.ask_text(system, fitted, max_tokens, timeout)
             meta.used_fallback = True
             if not meta.error:
-                return text, meta
+                return text, meta, p.provider_key
         return None
 
-    def _log_and_track(self, task: str, meta: LLMResponse):
+    def _log_and_track(self, task: str, meta: LLMResponse, provider_key: str = ""):
+        """
+        The ONE place a call's usage is counted, under the key of the
+        provider that served it (groq_70b, groq_8b, gemini, openrouter,
+        ollama).
+
+        Usage was counted twice, under two spellings: the Groq and Gemini
+        providers counted themselves under their provider key, and this
+        counted again under meta.provider. For Gemini both were "gemini", so
+        every figure was doubled and long tasks stopped routing there at
+        ~42% of real use. For Groq this wrote "groq", a key nothing reads:
+        COST_PER_1K had no "groq" entry (cost always $0) and the 80% budget
+        alert never fired for the provider with the tightest quota. Health
+        latency went to "groq" while breaker failures went to "groq_70b", so
+        one failure showed as a 100% error rate.
+        """
+        key = provider_key or meta.provider
         # Remembered per-thread so comment assembly can disclose which model
         # actually produced the output (handlers run one event per thread).
         _last_call.provider = meta.provider
         _last_call.model = meta.model
-        cost_est = (meta.total_tokens / 1000) * COST_PER_1K.get(meta.provider, 0)
+        cost_est = (meta.total_tokens / 1000) * COST_PER_1K.get(key, 0)
         log.info(
-            f"router.call task={task} provider={meta.provider} "
+            f"router.call task={task} provider={key} "
             f"tokens={meta.total_tokens} latency={meta.latency_ms}ms "
             f"cost=${cost_est:.5f} fallback={meta.used_fallback}"
         )
@@ -496,22 +536,22 @@ class LLMRouter:
             from app.core.redis_client import get_redis
 
             r = get_redis()
-            today = datetime.date.today().isoformat()
+            today = _utc_today()
             cost_mc = int(cost_est * 100_000)
             if cost_mc > 0:
-                cost_key = f"llm:cost_mc:{meta.provider}:{today}"
+                cost_key = f"llm:cost_mc:{key}:{today}"
                 r.incrby(cost_key, cost_mc)
                 r.expire(cost_key, 86400)
 
-            req_key = f"llm:requests:{meta.provider}:{today}"
+            req_key = f"llm:requests:{key}:{today}"
             r.incr(req_key)
             r.expire(req_key, 86400)
 
-            tok_key = f"llm:tokens:{meta.provider}:{today}"
+            tok_key = f"llm:tokens:{key}:{today}"
             r.incrby(tok_key, meta.total_tokens)
             r.expire(tok_key, 86400)
 
-            self._check_budget_alert(r, meta.provider, today)
+            self._check_budget_alert(r, key, today)
         except Exception:
             pass  # tracking must never affect request
 
@@ -523,7 +563,7 @@ class LLMRouter:
         try:
             from app.core.health_check import record_latency
 
-            record_latency(meta.provider, int(meta.latency_ms or 0))
+            record_latency(key, int(meta.latency_ms or 0))
         except Exception:
             pass  # health tracking must never affect request
 
@@ -600,7 +640,7 @@ class LLMRouter:
     def status(self) -> dict:
         from app.ai.circuit_breaker import status_all
 
-        today = datetime.date.today().isoformat()
+        today = _utc_today()
         usage = {}
         try:
             from app.core.redis_client import get_redis

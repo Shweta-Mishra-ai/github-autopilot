@@ -639,7 +639,7 @@
       "functions": 6,
       "classes": 1,
       "is_package": false,
-      "fan_in": 27,
+      "fan_in": 28,
       "fan_out": 1,
       "external_deps": [
         "__future__",
@@ -794,7 +794,7 @@
       "functions": 11,
       "classes": 2,
       "is_package": false,
-      "fan_in": 23,
+      "fan_in": 24,
       "fan_out": 2,
       "external_deps": [
         "app",
@@ -1140,16 +1140,17 @@
       "id": "app.handlers.issues",
       "path": "app/handlers/issues.py",
       "layer": "handlers",
-      "loc": 308,
-      "functions": 3,
+      "loc": 365,
+      "functions": 5,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 12,
+      "fan_out": 14,
       "external_deps": [
         "app",
         "contextlib",
-        "logging"
+        "logging",
+        "re"
       ]
     },
     {
@@ -1172,7 +1173,7 @@
       "id": "app.handlers.pull_request.analysis",
       "path": "app/handlers/pull_request/analysis.py",
       "layer": "handlers",
-      "loc": 264,
+      "loc": 269,
       "functions": 3,
       "classes": 0,
       "is_package": false,
@@ -2671,6 +2672,11 @@
     },
     {
       "source": "app.handlers.issues",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.issues",
       "target": "app.core.sanitizer",
       "kind": "import"
     },
@@ -2683,6 +2689,11 @@
       "source": "app.handlers.issues",
       "target": "app.github.client",
       "kind": "import"
+    },
+    {
+      "source": "app.handlers.issues",
+      "target": "app.github.client",
+      "kind": "runtime"
     },
     {
       "source": "app.handlers.issues",
@@ -3397,8 +3408,8 @@
   ],
   "stats": {
     "modules": 98,
-    "edges": 347,
-    "total_loc": 26156,
+    "edges": 349,
+    "total_loc": 26218,
     "layers": [
       "ai",
       "core",
@@ -3414,7 +3425,7 @@
       {
         "id": "app.core.redis_client",
         "loc": 511,
-        "fan_in": 27,
+        "fan_in": 28,
         "fan_out": 1
       },
       {
@@ -3426,7 +3437,7 @@
       {
         "id": "app.github.client",
         "loc": 307,
-        "fan_in": 23,
+        "fan_in": 24,
         "fan_out": 2
       },
       {

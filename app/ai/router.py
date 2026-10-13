@@ -402,8 +402,12 @@ class LLMRouter:
                 result = _extract_json(meta.text)
 
         if meta.error:
-            log.warning(f"router.primary_failed provider={meta.provider} error={meta.error}")
-            self._note_configuration_error(meta.error)
+            from app.core.redaction import redact_secrets
+
+            log.warning(
+                f"router.primary_failed provider={meta.provider} error={redact_secrets(meta.error)}"
+            )
+            self._note_configuration_error(meta.error, provider.provider_key)
             # The provider's own key, not meta.provider: Groq reports "groq"
             # while its slots are "groq_70b"/"groq_8b", so the skip below never
             # matched and the slot that just failed was called again first —
@@ -439,7 +443,7 @@ class LLMRouter:
 
         served_by = provider.provider_key
         if meta.error:
-            self._note_configuration_error(meta.error)
+            self._note_configuration_error(meta.error, served_by)
             fallback = self._try_fallback_text(system, user, max_tokens, timeout, served_by, task)
             if fallback:
                 text, meta, served_by = fallback
@@ -522,6 +526,13 @@ class LLMRouter:
         one failure showed as a 100% error rate.
         """
         key = provider_key or meta.provider
+        # The provider whose misconfiguration was recorded has just answered,
+        # so it is fixed. Nothing cleared it before: after one 401 and a key
+        # fix, every later unrelated outage was still reported to users as
+        # "the provider rejected GROQ_API_KEY", until a restart.
+        if LLMRouter._config_error and key == LLMRouter._config_error_key:
+            LLMRouter._config_error = ""
+            LLMRouter._config_error_key = ""
         # Remembered per-thread so comment assembly can disclose which model
         # actually produced the output (handlers run one event per thread).
         _last_call.provider = meta.provider
@@ -623,12 +634,14 @@ class LLMRouter:
     # a webhook thread and needs to be readable from /health and the doctor,
     # which run on a different request entirely.
     _config_error: str = ""
+    _config_error_key: str = ""
 
-    def _note_configuration_error(self, error: str) -> None:
+    def _note_configuration_error(self, error: str, provider_key: str = "") -> None:
         from app.ai.providers.base import is_configuration_error
 
         if is_configuration_error(error):
             LLMRouter._config_error = str(error)
+            LLMRouter._config_error_key = provider_key
 
     def configuration_error(self) -> str:
         """The last permanent provider misconfiguration seen, or ""."""
@@ -636,6 +649,7 @@ class LLMRouter:
 
     def clear_configuration_error(self) -> None:
         LLMRouter._config_error = ""
+        LLMRouter._config_error_key = ""
 
     def status(self) -> dict:
         from app.ai.circuit_breaker import status_all
@@ -729,6 +743,17 @@ def model_configuration_report() -> dict:
     from app.ai import model_catalog as catalog
     from app.ai.providers.gemini import gemini_model
     from app.ai.providers.openrouter import openrouter_model
+
+    # LLM_LOCAL_ONLY promises that NO cloud provider is ever contacted. The
+    # catalogue reads below are metadata, not code, but they are still calls
+    # to openrouter.ai (no key needed), Groq and Gemini — the promise is
+    # unconditional, so the diagnostic keeps it too.
+    if local_only():
+        return {
+            "autoheal": catalog.autoheal_enabled(),
+            "providers": {},
+            "skipped": "LLM_LOCAL_ONLY is set: cloud model catalogues are not contacted.",
+        }
 
     configured = {
         "groq": [

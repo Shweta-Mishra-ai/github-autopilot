@@ -123,6 +123,9 @@ _WEBHOOK_PATH_RES = (
 )
 
 
+_URL_USERINFO_RE = re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://)[^/@\s:]+:[^/@\s]+@")
+
+
 def redact_secrets(text: str | None) -> str:
     """
     Return `text` with URL-borne credentials replaced by REDACTED.
@@ -133,6 +136,9 @@ def redact_secrets(text: str | None) -> str:
     if not text:
         return ""
     out = str(text)
+    # Credentials in a URL's user-info (`http://user:pass@host`, as an
+    # OLLAMA_HOST may be written) — quoted by every connection error.
+    out = _URL_USERINFO_RE.sub(r"\1REDACTED@", out)
     for pattern in _WEBHOOK_PATH_RES:
         out = pattern.sub(lambda m: f"{m.group(1)}REDACTED", out)
     return _SECRET_QUERY_RE.sub(lambda m: f"{m.group(1)}=REDACTED", out)

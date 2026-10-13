@@ -147,8 +147,10 @@ class GeminiProvider(LLMProvider):
             if r.status_code in (400, 401, 403, 404):
                 # Same repair as the primary: a model the provider no longer
                 # serves is a question the provider itself can answer.
+                # "quality": Gemini fills a high-tier slot (long reviews), so
+                # its repair must not reach for the speed list's flash-lite.
                 replacement = substituted_model(
-                    "gemini", "gemini", "speed", model, r, r.status_code
+                    "gemini", "gemini", "quality", model, r, r.status_code
                 )
                 if replacement:
                     model = replacement

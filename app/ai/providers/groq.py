@@ -230,6 +230,20 @@ class GroqProvider(LLMProvider):
                     error=detail,
                 )
 
+            # Any other 4xx (400 bad parameter, 413 request too large, 422) is
+            # a fault in THIS request, not an outage. It used to fall into the
+            # generic handler below, whose `"raise_for_status" not in err`
+            # guard could never be true, so three oversized prompts opened the
+            # breaker and blocked every groq_70b call for a minute.
+            if 400 <= _status < 500 and _status != 429:
+                log.warning(f"groq.client_error status={_status} model={model}")
+                return LLMResponse(
+                    text="",
+                    provider="groq",
+                    model=model,
+                    error=f"Client error {_status}: {r.text[:150]}",
+                )
+
             r.raise_for_status()
             data = r.json()
             usage = data.get("usage", {})
@@ -261,8 +275,7 @@ class GroqProvider(LLMProvider):
             )
         except Exception as e:
             err = str(e)
-            if "raise_for_status" not in err:
-                breaker.record_failure(err[:60])
+            breaker.record_failure(err[:60])
             return LLMResponse(
                 text="",
                 provider="groq",

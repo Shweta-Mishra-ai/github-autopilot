@@ -238,10 +238,38 @@ class DepFinding:
         return self.severity in ISSUE_SEVERITIES and self.cve_id not in ACCEPTED_CVES
 
 
-# Matches `package==version`, tolerating extras (`celery[redis]==5.3.6`) and a
-# trailing comment. Anything else — ranges, markers, -r includes, VCS URLs — is
-# skipped, because a pin is the only form this scanner can match against a CVE.
-_PIN_RE = re.compile(r"^([a-zA-Z0-9_\-\[\]]+)==([^\s#]+)")
+# Matches `package==version`, tolerating extras (`celery[redis]==5.3.6`),
+# spaces around the operator (`flask == 3.0.0`), dotted names
+# (`zope.interface==6.0`) and a trailing comment or marker. Anything else —
+# ranges, -r includes, VCS URLs — is skipped, because a pin is the only form
+# this scanner can match against a CVE. The old pattern allowed neither spaces
+# nor dots, so those pins were silently left out of the scan.
+_PIN_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._\-]*)\s*(?:\[[^\]]*\])?\s*==\s*([^\s#;,]+)")
+
+# The name at the start of any requirement line, pinned or not.
+_NAME_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._\-]*)")
+
+
+def _canonical(name: str) -> str:
+    """PEP 503 name: `Zope_Interface` and `zope.interface` are one package."""
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def requirement_names(content: str) -> list[str]:
+    """
+    Every package named in a requirements file, pinned or not, in order and
+    without duplicates. Options (`-r`, `-e`, `--hash`) and URLs name nothing
+    this can look up and are skipped.
+    """
+    names: list[str] = []
+    for line in (content or "").splitlines():
+        line = line.split(" #", 1)[0].strip()
+        if not line or line.startswith(("#", "-")) or "://" in line:
+            continue
+        match = _NAME_RE.match(line)
+        if match and _canonical(match.group(1)) not in names:
+            names.append(_canonical(match.group(1)))
+    return names
 
 
 def parse_requirements(content: str) -> list[dict]:
@@ -254,12 +282,7 @@ def parse_requirements(content: str) -> list[dict]:
         match = _PIN_RE.match(line)
         if not match:
             continue
-        packages.append(
-            {
-                "name": match.group(1).lower().split("[")[0],  # strip extras
-                "version": match.group(2),
-            }
-        )
+        packages.append({"name": _canonical(match.group(1)), "version": match.group(2)})
     return packages
 
 

@@ -408,16 +408,9 @@ class TestRunCommand:
         mock_budget.assert_called_once_with()
         assert result == "## Budget"
 
-    def test_bad_parse_returns_error(self):
-        mod = _import_mcp()
-        with patch('app.github.auth.get_installation_token', return_value="tok"), \
-             patch('app.github.client.gh_get', return_value={"title":"t","body":"b"}), \
-             patch('app.handlers.comments._extract_command', return_value=None):
-                    result = mod._handle_run_command({
-                        "repo": "o/r", "issue_number": 1,
-                        "command": "/fix", "installation_id": 123
-                    })
-        assert "Error" in result
+    # test_bad_parse_returns_error was removed: the command is no longer
+    # re-parsed from "command + context" (which let the context pick the
+    # command); see tests/test_mcp_audit2.py::TestRunCommand.
 
 
 class TestToolsCallDispatch:

@@ -8,6 +8,8 @@ secret scanning.
 import random
 import string
 
+import pytest
+
 from app.security.enhanced_secrets import _redact, scan_diff
 
 
@@ -138,3 +140,35 @@ class TestRedactionKeepsNothingOfAKeywordValue:
         token = _pat()
         out = _redact(token)
         assert out.startswith("ghp_") and out.endswith(token[-4:]) and token[8:20] not in out
+
+
+class TestRandomSecretsAreNotIdentifiersOrPlaceholders:
+    """Samples the scanner dropped: dotted mixed-case values were taken for
+    attribute paths, and a password starting `youR$` for the word "your"."""
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            '+azure_client_secret = "kRxrmiwARtSPrkoRGf.CDyfWzwgtYESweN"',
+            '+azure_client_secret = "XFyYU_xbyco.STaHqHNNnUefW.cwrr.mzo"',
+            '+azure_client_secret = "iov_YDYCeVoRiyFthrRfK_lQofwYtPC.Kh"',
+            '+password = "youR$uFVguQ$Hue!4EApT3DX"',
+        ],
+    )
+    def test_reported(self, line):
+        from app.security.enhanced_secrets import scan_diff
+
+        assert scan_diff(line, file_path="app/settings.py")
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            '+AUTH = "rest_framework.authtoken.TokenAuthentication"',
+            '+api_key = "Your-Api-Key-Goes-Here"',
+            '+password = "YOUR_PASSWORD"',
+        ],
+    )
+    def test_still_not_reported(self, line):
+        from app.security.enhanced_secrets import scan_diff
+
+        assert not scan_diff(line, file_path="app/settings.py")

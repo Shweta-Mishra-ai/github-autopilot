@@ -40,23 +40,22 @@ _in_fallback = False
 
 def make_fingerprint(delivery_id: str, event_type: str, payload: dict) -> str:
     """
-    Create a stable 32-char fingerprint for a webhook event.
-    Uses delivery_id (unique per GitHub delivery) + key payload fields.
+    A stable 32-char fingerprint for a webhook event: a hash of the payload
+    itself.
+
+    It hashed the delivery id, the event header and a few payload fields. The
+    signature covers only the body — X-GitHub-Delivery and X-GitHub-Event are
+    not signed — so anyone holding one captured signed body could replay it
+    under a fresh delivery id (or another event header) and have it processed
+    again. The payload is what GitHub signed, so it is what identifies the
+    event. A genuine redelivery of an event that was not processed still runs:
+    every path that does not accept an event releases its fingerprint.
+    `delivery_id` and `event_type` are kept in the signature for callers.
     """
-    key_fields = {
-        "delivery": delivery_id,
-        "event": event_type,
-        "action": payload.get("action", ""),
-        "repo": payload.get("repository", {}).get("full_name", ""),
-        "number": (
-            payload.get("pull_request", {}).get("number")
-            or payload.get("issue", {}).get("number")
-            or payload.get("comment", {}).get("id")
-            or ""
-        ),
-    }
-    raw = "|".join(str(v) for v in key_fields.values())
-    return hashlib.sha256(raw.encode()).hexdigest()[:32]
+    import json
+
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(canonical.encode("utf-8", "surrogatepass")).hexdigest()[:32]
 
 
 def is_duplicate(fingerprint: str) -> bool:

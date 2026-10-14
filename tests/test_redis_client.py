@@ -65,13 +65,16 @@ class TestSingleton:
             rc.reset_client()
             assert rc.is_redis_available() is False
 
-    def test_connection_failure_falls_back_to_fake(self):
+    def test_connection_failure_never_pins_the_in_memory_fake(self):
+        """One failed ping (Redis still starting at deploy) cached the fake for
+        the life of the process: no queue, and dedupe/budgets/memory kept in
+        process memory and lost on restart, while /health said ok."""
         import redis as redis_lib
         with patch.dict(os.environ, {"REDIS_URL": "redis://unreachable:9999/0"}):
             rc.reset_client()
             with patch.object(redis_lib.Redis, "ping", side_effect=Exception("refused")):
                 r = rc.get_redis()
-        assert isinstance(r, rc._FakeRedis)
+        assert not isinstance(r, rc._FakeRedis)
 
 
 class TestBlockingClient:
@@ -106,13 +109,13 @@ class TestBlockingClient:
         assert plain is blocking
         assert isinstance(blocking, rc._FakeRedis)
 
-    def test_connection_failure_falls_back_to_fake(self):
+    def test_connection_failure_never_pins_the_in_memory_fake(self):
         import redis as redis_lib
         with patch.dict(os.environ, {"REDIS_URL": "redis://unreachable:9999/0"}):
             rc.reset_client()
             with patch.object(redis_lib.Redis, "ping", side_effect=Exception("refused")):
                 r = rc.get_redis_blocking()
-        assert isinstance(r, rc._FakeRedis)
+        assert not isinstance(r, rc._FakeRedis)
 
     def test_reset_client_clears_blocking_singleton_too(self):
         with patch.dict(os.environ, {"REDIS_URL": ""}):

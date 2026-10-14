@@ -58,6 +58,7 @@ import json
 import logging
 import threading
 import time
+import uuid
 from typing import Callable
 
 from app.core.metrics import metrics
@@ -73,13 +74,32 @@ log = logging.getLogger(__name__)
 PENDING_KEY = "evq:pending"
 PROCESSING_KEY = "evq:processing"
 DEAD_KEY = "evq:dead"
+# Who holds each in-flight envelope: {sha1(envelope): {"pid", "at"}}.
+CLAIMS_KEY = "evq:claims"
+# Retries waiting for their time: ZSET envelope -> due unix time.
+DELAYED_KEY = "evq:delayed"
+# A process is alive while its key exists; consumers refresh it.
+ALIVE_KEY = "evq:alive:{}"
 
 MAX_QUEUE_LEN = env_int("EVENT_QUEUE_MAX_LEN", 200, minimum=1)
 MAX_ENVELOPE_BYTES = env_int("EVENT_QUEUE_MAX_ITEM_BYTES", 512 * 1024, minimum=1024)
-MAX_ATTEMPTS = 2  # first run + one retry, then dead-letter
-# How long a consumer waits before requeueing an event whose handler hit a
-# transient failure (GitHub 5xx, rate limit, provider outage).
-RETRY_DELAY_SECONDS = 30
+# First run + three retries, then dead-letter. Two attempts 30 seconds apart
+# dead-lettered every event of a GitHub rate-limit outage, which lasts up to
+# an hour; the delays now grow.
+MAX_ATTEMPTS = 4
+RETRY_DELAYS = (30, 300, 1800)
+RETRY_DELAY_SECONDS = RETRY_DELAYS[0]  # kept for callers and tests
+
+# This process. A claim names it; its heartbeat says it is still working.
+PROCESS_ID = uuid.uuid4().hex[:12]
+HEARTBEAT_SECONDS = 10
+ALIVE_TTL = 45
+# A claim older than this is recovered even if its owner is alive: a handler
+# that has not finished in half an hour is stuck, not slow.
+LEASE_SECONDS = 1800
+# An envelope found in processing with no claim (the owner died between the
+# move and the claim) is recovered after this long.
+UNCLAIMED_GRACE = 60
 
 
 class HandlerOutcome:
@@ -104,7 +124,9 @@ class EnqueueResult:
     TOO_LARGE = "too_large"
 
 
-def enqueue(event: str, payload: dict, repo: str, delivery_id: str = "") -> str:
+def enqueue(
+    event: str, payload: dict, repo: str, delivery_id: str = "", fingerprint: str = ""
+) -> str:
     """
     Park one webhook event in Redis. Returns an EnqueueResult constant.
     Never raises — Redis errors degrade to UNAVAILABLE so the caller can
@@ -121,6 +143,9 @@ def enqueue(event: str, payload: dict, repo: str, delivery_id: str = "") -> str:
             "payload": payload,
             "attempts": 0,
             "enqueued_at": int(time.time()),
+            # The dedupe key, released if the event is dead-lettered so a
+            # redelivery from GitHub's UI is processed instead of skipped.
+            "fp": fingerprint,
         },
         separators=(",", ":"),
     )
@@ -146,13 +171,60 @@ def enqueue(event: str, payload: dict, repo: str, delivery_id: str = "") -> str:
 # ── Crash recovery ────────────────────────────────────────────────────────────
 
 
+def _claim_id(raw: str) -> str:
+    import hashlib
+
+    return hashlib.sha1(raw.encode("utf-8", "surrogatepass")).hexdigest()
+
+
+def _claim(r, raw: str) -> None:
+    r.hset(CLAIMS_KEY, _claim_id(raw), json.dumps({"pid": PROCESS_ID, "at": int(time.time())}))
+
+
+def _alive(r, pid: str) -> bool:
+    return pid == PROCESS_ID or bool(r.exists(ALIVE_KEY.format(pid)))
+
+
+def _stale(r, raw: str, now: float) -> bool:
+    """Whether an in-flight envelope belongs to nobody who is still working."""
+    cid = _claim_id(raw)
+    claim = r.hget(CLAIMS_KEY, cid)
+    if claim is None:
+        # Moved but never claimed: the owner died in between. Give a live
+        # owner a moment to write its claim before calling it abandoned.
+        # A placeholder with no owner; it is stale once it outlives the grace
+        # period. A consumer that claims the envelope overwrites it.
+        r.hsetnx(CLAIMS_KEY, cid, json.dumps({"pid": "", "at": int(now)}))
+        return False
+    try:
+        c = json.loads(claim)
+    except Exception:
+        return True
+    pid, at = str(c.get("pid") or ""), int(c.get("at") or 0)
+    if not pid:
+        return now - at > UNCLAIMED_GRACE
+    if now - at > LEASE_SECONDS:
+        return True
+    return not _alive(r, pid)
+
+
 def recover_stale(max_items: int = MAX_QUEUE_LEN) -> int:
     """
-    Requeue events stranded in evq:processing by a crash/restart.
-    Single-consumer-process design: at boot nothing is legitimately
-    in-flight, so everything found there is a leftover.
-    Items that already used their attempts go to evq:dead.
-    Returns number of items recovered.
+    Requeue in-flight events whose owner is gone; returns how many.
+
+    This ran at boot and assumed nothing was legitimately in flight, so it
+    moved EVERYTHING in evq:processing back to pending. That is false whenever
+    two processes overlap — a zero-downtime deploy boots the new instance
+    while the old one is still handling events, and several worker.py
+    replicas are the documented way to scale — so an event being handled was
+    requeued and handled twice (duplicate comments, PRs, merges), and what the
+    old process still held when it was killed stayed stuck until some later
+    boot. Each in-flight envelope is now claimed by the process that took it,
+    every process keeps a heartbeat, and only an envelope whose owner's
+    heartbeat has lapsed (or whose lease ran out) is recovered — by whichever
+    process notices first, every minute rather than once at boot. LREM is the
+    arbiter: the one recovery that removes the envelope is the one that
+    requeues it.
     """
     if not is_redis_available():
         return 0
@@ -160,10 +232,13 @@ def recover_stale(max_items: int = MAX_QUEUE_LEN) -> int:
     recovered = 0
     try:
         r = get_redis()
-        for _ in range(max_items):
-            raw = r.rpop(PROCESSING_KEY)
-            if raw is None:
-                break
+        now = time.time()
+        for raw in r.lrange(PROCESSING_KEY, 0, max_items - 1) or []:
+            if not _stale(r, raw, now):
+                continue
+            if not r.lrem(PROCESSING_KEY, 1, raw):
+                continue  # another process recovered it first
+            r.hdel(CLAIMS_KEY, _claim_id(raw))
             try:
                 env = json.loads(raw)
                 env["attempts"] = int(env.get("attempts", 0)) + 1
@@ -174,10 +249,7 @@ def recover_stale(max_items: int = MAX_QUEUE_LEN) -> int:
                 continue
 
             if env["attempts"] >= MAX_ATTEMPTS:
-                metrics.increment("queue.dead")
-                r.lpush(DEAD_KEY, json.dumps(env, separators=(",", ":")))
-                r.ltrim(DEAD_KEY, 0, DEAD_MAX - 1)
-                log.warning(f"queue.dead_letter id={env.get('id')} event={env.get('event')}")
+                _dead_letter(r, env, "owner stopped while handling it, attempts exhausted")
             else:
                 metrics.increment("queue.requeued")
                 r.lpush(PENDING_KEY, json.dumps(env, separators=(",", ":")))
@@ -189,10 +261,41 @@ def recover_stale(max_items: int = MAX_QUEUE_LEN) -> int:
     return recovered
 
 
+def promote_due(limit: int = 50) -> int:
+    """Move retries whose delay has passed from the delayed set to pending."""
+    try:
+        r = get_redis()
+        moved = 0
+        for raw in r.zrangebyscore(DELAYED_KEY, 0, time.time(), start=0, num=limit) or []:
+            if r.zrem(DELAYED_KEY, raw):  # one process wins each item
+                r.lpush(PENDING_KEY, raw)
+                moved += 1
+        return moved
+    except Exception as e:
+        log.warning(f"queue.promote_failed: {e}")
+        return 0
+
+
+def _housekeeping_loop() -> None:
+    """Heartbeat, due retries, and recovery of abandoned work."""
+    last_recover = 0.0
+    while not _stop.is_set():
+        try:
+            get_redis().set(ALIVE_KEY.format(PROCESS_ID), "1", ex=ALIVE_TTL)
+            promote_due()
+            if time.time() - last_recover >= 60:
+                recover_stale()
+                last_recover = time.time()
+        except Exception as e:
+            log.warning(f"queue.housekeeping_failed: {e}")
+        _stop.wait(HEARTBEAT_SECONDS)
+
+
 # ── Consumer group ────────────────────────────────────────────────────────────
 
 _stop = threading.Event()
 _threads: list[threading.Thread] = []
+_housekeeper: threading.Thread | None = None
 _threads_lock = threading.Lock()
 
 
@@ -213,6 +316,10 @@ def _consume_once(handler: Callable[[str, dict, str], None]) -> bool:
     if raw is None:
         return False
     try:
+        _claim(get_redis(), raw)
+    except Exception as e:
+        log.warning(f"queue.claim_failed: {e}")
+    try:
         env = json.loads(raw)
         outcome = handler(
             env.get("event", ""), env.get("payload") or {}, env.get("repo", "unknown")
@@ -222,6 +329,10 @@ def _consume_once(handler: Callable[[str, dict, str], None]) -> bool:
         # Remove from processing even if handler raised: a fatal error would
         # be retried forever otherwise.
         r.lrem(PROCESSING_KEY, 1, raw)
+        try:
+            get_redis().hdel(CLAIMS_KEY, _claim_id(raw))
+        except Exception as e:
+            log.debug(f"queue.unclaim_failed: {e}")
     return True
 
 
@@ -230,6 +341,12 @@ def _dead_letter(r, env: dict, why: str) -> None:
     r.lpush(DEAD_KEY, json.dumps({**env, "why": why[:200]}, separators=(",", ":")))
     r.ltrim(DEAD_KEY, 0, DEAD_MAX - 1)
     log.warning(f"queue.dead_letter id={env.get('id')} event={env.get('event')} why={why[:120]}")
+    # The dedupe key stayed set for 24h, so GitHub's "Redeliver" — the only
+    # way to recover a dead-lettered event — was answered "duplicate".
+    if env.get("fp"):
+        from app.core.idempotency import forget
+
+        forget(str(env["fp"]))
 
 
 def _settle(r, env: dict, outcome) -> None:
@@ -249,10 +366,17 @@ def _settle(r, env: dict, outcome) -> None:
     if outcome == HandlerOutcome.RETRY:
         env["attempts"] = int(env.get("attempts", 0)) + 1
         if env["attempts"] < MAX_ATTEMPTS:
-            _stop.wait(RETRY_DELAY_SECONDS)  # returns early on shutdown
+            # Scheduled, not slept: waiting in the consumer held one of the
+            # two consumer threads for 30s per failing event, so an outage
+            # throttled the whole queue to a few events a minute.
+            delay = RETRY_DELAYS[min(env["attempts"] - 1, len(RETRY_DELAYS) - 1)]
             metrics.increment("queue.retried")
-            r.lpush(PENDING_KEY, json.dumps(env, separators=(",", ":")))
-            log.info(f"queue.retry_scheduled id={env.get('id')} event={env.get('event')}")
+            get_redis().zadd(
+                DELAYED_KEY, {json.dumps(env, separators=(",", ":")): time.time() + delay}
+            )
+            log.info(
+                f"queue.retry_scheduled id={env.get('id')} event={env.get('event')} in={delay}s"
+            )
             return
         _dead_letter(r, env, "transient failure persisted after retry")
         return
@@ -287,14 +411,27 @@ def start_consumers(handler: Callable[[str, dict, str], None]) -> int:
         log.info("queue.consumers_disabled (EVENT_QUEUE_CONSUMERS=0)")
         return 0
     if not is_redis_available():
-        log.warning("queue.no_redis — consumers not started, thread-pool fallback active")
+        # Not "never": Redis that was unreachable at boot (still starting on a
+        # deploy) used to leave the queue without consumers for the life of
+        # the process. A watcher starts them once Redis answers.
+        log.warning("queue.no_redis — thread-pool fallback until Redis is reachable")
+        _start_when_redis_returns(handler)
         return 0
 
     with _threads_lock:
         if _threads:
             return len(_threads)
         _stop.clear()
+        try:
+            get_redis().set(ALIVE_KEY.format(PROCESS_ID), "1", ex=ALIVE_TTL)
+        except Exception as e:
+            log.warning(f"queue.heartbeat_failed: {e}")
         recover_stale()
+        global _housekeeper
+        _housekeeper = threading.Thread(
+            target=_housekeeping_loop, daemon=True, name="evq-housekeeping"
+        )
+        _housekeeper.start()
         for i in range(CONSUMER_COUNT):
             t = threading.Thread(
                 target=_consume_loop, args=(handler, i), daemon=True, name=f"evq-consumer-{i}"
@@ -305,6 +442,30 @@ def start_consumers(handler: Callable[[str, dict, str], None]) -> int:
         return len(_threads)
 
 
+_watcher: threading.Thread | None = None
+REDIS_WATCH_SECONDS = 15
+
+
+def _start_when_redis_returns(handler: Callable[[str, dict, str], None]) -> None:
+    global _watcher
+    from app.core.redis_client import REDIS_URL
+
+    if not (REDIS_URL or __import__("os").environ.get("REDIS_URL")):
+        return  # no Redis configured at all: the fallback is the design
+    if _watcher is not None and _watcher.is_alive():
+        return
+
+    def _watch() -> None:
+        while not _stop.wait(REDIS_WATCH_SECONDS):
+            if is_redis_available():
+                log.info("queue.redis_back — starting consumers")
+                start_consumers(handler)
+                return
+
+    _watcher = threading.Thread(target=_watch, daemon=True, name="evq-redis-watch")
+    _watcher.start()
+
+
 def stop_consumers(timeout: float = 10.0) -> None:
     """Graceful drain: signal stop, join with bound. Called from SIGTERM."""
     _stop.set()
@@ -312,6 +473,8 @@ def stop_consumers(timeout: float = 10.0) -> None:
         for t in _threads:
             t.join(timeout=timeout / max(len(_threads), 1))
         _threads.clear()
+        if _housekeeper is not None:
+            _housekeeper.join(timeout=1.0)
     log.info("queue.consumers_stopped")
 
 

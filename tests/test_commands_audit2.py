@@ -291,11 +291,11 @@ class TestReportRecordsWhatItShows:
     def test_an_empty_report_says_no_data_and_has_no_grade(self, monkeypatch):
         from app.core import analytics
 
-        monkeypatch.setattr(analytics, "_get_int", lambda k: 0)
-        monkeypatch.setattr(analytics, "_get_list", lambda k: [])
-        monkeypatch.setattr(analytics, "_get_top_commands", lambda repo, top_n=5: {})
+        monkeypatch.setattr(analytics, "_get_int", lambda r, k: 0)
+        monkeypatch.setattr(analytics, "_get_list", lambda r, k: [])
+        monkeypatch.setattr(analytics, "_get_top_commands", lambda r, repo, days, top_n=5: {})
         assert analytics.format_report_comment("o/r") == ""
-        monkeypatch.setattr(analytics, "_get_top_commands", lambda repo, top_n=5: {"fix": 2})
+        monkeypatch.setattr(analytics, "_get_top_commands", lambda r, repo, days, top_n=5: {"fix": 2})
         out = analytics.format_report_comment("o/r")
         assert "Grade" not in out and "/fix" in out
 

@@ -350,21 +350,27 @@ def cmd_budget() -> str:
 def cmd_report(repo: str) -> str:
     """Show weekly analytics for this repo."""
     # Counted by the comment service like every other command.
-    try:
-        from app.core.analytics import format_report_comment
+    from app.core.analytics import AnalyticsUnavailable, format_report_comment
 
+    try:
         report = format_report_comment(repo)
         if not report or not report.strip():
             return (
                 "## 📊 No Data Yet\n\n"
-                "No activity recorded for this repo yet. "
-                "The report populates after the first PR, issue, or command."
+                "Nothing has been recorded for this repo this week. "
+                "The report counts merged PRs, closed issues and commands."
             )
         return report
+    except AnalyticsUnavailable as exc:
+        # This branch was unreachable: every read swallowed its error and
+        # the report said "no activity" instead.
+        log.error(f"cmd_report.unavailable repo={repo}: {exc}")
+        return (
+            "## ⚠️ Report Unavailable\n\n"
+            f"The analytics store (Redis) could not be read: `{str(exc)[:120]}`. "
+            "This is not a report of zero activity."
+        )
     except Exception as exc:
-        err = str(exc).lower()
-        if any(w in err for w in ("redis", "connection", "refused")):
-            return "## ⚠️ Report Unavailable\n\nRedis is not reachable. Check `REDIS_URL` in Render."
         log.error(f"cmd_report error: {exc}")
         return fmt_error("Report failed", exc)
 

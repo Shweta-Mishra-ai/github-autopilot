@@ -285,6 +285,7 @@ def cmd_rollback(
 ) -> str:
     """Rollback command: preview/list snapshots and execute rollback."""
     from app.core.snapshot import (
+        SnapshotsUnavailable,
         get_snapshot_by_number,
         format_snapshot_list,
         format_rollback_result,
@@ -292,9 +293,16 @@ def cmd_rollback(
     )
 
     args = (cmd_args or "").strip()
+    unavailable = (
+        "## ⚠️ Snapshots Unavailable\n\nThe snapshot store (Redis) could not be read: "
+        "`{}`. This is not a report that nothing was recorded — nothing was rolled back."
+    )
 
     if not args:
-        return format_snapshot_list(repo)
+        try:
+            return format_snapshot_list(repo)
+        except SnapshotsUnavailable as e:
+            return unavailable.format(str(e)[:120])
 
     parts = args.split()
     n_str = parts[0]
@@ -305,7 +313,10 @@ def cmd_rollback(
     except ValueError:
         return f"## ⚠️ Invalid Snapshot Number\n\n`{n_str}` is not a number.\n\nUsage: `/rollback` → list, `/rollback 3` → preview, `/rollback 3 confirm` → execute"
 
-    snap = get_snapshot_by_number(repo, n)
+    try:
+        snap = get_snapshot_by_number(repo, n)
+    except SnapshotsUnavailable as e:
+        return unavailable.format(str(e)[:120])
     if not snap:
         return f"## ⚠️ Snapshot #{n} Not Found\n\nUse `/rollback` to see available snapshots (max 10, expire after 7 days)."
 

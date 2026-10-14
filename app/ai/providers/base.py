@@ -32,6 +32,9 @@ class LLMResponse:
     cost_usd: float = 0.0  # Estimated cost
     used_fallback: bool = False  # Was a fallback model used?
     error: str | None = None  # Non-None if call failed
+    # Which configured provider answered (groq_70b, groq_8b, gemini, …), set by
+    # the router. `provider` is the vendor and cannot tell the tiers apart.
+    provider_key: str = ""
 
     @property
     def is_error(self) -> bool:

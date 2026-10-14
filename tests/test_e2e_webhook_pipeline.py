@@ -316,7 +316,7 @@ class TestPullRequestOpened:
         description update since this shipped was a 404."""
         edits = self._metadata_edits(world)
         assert [w["method"] for w in edits] == ["PATCH"], edits
-        assert edits[0]["body"]["body"].startswith("## Summary")
+        assert "## Summary\nParameterises the query." in edits[0]["body"]["body"]
         # Title polish is off unless the repo opts in (config.py: "silent
         # rewrite off by default").
         assert "title" not in edits[0]["body"]
@@ -327,7 +327,7 @@ class TestPullRequestOpened:
         )
         assert [w["method"] for w in edits] == ["PATCH"], "title and body must be one request"
         assert edits[0]["body"]["title"] == ANALYSIS["suggested_title"]
-        assert edits[0]["body"]["body"].startswith("## Summary")
+        assert "## Summary\nParameterises the query." in edits[0]["body"]["body"]
 
     def test_an_exact_code_fix_is_a_commit_button(self, world):
         world.llm.script = script(

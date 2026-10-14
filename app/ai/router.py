@@ -537,6 +537,7 @@ class LLMRouter:
         # actually produced the output (handlers run one event per thread).
         _last_call.provider = meta.provider
         _last_call.model = meta.model
+        meta.provider_key = key
         cost_est = (meta.total_tokens / 1000) * COST_PER_1K.get(key, 0)
         log.info(
             f"router.call task={task} provider={key} "

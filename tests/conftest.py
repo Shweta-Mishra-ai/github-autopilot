@@ -334,7 +334,14 @@ def no_real_network(request):
             host.startswith(("127.", "localhost", "::1")) or host in ("", "0.0.0.0")
         )
 
+    attempts: list[str] = []
+
     def _refuse(host):
+        # Recorded as well as raised: the app catches broad exceptions on most
+        # network paths and carries on as "no data", so a raise alone left the
+        # test passing on the error path it never meant to test. Teardown
+        # fails the test if anything was recorded.
+        attempts.append(str(host))
         raise RuntimeError(
             f"A unit test tried to open a real connection to {host!r}.\n"
             "Mock the client instead. If the test genuinely needs the network, "
@@ -380,13 +387,19 @@ def no_real_network(request):
     http.client.HTTPConnection.set_tunnel = _guard_set_tunnel
     http.client.HTTPConnection.putrequest = _guard_putrequest
     try:
-        yield
+        yield attempts  # the guard's own tests read and clear this
     finally:
         socket.socket.connect = real_connect
         socket.getaddrinfo = real_getaddrinfo
         http.client.HTTPConnection.set_tunnel = real_set_tunnel
         http.client.HTTPConnection.putrequest = real_putrequest
         os.environ.update(saved_proxy_env)
+    if attempts:
+        pytest.fail(
+            f"tried to reach the network ({', '.join(sorted(set(attempts)))}); the app "
+            "swallowed the refusal, so this test ran the 'no data' path. Mock the client.",
+            pytrace=False,
+        )
 
 
 @pytest.fixture(autouse=True)

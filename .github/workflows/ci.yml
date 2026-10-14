@@ -235,25 +235,16 @@ jobs:
           METRICS_AUTH_TOKEN: "test_metrics_token"
           MCP_API_KEY: "test-mcp-api-key-xyz"
           LOG_FORMAT: "text"
-        run: pytest tests/ -m integration --tb=short
-
-      - name: Fail if nothing actually ran
-        # The suite skips itself when REDIS_TEST_URL is unset or unreachable,
-        # which is right locally and wrong here: a job that silently skips every
-        # test is a green tick that measured nothing.
-        env:
-          REDIS_TEST_URL: redis://127.0.0.1:6379/0
-          GROQ_API_KEY: "test_key_not_real"
-          GITHUB_APP_ID: "99999"
-          GITHUB_PRIVATE_KEY: ""
-          GITHUB_WEBHOOK_SECRET: "test-webhook-secret-32chars-abc!"
-          METRICS_AUTH_TOKEN: "test_metrics_token"
-          MCP_API_KEY: "test-mcp-api-key-xyz"
+        # One run, checked. The suite skips itself when REDIS_TEST_URL is
+        # unset or unreachable — right locally, wrong here. The old check ran
+        # the suite a second time and only failed when its summary line BEGAN
+        # with "N skipped", i.e. when every test skipped; "30 passed, 6
+        # skipped" went green with six tests unmeasured. Here, any skip fails.
         run: |
           set -o pipefail
-          pytest tests/ -m integration -q --tb=no | tee out.txt
-          if grep -qE "^(no tests ran|[0-9]+ skipped)" out.txt || ! grep -qE "[0-9]+ passed" out.txt; then
-            echo "::error::The integration suite did not run. Redis was unreachable, so this job proved nothing."
+          pytest tests/ -m integration --tb=short -q -rs | tee out.txt
+          if grep -qE "[0-9]+ skipped|no tests ran" out.txt || ! grep -qE "[0-9]+ passed" out.txt; then
+            echo "::error::Integration tests were skipped or none ran — Redis unreachable, or a test skipped itself. This job measured less than it claims."
             exit 1
           fi
 

@@ -138,8 +138,9 @@ The credentials are shown once. Put them in your host's environment:
 - Webhook URL: `https://<your-deployment>/webhook`
 - Webhook secret: `python3 -c "import secrets; print(secrets.token_hex(32))"`
 - Repository permissions: Issues ✏️ · Pull requests ✏️ · Contents ✏️ ·
-  Actions ✏️ · Metadata 👁 · Checks 👁 · Code scanning alerts 👁
-- Subscribe to: Push · Pull request · Issues · Issue comment
+  Actions ✏️ · Metadata 👁 · Checks 👁 · Code scanning alerts 👁 ·
+  Dependabot alerts 👁 · Secret scanning alerts 👁
+- Subscribe to: Push · Pull request · Issues · Issue comment · Check run
 - Generate and download the private key (`.pem`)
 
 The `/setup` flow exists because this list is easy to get subtly wrong. If you
@@ -289,10 +290,10 @@ Reported cost in local mode is always `0`.
 | | |
 |---|---|
 | Modules | 99 |
-| Lines of code | 26,828 |
+| Lines of code | 27,109 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 358 |
+| Internal imports | 361 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>

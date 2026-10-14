@@ -173,17 +173,18 @@ class TestFailureAnalysis:
         body = mock_post.call_args[0][4]
         assert "REDIS_URL" in body
 
-    def test_flaky_note_included(self):
+    def test_a_model_flaky_guess_is_not_shown(self):
+        """Nothing in one failed run shows flakiness; the model's guess was
+        published as "Possibly flaky — this might pass on re-run"."""
         analysis = {
             "root_cause": "Race condition in test setup",
             "category": "test_failure",
             "fix": "- Add sleep or use proper test fixtures",
             "is_flaky": True,
-            "confidence": 0.5,
         }
         _, mock_post = self._run(analysis=analysis)
         body = mock_post.call_args[0][4]
-        assert "flaky" in body.lower() or "Flaky" in body
+        assert "flaky" not in body.lower()
 
     def test_category_emoji_in_comment(self):
         for category, expected in [
@@ -304,9 +305,42 @@ class TestCiAudit2:
 
     def test_null_output_fields_do_not_crash(self):
         payload = _payload(output={"title": None, "summary": None, "text": None})
-        analysis = {"root_cause": "flaky network", "category": "other", "fix": "- retry", "confidence": 0.9}
-        post, _ = self._run(payload, analysis)
+        analysis = {"root_cause": "network", "category": "other", "fix": "- retry"}
+        with patch("app.handlers.ci._job_log_tail", return_value="E   ConnectionError: refused"):
+            post, _ = self._run(payload, analysis)
         post.assert_called_once()
+
+    def test_no_output_and_no_log_posts_no_invented_cause(self):
+        """Asked for the "exact reason" of a failure it could see nothing of,
+        the model named one from the check's name alone."""
+        payload = _payload(output={"title": None, "summary": None, "text": None})
+        analysis = {"root_cause": "ImportError in tests/test_cfg.py", "category": "test_failure", "fix": "- x"}
+        with patch("app.handlers.ci._job_log_tail", return_value=""):
+            post, release = self._run(payload, analysis)
+        post.assert_not_called()
+        release.assert_called_once()
+
+    def test_a_cause_is_confirmed_only_by_a_line_in_the_log(self):
+        log_text = "collected 12 items\nE   ImportError: cannot import name 'make_token'\nFAILED"
+        grounded = {"root_cause": "make_token was removed", "evidence": "ImportError: cannot import name 'make_token'",
+                    "category": "test_failure", "fix": "- restore it"}
+        with patch("app.handlers.ci._job_log_tail", return_value=log_text):
+            post, _ = self._run(_payload(), grounded)
+        assert "**Likely cause:**" in post.call_args[0][4]
+
+        invented = {**grounded, "evidence": "ModuleNotFoundError: no module named jwt"}
+        with patch("app.handlers.ci._job_log_tail", return_value=log_text):
+            post, _ = self._run(_payload(), invented)
+        assert "not confirmed by the log" in post.call_args[0][4]
+
+    def test_a_second_failing_check_adds_a_section_and_an_old_commit_is_dropped(self):
+        from app.handlers.ci import _merge_ci_report
+
+        first = _merge_ci_report("", "abc1234", "lint", "LINT SECTION")
+        both = _merge_ci_report(first, "abc1234", "tests", "TESTS SECTION")
+        assert "LINT SECTION" in both and "TESTS SECTION" in both
+        newer = _merge_ci_report(both, "def5678", "tests", "NEW TESTS")
+        assert "LINT SECTION" not in newer and "NEW TESTS" in newer
 
     def test_a_fix_given_as_a_list_is_rendered(self):
         analysis = {"root_cause": "bad import", "category": "build_error",

@@ -51,6 +51,39 @@ def _bool(val: Any) -> bool:
     return bool(val)
 
 
+def verdict(data: Any, key: str, allowed) -> str | None:
+    """
+    The model's answer for an enum field, or None when it gave none or an
+    answer outside `allowed`.
+
+    Handlers used `r.get("health", "good")`: a model that answered with prose,
+    or a different shape, was published as "Health: Good" — a default
+    rendered as a verdict nobody made.
+    """
+    if not isinstance(data, dict):
+        return None
+    val = data.get(key)
+    if not isinstance(val, str):
+        return None
+    val = val.strip().lower().replace(" ", "_")
+    return val if val in allowed else None
+
+
+def flag(data: Any, key: str) -> bool | None:
+    """True/False only when the model actually said so; None otherwise.
+    `bool("false")` is True, so "requires_migration": "false" read as Yes."""
+    if not isinstance(data, dict):
+        return None
+    val = data.get(key)
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, str) and val.strip().lower() in ("true", "yes"):
+        return True
+    if isinstance(val, str) and val.strip().lower() in ("false", "no"):
+        return False
+    return None
+
+
 def _str(val: Any, max_len: int = 300) -> str:
     """Safe string conversion with length cap."""
     return str(val)[:max_len].strip() if val is not None else ""

@@ -359,6 +359,25 @@ class TestRunAutofix:
 # 3. /release TESTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _release_gh(tags, since_tag, commits=()):
+    """GitHub, by route: the tags, the compare against the latest tag, the
+    branch commits (used only when there is no tag)."""
+    seen = []
+
+    def get(path, token):
+        seen.append(path)
+        if "/tags" in path:
+            return tags
+        if "/compare/" in path:
+            return {"commits": list(since_tag), "total_commits": len(since_tag)}
+        if "/commits" in path:
+            return list(commits)
+        raise AssertionError(f"unexpected GET {path}")
+
+    get.seen = seen
+    return get
+
+
 class TestCmdRelease:
     """Tests for _cmd_release."""
 
@@ -378,10 +397,10 @@ class TestCmdRelease:
         }
         with patch("app.handlers.comments.router.ask",
                    return_value=self._mock_router_text(plan)), \
-             patch("app.handlers.comments.gh_get", side_effect=[
-                 [{"name": "v1.1.0"}],   # tags
-                 [{"commit": {"message": "feat: add thing"}}] * 5,  # commits
-             ]), \
+             patch("app.handlers.comments.gh_get", side_effect=_release_gh(
+                 [{"name": "v1.1.0"}],
+                 [{"commit": {"message": "feat: add thing"}}] * 5,  # since v1.1.0
+             )), \
              patch("app.handlers.comments.gh_post", return_value={
                  "html_url": "https://github.com/test/repo/releases/1",
                  "number": 1,
@@ -431,10 +450,10 @@ class TestCmdRelease:
         }
         with patch("app.handlers.comments.router.ask",
                    return_value=self._mock_router_text(plan)), \
-             patch("app.handlers.comments.gh_get", side_effect=[
+             patch("app.handlers.comments.gh_get", side_effect=_release_gh(
                  [{"name": "v1.9.0"}],
                  [{"commit": {"message": "feat: big thing"}}],
-             ]), \
+             )), \
              patch("app.handlers.comments.gh_post", return_value={
                  "html_url": "https://github.com/test/repo/releases/42",
              }):

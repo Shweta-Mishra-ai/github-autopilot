@@ -259,11 +259,11 @@
       "id": "app.ai.validator",
       "path": "app/ai/validator.py",
       "layer": "ai",
-      "loc": 281,
-      "functions": 10,
+      "loc": 314,
+      "functions": 12,
       "classes": 0,
       "is_package": false,
-      "fan_in": 9,
+      "fan_in": 10,
       "fan_out": 0,
       "external_deps": [
         "logging",
@@ -761,11 +761,11 @@
       "id": "app.github.client",
       "path": "app/github/client.py",
       "layer": "github",
-      "loc": 306,
-      "functions": 11,
+      "loc": 324,
+      "functions": 12,
       "classes": 2,
       "is_package": false,
-      "fan_in": 25,
+      "fan_in": 26,
       "fan_out": 2,
       "external_deps": [
         "logging",
@@ -907,14 +907,15 @@
       "id": "app.handlers.ci",
       "path": "app/handlers/ci.py",
       "layer": "handlers",
-      "loc": 232,
-      "functions": 5,
+      "loc": 330,
+      "functions": 8,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 7,
+      "fan_out": 8,
       "external_deps": [
-        "logging"
+        "logging",
+        "re"
       ]
     },
     {
@@ -977,15 +978,16 @@
       "id": "app.handlers.comments.generator",
       "path": "app/handlers/comments/generator.py",
       "layer": "handlers",
-      "loc": 459,
+      "loc": 510,
       "functions": 11,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 9,
+      "fan_out": 10,
       "external_deps": [
         "__future__",
-        "logging"
+        "logging",
+        "re"
       ]
     },
     {
@@ -1009,12 +1011,12 @@
       "id": "app.handlers.comments.publisher",
       "path": "app/handlers/comments/publisher.py",
       "layer": "handlers",
-      "loc": 536,
-      "functions": 6,
+      "loc": 581,
+      "functions": 9,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 13,
+      "fan_out": 12,
       "external_deps": [
         "__future__",
         "contextlib",
@@ -1029,12 +1031,12 @@
       "id": "app.handlers.comments.reviewer",
       "path": "app/handlers/comments/reviewer.py",
       "layer": "handlers",
-      "loc": 490,
+      "loc": 521,
       "functions": 12,
       "classes": 0,
       "is_package": false,
-      "fan_in": 4,
-      "fan_out": 10,
+      "fan_in": 3,
+      "fan_out": 12,
       "external_deps": [
         "__future__",
         "datetime",
@@ -1127,7 +1129,7 @@
       "functions": 6,
       "classes": 0,
       "is_package": false,
-      "fan_in": 3,
+      "fan_in": 4,
       "fan_out": 13,
       "external_deps": [
         "__future__",
@@ -1252,7 +1254,7 @@
       "functions": 2,
       "classes": 0,
       "is_package": false,
-      "fan_in": 1,
+      "fan_in": 2,
       "fan_out": 1,
       "external_deps": [
         "__future__",
@@ -1549,7 +1551,7 @@
       "id": "app.setup_flow",
       "path": "app/setup_flow.py",
       "layer": "other",
-      "loc": 220,
+      "loc": 225,
       "functions": 7,
       "classes": 0,
       "is_package": false,
@@ -2153,6 +2155,11 @@
     },
     {
       "source": "app.handlers.ci",
+      "target": "app.github.client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.ci",
       "target": "app.github.sticky",
       "kind": "runtime"
     },
@@ -2298,6 +2305,11 @@
     },
     {
       "source": "app.handlers.comments.generator",
+      "target": "app.handlers.pull_request.analysis",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.generator",
       "target": "app.intelligence.memory",
       "kind": "runtime"
     },
@@ -2373,11 +2385,6 @@
     },
     {
       "source": "app.handlers.comments.publisher",
-      "target": "app.handlers.comments.reviewer",
-      "kind": "runtime"
-    },
-    {
-      "source": "app.handlers.comments.publisher",
       "target": "app.intelligence.memory",
       "kind": "runtime"
     },
@@ -2389,6 +2396,11 @@
     {
       "source": "app.handlers.comments.reviewer",
       "target": "app.ai.metrics",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.reviewer",
+      "target": "app.ai.validator",
       "kind": "runtime"
     },
     {
@@ -2424,6 +2436,11 @@
     {
       "source": "app.handlers.comments.reviewer",
       "target": "app.handlers.pull_request",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.reviewer",
+      "target": "app.handlers.pull_request.risk",
       "kind": "runtime"
     },
     {
@@ -3399,8 +3416,8 @@
   ],
   "stats": {
     "modules": 99,
-    "edges": 358,
-    "total_loc": 26828,
+    "edges": 361,
+    "total_loc": 27109,
     "layers": [
       "ai",
       "core",
@@ -3427,8 +3444,8 @@
       },
       {
         "id": "app.github.client",
-        "loc": 306,
-        "fan_in": 25,
+        "loc": 324,
+        "fan_in": 26,
         "fan_out": 2
       },
       {
@@ -3462,16 +3479,16 @@
         "fan_out": 1
       },
       {
+        "id": "app.ai.validator",
+        "loc": 314,
+        "fan_in": 10,
+        "fan_out": 0
+      },
+      {
         "id": "app.intelligence.memory",
         "loc": 380,
         "fan_in": 7,
         "fan_out": 2
-      },
-      {
-        "id": "app.ai.validator",
-        "loc": 281,
-        "fan_in": 9,
-        "fan_out": 0
       }
     ],
     "collisions": {},

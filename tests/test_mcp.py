@@ -15,18 +15,11 @@ if not _mcp_pkg.exists():
     _mcp_pkg.parent.mkdir(parents=True, exist_ok=True)
     _mcp_pkg.write_text('"""app/mcp package."""\n')
 
-# Mock heavy deps before any app imports
-_req = MagicMock()
-_req.adapters = MagicMock()
-_req.adapters.HTTPAdapter = MagicMock
-_req.Session = MagicMock
-_req.exceptions = MagicMock()
-_req.exceptions.RequestException = Exception
-_req.exceptions.ConnectionError = ConnectionError
-_req.exceptions.Timeout = TimeoutError
-sys.modules.setdefault('requests', _req)
-sys.modules.setdefault('requests.adapters', _req.adapters)
-sys.modules.setdefault('requests.exceptions', _req.exceptions)
+# The real requests: it is a hard dependency, always installed where tests
+# run. A MagicMock installed here with setdefault became `requests` for the
+# whole session whenever this file was collected first, and every later
+# test that touched HTTP failed with "MagicMock has no attribute 'request'".
+import requests  # noqa: E402,F401
 # Mock ONLY the deps that are genuinely missing. Blanket-mocking installed
 # modules (this list used to include flask unconditionally) poisoned
 # sys.modules for every later-collected test file and permanently skipped 21
@@ -304,7 +297,10 @@ class TestSecurityReview:
             result = mod._handle_security_review({"content": "SELECT * FROM {uid}"})
         assert "HIGH" in result
         assert "SQL injection" in result
-        assert "CVE-2024-1234" in result
+        # A CVE id from the model reading a snippet is not published: nothing
+        # checked it against an advisory database.
+        assert "CVE-2024-1234" not in result
+        assert "not checked against an advisory database" in result
 
 
 class TestGetRepoHealth:
@@ -333,7 +329,7 @@ class TestGetRepoHealth:
                 })
         # Computed from the repository's real data, with no model involved.
         ask.assert_not_called()
-        assert "100/100" in result and "MIT" in result
+        assert "License: MIT" in result and "Grade" not in result
 
 
 class TestRunCommand:
@@ -609,3 +605,38 @@ class TestRunCommandBindingsAreReal:
         described = next(t for t in MCP_TOOLS if t["name"] == "run_command")["description"]
         for cmd in self.BINDINGS:
             assert cmd in described, f"{cmd} is wired but not advertised"
+
+
+class TestHealthIsMeasuredNotGraded:
+    """The grade was 100 minus four penalties summing to at most 38: every
+    repository scored at least "C", and "All good!" sat under 🟡 findings."""
+
+    def _health(self, repo_data, n_prs=0):
+        from unittest.mock import patch
+
+        from app.handlers.comments.reviewer import cmd_health
+
+        def gh(path, token):
+            if path.startswith("/search/issues"):
+                return {"total_count": n_prs}
+            return repo_data
+
+        with patch("app.handlers.comments.gh_get", side_effect=gh):
+            return cmd_health("o/r", "t")
+
+    def test_the_worst_repository_is_not_given_a_c(self):
+        out = self._health({"open_issues_count": 80}, n_prs=30)
+        assert "Grade" not in out and "/100" not in out
+        assert "🔴 50 open issues (over 20)" in out and "🔴 No license" in out
+
+    def test_every_flag_carries_a_recommendation(self):
+        out = self._health({"open_issues_count": 12, "license": {"name": "MIT"}})
+        assert "🟡 12 open issues (over 10)" in out and "Review the open issues" in out
+        assert "Add a repository description" in out
+        assert "Nothing flagged" not in out
+
+    def test_mcp_tool_descriptions_promise_no_grade(self):
+        from app.mcp.tools import MCP_TOOLS
+
+        text = " ".join(t["description"] for t in MCP_TOOLS)
+        assert "(A-F)" not in text and "grade (" not in text

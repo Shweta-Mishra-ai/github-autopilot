@@ -122,70 +122,50 @@ def cmd_health(repo: str, token: str) -> str:
         prs = gh_get(f"/search/issues?q=repo:{repo}+type:pr+state:open&per_page=1", token)
         n_prs = int((prs or {}).get("total_count", 0)) if isinstance(prs, dict) else 0
         n_issues = max(0, int(repo_data.get("open_issues_count", 0) or 0) - n_prs)
-        score = 100
-        findings: list[str] = []
-        recommendations: list[str] = []
-
+        # Measured facts against stated thresholds — no score and no grade.
+        # The grade was 100 minus four fixed penalties summing to at most 38,
+        # so every repository scored at least 62 ("C"): D and F could not
+        # happen. And "All good!" was printed under 🟡 findings, because only
+        # some findings carried a recommendation.
+        checks = []  # (status, text, recommendation or "")
         if n_issues > 20:
-            score -= 15
-            findings.append(f"🔴 {n_issues} open issues")
-            recommendations.append("Triage and close old issues")
+            checks.append(
+                ("🔴", f"{n_issues} open issues (over 20)", "Triage and close stale issues")
+            )
         elif n_issues > 10:
-            score -= 7
-            findings.append(f"🟡 {n_issues} open issues")
+            checks.append(("🟡", f"{n_issues} open issues (over 10)", "Review the open issues"))
         else:
-            findings.append(f"✅ {n_issues} open issues")
-
+            checks.append(("✅", f"{n_issues} open issues", ""))
         if n_prs > 10:
-            score -= 10
-            findings.append(f"🔴 {n_prs} open PRs")
+            checks.append(("🔴", f"{n_prs} open PRs (over 10)", "Merge or close stale PRs"))
         elif n_prs > 5:
-            score -= 5
-            findings.append(f"🟡 {n_prs} open PRs")
+            checks.append(("🟡", f"{n_prs} open PRs (over 5)", "Review the open PRs"))
         else:
-            findings.append(f"✅ {n_prs} open PRs")
-
-        if not repo_data.get("license"):
-            score -= 8
-            findings.append("🔴 No license")
-            recommendations.append("Add LICENSE file")
+            checks.append(("✅", f"{n_prs} open PRs", ""))
+        lic = repo_data.get("license") or {}
+        if lic:
+            checks.append(("✅", f"License: {lic.get('name', '')}", ""))
         else:
-            findings.append(f"✅ License: {repo_data['license'].get('name', '')}")
-
-        if not repo_data.get("description"):
-            score -= 5
-            findings.append("🟡 No description")
+            checks.append(("🔴", "No license", "Add a LICENSE file"))
+        if repo_data.get("description"):
+            checks.append(("✅", "Description present", ""))
         else:
-            findings.append("✅ Description present")
+            checks.append(("🟡", "No description", "Add a repository description"))
 
-        grade = (
-            "A+"
-            if score >= 90
-            else "A"
-            if score >= 80
-            else "B"
-            if score >= 70
-            else "C"
-            if score >= 60
-            else "D"
-            if score >= 50
-            else "F"
-        )
-        bar = "█" * (score // 10) + "░" * (10 - score // 10)
-        findings_md = "\n".join(f"- {f}" for f in findings)
+        findings_md = "\n".join(f"- {s} {t}" for s, t, _ in checks)
+        recommendations = [r for _s, _t, r in checks if r]
         rec_section = (
-            "\n### 💡 Recommendations\n"
-            + "\n".join(f"{i + 1}. {r}" for i, r in enumerate(recommendations[:4]))
+            "\n\n### 💡 Recommendations\n"
+            + "\n".join(f"{i + 1}. {r}" for i, r in enumerate(recommendations))
             if recommendations
-            else "\n### 💡 All good!"
+            else "\n\nNothing flagged by these checks."
         )
-
         return (
             f"## 🏥 Repo Health — `{repo}`\n\n"
-            f"### Grade: **{grade}** ({score}/100)\n"
-            f"`{bar}`\n\n"
-            f"### Findings\n{findings_md}"
-            f"{rec_section}"
+            f"### Checks\n{findings_md}"
+            f"{rec_section}\n\n"
+            "*Four checks: open issues, open PRs, license, description. Not a "
+            "measure of code quality, tests or security — see `/secfull` for alerts.*"
         )
 
     except Exception as exc:

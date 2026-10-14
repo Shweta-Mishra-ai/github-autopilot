@@ -12,24 +12,20 @@ from unittest.mock import patch, MagicMock
 # Resolve repo root regardless of where tests are run from
 _ROOT = Path(__file__).parent.parent
 
-# ── Mock deps ─────────────────────────────────────────────
-_req = MagicMock()
-_req.adapters = MagicMock()
-_req.adapters.HTTPAdapter = MagicMock
-_req.Session = MagicMock
-_req.exceptions = MagicMock()
-_req.exceptions.RequestException = Exception
-_req.exceptions.ConnectionError = ConnectionError
-_req.exceptions.Timeout = TimeoutError
-sys.modules.setdefault('requests', _req)
-sys.modules.setdefault('requests.adapters', _req.adapters)
-sys.modules.setdefault('requests.exceptions', _req.exceptions)
+# The real requests: it is a hard dependency, always installed where tests
+# run. A MagicMock installed here with setdefault became `requests` for the
+# whole session whenever this file was collected first, and every later
+# test that touched HTTP failed with "MagicMock has no attribute 'request'".
+import requests  # noqa: E402,F401
 for _mod in ['structlog','redis','groq','google','google.generativeai',
              'flask_limiter','flask_limiter.util','apscheduler',
              'apscheduler.schedulers','apscheduler.schedulers.background',
              'sentence_transformers','qdrant_client','scipy',
              'flask','flask.logging']:
-    sys.modules.setdefault(_mod, MagicMock())
+    try:  # a real module when installed — a mock only for one that is missing
+        __import__(_mod)
+    except ImportError:
+        sys.modules.setdefault(_mod, MagicMock())
 
 sys.path.insert(0, str(_ROOT))
 

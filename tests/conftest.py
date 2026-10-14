@@ -538,6 +538,12 @@ def pytest_sessionfinish(session, exitstatus):
     from unittest import mock
 
     leaked = []
+    # Hard dependencies that are always installed: a mock standing in for one
+    # was a test file's module-level setdefault winning the collection race,
+    # and it broke whichever tests happened to run after it.
+    for dep in ("requests", "flask", "jwt", "cryptography", "yaml"):
+        if isinstance(sys.modules.get(dep), mock.Base):
+            leaked.append(f"sys.modules[{dep!r}]")
     for name, module in list(sys.modules.items()):
         if module is None or not (name == "server" or name.startswith("app.")):
             continue

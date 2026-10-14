@@ -17,9 +17,9 @@ MCP_TOOLS = [
     {
         "name": "analyze_pr",
         "description": (
-            "Analyze a GitHub pull request for code quality, security risks, "
-            "test coverage gaps, and blast radius. Returns grade (A-F), "
-            "findings, and improvement suggestions."
+            "Analyze a GitHub pull request's diff: a summary, security issues, "
+            "test gaps, blast radius and improvements the model found, and an "
+            "approve/request_changes recommendation. No grade or score."
         ),
         "inputSchema": {
             "type": "object",
@@ -106,7 +106,11 @@ MCP_TOOLS = [
     },
     {
         "name": "security_review",
-        "description": "Security review of code or requirements.txt for CVEs and vulnerabilities.",
+        "description": (
+            "Model review of code or config for security weaknesses. Not an "
+            "advisory lookup: it names no CVEs. Use /security on a PR for "
+            "GitHub's advisory data on pinned dependencies."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -122,7 +126,10 @@ MCP_TOOLS = [
     },
     {
         "name": "get_repo_health",
-        "description": "Get the health grade (A-F) for a repository with recommendations.",
+        "description": (
+            "Repository health checks (open issues, open PRs, license, "
+            "description) with a recommendation for each one flagged. No grade."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {

@@ -318,22 +318,34 @@ Return JSON:
 {{
   "risk_level": "low|medium|high|critical",
   "findings": [{{"issue":"","severity":"","line":0,"fix":""}}],
-  "cve_risks": [],
   "summary": ""
-}}""",
+}}
+
+Do not cite CVE or GHSA identifiers: none can be verified here.""",
             task="security_report",
             max_tokens=1200,
         )
 
-        from app.ai.validator import as_text
+        from app.ai.validator import as_text, is_unusable, verdict
 
-        risk = as_text(result.get("risk_level"), "unknown").upper()
+        if is_unusable(result):
+            return "Error: the security review could not be used — nothing is reported."
+        rec = verdict(result, "risk_level", {"low", "medium", "high", "critical"})
+        risk = rec.upper() if rec else "not given"
         findings = result.get("findings")
         findings = findings if isinstance(findings, list) else []
-        cves = result.get("cve_risks")
-        cves = cves if isinstance(cves, list) else []
 
-        lines = ["## Security Review", f"**Risk Level:** {risk}", ""]
+        # A "CVE Risks" list came from the model reading a snippet: identifiers
+        # nobody checked, printed as if looked up. Real advisories for pinned
+        # dependencies come from GitHub's database (/security on a PR).
+        lines = [
+            "## Security Review",
+            f"**Risk Level:** {risk}",
+            "",
+            "> The model's reading of the content — not checked against an advisory "
+            "database. For known advisories on pinned dependencies, run `/security` on a PR.",
+            "",
+        ]
         if findings:
             lines += ["**Findings:**"]
             for f in findings[:8]:
@@ -341,8 +353,8 @@ Return JSON:
                     continue
                 sev = as_text(f.get("severity")).upper()
                 lines.append(f"- [{sev}] {as_text(f.get('issue'))} — {as_text(f.get('fix'))}")
-        if cves:
-            lines += ["", "**CVE Risks:**"] + [f"- {as_text(c)}" for c in cves]
+        if not findings:
+            lines.append("No findings reported.")
         return "\n".join(lines)
 
     except Exception as e:

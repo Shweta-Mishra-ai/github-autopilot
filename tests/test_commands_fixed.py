@@ -18,18 +18,11 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# ─── Mock heavy deps before any project imports ──────────────────────────────
-# requests needs a proper mock with adapters sub-module
-_req_mock = MagicMock()
-_req_mock.adapters = MagicMock()
-_req_mock.adapters.HTTPAdapter = MagicMock
-_req_mock.Session = MagicMock
-_req_mock.exceptions = MagicMock()
-_req_mock.exceptions.RequestException = Exception
-_req_mock.exceptions.ConnectionError = ConnectionError
-sys.modules.setdefault("requests", _req_mock)
-sys.modules.setdefault("requests.adapters", _req_mock.adapters)
-sys.modules.setdefault("requests.exceptions", _req_mock.exceptions)
+# The real requests: it is a hard dependency, always installed where tests
+# run. A MagicMock installed here with setdefault became `requests` for the
+# whole session whenever this file was collected first, and every later
+# test that touched HTTP failed with "MagicMock has no attribute 'request'".
+import requests  # noqa: E402,F401
 
 # Mock ONLY genuinely-missing deps. This list used to blanket-mock flask,
 # which (as the alphabetically-first offender at collection time) poisoned

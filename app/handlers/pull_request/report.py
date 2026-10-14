@@ -19,6 +19,7 @@ def _build_pr_report(
     gaps_md: str,
     pr: dict,
     files: list,
+    notices_md: str = "",
 ) -> str:
     """
     Assemble the single sticky body.
@@ -34,6 +35,8 @@ def _build_pr_report(
         f"## 🤖 Autopilot — PR #{pr.get('number', '?')}\n",
         f"**Files:** {len(files)} · **+{adds} −{dels}**",
     ]
+    if notices_md:
+        parts.append(notices_md)
     if summary_md:
         parts.append(summary_md)
     if analysis_md:

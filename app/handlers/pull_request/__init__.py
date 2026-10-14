@@ -39,6 +39,7 @@ from app.core.sanitizer import InjectionRejected, wrap_user_content
 from app.core.transient import is_transient, once
 
 from .analysis import _analyze_pr, _build_pr_summary
+from .errors import SectionUnavailable
 from .classify import (
     _blast_radius,
     _file_review_priority,
@@ -263,6 +264,9 @@ def handle(payload: dict):
             log.warning(f"pr.{section}_input_rejected: {e}")
             rejected.append(section)
             return default
+        except SectionUnavailable as e:
+            failed.append(f"{section} — {e}")
+            return default
         except Exception as e:
             from app.ai.circuit_breaker import AllProvidersDown
             from app.core.guardrails import AIBudgetExceeded
@@ -315,21 +319,23 @@ def handle(payload: dict):
             "",
         )
 
+    # Shown unfolded under the header. They were put inside the collapsed
+    # "Code review" block, where a report missing three of its sections read
+    # as a short review unless someone opened it.
+    notices = []
     if rejected:
-        notice = (
+        notices.append(
             "> ⚠️ **Automated "
             + ", ".join(rejected)
             + " refused.** This PR's title, description or diff contains text "
             "matching a prompt-injection pattern, so it was not sent to the model. "
             "Review it manually."
         )
-        review_md = f"{notice}\n\n{review_md}".strip()
-
     if failed:
-        notice = "> ⚠️ **Not run on this commit:** " + "; ".join(failed) + "."
-        review_md = f"{notice}\n\n{review_md}".strip()
+        notices.append("> ⚠️ **Not run on this commit:** " + "; ".join(failed) + ".")
+    notices_md = "\n\n".join(notices)
 
-    if not any([analysis_md, summary_md, review_md, gaps_md]):
+    if not any([analysis_md, summary_md, review_md, gaps_md, notices_md]):
         log.info("pr.nothing_to_report — staying silent")
         if retryable:
             raise retryable[0]
@@ -339,7 +345,7 @@ def handle(payload: dict):
     # worth a notification to every subscriber. But it must still EDIT the
     # existing report (an edit notifies nobody): this used to return here, so
     # a push that fixed every finding left the report listing them as open.
-    edit_only = action == "synchronize" and not (review_md or gaps_md)
+    edit_only = action == "synchronize" and not (review_md or gaps_md or notices_md)
 
     # Line-anchored findings still go through the Reviews API: they land on
     # the diff itself, which is the one place bot output is unambiguously
@@ -353,7 +359,7 @@ def handle(payload: dict):
         if unposted_md:
             review_md = f"{review_md}\n\n{unposted_md}".strip()
 
-    body = _build_pr_report(analysis_md, summary_md, review_md, gaps_md, pr, files)
+    body = _build_pr_report(analysis_md, summary_md, review_md, gaps_md, pr, files, notices_md)
     try:
         if edit_only:
             if update_sticky_if_present(

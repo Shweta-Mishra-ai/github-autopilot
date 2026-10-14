@@ -362,23 +362,30 @@ def run_gaps_cases() -> tuple[list, list]:
             cfg = MagicMock()
             cfg.get.side_effect = lambda *a, **kw: kw.get("default", True)
             cfg.footer = ""
-            with patch.object(gaps_module.router, "ask", side_effect=_spy):
-                return gaps_module._detect_test_gaps(
-                    {"head": {"sha": "eval0000"}},
-                    "eval/repo",
-                    1,
-                    files,
-                    "tok",
-                    cfg,
-                    MagicMock(),
-                )
+            try:
+                with patch.object(gaps_module.router, "ask", side_effect=_spy):
+                    return gaps_module._detect_test_gaps(
+                        {"head": {"sha": "eval0000"}},
+                        "eval/repo",
+                        1,
+                        files,
+                        "tok",
+                        cfg,
+                        MagicMock(),
+                    )
+            except Exception:
+                # The section raises when the model never answered or its
+                # answer was unusable — blocked, below, not a scored failure.
+                # Anything raised after a usable answer is the code's fault.
+                if not captured or is_unusable(captured[0]):
+                    return ""
+                raise
 
         output = _attempt(_run, case, results, blocked_check=lambda _out: not captured)
         if output is None:
             continue
 
-        # _detect_test_gaps swallows every exception and returns "". An empty
-        # capture therefore means the provider never answered, not that the
+        # An empty capture means the provider never answered, not that the
         # code under test decided there was nothing to say.
         verdict = captured[0] if captured else None
         if verdict is None or is_unusable(verdict):

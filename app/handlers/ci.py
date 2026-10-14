@@ -42,11 +42,8 @@ def handle(payload: dict):
 
     log_ctx.info(f"CI failure: {check_name}")
 
-    try:
-        token = get_installation_token(installation_id)
-    except Exception as e:
-        log_ctx.error(f"Auth failed: {e}")
-        return
+    # Raised: nothing has run yet, so the queue retrying is the recovery.
+    token = get_installation_token(installation_id)
 
     config = load_config(repo, token)
     # Helper, not a raw get(): it also honours the bot.enabled kill switch.
@@ -185,6 +182,11 @@ def handle(payload: dict):
         # The dedup key was taken before the analysis. Released, so a retry
         # or re-run of this check can still produce its section.
         _release_ci_alert(repo, pr_number, head_sha, check_name)
+        # And retried: a 5xx here ended the event as handled with no report.
+        from app.core.transient import is_transient
+
+        if is_transient(e):
+            raise
 
 
 _LOG_CHARS = 4000
@@ -210,17 +212,20 @@ _SECTION = re.compile(r"<!-- ci-check:(.*?) -->\n(.*?)\n<!-- /ci-check -->", re.
 
 
 def _current_ci_report(repo: str, pr_number: int, token: str) -> str:
-    """The body of this bot's CI sticky, or "" when there is none."""
-    try:
-        from app.github.client import gh_get
-        from app.github.sticky import MARKER_CI_REPORT, find_sticky
+    """
+    The body of this bot's CI sticky, or "" when there is none.
 
-        cid = find_sticky(repo, pr_number, token, MARKER_CI_REPORT)
-        if cid is None:
-            return ""
-        return str((gh_get(f"/repos/{repo}/issues/comments/{cid}", token) or {}).get("body") or "")
-    except Exception:
+    Raises when it cannot be read. It returned "" for any error, and the
+    caller then merged into nothing: a 502 here replaced the report, and the
+    sections other failing checks had written were gone.
+    """
+    from app.github.client import gh_get
+    from app.github.sticky import MARKER_CI_REPORT, find_sticky
+
+    cid = find_sticky(repo, pr_number, token, MARKER_CI_REPORT, strict=True)
+    if cid is None:
         return ""
+    return str((gh_get(f"/repos/{repo}/issues/comments/{cid}", token) or {}).get("body") or "")
 
 
 def _merge_ci_report(existing: str, head_sha: str, check_name: str, section: str) -> str:

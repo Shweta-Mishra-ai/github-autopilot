@@ -168,6 +168,35 @@ def enqueue(
         return EnqueueResult.UNAVAILABLE
 
 
+def schedule(event: str, payload: dict, repo: str, delay: float, job_id: str) -> bool:
+    """
+    Park an internal job to run after `delay` seconds, with the same retries
+    as a webhook event. False when Redis is unavailable — the caller decides
+    what losing it means. Never raises.
+    """
+    if not is_redis_available():
+        return False
+    envelope = json.dumps(
+        {
+            "id": job_id,
+            "event": event,
+            "repo": repo,
+            "payload": payload,
+            "attempts": 0,
+            "enqueued_at": int(time.time()),
+            "fp": "",
+        },
+        separators=(",", ":"),
+    )
+    try:
+        get_redis().zadd(DELAYED_KEY, {envelope: time.time() + delay})
+        metrics.increment("queue.scheduled")
+        return True
+    except Exception as e:
+        log.warning(f"queue.schedule_failed id={job_id}: {e}")
+        return False
+
+
 # ── Crash recovery ────────────────────────────────────────────────────────────
 
 

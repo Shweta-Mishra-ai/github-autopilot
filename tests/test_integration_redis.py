@@ -438,3 +438,34 @@ class TestLosingRedisDegradesRatherThanBreaks:
         import app.core.event_queue as eq
 
         assert eq.recover_stale() == 0
+
+
+class TestAParkedReplyIsDeliveredByTheQueue:
+    """A reply GitHub refused for a passing reason waits on the delayed set,
+    is promoted when due, and is posted by the real runner — on its own, with
+    the command that produced it never run again."""
+
+    def test_park_promote_deliver(self, queue, live_redis, monkeypatch):
+        from unittest.mock import MagicMock, patch
+
+        # Importing server boots it; with REDIS_URL live that would start
+        # background consumers that take the job before this test does.
+        monkeypatch.setattr(queue, "CONSUMER_COUNT", 0)
+        import server
+        from app.github import deferred_reply
+        from app.github.client import GitHubError
+
+        post = MagicMock(side_effect=GitHubError("bad gateway", 502))
+        deferred_reply.post_comment("o/r", 4, "tok", 9, "the answer", post=post)
+        assert live_redis.llen(queue.PENDING_KEY) == 0, "parked, not run at once"
+        assert queue.promote_due() == 0, "not due yet"
+
+        (raw,) = live_redis.zrange(queue.DELAYED_KEY, 0, -1)
+        live_redis.zadd(queue.DELAYED_KEY, {raw: time.time() - 1})  # its time has come
+        assert queue.promote_due() == 1
+
+        with patch("app.github.auth.get_installation_token", return_value="fresh"), \
+             patch("app.github.deferred_reply.gh_post") as delivered:
+            assert queue._consume_once(server._run_handler)
+        delivered.assert_called_once_with("/repos/o/r/issues/4/comments", "fresh", {"body": "the answer"})
+        assert live_redis.llen(queue.PROCESSING_KEY) == 0

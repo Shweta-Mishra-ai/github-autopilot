@@ -21,6 +21,7 @@ from app.core.metrics import metrics
 from app.core.redis_client import is_redis_available
 from app.core.thread_pool import is_saturated, pool_stats, shutdown
 from app.core.webhook_security import MAX_PAYLOAD_BYTES, startup_check
+from app.github.deferred_reply import INTERNAL_PREFIX, REPLY_EVENT
 import app.core.idempotency as idempotency
 import app.core.thread_pool as thread_pool
 import app.core.webhook_security as webhook_security
@@ -583,6 +584,10 @@ def webhook():
 
     webhook_event = request.headers.get("X-GitHub-Event", "")
     delivery_id = request.headers.get("X-GitHub-Delivery", "")
+    # Internal job names are never a GitHub event. Refused here so that only
+    # the app itself can park one on the queue.
+    if webhook_event.startswith(INTERNAL_PREFIX):
+        return jsonify({"error": "Unsupported event"}), 400
     repo = payload.get("repository", {}).get("full_name", "unknown")
 
     # Bot loop prevention
@@ -702,6 +707,11 @@ def _run_handler(webhook_event: str, payload: dict, repo: str) -> str:
                 except ImportError:
                     log.debug("ci handler not available — skipping")
 
+            elif webhook_event == REPLY_EVENT:
+                from app.github.deferred_reply import deliver
+
+                deliver(payload)
+
             else:
                 log.debug(f"dispatch.unhandled event={webhook_event}")
                 return HandlerOutcome.OK
@@ -761,26 +771,9 @@ def _track_installations(webhook_event: str, payload: dict, repo: str) -> None:
 
 def _is_transient(e: Exception) -> bool:
     """A failure that the same event can succeed after, a little later."""
-    import requests
+    from app.core.transient import is_transient
 
-    from app.ai.circuit_breaker import AllProvidersDown
-    from app.github.client import GitHubError
-    from app.github.rate_limit import GitHubRateLimitExhausted
-
-    if isinstance(
-        e, (GitHubRateLimitExhausted, AllProvidersDown, requests.ConnectionError, requests.Timeout)
-    ):
-        return True
-    if isinstance(e, GitHubError):
-        # Secondary rate limits are 403s with their own type.
-        # Status 0 is the client's code for a connection error or timeout —
-        # the most transient failure there is, and it was not retried.
-        return (
-            e.status_code in (0, 429, 502, 503, 504)
-            or e.status_code >= 500
-            or (type(e).__name__ == "GitHubSecondaryRateLimitError")
-        )
-    return False
+    return is_transient(e)
 
 
 def _dispatch(webhook_event: str, payload: dict, repo: str):

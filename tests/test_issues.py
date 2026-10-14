@@ -5,6 +5,7 @@ Covers: action filter, bot skip, PR-as-issue skip, auth failure,
         issues disabled, triage comment, label posting, notification.
 """
 
+import pytest
 from unittest.mock import MagicMock, patch
 from app.ai.providers.base import LLMResponse
 
@@ -91,13 +92,15 @@ class TestHandleRouting:
             handle(_payload(author="dependabot[bot]"))
             mock_tok.assert_not_called()
 
-    def test_auth_failure_returns_early(self):
+    def test_auth_failure_is_raised_before_any_triage(self):
+        # Raised for the queue to retry; returning reported it as handled.
         with patch("app.handlers.issues.get_installation_token",
                    side_effect=Exception("auth fail")), \
-             patch("app.handlers.issues.router.ask") as mock_ask:
+             patch("app.handlers.issues.router.ask") as mock_ask, \
+             pytest.raises(Exception, match="auth fail"):
             from app.handlers.issues import handle
             handle(_payload())
-            mock_ask.assert_not_called()
+        mock_ask.assert_not_called()
 
     def test_issues_disabled_skips(self):
         with patch("app.handlers.issues.get_installation_token", return_value="tok"), \

@@ -10,7 +10,7 @@ from app.core.config import load_config
 from app.core.guardrails import budget_refusal, reset_budget_refusal
 from app.core.logger import EventLogger
 from app.github.auth import get_installation_token
-from app.github.client import GitHubError
+from app.github.deferred_reply import post_comment
 from app.github.helpers import fmt_error
 
 from ._client import gh_post
@@ -35,7 +35,8 @@ def handle_comment_event(payload: dict) -> None:
     Main webhook handler for issue_comment events.
 
     Called from _run_handler() in server.py inside the thread pool.
-    Never raises — all exceptions are caught and logged.
+    Raises when the command could not be answered, so the queue retries a
+    transient failure and counts the rest. Returning reported them as handled.
     """
     # ── Payload extraction ────────────────────────────────────────────────
     action = payload.get("action", "")
@@ -78,22 +79,19 @@ def handle_comment_event(payload: dict) -> None:
         token = get_installation_token(installation_id)
     except Exception as exc:
         log_ctx.error("auth_failed", reason=str(exc)[:100])
-        return
+        raise  # nothing has run yet; the queue retries the whole command
 
     config = load_config(repo, token)
 
+    def reply(text: str) -> None:
+        _post_comment(repo, issue_number, token, text, log_ctx, installation_id)
+
     # ── Per-user rate limit ───────────────────────────────────────────────
     if not check_user_rate_limit(repo, author):
-        _post_comment(
-            repo,
-            issue_number,
-            token,
-            (
-                f"## ⏳ Rate Limit Reached\n\n"
-                f"@{author} — you've used the command limit (10/hour) for this repo.\n\n"
-                "Please try again in an hour."
-            ),
-            log_ctx,
+        reply(
+            f"## ⏳ Rate Limit Reached\n\n"
+            f"@{author} — you've used the command limit (10/hour) for this repo.\n\n"
+            "Please try again in an hour."
         )
         return
 
@@ -104,7 +102,7 @@ def handle_comment_event(payload: dict) -> None:
     # command never costs a GitHub permission API call.
     if not config.command_enabled(cmd):
         log_ctx.info("command_disabled_by_config")
-        _post_comment(repo, issue_number, token, command_disabled_comment(cmd), log_ctx)
+        reply(command_disabled_comment(cmd))
         return
 
     # ── Authorization ─────────────────────────────────────────────────────
@@ -114,13 +112,7 @@ def handle_comment_event(payload: dict) -> None:
     # the maintainer looking at their own account instead of the App install.
     allowed, reason = check_command_permission(cmd, repo, author, token, config)
     if not allowed:
-        _post_comment(
-            repo,
-            issue_number,
-            token,
-            f"## 🚫 `{cmd}` Not Run\n\n@{author} — {reason}",
-            log_ctx,
-        )
+        reply(f"## 🚫 `{cmd}` Not Run\n\n@{author} — {reason}")
         return
 
     # ── Context building & Memory ─────────────────────────────────────────
@@ -159,7 +151,7 @@ def handle_comment_event(payload: dict) -> None:
     # the worst reply available here.
     if not response:
         log_ctx.warning("empty_response")
-        _post_comment(repo, issue_number, token, empty_response_comment(cmd), log_ctx)
+        reply(empty_response_comment(cmd))
         return
 
     # ── Check for providers-down sentinel ─────────────────────────────────
@@ -171,7 +163,7 @@ def handle_comment_event(payload: dict) -> None:
     full = (
         f"{response}\n\n---\n*🤖 `{cmd}` — requested by @{author}{last_model_disclosure()}*{footer}"
     )
-    _post_comment(repo, issue_number, token, full, log_ctx)
+    reply(full)
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
@@ -183,15 +175,16 @@ def _post_comment(
     token: str,
     body: str,
     log_ctx: EventLogger,
+    installation_id: int = 0,
 ) -> None:
-    """Post a comment to GitHub. Logs on failure, never raises."""
+    """Post the reply; a transient refusal parks it on the queue (the command
+    is not run again — see deferred_reply). Raises when the reply is lost."""
     try:
-        gh_post(f"/repos/{repo}/issues/{issue_number}/comments", token, {"body": body})
+        post_comment(repo, issue_number, token, installation_id, body, post=gh_post)
         log_ctx.done("comment_posted")
-    except GitHubError as exc:
-        log_ctx.error("post_failed", reason=str(exc)[:100])
     except Exception as exc:
-        log_ctx.error("post_unexpected", reason=str(exc)[:100])
+        log_ctx.error("post_failed", reason=f"{type(exc).__name__}: {str(exc)[:100]}")
+        raise
 
 
 def _dispatch(

@@ -128,27 +128,11 @@ def cmd_merge(
         )
 
         if result.get("merged"):
-            # Audit log — /merge is irreversible
-            try:
-                import json as _j
-                import time as _t
-                from app.core.redis_client import get_redis as _r
+            # /merge is irreversible: record who did it. Never blocks the merge;
+            # an unrecorded entry is logged as an error (app/core/audit.py).
+            from app.core.audit import record_merge
 
-                _r().lpush(
-                    "audit:merge",
-                    _j.dumps(
-                        {
-                            "repo": repo,
-                            "pr": issue_number,
-                            "by": author,
-                            "at": int(_t.time()),
-                            "sha": result.get("sha", "")[:12],
-                        }
-                    ),
-                )
-                _r().ltrim("audit:merge", 0, 999)
-            except Exception:
-                pass  # audit failure must not block the merge
+            record_merge(repo, issue_number, author, result.get("sha", ""))
 
             # Only a branch that lives in THIS repository. A fork PR's head
             # branch is in the fork; deleting `heads/<its name>` here deleted

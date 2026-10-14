@@ -289,11 +289,11 @@ Reported cost in local mode is always `0`.
 <!-- autopilot:stats:start -->
 | | |
 |---|---|
-| Modules | 100 |
-| Lines of code | 27,693 |
+| Modules | 101 |
+| Lines of code | 27,727 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 398 |
+| Internal imports | 400 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>
@@ -405,7 +405,7 @@ Regenerate either form with
 ```mermaid
 graph LR
     ai["ai<br/>16 modules"]
-    core["core<br/>27 modules"]
+    core["core<br/>28 modules"]
     github["github<br/>9 modules"]
     handlers["handlers<br/>28 modules"]
     intelligence["intelligence<br/>5 modules"]

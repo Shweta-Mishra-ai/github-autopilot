@@ -298,6 +298,23 @@
       ]
     },
     {
+      "id": "app.core.audit",
+      "path": "app/core/audit.py",
+      "layer": "core",
+      "loc": 50,
+      "functions": 1,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 2,
+      "external_deps": [
+        "__future__",
+        "json",
+        "logging",
+        "time"
+      ]
+    },
+    {
       "id": "app.core.authorization",
       "path": "app/core/authorization.py",
       "layer": "core",
@@ -550,7 +567,7 @@
       "functions": 1,
       "classes": 1,
       "is_package": false,
-      "fan_in": 10,
+      "fan_in": 11,
       "fan_out": 0,
       "external_deps": [
         "collections",
@@ -1043,7 +1060,7 @@
       "id": "app.handlers.comments.publisher",
       "path": "app/handlers/comments/publisher.py",
       "layer": "handlers",
-      "loc": 592,
+      "loc": 576,
       "functions": 9,
       "classes": 0,
       "is_package": false,
@@ -1052,10 +1069,8 @@
       "external_deps": [
         "__future__",
         "contextlib",
-        "json",
         "logging",
         "re",
-        "time",
         "urllib"
       ]
     },
@@ -1908,6 +1923,16 @@
       "kind": "import"
     },
     {
+      "source": "app.core.audit",
+      "target": "app.core.metrics",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.audit",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
       "source": "app.core.authorization",
       "target": "app.core.commands",
       "kind": "import"
@@ -2469,12 +2494,12 @@
     },
     {
       "source": "app.handlers.comments.publisher",
-      "target": "app.core.guardrails",
+      "target": "app.core.audit",
       "kind": "runtime"
     },
     {
       "source": "app.handlers.comments.publisher",
-      "target": "app.core.redis_client",
+      "target": "app.core.guardrails",
       "kind": "runtime"
     },
     {
@@ -3619,9 +3644,9 @@
     }
   ],
   "stats": {
-    "modules": 100,
-    "edges": 398,
-    "total_loc": 27693,
+    "modules": 101,
+    "edges": 400,
+    "total_loc": 27727,
     "layers": [
       "ai",
       "core",

@@ -506,7 +506,7 @@
       "id": "app.core.maintenance",
       "path": "app/core/maintenance.py",
       "layer": "core",
-      "loc": 347,
+      "loc": 352,
       "functions": 13,
       "classes": 0,
       "is_package": false,
@@ -993,7 +993,7 @@
       "id": "app.handlers.comments.dispatcher",
       "path": "app/handlers/comments/dispatcher.py",
       "layer": "handlers",
-      "loc": 331,
+      "loc": 346,
       "functions": 17,
       "classes": 0,
       "is_package": false,
@@ -1044,11 +1044,11 @@
       "id": "app.handlers.comments.publisher",
       "path": "app/handlers/comments/publisher.py",
       "layer": "handlers",
-      "loc": 592,
+      "loc": 598,
       "functions": 9,
       "classes": 0,
       "is_package": false,
-      "fan_in": 2,
+      "fan_in": 3,
       "fan_out": 12,
       "external_deps": [
         "__future__",
@@ -1064,17 +1064,18 @@
       "id": "app.handlers.comments.reviewer",
       "path": "app/handlers/comments/reviewer.py",
       "layer": "handlers",
-      "loc": 527,
-      "functions": 12,
+      "loc": 575,
+      "functions": 13,
       "classes": 0,
       "is_package": false,
       "fan_in": 3,
-      "fan_out": 12,
+      "fan_out": 13,
       "external_deps": [
         "__future__",
         "datetime",
         "logging",
-        "re"
+        "re",
+        "urllib"
       ]
     },
     {
@@ -1448,7 +1449,7 @@
       "id": "app.intelligence.summarizer",
       "path": "app/intelligence/summarizer.py",
       "layer": "intelligence",
-      "loc": 175,
+      "loc": 179,
       "functions": 2,
       "classes": 0,
       "is_package": false,
@@ -2559,6 +2560,11 @@
     },
     {
       "source": "app.handlers.comments.reviewer",
+      "target": "app.handlers.comments.publisher",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.reviewer",
       "target": "app.handlers.pull_request",
       "kind": "runtime"
     },
@@ -3600,8 +3606,8 @@
   ],
   "stats": {
     "modules": 102,
-    "edges": 389,
-    "total_loc": 27802,
+    "edges": 390,
+    "total_loc": 27880,
     "layers": [
       "ai",
       "core",

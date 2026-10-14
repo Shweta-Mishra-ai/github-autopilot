@@ -111,7 +111,7 @@ Write a structured summary with these exact sections:
         return ""
 
 
-def summarize_issue_thread(comments: list, issue: dict) -> str:
+def summarize_issue_thread(comments: list, issue: dict, omitted: int = 0) -> str:
     """
     Summarize a long issue discussion thread.
 
@@ -120,6 +120,8 @@ def summarize_issue_thread(comments: list, issue: dict) -> str:
     text at 3,000 characters — so on a long thread the summary described the
     opening and not the resolution. `user` is null for a deleted account, and
     `.get('user', {}).get(...)` raised on it, failing the whole command.
+    `omitted` is how many comments between the first and the rest were not
+    fetched; it is stated in the thread rather than left as a silent gap.
     """
     try:
         from app.ai.router import prompt_budget
@@ -137,6 +139,8 @@ def summarize_issue_thread(comments: list, issue: dict) -> str:
         overhead = sum(len(h) + 2 for h in heads)
         share = max(120, (room - overhead) // max(1, len(usable)))
         entries = [h + (c.get("body") or "")[:share] for h, c in zip(heads, usable, strict=True)]
+        if omitted and entries:
+            entries.insert(1, f"[{omitted} comment(s) in the middle of the thread not fetched]")
         # When even 120 characters each do not fit, keep the opening comment
         # and as many of the latest as fit, and say how many were left out.
         if sum(len(e) + 2 for e in entries) > room and len(entries) > 1:

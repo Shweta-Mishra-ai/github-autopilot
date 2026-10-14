@@ -77,3 +77,40 @@ class TestInstallations:
                 (m.decode() if isinstance(m, bytes) else m)
                 for m in fake_redis.smembers(inst._INDEX_KEY) or set()
             }
+
+
+class TestSummarizeReadsTheEnd:
+    """It read the first 50 comments, oldest first: on a longer thread the
+    resolution was never fetched and the summary described the opening."""
+
+    def _run(self, total):
+        from app.handlers.comments import reviewer
+
+        def get(path, token):
+            if path.endswith("/issues/9"):
+                return {"title": "t", "comments": total}
+            page = int(path.rsplit("page=", 1)[1])
+            start = (page - 1) * 100
+            return [{"user": {"login": "u"}, "body": f"c{i}"} for i in range(start, min(total, start + 100))]
+
+        seen = {}
+
+        def summarize(comments, issue, omitted=0):
+            seen.update(n=len(comments), omitted=omitted, last=comments[-1]["body"])
+            return "summary"
+
+        with patch.object(reviewer, "gh_get", side_effect=get), \
+             patch("app.intelligence.summarizer.summarize_issue_thread", side_effect=summarize):
+            out = reviewer.cmd_summarize("o/r", 9, "t")
+        return out, seen
+
+    def test_a_long_thread_includes_its_latest_comment(self):
+        out, seen = self._run(1000)
+        assert seen["last"] == "c999"
+        assert seen["omitted"] == 1000 - seen["n"]
+        assert f"Read {seen['n']} of 1000 comments" in out
+
+    def test_a_short_thread_is_read_whole_and_says_nothing_extra(self):
+        out, seen = self._run(40)
+        assert seen == {"n": 40, "omitted": 0, "last": "c39"}
+        assert "Read " not in out

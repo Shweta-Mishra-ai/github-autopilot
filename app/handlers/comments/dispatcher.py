@@ -295,8 +295,8 @@ def providers_down_comment(retry_in: int = 60) -> str:
         "## ⚠️ AI Temporarily Unavailable\n\n"
         "All language model providers are currently unavailable "
         f"(circuit breakers open). Earliest retry: **~{retry_in}s**.\n\n"
-        "Please try again in a minute.\n\n"
-        "> Transient issue — no action needed.\n\n"
+        "Please try again in a minute. If it persists, `/health` shows each "
+        "provider's state.\n\n"
         "---\n*🤖 GitHub Autopilot*"
     )
 
@@ -327,5 +327,20 @@ def is_providers_down(result: dict) -> bool:
 
 
 def make_degraded_response(result: dict) -> str:
-    retry_in = result.get("_retry_in", 60) if isinstance(result, dict) else 60
-    return providers_down_comment(retry_in)
+    """
+    The reply when no provider answered. It read `_retry_in`, a key the router
+    never sets (`retry_in`), so every reply said ~60s; and it ignored the
+    router's `_configuration_error`, so a missing or rejected API key was
+    reported as "Transient issue — no action needed" — the one case where
+    waiting cannot help.
+    """
+    result = result if isinstance(result, dict) else {}
+    if result.get("_configuration_error"):
+        return (
+            "## ⚠️ AI Not Configured\n\n"
+            f"{result.get('message') or 'No language model provider is usable.'}\n\n"
+            "This will not resolve by waiting: a maintainer needs to fix the "
+            "deployment's provider settings. `/health` shows what is wrong.\n\n"
+            "---\n*🤖 GitHub Autopilot*"
+        )
+    return providers_down_comment(int(result.get("retry_in") or 60))

@@ -175,9 +175,21 @@ class TestProvidersDown:
 
     def test_make_degraded_response_contains_retry(self):
         from app.handlers.comments.dispatcher import make_degraded_response
-        result = make_degraded_response({"_providers_down": True, "_retry_in": 45})
+        # `retry_in` is the key the router sets; this test used `_retry_in`,
+        # which nothing sets, so the reply always said 60s and it passed.
+        result = make_degraded_response({"_providers_down": True, "retry_in": 45})
         assert "45" in result
         assert "unavailable" in result.lower() or "AI" in result
+
+    def test_a_configuration_fault_is_not_called_transient(self):
+        from app.handlers.comments.dispatcher import make_degraded_response
+        result = make_degraded_response({
+            "_providers_down": True, "retry_in": 60, "_configuration_error": True,
+            "message": "GROQ_API_KEY is invalid (401).",
+        })
+        assert "AI Not Configured" in result and "GROQ_API_KEY is invalid" in result
+        assert "will not resolve by waiting" in result
+        assert "Transient" not in result
 
     def test_providers_down_comment_default(self):
         from app.handlers.comments.dispatcher import providers_down_comment

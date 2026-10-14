@@ -29,6 +29,7 @@ Design constraints this respects:
 from __future__ import annotations
 
 import logging
+import re
 
 from app.ai.guarded import safe_router_ask
 from app.core.sanitizer import one_line, wrap_user_content
@@ -222,6 +223,20 @@ def _shell_quote(value: str) -> str:
     return "'" + value.replace("'", "'\\''") + "'"
 
 
+_DOUBLED_TYPE = re.compile(r"^(\w+(?:\([^)]*\))?!?):\s*\1:\s*", re.I)
+
+
+def _clean_suggestion(message: str) -> str:
+    """The suggested subject if it is a valid Conventional Commit, else ""."""
+    from app.handlers.push import _is_conventional
+
+    subject = message.strip().split("\n")[0].strip()
+    subject = _DOUBLED_TYPE.sub(r"\1: ", subject)  # "fix: fix: x" -> "fix: x"
+    if not subject or len(subject) > 200 or not _is_conventional(subject):
+        return ""
+    return subject
+
+
 def suggest_commit_messages(repo, commits, token, config, log_ctx) -> int:
     """
     Comment a professional commit message on each poorly-named commit.
@@ -266,8 +281,12 @@ def suggest_commit_messages(repo, commits, token, config, log_ctx) -> int:
         for s in suggestions:
             if not isinstance(s, dict):
                 continue
-            message = str(s.get("message", "")).strip()
-            if not message or len(message) > 200:
+            message = _clean_suggestion(str(s.get("message", "")))
+            if not message:
+                # Not posted: a suggestion that fails the very check the
+                # commit failed ("fix: fix: …", a bare sentence) told the
+                # author to replace a non-conventional message with another.
+                log_ctx.warning("commit_message.invalid_suggestion_skipped")
                 continue
 
             commit = by_short_sha.get(str(s.get("sha", "")).strip()[:7])
@@ -286,7 +305,10 @@ def suggest_commit_messages(repo, commits, token, config, log_ctx) -> int:
                 gh_post(
                     f"/repos/{repo}/commits/{commit['id']}/comments",
                     token,
-                    {"body": _render(repo, s, original) + getattr(config, "footer", "")},
+                    {
+                        "body": _render(repo, {**s, "message": message}, original)
+                        + getattr(config, "footer", "")
+                    },
                 )
                 posted += 1
                 commented.add(commit["id"])

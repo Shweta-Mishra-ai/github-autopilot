@@ -573,6 +573,14 @@ Skip empty sections. Today's date is {datetime.datetime.now(datetime.timezone.ut
 
         if not changelog or not changelog.strip():
             return "## ⚠️ Changelog generation returned empty response. Try again."
+        # Whatever came back was published as the entry, a refusal ("I'm
+        # sorry, I can't…") included, inside a "CHANGELOG Entry" block.
+        if not re.search(r"^##\s*\[", changelog, re.M):
+            return (
+                "## ⚠️ No Changelog Entry Produced\n\n"
+                "The model's answer was not a changelog entry (no `## [version]` "
+                "heading), so it is not shown as one. Try again."
+            )
 
         return (
             f"## 📋 CHANGELOG Entry\n\n"

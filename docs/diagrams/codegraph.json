@@ -1064,7 +1064,7 @@
       "id": "app.handlers.comments.reviewer",
       "path": "app/handlers/comments/reviewer.py",
       "layer": "handlers",
-      "loc": 587,
+      "loc": 595,
       "functions": 14,
       "classes": 0,
       "is_package": false,
@@ -1113,15 +1113,16 @@
       "id": "app.handlers.commit_message",
       "path": "app/handlers/commit_message.py",
       "layer": "handlers",
-      "loc": 306,
-      "functions": 9,
+      "loc": 328,
+      "functions": 10,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
       "fan_out": 6,
       "external_deps": [
         "__future__",
-        "logging"
+        "logging",
+        "re"
       ]
     },
     {
@@ -1418,8 +1419,8 @@
       "id": "app.intelligence.summarizer",
       "path": "app/intelligence/summarizer.py",
       "layer": "intelligence",
-      "loc": 179,
-      "functions": 2,
+      "loc": 82,
+      "functions": 1,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
@@ -1444,7 +1445,7 @@
       "id": "app.mcp.handlers",
       "path": "app/mcp/handlers.py",
       "layer": "mcp",
-      "loc": 580,
+      "loc": 600,
       "functions": 12,
       "classes": 0,
       "is_package": false,
@@ -3581,7 +3582,7 @@
   "stats": {
     "modules": 100,
     "edges": 391,
-    "total_loc": 27875,
+    "total_loc": 27828,
     "layers": [
       "ai",
       "core",

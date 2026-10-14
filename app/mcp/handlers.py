@@ -101,20 +101,33 @@ Return JSON:
             max_tokens=1000,
         )
 
+        from app.ai.validator import as_text, is_unusable, verdict
+
+        # An unusable answer rendered as an analysis with blank fields, and a
+        # recommendation was whatever string came back.
+        if is_unusable(result):
+            return (
+                f"Error: the analysis of PR #{pr_number} could not be used — nothing is reported."
+            )
+        rec = verdict(result, "recommendation", {"approve", "request_changes"})
         lines = [
             f"## PR #{pr_number} Analysis — {repo}",
             "",
-            f"**Summary:** {result.get('summary', '')}",
-            f"**Recommendation:** {result.get('recommendation', '')}",
+            f"**Summary:** {as_text(result.get('summary')) or 'not given'}",
+            f"**Recommendation:** {rec.replace('_', ' ') if rec else 'not given'}",
             "",
         ]
-        if result.get("security_issues"):
-            lines += ["**Security:**"] + [f"- {i}" for i in result["security_issues"]] + [""]
-        if result.get("test_gaps"):
-            lines += ["**Test Gaps:**"] + [f"- {g}" for g in result["test_gaps"]] + [""]
-        if result.get("improvements"):
-            lines += ["**Improvements:**"] + [f"- {i}" for i in result["improvements"]]
-        return "\n".join(lines)
+        for key, heading in (
+            ("security_issues", "Security"),
+            ("test_gaps", "Test Gaps"),
+            # Asked for and never shown.
+            ("blast_radius", "Blast Radius"),
+            ("improvements", "Improvements"),
+        ):
+            items = [as_text(i) for i in (result.get(key) or []) if as_text(i)]
+            if items:
+                lines += [f"**{heading}:**"] + [f"- {i}" for i in items] + [""]
+        return "\n".join(lines).rstrip()
 
     except Exception as e:
         log.error(f"mcp.analyze_pr error: {e}")
@@ -164,9 +177,16 @@ Return JSON:
             max_tokens=1500,
         )
 
+        from app.ai.validator import is_unusable
+
+        if is_unusable(result) or not result.get("fix"):
+            return f"Error: no usable fix was produced for issue #{issue_number}."
         return "\n".join(
             [
                 f"## Fix for Issue #{issue_number}",
+                "",
+                "> Based on the issue's text (and any context given) only — the "
+                "repository's code was not read. Check every file or function it names.",
                 "",
                 f"**Root Cause:** {result.get('root_cause', '')}",
                 "",

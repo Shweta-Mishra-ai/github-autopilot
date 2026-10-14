@@ -417,10 +417,10 @@
 <circle cx="520.4" cy="174.9" r="6.47" fill="#22d3ee"/>
 <circle cx="534.8" cy="181.8" r="4.82" fill="#22d3ee"/>
 <circle cx="548.7" cy="189.5" r="6.78" fill="#22d3ee"/>
-<circle cx="562.2" cy="198.0" r="6.73" fill="#22d3ee"/>
+<circle cx="562.2" cy="198.0" r="6.77" fill="#22d3ee"/>
 <circle cx="575.1" cy="207.3" r="4.3" fill="#22d3ee"/>
 <circle cx="587.5" cy="217.4" r="5.14" fill="#22d3ee"/>
-<circle cx="599.2" cy="228.2" r="5.25" fill="#22d3ee"/>
+<circle cx="599.2" cy="228.2" r="5.38" fill="#22d3ee"/>
 <circle cx="610.3" cy="239.7" r="5.88" fill="#22d3ee"/>
 <circle cx="620.6" cy="251.8" r="5.7" fill="#22d3ee"/>
 <circle cx="630.3" cy="264.5" r="5.83" fill="#22d3ee"/>
@@ -455,7 +455,7 @@
 <circle cx="511.7" cy="668.8" r="6.72" fill="#a78bfa"/>
 <circle cx="496.7" cy="674.3" r="6.38" fill="#a78bfa"/>
 <circle cx="481.5" cy="678.8" r="5.69" fill="#a78bfa"/>
-<circle cx="466.0" cy="682.5" r="4.34" fill="#a78bfa"/>
+<circle cx="466.0" cy="682.5" r="3.39" fill="#a78bfa"/>
 <circle cx="439.1" cy="686.6" r="1.8" fill="#818cf8"/>
 <circle cx="423.2" cy="687.8" r="4.63" fill="#818cf8"/>
 <circle cx="407.3" cy="688.0" r="4.66" fill="#818cf8"/>
@@ -498,7 +498,7 @@
 <circle cx="212.5" cy="241.0" r="5.17" fill="#34d399"/>
 <circle cx="223.5" cy="229.5" r="3.92" fill="#34d399"/>
 <circle cx="243.8" cy="211.4" r="2.06" fill="#60a5fa"/>
-<circle cx="256.5" cy="201.7" r="6.7" fill="#60a5fa"/>
+<circle cx="256.5" cy="201.7" r="6.79" fill="#60a5fa"/>
 <circle cx="269.7" cy="192.9" r="4.26" fill="#60a5fa"/>
 <circle cx="283.5" cy="184.8" r="4.44" fill="#60a5fa"/>
 <circle cx="307.9" cy="173.0" r="1.89" fill="#9ca3af"/>
@@ -612,7 +612,7 @@
 <line x1="800.0" y1="110.0" x2="1280" y2="110.0" stroke="#1f2937" stroke-width="1"/>
 <text x="800.0" y="133.0" font-size="12" fill="#9ca3af">Modules</text><text x="1280" y="133.0" font-size="12" fill="#e5e7eb" text-anchor="end" font-weight="600">100</text>
 <text x="800.0" y="156.0" font-size="12" fill="#9ca3af">Imports</text><text x="1280" y="156.0" font-size="12" fill="#e5e7eb" text-anchor="end" font-weight="600">391</text>
-<text x="800.0" y="179.0" font-size="12" fill="#9ca3af">Lines of code</text><text x="1280" y="179.0" font-size="12" fill="#e5e7eb" text-anchor="end" font-weight="600">27,875</text>
+<text x="800.0" y="179.0" font-size="12" fill="#9ca3af">Lines of code</text><text x="1280" y="179.0" font-size="12" fill="#e5e7eb" text-anchor="end" font-weight="600">27,828</text>
 <text x="800.0" y="202.0" font-size="12" fill="#9ca3af">Import cycles</text><text x="1280" y="202.0" font-size="12" fill="#22c55e" text-anchor="end" font-weight="600">none</text>
 <text x="800.0" y="225.0" font-size="12" fill="#9ca3af">Unreferenced modules</text><text x="1280" y="225.0" font-size="12" fill="#22c55e" text-anchor="end" font-weight="600">none</text>
 <text x="800.0" y="255.0" font-size="10" fill="#9ca3af" font-weight="600">LAYERS</text>

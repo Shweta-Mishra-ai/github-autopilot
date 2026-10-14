@@ -21,8 +21,9 @@ HANDLING OF SECRETS
   Step 3 returns a private key and a webhook secret. They are rendered once, in
   the operator's own browser, and never logged, stored or sent anywhere — the
   page says so, because a credential shown without that promise is one the
-  reader has to assume leaked. `state` is a random value checked on return, so
-  a callback the operator did not initiate cannot be replayed into this page.
+  reader has to assume leaked. `state` is a random value set as a cookie in
+  the browser that loaded /setup and required to match on return, so a
+  callback that browser did not initiate is refused.
 
 WHAT THE MANIFEST ASKS FOR
   Only what the code calls. If the setup doctor later reports the collaborator
@@ -33,16 +34,24 @@ WHAT THE MANIFEST ASKS FOR
 
 from __future__ import annotations
 
+import hmac
 import html
 import json
 import logging
 import os
+import re
 import secrets
 
 log = logging.getLogger(__name__)
 
-_STATES: set[str] = set()
-_MAX_STATES = 32
+# The state cookie, set on /setup and required on /setup/callback.
+STATE_COOKIE = "autopilot_setup_state"
+STATE_TTL_SECONDS = 1800
+
+# GitHub's manifest codes are URL-safe tokens. The code is placed in a URL
+# path, so anything else — "../" included — is refused before it is sent.
+_CODE_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+_STATE_RE = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
 
 
 def _public_url() -> str:
@@ -83,27 +92,37 @@ def build_manifest(base_url: str, name: str = "") -> dict:
 
 
 def new_state() -> str:
-    """A one-shot CSRF token for the round trip to GitHub."""
-    state = secrets.token_urlsafe(24)
-    if len(_STATES) >= _MAX_STATES:
-        _STATES.clear()  # bounded; a stale state simply has to start over
-    _STATES.add(state)
-    return state
+    """
+    A one-shot CSRF token for the round trip to GitHub. The caller sets it as
+    the STATE_COOKIE in the browser that asked for the setup page.
+
+    It used to be held in one server-wide set instead. That bound it to
+    nothing: a state fetched by anyone from the public /setup page was
+    accepted on anyone else's callback, so an attacker could walk a victim's
+    browser through the callback with the attacker's own code and show them
+    an install link for the attacker's App. And the set was cleared at 32
+    entries, so 32 anonymous page loads voided an operator's setup in flight.
+    """
+    return secrets.token_urlsafe(24)
 
 
-def consume_state(state: str) -> bool:
-    """True once per state. A replayed callback fails here."""
-    try:
-        _STATES.remove(state)
-        return True
-    except KeyError:
+def consume_state(state: str, cookie: str) -> bool:
+    """
+    True when the callback's state is the one this browser was given. The
+    caller clears the cookie whatever the answer, so it works once.
+    """
+    if not (state and cookie and _STATE_RE.match(state)):
         return False
+    return hmac.compare_digest(state.encode(), cookie.encode())
 
 
-def setup_page(base_url: str) -> str:
+def valid_code(code: str) -> bool:
+    return bool(_CODE_RE.match(code or ""))
+
+
+def setup_page(base_url: str, state: str) -> str:
     """The one-button page. No secret is present on it."""
     manifest = json.dumps(build_manifest(base_url))
-    state = new_state()
     perms = build_manifest(base_url)["default_permissions"]
     rows = "\n".join(
         f"<tr><td><code>{html.escape(k)}</code></td><td>{html.escape(v)}</td></tr>"

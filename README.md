@@ -290,7 +290,7 @@ Reported cost in local mode is always `0`.
 | | |
 |---|---|
 | Modules | 100 |
-| Lines of code | 27,458 |
+| Lines of code | 27,502 |
 | Slash commands | 27 |
 | MCP tools | 9 |
 | Internal imports | 397 |

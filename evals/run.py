@@ -443,7 +443,7 @@ def run_gaps_cases() -> tuple[list, list]:
                     return ""
                 raise
 
-        output = _attempt(_run, case, results, blocked_check=lambda _out: not captured)
+        output = _attempt(_run, case, results, blocked_check=lambda _out, captured=captured: not captured)
         if output is None:
             continue
 

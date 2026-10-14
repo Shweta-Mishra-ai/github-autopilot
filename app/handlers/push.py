@@ -155,17 +155,32 @@ def handle(payload: dict) -> None:
     scan_all = config.get("push", "scan_all_branches", default=False)
     run_full_scan = is_default_branch or scan_all
 
+    # A scan that could not finish (a commit it could not read, an issue it
+    # could not file) is not a clean result. Its failure is kept and raised
+    # once every other scan has run, so the queue retries the event; the
+    # dedupe keys of anything not filed are released first. These failures
+    # were logged and swallowed, and the next push was then told the alert
+    # had already been sent.
+    failures: list[Exception] = []
+
+    def _attempt(scan, *args, **kwargs):
+        try:
+            scan(*args, **kwargs)
+        except Exception as e:  # noqa: BLE001 — re-raised below
+            log.error(f"push.scan_incomplete scan={scan.__name__}: {e}")
+            failures.append(e)
+
     # Secret scan: ALL branches — secrets don't care which branch they're on
     if config.get("push", "scan_secrets", default=True):
-        _scan_secrets(repo, commits, token, config, log)
+        _attempt(_scan_secrets, repo, commits, token, config, log)
 
     # Dep scan + commit lint: default branch only (or all if scan_all_branches=true)
     if run_full_scan:
         if config.get("push", "scan_dependencies", default=True):
-            _scan_dependencies(repo, commits, token, config, log, ref=latest_sha)
+            _attempt(_scan_dependencies, repo, commits, token, config, log, ref=latest_sha)
 
         if config.get("push", "enforce_conventional_commits", default=True):
-            _lint_commits(repo, commits, token, config, log, branch=branch)
+            _attempt(_lint_commits, repo, commits, token, config, log, branch=branch)
 
         # Writes the replacement message rather than only naming the problem.
         # Runs on the same branches as the lint it complements, and is its own
@@ -186,8 +201,21 @@ def handle(payload: dict) -> None:
 
             maybe_update_readme(repo, commits, token, config, log)
 
+    if failures:
+        raise failures[0]
+
 
 # ── Dedup ──────────────────────────────────────────────────────────────────────
+
+
+def _release_report(repo: str, report_type: str) -> None:
+    """Undo _already_reported for a report that was not actually filed."""
+    try:
+        from app.core.redis_client import get_redis
+
+        get_redis().delete(f"push_reported:{repo}:{report_type}")
+    except Exception as e:
+        _log.warning(f"push.release_failed repo={repo} type={report_type}: {e}")
 
 
 def _already_reported(repo: str, report_type: str, ttl_seconds: int = 86400) -> bool:
@@ -259,13 +287,13 @@ def _scan_secrets(repo, commits, token, config, log) -> None:
     quieter one was reachable only via /security and MCP.
     """
     all_findings = []
+    unread: list[Exception] = []
     for commit in commits:
         sha = commit.get("id", "")
         if not sha:
             continue
         try:
-            diff_data = gh_get(f"/repos/{repo}/commits/{sha}", token)
-            for f in diff_data.get("files", []):
+            for f in _commit_files(repo, sha, token):
                 filename = f.get("filename", "")
                 if _skip_secret_scan(filename):
                     continue  # test/example/docs — dummy secrets expected, skip
@@ -276,8 +304,11 @@ def _scan_secrets(repo, commits, token, config, log) -> None:
                     all_findings.extend(scan_diff(patch, file_path=filename))
         except Exception as e:
             log.error(f"Secret scan failed for {sha[:7]}: {e}")
+            unread.append(e)
 
     if not all_findings:
+        if unread:
+            raise unread[0]  # a commit nobody read is not a clean commit
         return
 
     actionable = _actionable_secrets(all_findings)
@@ -296,6 +327,44 @@ def _scan_secrets(repo, commits, token, config, log) -> None:
         _open_secret_issue(repo, token, fresh, log, config)
     except Exception as e:
         log.error(f"Failed to post secret alert: {e}")
+        _release_secrets(repo, fresh)
+        raise
+    if unread:
+        raise unread[0]
+
+
+# GitHub returns at most 300 files per page of a commit.
+_COMMIT_FILES_PER_PAGE = 300
+_COMMIT_FILES_MAX_PAGES = 10
+
+
+def _commit_files(repo: str, sha: str, token: str) -> list:
+    """Every changed file of a commit. One GET returned the first 300 only,
+    so a secret in file 301 of a large commit was never scanned."""
+    files: list = []
+    for page in range(1, _COMMIT_FILES_MAX_PAGES + 1):
+        data = gh_get(
+            f"/repos/{repo}/commits/{sha}?per_page={_COMMIT_FILES_PER_PAGE}&page={page}", token
+        )
+        batch = data.get("files") if isinstance(data, dict) else None
+        if not isinstance(batch, list):
+            break
+        files.extend(f for f in batch if isinstance(f, dict))
+        if len(batch) < _COMMIT_FILES_PER_PAGE:
+            break
+    return files
+
+
+def _release_secrets(repo: str, findings: list) -> None:
+    """Undo _unreported_secrets for findings whose alert was not filed."""
+    try:
+        from app.core.redis_client import get_redis
+
+        r = get_redis()
+        for f in findings:
+            r.delete(f"push_secret_seen:{repo}:{_secret_fingerprint(f)}")
+    except Exception as e:
+        _log.warning(f"push.secret_release_failed repo={repo}: {e}")
 
 
 def _secret_fingerprint(finding) -> str:
@@ -404,7 +473,10 @@ def _scan_dependencies(repo, commits, token, config, log, ref: str = "") -> None
 
     dep_files = [f for f in changed_files if f in ("requirements.txt", "requirements-dev.txt")]
 
+    failures: list[Exception] = []
     for dep_file in dep_files:
+        report_key = f"dep_high_{dep_file}"
+        taken = False
         try:
             # At the pushed commit. Without ?ref= this read the DEFAULT
             # branch, so a feature-branch change to requirements.txt (with
@@ -435,10 +507,10 @@ def _scan_dependencies(repo, commits, token, config, log, ref: str = "") -> None
                 )
                 continue
 
-            report_key = f"dep_high_{dep_file}"
             if _already_reported(repo, report_key, ttl_seconds=86400):
                 log.info(f"push.dep_scan_dedup file={dep_file} (HIGH reported in last 24h)")
                 continue
+            taken = True
 
             created = gh_post(
                 f"/repos/{repo}/issues",
@@ -454,6 +526,11 @@ def _scan_dependencies(repo, commits, token, config, log, ref: str = "") -> None
 
         except Exception as e:
             log.error(f"Dep scan failed for {dep_file}: {e}")
+            if taken:
+                _release_report(repo, report_key)
+            failures.append(e)
+    if failures:
+        raise failures[0]
 
 
 # ── Commit lint ────────────────────────────────────────────────────────────────
@@ -493,8 +570,8 @@ type(scope): description
 ### Valid Types
 `feat` `fix` `docs` `refactor` `test` `chore` `perf` `ci` `style` `build`
 
-> 💡 Use `/fix` on this issue for AI help.
-> ⚡ Use `/apply` to auto-fix commit messages.
+> 💡 Rewording a pushed commit means rewriting history: `git rebase -i`, then
+> a force-push, only on a branch nobody else has pulled.
 """
     try:
         created = gh_post(
@@ -513,6 +590,8 @@ type(scope): description
         log.done(f"Commit lint issue created: {len(bad_commits)} bad commits")
     except GitHubError as e:
         log.error(f"Failed to create lint issue: {e}")
+        _release_report(repo, "commit_lint")
+        raise
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────

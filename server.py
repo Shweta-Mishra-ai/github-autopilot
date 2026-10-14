@@ -773,8 +773,10 @@ def _is_transient(e: Exception) -> bool:
         return True
     if isinstance(e, GitHubError):
         # Secondary rate limits are 403s with their own type.
+        # Status 0 is the client's code for a connection error or timeout —
+        # the most transient failure there is, and it was not retried.
         return (
-            e.status_code in (429, 502, 503, 504)
+            e.status_code in (0, 429, 502, 503, 504)
             or e.status_code >= 500
             or (type(e).__name__ == "GitHubSecondaryRateLimitError")
         )

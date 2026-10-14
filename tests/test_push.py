@@ -4,6 +4,7 @@ Sprint 8 — push handler tests.
 Covers: secret scan, dep scan, commit lint, dedup, bot skip, branch filter.
 """
 
+import pytest
 from unittest.mock import MagicMock, patch
 
 
@@ -232,12 +233,14 @@ class TestScanSecrets:
             _scan_secrets("org/repo", [_commit()], "tok", MagicMock(), MagicMock())
             mock_post.assert_not_called()
 
-    def test_gh_get_error_handled_gracefully(self):
+    def test_an_unreadable_commit_is_raised_for_retry_not_called_clean(self):
+        """A commit the scan could not read was logged and treated as clean."""
         with patch("app.handlers.push.gh_get", side_effect=Exception("network error")), \
              patch("app.handlers.push.gh_post") as mock_post:
             from app.handlers.push import _scan_secrets
             log = MagicMock()
-            _scan_secrets("org/repo", [_commit()], "tok", MagicMock(), log)
+            with pytest.raises(Exception, match="network error"):
+                _scan_secrets("org/repo", [_commit()], "tok", MagicMock(), log)
             mock_post.assert_not_called()
 
 
@@ -552,7 +555,8 @@ class TestDefaultBranch:
         from app.handlers.push import _scan_dependencies
 
         commits = [_commit(modified=["requirements.txt"])]
-        with patch("app.handlers.push.gh_get", side_effect=Exception("stop")) as get:
+        with patch("app.handlers.push.gh_get", side_effect=Exception("stop")) as get, \
+             pytest.raises(Exception, match="stop"):
             _scan_dependencies("org/repo", commits, "tok", _mock_config(), MagicMock(), ref="abc1234")
         assert get.call_args[0][0] == "/repos/org/repo/contents/requirements.txt?ref=abc1234"
 
@@ -564,3 +568,53 @@ class TestDefaultBranch:
 
             _lint_commits("org/repo", commits, "tok", _mock_config(), MagicMock(), branch="trunk")
         assert post.call_args[0][2]["title"].endswith("pushed to trunk")
+
+
+class TestAlertsAreNotLostToOneFailedPost:
+    """The dedupe key was taken before the issue POST; a 502 on the POST was
+    swallowed and the next push was told the alert had been sent."""
+
+    def test_a_failed_secret_alert_releases_its_keys_and_raises(self, fake_redis):
+        from app.handlers import push
+
+        finding = MagicMock(
+            file_path="app/x.py", pattern_name="AWS", redacted_match="AKIA****", severity="critical"
+        )
+        with (
+            patch.object(
+                push, "_commit_files", return_value=[{"filename": "app/x.py", "patch": "+k"}]
+            ),
+            patch.object(push, "scan_diff", return_value=[finding]),
+            patch.object(push, "_actionable_secrets", side_effect=lambda f: f),
+            patch.object(
+                push, "_open_secret_issue", side_effect=push.GitHubError("bad gateway", 502)
+            ),
+        ):
+            with pytest.raises(push.GitHubError):
+                push._scan_secrets("o/r", [_commit()], "tok", MagicMock(), MagicMock())
+        assert push._unreported_secrets("o/r", [finding]) == [finding], "key was released"
+
+    def test_a_failed_lint_issue_releases_its_key_and_raises(self, fake_redis):
+        from app.handlers import push
+
+        commits = [_commit(sha=f"abc{i}xxx", msg="wip") for i in range(4)]
+        with patch.object(push, "gh_post", side_effect=push.GitHubError("bad gateway", 502)):
+            with pytest.raises(push.GitHubError):
+                push._lint_commits("o/r", commits, "tok", _mock_config(), MagicMock())
+        assert push._already_reported("o/r", "commit_lint") is False, "key was released"
+
+    def test_large_commits_are_read_page_by_page(self):
+        from app.handlers import push
+
+        pages = {1: [{"filename": f"f{i}"} for i in range(300)], 2: [{"filename": "f300"}]}
+        with patch.object(
+            push, "gh_get", side_effect=lambda p, t: {"files": pages[int(p.rsplit("page=", 1)[1])]}
+        ):
+            assert len(push._commit_files("o/r", "sha", "tok")) == 301
+
+
+def test_a_connection_error_is_transient():
+    import server
+    from app.github.client import GitHubError
+
+    assert server._is_transient(GitHubError("ReadTimeout: x", 0))

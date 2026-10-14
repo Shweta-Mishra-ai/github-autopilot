@@ -504,6 +504,7 @@ _PLACEHOLDER_WORDS = frozenset(
         "yourkey",
         "yourtoken",
         "dummy",
+        "mock",
         "sample",
         "notreal",
         "fake",
@@ -629,6 +630,14 @@ def _has_key_material(candidate: str) -> bool:
             and any(c.isdigit() for c in token)
         ):
             return True
+    # The splits above break on every symbol, but `$ # ! @ %` are password
+    # characters, not the separators a person types into a stand-in (`_ - .`
+    # and space). `7FI0KWR$0P#BTGd$XXX$ygEr` fell apart into fragments too
+    # short to count, and its `XXX` fragment then marked a random 24-character
+    # password as a placeholder (2 in 800,000 generated passwords).
+    for token in re.split(r"[\s'\"_.,/=:\-]+", candidate):
+        if len(token) >= _KEY_MATERIAL_CHARS and _looks_random(token):
+            return True
     return False
 
 
@@ -747,9 +756,19 @@ def _is_false_positive(value: str, word_rules: bool = True) -> bool:
     return word_rules and not has_material and _has_placeholder_word(value)
 
 
+_STRING_LITERAL = re.compile(r"""(['"])(?:\\.|(?!\1).)*\1""")
+
+
 def _is_test_line(line: str) -> bool:
-    """Heuristic: skip lines that look like test fixtures or documentation."""
-    line_lower = line.lower()
+    """Heuristic: skip lines that look like test fixtures or documentation.
+
+    Only the code and its comment are read, never the inside of a string. The
+    value is what is being judged, and a random password that happens to begin
+    `MoCK#` is not a mock: `#` is a word boundary, so `\\bmock\\b` matched
+    inside the string and every keyword pattern skipped the line. A stand-in
+    VALUE is caught by the placeholder-word rules, which look at it properly.
+    """
+    line_lower = _STRING_LITERAL.sub(" ", line).lower()
     # Use word-boundary aware checks to avoid false matches inside tokens
     # e.g. "p4ssw0rd_t3st_fake" should not match "_fake" as a test marker
     test_markers = ["# example", "# test", "# demo", "# sample"]

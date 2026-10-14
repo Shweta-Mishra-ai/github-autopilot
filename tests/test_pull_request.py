@@ -333,7 +333,10 @@ class TestDetectTestGaps:
             pr = _pr()["pull_request"]
             log = MagicMock()
             gaps_md = _detect_test_gaps(pr, "org/repo", 1, files, "tok", cfg, log)
-            assert "Missing edge case tests" in gaps_md  # V7: returned, not posted
+            # The gap is published; the model's free-text summary is not — it
+            # described "the test suite" it was never shown.
+            assert "`login`" in gaps_md  # V7: returned, not posted
+            assert "Missing edge case tests" not in gaps_md
             mock_post.assert_not_called()
 
     def test_no_gaps_detected_no_comment(self):

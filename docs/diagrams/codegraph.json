@@ -765,7 +765,7 @@
       "functions": 11,
       "classes": 2,
       "is_package": false,
-      "fan_in": 24,
+      "fan_in": 25,
       "fan_out": 2,
       "external_deps": [
         "logging",
@@ -959,8 +959,8 @@
       "id": "app.handlers.comments.dispatcher",
       "path": "app/handlers/comments/dispatcher.py",
       "layer": "handlers",
-      "loc": 288,
-      "functions": 15,
+      "loc": 320,
+      "functions": 17,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
@@ -1029,8 +1029,8 @@
       "id": "app.handlers.comments.reviewer",
       "path": "app/handlers/comments/reviewer.py",
       "layer": "handlers",
-      "loc": 479,
-      "functions": 11,
+      "loc": 490,
+      "functions": 12,
       "classes": 0,
       "is_package": false,
       "fan_in": 4,
@@ -1156,7 +1156,7 @@
       "functions": 5,
       "classes": 0,
       "is_package": false,
-      "fan_in": 1,
+      "fan_in": 2,
       "fan_out": 1,
       "external_deps": [
         "__future__",
@@ -1169,15 +1169,18 @@
       "id": "app.handlers.pull_request.gaps",
       "path": "app/handlers/pull_request/gaps.py",
       "layer": "handlers",
-      "loc": 434,
-      "functions": 12,
+      "loc": 628,
+      "functions": 18,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 5,
+      "fan_out": 7,
       "external_deps": [
         "__future__",
-        "re"
+        "ast",
+        "base64",
+        "re",
+        "urllib"
       ]
     },
     {
@@ -2834,6 +2837,11 @@
     },
     {
       "source": "app.handlers.pull_request.gaps",
+      "target": "app.github.client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request.gaps",
       "target": "app.github.patch_parser",
       "kind": "import"
     },
@@ -2841,6 +2849,11 @@
       "source": "app.handlers.pull_request.gaps",
       "target": "app.handlers.pull_request.classify",
       "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.gaps",
+      "target": "app.handlers.pull_request.context",
+      "kind": "runtime"
     },
     {
       "source": "app.handlers.pull_request.grounding",
@@ -3355,8 +3368,8 @@
   ],
   "stats": {
     "modules": 98,
-    "edges": 353,
-    "total_loc": 26375,
+    "edges": 355,
+    "total_loc": 26612,
     "layers": [
       "ai",
       "core",
@@ -3384,7 +3397,7 @@
       {
         "id": "app.github.client",
         "loc": 306,
-        "fan_in": 24,
+        "fan_in": 25,
         "fan_out": 2
       },
       {

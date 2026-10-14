@@ -27,8 +27,8 @@ EXCERPT_CHARS = 600
 MAX_REFERENCED_LISTED = 40
 
 # A symbol a source diff defines or edits: a def/class/function on an added
-# line, a module-level assignment (no indent, so not a local), or the enclosing
-# def/class GitHub names in a hunk header when the edit is inside a body.
+# line, or a module-level assignment (no indent, so not a local). A function
+# whose body changed is found by _enclosing_symbols.
 #
 # The JS/TS forms were missing — `export class X`, `export default function f`,
 # `export const f: T = …`, class methods and `@@ … @@ export function f(` —
@@ -40,7 +40,6 @@ _DEFINED = re.compile(
     r"|^\+([A-Za-z_]\w*)\s*(?::[^=\n]*)?=(?!=)"
     r"|^\+\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s*(\w+)"
     r"|^\+(?:export\s+)?(?:const|let|var)\s+(\w+)\s*(?::[^=\n]*)?="
-    r"|^@@[^@\n]*@@\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:def|class|function)\s+(\w+)"
     r"|^\+\s+(?:(?:public|private|protected|static|async|readonly)\s+)*(\w+)\s*\([^)\n]*\)\s*(?::\s*[^{\n]+)?\{",
     re.M,
 )
@@ -50,14 +49,60 @@ _NOT_SYMBOLS = frozenset(
 )
 
 
+# A def/class/function line of a hunk, added or unchanged: the scope that the
+# changed lines below it belong to.
+_SCOPE_LINE = re.compile(
+    r"^[ +](\s*)(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:def|class|function)\s+(\w+)"
+)
+_SCOPE_HEADER = re.compile(
+    r"^@@[^@\n]*@@\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:def|class|function)\s+(\w+)"
+)
+
+
+def _enclosing_symbols(patch: str) -> list[tuple[int, str]]:
+    """
+    (offset, name) of the function or class each changed line sits in.
+
+    _DEFINED sees a definition only when its own line is added. A change to a
+    function's BODY under an unchanged `def` line — the commonest edit there
+    is — counted as no symbol at all, so a gap the model claimed for that
+    function was never checked against any test and went straight out
+    (`_extract_json` on this repository's PR #110, tested in seven files).
+    """
+    names: list[tuple[int, str]] = []
+    stack: list[tuple[int, str]] = []
+    offset = 0
+    for line in (patch or "").split("\n"):
+        here, offset = offset, offset + len(line) + 1
+        if line.startswith("@@"):
+            m = _SCOPE_HEADER.match(line)
+            stack = [(0, m.group(1))] if m else []
+            continue
+        text = line[1:]
+        if not text.strip() or line.startswith(("+++", "---")):
+            continue
+        indent = len(text) - len(text.lstrip())
+        m = _SCOPE_LINE.match(line)
+        while stack and indent <= stack[-1][0]:
+            stack.pop()
+        if m:
+            stack.append((len(m.group(1)), m.group(2)))
+            continue
+        if line[0] in "+-" and stack:
+            names.append((here, stack[-1][1]))
+    return names
+
+
 def changed_symbols(patch: str) -> list[str]:
     """Names a source diff defines or edits, in order, without repeats."""
     seen: dict[str, None] = {}
-    for m in _DEFINED.finditer(patch or ""):
-        name = next((g for g in m.groups() if g), "")
+    found = [
+        (m.start(), next((g for g in m.groups() if g), "")) for m in _DEFINED.finditer(patch or "")
+    ]
+    for _, name in sorted(found + _enclosing_symbols(patch)):
         # One- and two-letter names match everywhere, and dunders are
         # protocol plumbing rather than behaviour anyone writes a test for.
-        if name in _NOT_SYMBOLS:
+        if not name or name in _NOT_SYMBOLS:
             continue
         if len(name) >= 3 and not (name.startswith("__") and name.endswith("__")):
             seen.setdefault(name, None)
@@ -202,6 +247,140 @@ def _proof_of_gap(gap: dict, source_patch: str, tests_text: str) -> str:
         ):
             return f"no test in this PR sets the optional parameter `{param}`"
     return ""
+
+
+# How many existing test files are read to confirm a code-search hit.
+_REPO_TEST_FILES_READ = 3
+
+
+def _in_repository_tests(repo: str, token: str, symbol: str) -> bool | None:
+    """
+    Whether a test file already in the repository mentions `symbol` by name:
+    True, False, or None when that could not be established.
+
+    The gap report searched only the tests THIS PR changes, so a function with
+    a full test suite elsewhere was published as "not exercised by the
+    existing test suite" — PR #110 was told that of `call_raw` (32 test
+    files), `_extract_json` (7) and `is_substantive` (6). Code search finds
+    candidate files on the default branch; each candidate is read and matched
+    as a whole word, because the search tokenises `_extract_json` into
+    `extract` and `json` and would otherwise count any file with both words.
+    """
+    try:
+        import base64
+        from urllib.parse import quote
+
+        from app.github.client import gh_get
+
+        found = gh_get(f"/search/code?q={quote(f'{symbol} repo:{repo}')}&per_page=50", token)
+        if not isinstance(found, dict) or not isinstance(found.get("items"), list):
+            return None
+        paths = [
+            str(i.get("path") or "")
+            for i in found["items"]
+            if isinstance(i, dict) and _is_test_file(str(i.get("path") or ""))
+        ]
+        word = re.compile(rf"\b{re.escape(symbol)}\b")
+        for path in paths[:_REPO_TEST_FILES_READ]:
+            data = gh_get(f"/repos/{repo}/contents/{quote(path, safe='/')}", token)
+            body = base64.b64decode((data or {}).get("content") or "").decode("utf-8", "replace")
+            if word.search(body):
+                return True
+        if found.get("incomplete_results") or len(paths) > _REPO_TEST_FILES_READ:
+            return None
+        return False
+    except Exception:
+        return None
+
+
+def _changed_symbol_named(gap: dict, symbols) -> str:
+    """The changed symbol a gap's `function` field names, or ""."""
+    text = str(gap.get("function") or "")
+    for symbol in symbols:
+        if re.search(rf"\b{re.escape(symbol)}\b", text):
+            return symbol
+    return ""
+
+
+def _touched_lines(patch: str) -> list[int]:
+    """New-side line numbers of the lines a patch adds, and of the place each
+    removed line was (the line that now follows it)."""
+    out: list[int] = []
+    new = 0
+    for line in (patch or "").split("\n"):
+        m = re.match(r"^@@ -\d+(?:,\d+)? \+(\d+)", line)
+        if m:
+            new = int(m.group(1))
+        elif line.startswith(("+++", "---")):
+            continue
+        elif line.startswith("+"):
+            out.append(new)
+            new += 1
+        elif line.startswith("-"):
+            out.append(new)
+        elif line.startswith(" "):
+            new += 1
+    return out
+
+
+def _functions_at(source: str, lines: list[int]) -> list[str]:
+    """The innermost function (or class) of `source` containing each line."""
+    import ast
+
+    try:
+        tree = ast.parse(source)
+    except (SyntaxError, ValueError, RecursionError, MemoryError):
+        return []
+    scopes = [
+        (n.lineno, n.end_lineno or n.lineno, n.name)
+        for n in ast.walk(tree)
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+    ]
+    names: list[str] = []
+    for ln in lines:
+        inside = [s for s in scopes if s[0] <= ln <= s[1]]
+        if inside:
+            name = min(inside, key=lambda s: s[1] - s[0])[2]
+            if name not in names:
+                names.append(name)
+    return names
+
+
+def _check_repository_tests(gaps, symbols, repo, token, log, functions_in=None) -> list:
+    """
+    Gaps that survive the repository's existing tests, each with the reason
+    it is reported.
+
+    A gap whose function is not something this PR changes is dropped: the
+    model was asked about the diff. A gap whose function an existing test
+    names is dropped too. When that cannot be checked the gap is kept and says
+    so, rather than asserting the function is untested.
+    """
+    kept = []
+    for g in gaps:
+        if g.get("proof"):
+            kept.append(g)
+            continue
+        name = _changed_symbol_named(g, symbols)
+        if not name and functions_in is not None:
+            # A method whose `def` sits above the hunk: the hunk header names
+            # only the class, so the diff alone cannot tell which method the
+            # change is in. The file at the PR head can.
+            name = _changed_symbol_named(g, functions_in(str(g.get("file", ""))))
+        if not name:
+            log.info(f"test_gaps.not_a_changed_symbol function={g.get('function')!r} -> dropped")
+            continue
+        tested = _in_repository_tests(repo, token, name)
+        if tested:
+            log.info(f"test_gaps.tested_elsewhere function={name} -> dropped")
+            continue
+        reason = (
+            "no test in this PR or in the repository's existing tests mentions it"
+            if tested is False
+            else "no test in this PR mentions it (the repository's existing tests could not be searched)"
+        )
+        kept.append({**g, "proof": reason})
+    return kept
 
 
 def _verify_against_tests(gaps, referenced, source_files, test_files, log) -> list:
@@ -385,6 +564,20 @@ Only report real gaps. If tests are adequate, set has_gaps to false.""",
         if len(known) != len(gaps):
             log.warning(f"test_gaps.unknown_file_skipped n={len(gaps) - len(known)}")
         gaps = _verify_against_tests(known, referenced, source_files, test_files, log)
+        head_sha = ((pr or {}).get("head") or {}).get("sha", "")
+        patches = {f.get("filename", ""): f.get("patch", "") for f in source_files}
+
+        def functions_in(path: str) -> list[str]:
+            if not (head_sha and path.endswith(".py") and path in patches):
+                return []
+            from app.github.client import gh_get
+
+            from .context import fetch_file
+
+            source = fetch_file(repo, path, head_sha, token, gh_get)
+            return _functions_at(source, _touched_lines(patches[path])) if source else []
+
+        gaps = _check_repository_tests(gaps[:5], symbols, repo, token, log, functions_in)
         if not gaps:
             log.info("test_gaps.all_claims_refuted_by_tests", pr=pr_number)
             return ""
@@ -413,9 +606,10 @@ Only report real gaps. If tests are adequate, set has_gaps to false.""",
         )
         why_md = f"\n**Why these are reported**\n{proofs}\n" if proofs else ""
 
-        comment = f"""{score_md}{r.get("summary", "")}
-
-### Gaps Found
+        # The model's own summary is not published: it describes "the current
+        # test suite" it was never shown ("does not reach these paths",
+        # "currently missing"), and those were the sentences that were wrong.
+        comment = f"""{score_md}### Gaps Found
 
 | File | Function | Risk | Suggested Test |
 |------|----------|------|----------------|

@@ -364,8 +364,9 @@ def _track_record(repo: str) -> str:
         from app.core.learning import get_learning_summary
 
         s = get_learning_summary(repo)
-        merged, closed = int(s.get("autofix_merged", 0)), int(s.get("autofix_closed", 0))
-    except Exception:
+        merged, closed = s["autofix_merged"], s["autofix_closed"]
+    except Exception as e:
+        log.warning(f"autofix.track_record_unreadable repo={repo}: {e}")
         return ""
     if merged + closed < 3:
         return ""

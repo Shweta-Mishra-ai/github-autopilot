@@ -1,48 +1,11 @@
 """
-tests/test_learning_wiring.py — V6.2
+tests/test_learning_wiring.py
 
-The learning module (app/core/learning.py) existed unit-tested but UNWIRED for
-three releases. These tests pin the actual wiring:
-
-  record:  /apply (PR opened from a bot fix)  → record_fix_accepted
-           /merge (bot autofix branch merged) → record_autofix_merged
-  recall:  /fix prompt includes get_pattern_summary(repo) when non-empty
+Autofix outcomes are recorded once, from the PR's `closed` event, and shown
+beside the next autofix as its track record.
 """
 
 from unittest.mock import MagicMock, patch
-
-
-class TestApplyRecordsAcceptance:
-
-    def _gh_get_side_effect(self, path, token):
-        if path.startswith("/repos/o/r/branches/"):
-            return {"name": "fix/bot-issue-42"}
-        if path == "/repos/o/r":
-            return {"default_branch": "main"}
-        if path.startswith("/repos/o/r/pulls?"):
-            return []
-        raise AssertionError(f"unexpected gh_get {path}")
-
-    def test_apply_records_fix_accepted(self):
-        from app.handlers.comments import publisher
-
-        with patch.object(publisher, "gh_get", side_effect=self._gh_get_side_effect), \
-             patch.object(publisher, "gh_post", return_value={"number": 7, "title": "t", "html_url": "u"}), \
-             patch("app.core.learning.record_fix_accepted") as rec:
-            out = publisher.cmd_apply("o/r", 42, "tok", "fix/bot-issue-42")
-
-        assert "PR Created" in out
-        rec.assert_called_once_with("o/r", 42, "autofix")
-
-    def test_apply_learning_failure_does_not_break_pr_creation(self):
-        from app.handlers.comments import publisher
-
-        with patch.object(publisher, "gh_get", side_effect=self._gh_get_side_effect), \
-             patch.object(publisher, "gh_post", return_value={"number": 7, "title": "t", "html_url": "u"}), \
-             patch("app.core.learning.record_fix_accepted", side_effect=RuntimeError("redis down")):
-            out = publisher.cmd_apply("o/r", 42, "tok", "fix/bot-issue-42")
-
-        assert "PR Created" in out  # learning is best-effort, never fatal
 
 
 _NUMBERS = iter(range(10_000, 20_000))
@@ -149,52 +112,29 @@ class TestAutofixOutcomesAreRecordedFromTheClosedEvent:
         rec.assert_not_called()
 
 
-class TestFixPromptRecallsPatterns:
+class TestFixPromptHasNoInventedConventions:
+    """The /fix prompt carried "Repo conventions (learned from previously
+    accepted fixes)", fed by a store nothing ever wrote — its test mocked the
+    reader to return data. The line and the store are gone."""
 
-    def _capture_fix_prompt(self, pattern_summary):
+    def test_the_fix_prompt_claims_no_learned_conventions(self):
         from app.handlers.comments import generator
 
         captured = {}
 
-        # V7: cmd_fix goes through app.ai.guarded.guarded_ask, which calls
-        # app.ai.guarded.safe_router_ask. Patch there — patching
-        # app.handlers.comments.router no longer intercepts and lets the call
-        # reach the real provider.
         def _fake_ask(system, user, **kw):
             captured["user"] = user
-            return (
-                {
-                    "root_cause": "x",
-                    "fix": "y — a sufficiently long fix body",
-                    "explanation": "z — why this works",
-                    "test": "t",
-                    "confidence": 0.9,
-                },
-                MagicMock(),
-            )
+            return ({"root_cause": "x", "fix": "y", "explanation": "z", "test": "t"}, MagicMock())
 
-        with patch("app.ai.guarded.safe_router_ask", side_effect=_fake_ask), \
-             patch("app.core.learning.get_pattern_summary", return_value=pattern_summary):
-            generator.cmd_fix("bug title", "some context", repo="o/r")
-        return captured["user"]
+        with patch("app.ai.guarded.safe_router_ask", side_effect=_fake_ask):
+            generator.cmd_fix("bug title", "some context")
+        assert "conventions" not in captured["user"].lower()
 
-    def test_learned_patterns_injected(self):
-        prompt = self._capture_fix_prompt(" prefers-pathlib=True")
-        assert "Repo conventions (learned from previously accepted fixes)" in prompt
-        assert "prefers-pathlib=True" in prompt
+    def test_the_store_is_gone(self):
+        from app.core import learning
 
-    def test_no_patterns_no_noise(self):
-        prompt = self._capture_fix_prompt("")
-        assert "Repo conventions" not in prompt
-
-    def test_no_repo_arg_skips_learning_entirely(self):
-        from app.handlers.comments import generator
-
-        with patch("app.ai.guarded.safe_router_ask",
-                   return_value=({"root_cause": "x"}, MagicMock())), \
-             patch("app.core.learning.get_pattern_summary") as gps:
-            generator.cmd_fix("t", "c")  # no repo
-        gps.assert_not_called()
+        for name in ("get_pattern_summary", "record_pattern", "get_acceptance_rate", "record_fix_accepted"):
+            assert not hasattr(learning, name), name
 
 
 class TestAutofixShowsItsTrackRecord:
@@ -212,3 +152,31 @@ class TestAutofixShowsItsTrackRecord:
         with patch("app.core.learning.get_learning_summary",
                    return_value={"autofix_merged": 1, "autofix_closed": 0}):
             assert _track_record("o/r") == ""
+
+    def test_an_unreadable_record_is_not_shown_as_none_merged(self):
+        from app.handlers.autofix import _track_record
+
+        with patch("app.core.learning.get_redis", side_effect=ConnectionError("down")):
+            assert _track_record("o/r") == ""
+
+
+class TestCountersAgainstRealRedis:
+    """The counters themselves, against the in-memory Redis rather than a mock."""
+
+    def test_merged_and_closed_are_counted_separately(self, fake_redis):
+        from app.core import learning
+
+        learning.record_autofix_merged("o/r", 1, 2)
+        learning.record_autofix_merged("o/r", 3, 4)
+        learning.record_autofix_closed("o/r", 5)
+        assert learning.get_learning_summary("o/r") == {"autofix_merged": 2, "autofix_closed": 1}
+        assert learning.get_learning_summary("o/other") == {"autofix_merged": 0, "autofix_closed": 0}
+
+    def test_summary_raises_when_redis_is_down(self):
+        import pytest
+
+        from app.core import learning
+
+        with patch("app.core.learning.get_redis", side_effect=ConnectionError("down")), \
+             pytest.raises(ConnectionError):
+            learning.get_learning_summary("o/r")

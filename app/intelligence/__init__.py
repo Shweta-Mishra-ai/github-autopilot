@@ -1,7 +1,6 @@
 """
 app/intelligence/ — what the bot learns and derives about a repository:
-memory (memory.py), accepted-fix conventions (learning.py), thread
-summaries (summarizer.py) and the code map (codegraph.py).
+memory (memory.py), thread summaries (summarizer.py) and the code map (codegraph.py).
 
 There is no embedding or vector-search layer. One existed as a stub — it
 encoded text and discarded the result, and its search always returned

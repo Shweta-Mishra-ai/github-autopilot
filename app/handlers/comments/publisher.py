@@ -252,14 +252,8 @@ def cmd_apply(
             },
         )
 
-        # Learning loop: a maintainer choosing to open a PR from a bot fix IS
-        # an acceptance signal; it feeds the acceptance rate. Whether the PR is
-        # then merged or rejected is recorded from its `closed` event.
-        with contextlib.suppress(Exception):
-            from app.core.learning import record_fix_accepted
-
-            record_fix_accepted(repo, issue_number, "autofix")
-
+        # Whether the PR is then merged or rejected is recorded from its
+        # `closed` event (pull_request/outcomes.py).
         with contextlib.suppress(Exception):
             from app.intelligence.memory import remember
 

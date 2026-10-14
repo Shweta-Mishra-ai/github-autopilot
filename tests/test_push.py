@@ -58,14 +58,20 @@ class TestHandleSkips:
             mock_tok.assert_not_called()
 
     def test_non_main_branch_skipped(self):
-        """V5: non-main branches still run secret scan, so token IS fetched."""
+        """V5: non-main branches still run secret scan, so token IS fetched.
+        (Asserted nothing; the name said "skipped" while the docstring said
+        the opposite. What happens: the secret scan runs, the rest does not.)"""
         with patch("app.handlers.push.get_installation_token", return_value="tok") as mock_tok, \
              patch("app.handlers.push.load_config", return_value=_mock_config()), \
-             patch("app.handlers.push._scan_secrets"), \
-             patch("app.handlers.push._scan_dependencies"), \
-             patch("app.handlers.push._lint_commits"):
+             patch("app.handlers.push._scan_secrets") as secrets, \
+             patch("app.handlers.push._scan_dependencies") as deps, \
+             patch("app.handlers.push._lint_commits") as lint:
             from app.handlers.push import handle
             handle(_payload(ref="refs/heads/feature/foo"))
+        mock_tok.assert_called_once()
+        secrets.assert_called_once()
+        deps.assert_not_called()
+        lint.assert_not_called()
 
     def test_empty_commits_skipped(self):
         import importlib
@@ -75,14 +81,24 @@ class TestHandleSkips:
             push_mod.handle(_payload(commits=[]))
             mock_tok.assert_not_called()
 
-    def test_master_branch_allowed(self):
+    def _scans(self, **payload_kw):
         with patch("app.handlers.push.get_installation_token", return_value="tok"), \
              patch("app.handlers.push.load_config", return_value=_mock_config()), \
-             patch("app.handlers.push._scan_secrets"), \
-             patch("app.handlers.push._scan_dependencies"), \
-             patch("app.handlers.push._lint_commits"):
+             patch("app.handlers.push._scan_secrets") as secrets, \
+             patch("app.handlers.push._scan_dependencies") as deps, \
+             patch("app.handlers.push._lint_commits") as lint:
             from app.handlers.push import handle
-            handle(_payload(ref="refs/heads/master"))  # Should not skip
+            handle(_payload(**payload_kw))
+        return secrets.called, deps.called, lint.called
+
+    # This was "master branch allowed" with no assertion. The handler reads
+    # the repository's real default branch, so master gets the full scan
+    # when it IS the default, and only the secret scan in a `main` repo.
+    def test_master_is_fully_scanned_when_it_is_the_default(self):
+        assert self._scans(ref="refs/heads/master", default_branch="master") == (True, True, True)
+
+    def test_a_stray_master_in_a_main_repo_gets_only_the_secret_scan(self):
+        assert self._scans(ref="refs/heads/master", default_branch="main") == (True, False, False)
 
     def test_auth_failure_returns_early(self):
         with patch("app.handlers.push.get_installation_token", side_effect=Exception("auth failed")), \

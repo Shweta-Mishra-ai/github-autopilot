@@ -438,7 +438,14 @@ def health():
     except Exception as exc:  # health must not fail on its own reporting
         log.debug(f"health.llm_status_failed: {exc}")
 
-    overall = "ok" if (gh_ok and any_llm_ok and not llm_config_error) else "degraded"
+    # Redis counts: without it the durable queue, dedupe, budgets and memory
+    # are all down, and /health used to say "ok" regardless.
+    redis_configured = bool(os.environ.get("REDIS_URL"))
+    overall = (
+        "ok"
+        if (gh_ok and any_llm_ok and not llm_config_error and (redis_ok or not redis_configured))
+        else "degraded"
+    )
     if llm_substitutions:
         # Answering, but on a model nobody configured. Not "ok", not an outage.
         overall = "degraded" if overall == "ok" else overall
@@ -600,7 +607,7 @@ def webhook():
     # Survives restarts/deploys — thread-pool queue does not.
     from app.core.event_queue import EnqueueResult, enqueue
 
-    eq = enqueue(webhook_event, payload, repo, delivery_id)
+    eq = enqueue(webhook_event, payload, repo, delivery_id, fingerprint=fingerprint)
 
     if eq == EnqueueResult.OK:
         metrics.increment(f"events.{webhook_event}.queued")

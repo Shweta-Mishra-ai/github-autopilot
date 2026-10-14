@@ -170,6 +170,32 @@ class TestOrderingIsActuallyFIFO:
 # ── At-least-once and crash recovery ─────────────────────────────────────────
 
 
+def _claimed_by_a_dead_process(queue, live_redis, raw):
+    """What a crash leaves: the envelope claimed by a process whose
+    heartbeat key has expired (it was never set here)."""
+    live_redis.hset(
+        queue.CLAIMS_KEY, queue._claim_id(raw), json.dumps({"pid": "crashed-proc", "at": 0})
+    )
+
+
+class TestDeployOverlap:
+    def test_an_event_another_live_process_is_handling_is_not_stolen(self, queue, live_redis):
+        """A zero-downtime deploy boots the new instance while the old one is
+        still handling events. Recovery requeued them, so they ran twice."""
+        queue.enqueue("pull_request", {"n": 2}, "o/r", "d2")
+        raw = live_redis.rpoplpush(queue.PENDING_KEY, queue.PROCESSING_KEY)
+        live_redis.hset(
+            queue.CLAIMS_KEY, queue._claim_id(raw), json.dumps({"pid": "old-instance", "at": int(time.time())})
+        )
+        live_redis.set(queue.ALIVE_KEY.format("old-instance"), "1", ex=30)
+
+        assert queue.recover_stale() == 0
+        assert live_redis.llen(queue.PROCESSING_KEY) == 1
+
+        live_redis.delete(queue.ALIVE_KEY.format("old-instance"))  # it stopped
+        assert queue.recover_stale() == 1
+
+
 class TestAnEventSurvivesACrash:
     """The reason the queue exists. A thread pool loses everything on restart;
     this must not."""
@@ -181,6 +207,7 @@ class TestAnEventSurvivesACrash:
         # and the process dies before LREM.
         raw = live_redis.rpoplpush(queue.PENDING_KEY, queue.PROCESSING_KEY)
         assert raw is not None
+        _claimed_by_a_dead_process(queue, live_redis, raw)
         assert live_redis.llen(queue.PROCESSING_KEY) == 1
         assert live_redis.llen(queue.PENDING_KEY) == 0
 
@@ -190,8 +217,11 @@ class TestAnEventSurvivesACrash:
 
     def test_a_poison_event_dead_letters_instead_of_looping(self, queue, live_redis):
         """Without this it is requeued forever and the queue never drains."""
-        env = json.dumps({"id": "d1", "event": "push", "repo": "o/r", "payload": {}, "attempts": 1})
+        env = json.dumps(
+            {"id": "d1", "event": "push", "repo": "o/r", "payload": {}, "attempts": queue.MAX_ATTEMPTS - 1}
+        )
         live_redis.lpush(queue.PROCESSING_KEY, env)
+        _claimed_by_a_dead_process(queue, live_redis, env)
 
         assert queue.recover_stale() == 0
         assert live_redis.llen(queue.DEAD_KEY) == 1
@@ -199,13 +229,16 @@ class TestAnEventSurvivesACrash:
 
     def test_unparseable_json_is_dead_lettered_not_crashed_on(self, queue, live_redis):
         live_redis.lpush(queue.PROCESSING_KEY, "{not json at all")
+        _claimed_by_a_dead_process(queue, live_redis, "{not json at all")
         queue.recover_stale()
         assert live_redis.llen(queue.DEAD_KEY) == 1
 
     def test_the_dead_letter_list_stays_bounded(self, queue, live_redis):
         """25MB of Redis. An unbounded debug list is a slow outage."""
         for i in range(queue.DEAD_MAX + 25):
-            live_redis.lpush(queue.PROCESSING_KEY, json.dumps({"id": i, "attempts": 5}))
+            raw = json.dumps({"id": i, "attempts": 5})
+            live_redis.lpush(queue.PROCESSING_KEY, raw)
+            _claimed_by_a_dead_process(queue, live_redis, raw)
         queue.recover_stale(max_items=queue.DEAD_MAX + 25)
         assert live_redis.llen(queue.DEAD_KEY) == queue.DEAD_MAX
 
@@ -337,8 +370,10 @@ class TestIdempotencyAgainstRealRedis:
     def test_two_different_deliveries_do_not_collide(self, live_redis):
         import app.core.idempotency as idem
 
-        a = idem.make_fingerprint("delivery-1", "push", {"a": 1})
-        b = idem.make_fingerprint("delivery-2", "push", {"a": 1})
+        # Two real deliveries differ in their bodies; the same signed body under
+        # a new delivery id is a replay (see test_idempotency).
+        a = idem.make_fingerprint("delivery-1", "push", {"after": "aaa"})
+        b = idem.make_fingerprint("delivery-2", "push", {"after": "bbb"})
         assert a != b
         assert idem.is_duplicate(a) is False
         assert idem.is_duplicate(b) is False

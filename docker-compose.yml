@@ -18,6 +18,9 @@ x-app-env: &app-env
   GITHUB_PRIVATE_KEY: ${GITHUB_PRIVATE_KEY}
   GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET}
   REDIS_URL: redis://redis:6379/0
+  # Redis is required here: a deployment must fail loudly without it rather
+  # than keep dedupe, budgets and memory in process memory.
+  ENVIRONMENT: production
 
   # ── The model ───────────────────────────────────────────────────────────
   # Set GROQ_API_KEY for the cloud path, or the three OLLAMA/LLM_LOCAL_ONLY

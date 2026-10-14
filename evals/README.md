@@ -15,7 +15,16 @@ python -m evals.run --task gaps         # just test-gap cases
 python -m evals.run --min-pass-rate 0.8
 ```
 
-Exit 0 = pass-rate met, 1 = below threshold, 2 = no real API key.
+Exit 0 = gate met, 1 = below threshold, 2 = no real API key, 3 = configured
+model gone, 4 = provider throttled cases (not scored), 5 = a case raised (a
+code fault, not a quality result).
+
+The gate is applied three times: to the overall pass rate, to the
+**detection** cases (a planted bug or real gap must be found) and to the
+**restraint** cases (a clean change must not be flagged). One overall rate let
+a model that reports nothing pass on the clean cases alone. A review case is
+caught only by a published finding that names the bug — the file summary does
+not count.
 
 Also runnable from GitHub Actions: the **Evals** workflow (`workflow_dispatch`)
 uses the `GROQ_API_KEY` repo secret.

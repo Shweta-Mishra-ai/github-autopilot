@@ -39,9 +39,28 @@ import os
 import sys
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 CASES_DIR = Path(__file__).parent / "cases"
+
+
+def _real_collaborators():
+    """
+    The config, confidence gate and logger the PR handler builds, with the
+    repository's config file absent.
+
+    These were MagicMocks. A mock gate's verdict is a mock whose
+    `auto_apply` is truthy and whose float() is 1.0, so the low-confidence
+    demotion the production review applies never ran here — the suite scored
+    output users would have seen marked "treat it as a prompt to look". And
+    the mock config answered True to every setting, which no repository is.
+    """
+    from app.core.confidence import ConfidenceGate
+    from app.core.config import Config
+    from app.core.logger import EventLogger
+
+    cfg = Config({})
+    return cfg, ConfidenceGate(cfg), EventLogger("eval", repo="eval/repo")
 
 
 # Model ids are configuration, and providers retire them. Checking before the
@@ -218,7 +237,7 @@ def run_fix_cases() -> tuple[list, list]:
         # loop today, but a closure over a loop variable silently reads the
         # LAST case the moment anyone defers the call.
         def _run(case=case):
-            return cmd_fix(case["title"], case["context"], repo="")
+            return cmd_fix(case["title"], case["context"])
 
         output = _attempt(_run, case, results)
         if output is None:
@@ -252,9 +271,8 @@ def run_review_cases() -> tuple[list, list]:
             _sink.append(body)
             return {"id": 1}
 
-        cfg = MagicMock()
-        cfg.get.side_effect = lambda *a, **kw: kw.get("default", True)
-        cfg.footer = ""
+        cfg, gate, elog = _real_collaborators()
+        findings: list[str] = []
         files = [{"filename": case["filename"], "patch": case["patch"]}]
         pr = {"head": {"sha": "eval0000"}}
 
@@ -270,7 +288,16 @@ def run_review_cases() -> tuple[list, list]:
             body = _case["source"].encode()
             return {"encoding": "base64", "size": len(body), "content": base64.b64encode(body).decode()}
 
-        def _run(pr=pr, files=files, cfg=cfg, captured=captured, _contents=_contents):
+        def _run(
+            pr=pr,
+            files=files,
+            cfg=cfg,
+            gate=gate,
+            elog=elog,
+            captured=captured,
+            findings=findings,
+            _contents=_contents,
+        ):
             # _review_code RETURNS the review; its own docstring says "This
             # function posts nothing itself." The harness captured gh_post and
             # threw the return value away, so `captured` was always empty and
@@ -289,13 +316,21 @@ def run_review_cases() -> tuple[list, list]:
                 patch("app.handlers.pull_request.review.gh_get", side_effect=_contents),
             ):
                 markdown, inline = _review_code(
-                    pr, "eval/repo", 1, files, "tok", cfg, MagicMock(), "", MagicMock()
+                    pr, "eval/repo", 1, files, "tok", cfg, gate, "", elog
                 )
             # Everything the reviewer produced: the body, the line-anchored
             # comments, and anything the fallback path did post.
             parts = [markdown]
             parts += [c.get("body", "") for c in inline or []]
             parts += captured
+            # The findings alone: anchored comments and the "- **severity**"
+            # lines of findings that could not anchor. A planted bug is
+            # caught only if it is named HERE. Matching the whole text let a
+            # model that reported nothing pass on its file summary — "start
+            # + size + 1" matched the off-by-one case's pattern.
+            findings[:] = [c.get("body", "") for c in inline or []] + [
+                line for line in (markdown or "").splitlines() if line.startswith("- **")
+            ]
             return "\n".join(p for p in parts if p)
 
         output = _attempt(_run, case, results)
@@ -306,10 +341,36 @@ def run_review_cases() -> tuple[list, list]:
             _print_blocked(case["id"])
             continue
 
-        result = score_output(output, case)
+        result = score_output(output, case, findings="\n".join(findings))
         results.append(result)
         _print_case(result)
     return results, blocked
+
+
+def _eval_repo_github(case: dict):
+    """
+    GitHub as seen from the eval case's repository, which does not exist.
+
+    The gap check searches the repository for tests of each function and
+    reads the changed file at the head commit. Those calls went to the real
+    API for "eval/repo" with the token "tok", so the result depended on the
+    network and on how GitHub answers a bad token — not on the case. Here the
+    repository holds exactly what the case gives it: no tests beyond the
+    case's own test files, and the changed file's `source` when one is given.
+    """
+    from app.github.client import GitHubError
+
+    def _get(path, token):
+        if path.startswith("/search/code"):
+            return {"items": [], "incomplete_results": False}
+        if "/contents/" in path and "source" in case:
+            import base64
+
+            body = case["source"].encode()
+            return {"encoding": "base64", "size": len(body), "content": base64.b64encode(body).decode()}
+        raise GitHubError(f"Not found: {path}", 404)
+
+    return _get
 
 
 def run_gaps_cases() -> tuple[list, list]:
@@ -359,11 +420,12 @@ def run_gaps_cases() -> tuple[list, list]:
                 {"filename": t["filename"], "patch": t["patch"], "status": "modified"}
                 for t in case.get("test_files", [])
             ]
-            cfg = MagicMock()
-            cfg.get.side_effect = lambda *a, **kw: kw.get("default", True)
-            cfg.footer = ""
+            cfg, _gate, elog = _real_collaborators()
             try:
-                with patch.object(gaps_module.router, "ask", side_effect=_spy):
+                with (
+                    patch.object(gaps_module.router, "ask", side_effect=_spy),
+                    patch("app.github.client.gh_get", side_effect=_eval_repo_github(case)),
+                ):
                     return gaps_module._detect_test_gaps(
                         {"head": {"sha": "eval0000"}},
                         "eval/repo",
@@ -371,7 +433,7 @@ def run_gaps_cases() -> tuple[list, list]:
                         files,
                         "tok",
                         cfg,
-                        MagicMock(),
+                        elog,
                     )
             except Exception:
                 # The section raises when the model never answered or its
@@ -526,11 +588,18 @@ def main() -> int:
         )
         return 4
 
-    ok = stats["pass_rate"] >= args.min_pass_rate
-    print(
-        f"\n{'PASS' if ok else 'FAIL'}: pass_rate={stats['pass_rate']} "
-        f"(threshold {args.min_pass_rate})"
-    )
+    # A case that raised is a fault in the code or the harness, not a quality
+    # result. It was scored 0 and folded into the pass rate, so a broken call
+    # signature read as "the model got worse".
+    crashed = [r.case_id for r in results if any(f.startswith("exception:") for f in r.failures)]
+    if crashed:
+        print(f"\nERROR: {len(crashed)} case(s) raised — fix the code, not the prompts: {', '.join(crashed)}")
+        return 5
+
+    from evals.scorers import gate
+
+    ok, detail = gate(stats, args.min_pass_rate)
+    print(f"\n{'PASS' if ok else 'FAIL'}: {detail}")
     return 0 if ok else 1
 
 

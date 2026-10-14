@@ -310,3 +310,51 @@ class TestThunderingHerd:
         with ctx:
             load_config("o/r", "tok")
         assert "o/r" not in config_mod._config_fetching
+
+
+class TestASectionWrittenAsAScalar:
+    """Round-3 audit C4. `bot: false` left the bot running, and one section
+    of the wrong type made the whole repo's events retry forever."""
+
+    def test_bot_false_is_the_kill_switch(self):
+        c = Config({"bot": False})
+        assert not c.bot_enabled() and not c.pr_enabled() and not c.command_enabled("fix")
+
+    @pytest.mark.parametrize("value", [False, "false", "off", "no", "FALSE"])
+    def test_section_false_disables_it(self, value):
+        assert not Config({"pull_requests": value}).pr_enabled()
+        assert not Config({"push": {"enabled": value}}).push_enabled()
+
+    def test_a_quoted_false_switch_is_off(self):
+        c = Config({"pull_requests": {"code_review": "false"}, "bot": {"enabled": "false"}})
+        assert c.get("pull_requests", "code_review") is False
+        assert not c.bot_enabled()
+
+    def test_an_unreadable_switch_keeps_its_default(self):
+        c = Config({"pull_requests": {"code_review": "maybe"}})
+        assert c.get("pull_requests", "code_review") is True
+
+    def test_a_wrong_typed_section_costs_only_that_section(self):
+        y = (
+            "bot: {enabled: false}\n"
+            "commands: {permissions: {maintainer_only: [autofix]}}\n"
+            "confidence: high\n"
+        )
+        cm, _ = _serving(y)
+        with cm:
+            c = load_config("o/r", "t")
+        assert not c.bot_enabled()
+        assert c.is_maintainer_only("autofix")
+
+    @pytest.mark.parametrize("value", [True, False, "x", 3, 2.5, [1], None, {"enabled": "nonsense"}])
+    def test_no_section_value_raises(self, value):
+        from app.core.config import DEFAULTS
+
+        for key in list(DEFAULTS) + ["ci", "confidence"]:
+            c = Config({key: value})
+            c.bot_enabled(), c.pr_enabled(), c.ci_enabled(), c.command_enabled("fix")
+            c.is_maintainer_only("merge"), c.footer
+
+    def test_the_commands_allow_list_is_not_a_switch(self):
+        c = Config({"commands": {"enabled": ["fix"]}})
+        assert c.command_enabled("fix") and not c.command_enabled("autofix")

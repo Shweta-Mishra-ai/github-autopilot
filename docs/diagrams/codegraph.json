@@ -345,8 +345,8 @@
       "id": "app.core.config",
       "path": "app/core/config.py",
       "layer": "core",
-      "loc": 492,
-      "functions": 5,
+      "loc": 567,
+      "functions": 6,
       "classes": 2,
       "is_package": false,
       "fan_in": 8,
@@ -3613,7 +3613,7 @@
   "stats": {
     "modules": 100,
     "edges": 397,
-    "total_loc": 27502,
+    "total_loc": 27577,
     "layers": [
       "ai",
       "core",
@@ -3651,6 +3651,12 @@
         "fan_out": 0
       },
       {
+        "id": "app.core.config",
+        "loc": 567,
+        "fan_in": 8,
+        "fan_out": 1
+      },
+      {
         "id": "app.core.sanitizer",
         "loc": 284,
         "fan_in": 16,
@@ -3661,12 +3667,6 @@
         "loc": 534,
         "fan_in": 8,
         "fan_out": 4
-      },
-      {
-        "id": "app.core.config",
-        "loc": 492,
-        "fan_in": 8,
-        "fan_out": 1
       },
       {
         "id": "app.core.guardrails",

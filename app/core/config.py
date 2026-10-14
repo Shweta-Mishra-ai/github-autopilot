@@ -149,6 +149,34 @@ def _deep_merge(base: dict, override: dict) -> dict:
     return result
 
 
+# Sections read with an `enabled` switch that have no entry in DEFAULTS.
+# "confidence" is listed so a scalar there is dropped rather than raising.
+_SECTIONS_WITHOUT_DEFAULTS = {"ci", "confidence"}
+
+_TRUE_WORDS = {"true", "yes", "on", "1"}
+_FALSE_WORDS = {"false", "no", "off", "0"}
+
+
+def _as_bool(value):
+    """
+    True or False for a boolean or a boolean-looking string; None otherwise.
+
+    `enabled: "false"` (quoted) is a string, and bool("false") is True — the
+    switch read as on.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return None if value not in (0, 1) else bool(value)
+    if isinstance(value, str):
+        word = value.strip().lower()
+        if word in _TRUE_WORDS:
+            return True
+        if word in _FALSE_WORDS:
+            return False
+    return None
+
+
 def _validate_config(data: dict) -> dict:
     """
     Validate and sanitize user config values.
@@ -158,9 +186,56 @@ def _validate_config(data: dict) -> dict:
     # children) is YAML null. `data.get("push", {})` returned that None, the
     # next `.get` raised, and load_config fell back to DEFAULTS for the WHOLE
     # file — `bot: {enabled: false}` and every maintainer_only entry ignored.
-    for key, default in DEFAULTS.items():
-        if isinstance(default, dict) and key in data and data[key] is None:
+    #
+    # A section written as a scalar did worse. `bot: false` replaced the bot
+    # dict with False, bot_enabled() then read its default of True, and the
+    # kill switch left the bot running. `confidence: high` made the next
+    # `.get` raise, which load_config reported as an unreadable config, so
+    # every event for the repo was retried and never ran. Each section is now
+    # repaired on its own: a boolean on a section with an `enabled` switch
+    # sets that switch, anything else that is not a mapping is dropped with
+    # a warning and that section alone takes its defaults.
+    for key in set(DEFAULTS) | _SECTIONS_WITHOUT_DEFAULTS:
+        if key not in data:
+            continue
+        value = data[key]
+        if value is None:
             data[key] = {}
+        elif isinstance(value, dict):
+            pass
+        elif _as_bool(value) is not None and (
+            "enabled" in DEFAULTS.get(key, {}) or key in _SECTIONS_WITHOUT_DEFAULTS
+        ):
+            data[key] = {"enabled": _as_bool(value)}
+            log.info(f"config.section_as_switch section={key} enabled={data[key]['enabled']}")
+        else:
+            log.warning(
+                f"config.invalid_section section={key} type={type(value).__name__} "
+                "— must be a mapping; this section uses defaults"
+            )
+            del data[key]
+        section = data.get(key)
+        if not isinstance(section, dict):
+            continue
+        # Every on/off setting, not only `enabled`: `code_review: "false"`
+        # read as on for the same reason.
+        defaults = DEFAULTS.get(key, {})
+        # Only keys whose default IS a boolean: `commands.enabled` is an
+        # allow-list, and coercing it deleted the list and lifted the
+        # restriction.
+        switches = {k for k, v in defaults.items() if isinstance(v, bool)}
+        if key in _SECTIONS_WITHOUT_DEFAULTS:
+            switches.add("enabled")
+        for name in switches & set(section):
+            flag = _as_bool(section[name])
+            if flag is None:
+                log.warning(
+                    f"config.invalid_switch section={key} key={name} value={section[name]!r} "
+                    "— must be true or false; using the default"
+                )
+                del section[name]
+            else:
+                section[name] = flag
 
     # ── Confidence thresholds: must be float 0.0-1.0 ────────────────────────
     raw_thresholds = (data.get("confidence") or {}).get("thresholds") or {}

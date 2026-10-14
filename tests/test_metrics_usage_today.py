@@ -44,26 +44,50 @@ def test_yesterdays_counters_are_not_today():
 
 
 def test_every_configured_provider_is_reported():
-    assert set(_usage({})) == set(metrics.PROVIDER_LIMITS)
+    from app.ai.routing_policy import DAILY_LIMITS
+
+    assert set(_usage({})) == set(DAILY_LIMITS)
 
 
-def test_one_unreadable_counter_does_not_lose_the_others():
-    def get(key):
-        if "gemini" in key:
-            raise ConnectionError("redis blip")
-        return "10" if key.startswith("llm:requests:openrouter") else None
+def test_an_unreadable_counter_is_raised_not_reported_as_zero():
+    """A Redis error read as "0 used", and /budget then showed headroom
+    nobody had measured."""
+    import pytest
 
     r = MagicMock()
-    r.get.side_effect = get
+    r.get.side_effect = ConnectionError("redis blip")
     with (
         patch.object(metrics.datetime, "datetime", _FrozenDatetime),
         patch("app.core.redis_client.get_redis", return_value=r),
+        pytest.raises(ConnectionError),
     ):
-        out = metrics.get_usage_today()
-    assert out["gemini"]["requests_used"] == 0
-    assert out["openrouter"]["requests_used"] == 10
+        metrics.get_usage_today()
 
 
-def test_no_redis_returns_empty_rather_than_raising():
+def test_budget_says_unreadable_rather_than_zero():
     with patch("app.core.redis_client.get_redis", side_effect=RuntimeError("down")):
-        assert metrics.get_usage_today() == {}
+        out = metrics.format_budget_comment()
+    assert "could not be read" in out and "not a report of zero use" in out
+
+
+def test_labels_name_the_configured_model_not_llama(monkeypatch):
+    monkeypatch.setenv("LLM_PRIMARY_MODEL", "openai/gpt-oss-120b")
+    out = _usage({})
+    assert out["groq_70b"]["label"] == "Groq · openai/gpt-oss-120b"
+    assert "Llama" not in " ".join(v["label"] for v in out.values())
+
+
+def test_the_limits_are_labelled_as_assumptions():
+    with patch("app.core.redis_client.get_redis", return_value=_redis({})):
+        out = metrics.format_budget_comment()
+    assert "not read from the provider" in out and "LLM_DAILY_LIMIT_" in out
+
+
+def test_a_limit_can_be_set_to_the_accounts_plan(monkeypatch):
+    from app.ai import routing_policy
+
+    monkeypatch.setenv("LLM_DAILY_LIMIT_GROQ_70B_TOKENS", "200000")
+    monkeypatch.setenv("LLM_DAILY_LIMIT_GEMINI_REQUESTS", "nonsense")
+    limits = routing_policy._daily_limits()
+    assert limits["groq_70b"]["tokens"] == 200_000
+    assert limits["gemini"]["requests"] == 1_200, "a typo keeps the default"

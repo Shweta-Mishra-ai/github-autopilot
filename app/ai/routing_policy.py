@@ -47,12 +47,35 @@ TASK_MAP: dict[str, str] = {
 }
 
 # ── Quotas and cost ──────────────────────────────────────────────────────────
-DAILY_LIMITS = {
+# Daily quotas this deployment ASSUMES each provider allows. They are not read
+# from the provider — no provider exposes them — and free tiers change, so
+# each can be set to match the account's plan:
+#     LLM_DAILY_LIMIT_GROQ_70B_TOKENS=200000  LLM_DAILY_LIMIT_GEMINI_REQUESTS=500
+# Routing steers away from a provider near its limit, and /budget shows them
+# labelled as assumptions.
+_DEFAULT_DAILY_LIMITS = {
     "groq_70b": {"tokens": 80_000, "requests": 5_000},
     "groq_8b": {"tokens": 400_000, "requests": 12_000},
     "gemini": {"tokens": 800_000, "requests": 1_200},
     "openrouter": {"tokens": 50_000, "requests": 200},
 }
+
+
+def _daily_limits() -> dict:
+    out = {}
+    for key, defaults in _DEFAULT_DAILY_LIMITS.items():
+        out[key] = {}
+        for kind, default in defaults.items():
+            raw = os.environ.get(f"LLM_DAILY_LIMIT_{key.upper()}_{kind.upper()}", "")
+            try:
+                value = int(raw) if raw.strip() else default
+            except ValueError:
+                value = default  # read at import: a typo must not stop the app
+            out[key][kind] = value if value >= 0 else default
+    return out
+
+
+DAILY_LIMITS = _daily_limits()
 
 COST_PER_1K = {
     "groq_70b": 0.0009,

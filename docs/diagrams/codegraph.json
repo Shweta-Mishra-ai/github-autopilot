@@ -94,12 +94,12 @@
       "id": "app.ai.metrics",
       "path": "app/ai/metrics.py",
       "layer": "ai",
-      "loc": 172,
+      "loc": 137,
       "functions": 3,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 2,
+      "fan_out": 6,
       "external_deps": [
         "datetime",
         "logging",
@@ -164,7 +164,7 @@
       "functions": 2,
       "classes": 1,
       "is_package": false,
-      "fan_in": 1,
+      "fan_in": 2,
       "fan_out": 3,
       "external_deps": [
         "logging",
@@ -214,7 +214,7 @@
       "functions": 1,
       "classes": 1,
       "is_package": false,
-      "fan_in": 1,
+      "fan_in": 2,
       "fan_out": 4,
       "external_deps": [
         "logging",
@@ -231,7 +231,7 @@
       "functions": 10,
       "classes": 1,
       "is_package": false,
-      "fan_in": 16,
+      "fan_in": 17,
       "fan_out": 16,
       "external_deps": [
         "datetime",
@@ -244,11 +244,11 @@
       "id": "app.ai.routing_policy",
       "path": "app/ai/routing_policy.py",
       "layer": "ai",
-      "loc": 165,
-      "functions": 9,
+      "loc": 188,
+      "functions": 10,
       "classes": 0,
       "is_package": false,
-      "fan_in": 4,
+      "fan_in": 5,
       "fan_out": 0,
       "external_deps": [
         "__future__",
@@ -1687,6 +1687,26 @@
     {
       "source": "app.ai.metrics",
       "target": "app.ai.circuit_breaker",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.metrics",
+      "target": "app.ai.providers.gemini",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.metrics",
+      "target": "app.ai.providers.openrouter",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.metrics",
+      "target": "app.ai.router",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.metrics",
+      "target": "app.ai.routing_policy",
       "kind": "runtime"
     },
     {
@@ -3587,8 +3607,8 @@
   ],
   "stats": {
     "modules": 100,
-    "edges": 392,
-    "total_loc": 27677,
+    "edges": 396,
+    "total_loc": 27665,
     "layers": [
       "ai",
       "core",
@@ -3610,7 +3630,7 @@
       {
         "id": "app.ai.router",
         "loc": 836,
-        "fan_in": 16,
+        "fan_in": 17,
         "fan_out": 16
       },
       {

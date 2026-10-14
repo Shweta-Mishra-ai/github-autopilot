@@ -167,7 +167,10 @@ def verify_signature(payload_bytes: bytes, signature_header: str) -> bool:
 
     expected = "sha256=" + hmac.new(secret, payload_bytes, hashlib.sha256).hexdigest()
 
-    ok = hmac.compare_digest(expected, signature_header)
+    # Bytes: a str holding any non-ASCII character makes compare_digest raise
+    # TypeError, which turned a forged signature into a 500 — and GitHub
+    # redelivers on a 5xx.
+    ok = hmac.compare_digest(expected.encode("utf-8"), signature_header.encode("utf-8"))
     if not ok:
         log.warning("webhook_security.invalid_signature")
     return ok

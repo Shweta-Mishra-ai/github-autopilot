@@ -113,7 +113,9 @@ def _authorized(req) -> bool:
     if not METRICS_TOKEN:
         return True
     auth = req.headers.get("Authorization", "")
-    return hmac.compare_digest(auth, f"Bearer {METRICS_TOKEN}")
+    # Bytes: compare_digest raises TypeError on a str with any non-ASCII
+    # character, so `Bearer é` was a 500 rather than a 401.
+    return hmac.compare_digest(auth.encode("utf-8"), f"Bearer {METRICS_TOKEN}".encode("utf-8"))
 
 
 # ── Graceful shutdown ───────────────────────────────────────────────────────

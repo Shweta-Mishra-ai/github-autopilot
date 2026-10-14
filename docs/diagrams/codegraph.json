@@ -714,7 +714,7 @@
       "id": "app.core.webhook_security",
       "path": "app/core/webhook_security.py",
       "layer": "core",
-      "loc": 524,
+      "loc": 527,
       "functions": 16,
       "classes": 0,
       "is_package": false,
@@ -1588,7 +1588,7 @@
       "id": "server",
       "path": "server.py",
       "layer": "other",
-      "loc": 959,
+      "loc": 961,
       "functions": 33,
       "classes": 0,
       "is_package": false,
@@ -3614,7 +3614,7 @@
   "stats": {
     "modules": 100,
     "edges": 397,
-    "total_loc": 27592,
+    "total_loc": 27597,
     "layers": [
       "ai",
       "core",

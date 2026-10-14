@@ -31,6 +31,7 @@ import logging
 import re
 
 from app.github.auth import get_installation_token
+from app.github.helpers import fit_comment
 from app.github.client import gh_get, gh_post, GitHubError
 from app.github.notifications import notify_secret_detected
 from app.core.config import load_config
@@ -428,7 +429,11 @@ def _open_secret_issue(repo: str, token: str, findings: list, log, config=None) 
         try:
             issue = gh_get(f"/repos/{repo}/issues/{int(existing)}", token)
             if issue.get("state") == "open":
-                gh_post(f"/repos/{repo}/issues/{int(existing)}/comments", token, {"body": body})
+                gh_post(
+                    f"/repos/{repo}/issues/{int(existing)}/comments",
+                    token,
+                    {"body": fit_comment(body)},
+                )
                 log.info(f"push.secret_alert_appended issue=#{existing}")
                 return
         except Exception as e:
@@ -439,7 +444,7 @@ def _open_secret_issue(repo: str, token: str, findings: list, log, config=None) 
         token,
         {
             "title": f"🚨 Secret detected in push — {len(findings)} finding(s)",
-            "body": body,
+            "body": fit_comment(body),
             "labels": ["security", "critical"],
         },
     )
@@ -517,7 +522,7 @@ def _scan_dependencies(repo, commits, token, config, log, ref: str = "") -> None
                 token,
                 {
                     "title": f"🔴 HIGH severity dependency in {dep_file}",
-                    "body": format_dep_findings(all_findings),
+                    "body": fit_comment(format_dep_findings(all_findings)),
                     "labels": ["security", "dependencies"],
                 },
             )
@@ -582,7 +587,7 @@ type(scope): description
                     f"⚡ {len(bad_commits)} non-conventional commits pushed to "
                     f"{branch or 'the default branch'}"
                 ),
-                "body": body,
+                "body": fit_comment(body),
                 "labels": ["commit-convention", "help wanted ⚠️"],
             },
         )

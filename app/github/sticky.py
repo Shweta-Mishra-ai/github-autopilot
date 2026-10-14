@@ -87,6 +87,15 @@ def find_sticky(
     return None
 
 
+def _fit_with_marker(body: str, marker: str) -> str:
+    """Fit GitHub's size limit and keep the marker: a report cut past its
+    marker could not be found again, and every update would post a new one."""
+    from app.github.helpers import fit_comment
+
+    body = fit_comment(body, reserve=len(marker) + 2)
+    return body if marker in body else f"{body}\n\n{marker}"
+
+
 def upsert_sticky(repo: str, issue_number: int, token: str, marker: str, body: str) -> dict:
     """
     PATCH the existing sticky when one exists, else POST a new one.
@@ -95,8 +104,7 @@ def upsert_sticky(repo: str, issue_number: int, token: str, marker: str, body: s
     by a maintainer since we found it — so a report is never lost to a stale
     comment id.
     """
-    if marker not in body:
-        body = f"{body}\n\n{marker}"
+    body = _fit_with_marker(body, marker)
 
     existing = find_sticky(repo, issue_number, token, marker)
     if existing is not None:
@@ -116,8 +124,7 @@ def update_sticky_if_present(
     none. Never creates one: for an update with nothing new to flag, where a
     fresh comment would be noise but a stale one would be wrong.
     """
-    if marker not in body:
-        body = f"{body}\n\n{marker}"
+    body = _fit_with_marker(body, marker)
     existing = find_sticky(repo, issue_number, token, marker)
     if existing is None:
         return None

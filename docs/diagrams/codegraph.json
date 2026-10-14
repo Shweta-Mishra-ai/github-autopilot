@@ -796,12 +796,12 @@
       "id": "app.github.deferred_reply",
       "path": "app/github/deferred_reply.py",
       "layer": "github",
-      "loc": 65,
+      "loc": 68,
       "functions": 2,
       "classes": 0,
       "is_package": false,
       "fan_in": 4,
-      "fan_out": 4,
+      "fan_out": 5,
       "external_deps": [
         "hashlib",
         "logging"
@@ -811,11 +811,11 @@
       "id": "app.github.helpers",
       "path": "app/github/helpers.py",
       "layer": "github",
-      "loc": 97,
-      "functions": 3,
+      "loc": 127,
+      "functions": 4,
       "classes": 0,
       "is_package": false,
-      "fan_in": 13,
+      "fan_in": 16,
       "fan_out": 1,
       "external_deps": [
         "logging"
@@ -879,12 +879,12 @@
       "id": "app.github.sticky",
       "path": "app/github/sticky.py",
       "layer": "github",
-      "loc": 124,
-      "functions": 4,
+      "loc": 131,
+      "functions": 5,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 1,
+      "fan_out": 2,
       "external_deps": [
         "__future__",
         "logging",
@@ -1310,12 +1310,12 @@
       "id": "app.handlers.push",
       "path": "app/handlers/push.py",
       "layer": "handlers",
-      "loc": 619,
+      "loc": 624,
       "functions": 16,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 14,
+      "fan_out": 15,
       "external_deps": [
         "base64",
         "hashlib",
@@ -2153,6 +2153,11 @@
       "kind": "import"
     },
     {
+      "source": "app.github.deferred_reply",
+      "target": "app.github.helpers",
+      "kind": "runtime"
+    },
+    {
       "source": "app.github.helpers",
       "target": "app.github.client",
       "kind": "runtime"
@@ -2186,6 +2191,11 @@
       "source": "app.github.sticky",
       "target": "app.github.client",
       "kind": "import"
+    },
+    {
+      "source": "app.github.sticky",
+      "target": "app.github.helpers",
+      "kind": "runtime"
     },
     {
       "source": "app.handlers.autofix",
@@ -3189,6 +3199,11 @@
     },
     {
       "source": "app.handlers.push",
+      "target": "app.github.helpers",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.push",
       "target": "app.github.notifications",
       "kind": "import"
     },
@@ -3580,8 +3595,8 @@
   ],
   "stats": {
     "modules": 102,
-    "edges": 385,
-    "total_loc": 27743,
+    "edges": 388,
+    "total_loc": 27788,
     "layers": [
       "ai",
       "core",

@@ -819,9 +819,12 @@ def _web_process_check() -> dict:
         from app.core.process_guard import active_process_count, verdict
 
         state, message = verdict()
-        return {"state": state, "count": active_process_count(), "detail": message}
+        # None, not 0, when it could not be counted: "0 processes" from the
+        # process answering the request is not a reading.
+        count = active_process_count() if state != "unknown" else None
+        return {"state": state, "count": count, "detail": message}
     except Exception as e:
-        return {"state": "unknown", "count": 0, "detail": str(e)[:120]}
+        return {"state": "unknown", "count": None, "detail": str(e)[:120]}
 
 
 def _queue_stats() -> dict:

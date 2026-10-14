@@ -609,33 +609,58 @@ class TestCmdReport:
 
 class TestGeneralCommandSafety:
 
+    # Both tests below passed for the wrong reason: the payload had no
+    # `sender`, so the handler returned at "missing required fields" before
+    # the rule under test, and the mint they patched was the package's name,
+    # not service.py's. And `edited` is handled now — an edit runs a command
+    # when the edit added it — so "non-created action skipped" was false.
+
+    @staticmethod
+    def _payload(action="created", body="/fix stuff", sender="user", sender_type="User", before=None):
+        p = {
+            "action": action,
+            "comment": {"body": body, "user": {"login": sender}},
+            "repository": {"full_name": "test/repo"},
+            "issue": {"number": 1, "title": "t"},
+            "installation": {"id": 123},
+            "sender": {"login": sender, "type": sender_type},
+        }
+        if before is not None:
+            p["changes"] = {"body": {"from": before}}
+        return p
+
+    def _reached_auth(self, payload) -> bool:
+        """True when the handler got as far as minting a token."""
+        from app.handlers.comments import handle
+
+        with patch(
+            "app.handlers.comments.service.get_installation_token",
+            side_effect=RuntimeError("reached auth"),
+        ) as mint:
+            try:
+                handle(payload)
+            except RuntimeError as e:
+                if "reached auth" not in str(e):
+                    raise
+        return mint.called
+
+    def test_the_payload_reaches_auth_from_a_person(self):
+        """The control: without it, every 'skipped' below could be a payload
+        the handler rejects for some other reason."""
+        assert self._reached_auth(self._payload())
+
     def test_bot_author_skipped(self):
         """Bot comments must be silently ignored."""
-        from app.handlers.comments import handle
-        payload = {
-            "action": "created",
-            "comment": {"body": "/fix stuff", "user": {"login": "dependabot[bot]"}},
-            "repository": {"full_name": "test/repo"},
-            "issue": {"number": 1},
-            "installation": {"id": 123},
-        }
-        # Should return without doing anything — no token call
-        with patch("app.handlers.comments.get_installation_token") as mock_token:
-            handle(payload)
-            mock_token.assert_not_called()
+        assert not self._reached_auth(self._payload(sender="dependabot[bot]", sender_type="Bot"))
 
-    def test_non_created_action_skipped(self):
-        from app.handlers.comments import handle
-        payload = {
-            "action": "edited",  # not 'created'
-            "comment": {"body": "/fix stuff", "user": {"login": "user"}},
-            "repository": {"full_name": "test/repo"},
-            "issue": {"number": 1},
-            "installation": {"id": 123},
-        }
-        with patch("app.handlers.comments.get_installation_token") as mock_token:
-            handle(payload)
-            mock_token.assert_not_called()
+    def test_an_edit_that_kept_the_command_is_skipped(self):
+        assert not self._reached_auth(self._payload(action="edited", body="/fix stuffs", before="/fix stuff"))
+
+    def test_an_edit_that_added_the_command_runs(self):
+        assert self._reached_auth(self._payload(action="edited", body="/fix stuff", before="/fxi stuff"))
+
+    def test_a_deleted_comment_is_skipped(self):
+        assert not self._reached_auth(self._payload(action="deleted"))
 
 
 # ─── Runner ──────────────────────────────────────────────────────────────────

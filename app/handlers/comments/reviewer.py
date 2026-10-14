@@ -40,7 +40,7 @@ def commits_since(commits: list, tag_sha: str | None) -> list:
     return commits
 
 
-def _fetch_commits_since_tag(repo: str, token: str, per_page: int = 20) -> tuple[list, str]:
+def _fetch_commits_since_tag(repo: str, token: str) -> tuple[list, str]:
     """
     Fetch the commits made SINCE the latest tag, plus that tag's name.
 
@@ -51,12 +51,31 @@ def _fetch_commits_since_tag(repo: str, token: str, per_page: int = 20) -> tuple
     last `per_page` commits on the default branch, released ones included — so
     every /changelog re-described work that had already shipped in <tag>, and
     the empty branch was unreachable.
+
+    Two more, shared with /release before it was fixed: "the latest tag" was
+    the first one GitHub lists, which is by NAME (v1.9.0 before v1.10.0), and
+    only the last 20 commits were read, so a larger release was described
+    from a part of it. The highest semver tag is used, and everything since it
+    is read through the compare API (newest first, as before).
     """
-    tags = gh_get(f"/repos/{repo}/tags?per_page=1", token)
-    commits = gh_get(f"/repos/{repo}/commits?per_page={per_page}", token)
-    has_tag = isinstance(tags, list) and tags and isinstance(tags[0], dict)
-    latest_tag = tags[0].get("name", "v0.0.0") if has_tag else "v0.0.0"
-    tag_sha = (tags[0].get("commit") or {}).get("sha") if has_tag else None
+    from .publisher import _semver
+
+    tags = gh_get(f"/repos/{repo}/tags?per_page=100", token)
+    tagged = [t for t in (tags if isinstance(tags, list) else []) if isinstance(t, dict)]
+    semver = sorted(
+        (t for t in tagged if _semver(t.get("name", ""))), key=lambda t: _semver(t["name"])
+    )
+    tag = semver[-1] if semver else None
+    latest_tag = tag["name"] if tag else "v0.0.0"
+    tag_sha = (tag.get("commit") or {}).get("sha") if tag else None
+
+    if tag:
+        from urllib.parse import quote
+
+        data = gh_get(f"/repos/{repo}/compare/{quote(tag['name'], safe='')}...HEAD", token)
+        if isinstance(data, dict) and isinstance(data.get("commits"), list):
+            return list(reversed(data["commits"])), latest_tag
+    commits = gh_get(f"/repos/{repo}/commits?per_page=100", token)
     return commits_since(commits if isinstance(commits, list) else [], tag_sha), latest_tag
 
 
@@ -204,22 +223,44 @@ def cmd_summarize(repo: str, issue_number: int, token: str) -> str:
     try:
         from app.intelligence.summarizer import summarize_issue_thread
 
-        comments = gh_get(f"/repos/{repo}/issues/{issue_number}/comments?per_page=50", token)
-        if not isinstance(comments, list):
-            comments = []
+        issue = gh_get(f"/repos/{repo}/issues/{issue_number}", token) or {}
+        comments, total = _thread_comments(repo, issue_number, token, issue)
+        omitted = max(0, total - len(comments))
 
-        issue = {}
-        try:
-            issue = gh_get(f"/repos/{repo}/issues/{issue_number}", token) or {}
-        except Exception as exc:
-            log.debug(f"cmd_summarize.title_unavailable: {exc}")
-
-        summary = summarize_issue_thread(comments, issue)
+        summary = summarize_issue_thread(comments, issue, omitted=omitted)
         if not summary.strip():
             return "## 📝 Thread Summary\n\nCould not summarize this thread right now."
-        return f"## 📝 Thread Summary\n\n{summary}"
+        scope = (
+            f"\n\n*Read {len(comments)} of {total} comments: the first and the latest.*"
+            if omitted
+            else ""
+        )
+        return f"## 📝 Thread Summary\n\n{summary}{scope}"
     except Exception as exc:
         return fmt_error("Summarize failed", exc)
+
+
+_THREAD_PAGES = 3  # 300 comments: the first page and the last two
+
+
+def _thread_comments(repo: str, number: int, token: str, issue: dict) -> tuple[list, int]:
+    """
+    The opening of a thread and its end, and how many comments it has.
+
+    This read the first 50 comments, oldest first, so on a longer thread the
+    latest — where a resolution is — were never fetched, and the summary
+    described the opening as the current state.
+    """
+    total = int(issue.get("comments") or 0)
+    path = f"/repos/{repo}/issues/{number}/comments?per_page=100"
+    last = max(1, -(-total // 100))
+    pages = [1, *range(max(2, last - _THREAD_PAGES + 2), last + 1)]
+    comments: list = []
+    for page in pages:
+        batch = gh_get(f"{path}&page={page}", token)
+        if isinstance(batch, list):
+            comments.extend(batch)
+    return comments, max(total, len(comments))
 
 
 _CI_LOG_CHARS = 3000
@@ -486,9 +527,16 @@ def cmd_changelog(repo: str, token: str) -> str:
         if not commits:
             return f"## ℹ️ No New Commits\n\nNothing on the default branch since `{latest_tag}`."
 
-        commit_list = "\n".join(
-            f"- {c['commit']['message'].split(chr(10))[0][:120]}" for c in commits[:15]
-        )
+        # Every commit up to 100, newest first. This sent the first 15, so a
+        # changelog for a larger release silently left the rest out.
+        subjects = [
+            str(((c.get("commit") or {}).get("message")) or "").split("\n")[0][:120]
+            for c in commits
+            if isinstance(c, dict)
+        ]
+        commit_list = "\n".join(f"- {s}" for s in subjects[:100])
+        if len(subjects) > 100:
+            commit_list += f"\n- (and {len(subjects) - 100} older commits not listed)"
 
         changelog, _ = router.ask_text(
             "Technical writer. Generate a CHANGELOG entry. Keep a Changelog format.",

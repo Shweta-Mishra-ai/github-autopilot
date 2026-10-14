@@ -148,7 +148,7 @@ def scan_repo(repo: str, installation_id: int) -> dict:
     Never raises: one repository failing must not stop the pass, and the record
     says which repositories were not scanned rather than quietly omitting them.
     """
-    record = {"repo": repo, "ok": False, "critical": 0, "total": 0, "error": ""}
+    record = {"repo": repo, "ok": False, "critical": 0, "total": 0, "error": "", "missed": []}
     try:
         from app.github.auth import get_installation_token
         from app.security.scanner import run_security_scan
@@ -159,11 +159,14 @@ def scan_repo(repo: str, installation_id: int) -> dict:
         # report — so reaching this line proved nothing. A repository none of
         # whose sources could be read was counted as scanned with 0 findings,
         # which is exactly the "quietly omitting" this record exists to stop.
+        # A scan that could read some sources but not others was "ok" with
+        # nothing saying which were missed, and its 0 read as clean.
         record.update(
             ok=not report.scanned_nothing,
             critical=report.critical_count,
             total=report.total_count,
             error="; ".join(report.errors)[:150] if report.scanned_nothing else "",
+            missed=list(report.unavailable) + list(report.truncated),
         )
     except Exception as e:
         record["error"] = str(e)[:150]
@@ -230,6 +233,8 @@ def run_pass() -> dict:
         "repos_known": len(installs),
         "repos_scanned": sum(1 for s in scanned if s["ok"]),
         "repos_failed": sum(1 for s in scanned if not s["ok"]),
+        # Scanned, but not every source could be read in full.
+        "repos_partial": sorted(s["repo"] for s in scanned if s["ok"] and s["missed"]),
         "critical_findings": findings,
         "memory_backed_up": backed_up,
     }

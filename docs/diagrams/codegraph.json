@@ -822,8 +822,8 @@
       "id": "app.github.notifications",
       "path": "app/github/notifications.py",
       "layer": "github",
-      "loc": 534,
-      "functions": 20,
+      "loc": 567,
+      "functions": 22,
       "classes": 0,
       "is_package": false,
       "fan_in": 8,
@@ -832,6 +832,7 @@
         "datetime",
         "logging",
         "os",
+        "re",
         "requests",
         "threading"
       ]
@@ -1024,7 +1025,7 @@
       "id": "app.handlers.comments.integrations",
       "path": "app/handlers/comments/integrations.py",
       "layer": "handlers",
-      "loc": 241,
+      "loc": 243,
       "functions": 4,
       "classes": 0,
       "is_package": false,
@@ -3614,7 +3615,7 @@
   "stats": {
     "modules": 100,
     "edges": 397,
-    "total_loc": 27597,
+    "total_loc": 27632,
     "layers": [
       "ai",
       "core",
@@ -3658,16 +3659,16 @@
         "fan_out": 1
       },
       {
+        "id": "app.github.notifications",
+        "loc": 567,
+        "fan_in": 8,
+        "fan_out": 4
+      },
+      {
         "id": "app.core.sanitizer",
         "loc": 284,
         "fan_in": 16,
         "fan_out": 0
-      },
-      {
-        "id": "app.github.notifications",
-        "loc": 534,
-        "fan_in": 8,
-        "fan_out": 4
       },
       {
         "id": "app.core.guardrails",

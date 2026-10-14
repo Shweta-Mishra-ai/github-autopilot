@@ -162,14 +162,16 @@ def cmd_notify(
         )
 
     try:
-        from app.github.notifications import send_rich_discord, send_rich_slack
+        from app.github.notifications import plain, send_rich_discord, send_rich_slack
 
-        title = issue.get("title", f"Issue #{issue_number}")
+        # The title, the labels and the note are untrusted: plain() keeps them
+        # from becoming links, and the senders keep them from pinging.
+        title = plain(issue.get("title", f"Issue #{issue_number}"))
         is_pr = "pull_request" in issue
-        labels = [lb.get("name", "") for lb in issue.get("labels", [])]
+        labels = [plain(lb.get("name", "")) for lb in issue.get("labels", [])]
         kind = "PR" if is_pr else "Issue"
         url = issue.get("html_url", f"https://github.com/{repo}/issues/{issue_number}")
-        custom_msg = (cmd_args or "").strip()
+        custom_msg = plain((cmd_args or "").strip())
 
         color = 0x5865F2  # Discord blurple
         for lb in labels:

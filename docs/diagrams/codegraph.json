@@ -1126,7 +1126,7 @@
       "id": "app.handlers.issues",
       "path": "app/handlers/issues.py",
       "layer": "handlers",
-      "loc": 418,
+      "loc": 422,
       "functions": 5,
       "classes": 0,
       "is_package": false,
@@ -1134,6 +1134,7 @@
       "fan_out": 17,
       "external_deps": [
         "contextlib",
+        "json",
         "logging",
         "re"
       ]
@@ -1395,7 +1396,7 @@
       "id": "app.intelligence.memory",
       "path": "app/intelligence/memory.py",
       "layer": "intelligence",
-      "loc": 380,
+      "loc": 391,
       "functions": 17,
       "classes": 1,
       "is_package": false,
@@ -3613,7 +3614,7 @@
   "stats": {
     "modules": 100,
     "edges": 397,
-    "total_loc": 27577,
+    "total_loc": 27592,
     "layers": [
       "ai",
       "core",

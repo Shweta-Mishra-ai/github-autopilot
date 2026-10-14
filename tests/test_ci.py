@@ -5,6 +5,7 @@ Covers: action filter, skip conclusions, auth failure, no PR associated,
         CI disabled, failure analysis comment, failure pattern tracking.
 """
 
+import pytest
 from unittest.mock import MagicMock, patch
 from app.ai.providers.base import LLMResponse
 
@@ -96,13 +97,15 @@ class TestHandleRouting:
             handle(payload)
             mock_tok.assert_not_called()
 
-    def test_auth_failure_returns_early(self):
+    def test_auth_failure_is_raised_before_any_analysis(self):
+        # Raised for the queue to retry; returning reported it as handled.
         with patch("app.handlers.ci.get_installation_token",
                    side_effect=Exception("auth fail")), \
-             patch("app.ai.guarded.safe_router_ask") as mock_ask:
+             patch("app.ai.guarded.safe_router_ask") as mock_ask, \
+             pytest.raises(Exception, match="auth fail"):
             from app.handlers.ci import handle
             handle(_payload())
-            mock_ask.assert_not_called()
+        mock_ask.assert_not_called()
 
     def test_ci_disabled_skips_analysis(self):
         with patch("app.handlers.ci.get_installation_token", return_value="tok"), \
@@ -148,6 +151,7 @@ class TestFailureAnalysis:
         with patch("app.handlers.ci.get_installation_token", return_value="tok"), \
              patch("app.handlers.ci.load_config", return_value=config), \
              patch("app.handlers.ci._ci_already_alerted", return_value=False), \
+             patch("app.handlers.ci._current_ci_report", return_value=""), \
              patch("app.ai.guarded.safe_router_ask",
                    return_value=(analysis, meta)) as mock_ask, \
              patch("app.github.sticky.upsert_sticky") as mock_post:
@@ -205,6 +209,7 @@ class TestFailureAnalysis:
             with patch("app.handlers.ci.get_installation_token", return_value="tok"), \
                  patch("app.handlers.ci.load_config", return_value=_mock_config()), \
                  patch("app.handlers.ci._ci_already_alerted", return_value=False), \
+             patch("app.handlers.ci._current_ci_report", return_value=""), \
                  patch("app.ai.guarded.safe_router_ask", return_value=(analysis, meta)), \
                  patch("app.github.sticky.upsert_sticky") as mock_post:
                 from app.handlers.ci import handle
@@ -216,6 +221,7 @@ class TestFailureAnalysis:
         with patch("app.handlers.ci.get_installation_token", return_value="tok"), \
              patch("app.handlers.ci.load_config", return_value=_mock_config()), \
              patch("app.handlers.ci._ci_already_alerted", return_value=False), \
+             patch("app.handlers.ci._current_ci_report", return_value=""), \
              patch("app.ai.guarded.safe_router_ask",
                    side_effect=Exception("LLM timeout")), \
              patch("app.github.sticky.upsert_sticky") as mock_post:
@@ -235,6 +241,7 @@ class TestFailureAnalysis:
         with patch("app.handlers.ci.get_installation_token", return_value="tok"), \
              patch("app.handlers.ci.load_config", return_value=_mock_config()), \
              patch("app.handlers.ci._ci_already_alerted", return_value=False), \
+             patch("app.handlers.ci._current_ci_report", return_value=""), \
              patch("app.ai.guarded.safe_router_ask", return_value=(analysis, meta)), \
              patch("app.github.sticky.upsert_sticky") as mock_post:
             from app.handlers.ci import handle
@@ -295,6 +302,7 @@ class TestCiAudit2:
         with patch("app.handlers.ci.get_installation_token", return_value="tok"), \
              patch("app.handlers.ci.load_config", return_value=_mock_config()), \
              patch("app.handlers.ci._ci_already_alerted", return_value=False), \
+             patch("app.handlers.ci._current_ci_report", return_value=""), \
              patch("app.handlers.ci._release_ci_alert") as release, \
              patch("app.ai.guarded.safe_router_ask", return_value=(analysis, _meta())), \
              patch("app.github.sticky.upsert_sticky") as post:
@@ -353,3 +361,45 @@ class TestCiAudit2:
         analysis = {"root_cause": "x", "category": "other", "fix": "- y", "is_flaky": "false", "confidence": 0.9}
         post, _ = self._run(_payload(), analysis)
         assert "Possibly flaky" not in post.call_args[0][4]
+
+
+class TestAnUnreadableReportIsNotOverwritten:
+    """The existing report was read with every error turned into "" — so a
+    502 on that read merged this check's section into nothing and the upsert
+    erased the sections other failing checks had written."""
+
+    def _run(self, report_error):
+        with patch("app.handlers.ci.get_installation_token", return_value="tok"), \
+             patch("app.handlers.ci.load_config", return_value=_mock_config()), \
+             patch("app.handlers.ci._ci_already_alerted", return_value=False), \
+             patch("app.handlers.ci._release_ci_alert") as release, \
+             patch("app.handlers.ci._job_log_tail", return_value="E   ImportError: x"), \
+             patch("app.ai.guarded.safe_router_ask", return_value=(
+                 {"root_cause": "x", "evidence": "ImportError: x", "category": "other", "fix": "- y"},
+                 _meta())), \
+             patch("app.github.sticky.gh_get", side_effect=report_error), \
+             patch("app.github.sticky.upsert_sticky") as post:
+            from app.handlers.ci import handle
+
+            try:
+                handle(_payload())
+                raised = None
+            except Exception as e:
+                raised = e
+        return post, release, raised
+
+    def test_a_502_is_raised_for_retry_and_nothing_is_written(self):
+        from app.github.client import GitHubError
+
+        post, release, raised = self._run(GitHubError("bad gateway", 502))
+        assert isinstance(raised, GitHubError)
+        post.assert_not_called()
+        release.assert_called_once()
+
+    def test_a_403_writes_nothing_and_is_not_retried(self):
+        from app.github.client import GitHubError
+
+        post, release, raised = self._run(GitHubError("forbidden", 403))
+        assert raised is None
+        post.assert_not_called()
+        release.assert_called_once()

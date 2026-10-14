@@ -92,13 +92,22 @@ def _mock_context():
 
 class TestCommandParsing:
 
-    def test_handle_skips_non_created_action(self):
+    def test_handle_skips_an_edit_that_did_not_add_the_command(self):
+        # This was "skips non-created action" and asserted only `result is
+        # None`. Edits are handled now, and its token patch missed the module
+        # that mints it: a real mint failed on the fake key, the failure was
+        # swallowed, and None came back — the test passed without reaching the
+        # code it named. The real rule: an edit runs a command only if the
+        # edit added it, so nothing — not even a token — is spent here.
         from app.handlers.comments import handle
         payload = _make_payload()
         payload["action"] = "edited"
-        with _mock_token(), _mock_config(), _mock_gh_post():
-            result = handle(payload)
-        assert result is None
+        payload["changes"] = {"body": {"from": "/fix"}}
+        with patch("app.handlers.comments.service.get_installation_token") as mint, \
+             _mock_config(), _mock_gh_post() as post:
+            handle(payload)
+        mint.assert_not_called()
+        post.assert_not_called()
 
     def test_handle_skips_bot_sender(self):
         from app.handlers.comments import handle

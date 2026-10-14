@@ -108,9 +108,12 @@ class TestEarlyExits:
             handle_comment_event(_payload(body="just chatting, no slash command here"))
         dispatch.assert_not_called()
 
-    def test_auth_failure_returns_early(self, common_mocks):
+    def test_auth_failure_is_raised_before_anything_runs(self, common_mocks):
+        # Raised, not returned: returning told the queue the command had been
+        # handled, so a token-endpoint timeout cost the user their answer.
         common_mocks["token"].side_effect = Exception("token fetch failed")
-        with patch("app.handlers.comments.service._dispatch") as dispatch:
+        with patch("app.handlers.comments.service._dispatch") as dispatch, \
+             pytest.raises(Exception, match="token fetch failed"):
             handle_comment_event(_payload())
         dispatch.assert_not_called()
         common_mocks["post"].assert_not_called()
@@ -230,12 +233,40 @@ class TestDispatchOutcomes:
         assert result is not None
         assert "/fix" in result
 
-    def test_post_comment_failure_does_not_raise(self, common_mocks):
+    def test_a_reply_refused_for_a_passing_reason_is_parked_not_rerun(self, common_mocks):
+        """A 5xx on the reply used to be logged and the answer was gone. The
+        command is not run again (a /merge would merge twice); the reply text
+        is parked on the queue and only the POST is retried."""
         from app.github.client import GitHubError
 
-        common_mocks["post"].side_effect = GitHubError("posting failed", 500)
-        with patch("app.handlers.comments.service._dispatch", return_value="some response"):
-            handle_comment_event(_payload())  # must not raise
+        common_mocks["post"].side_effect = GitHubError("posting failed", 502)
+        with patch("app.handlers.comments.service._dispatch", return_value="some response") as d, \
+             patch("app.core.event_queue.schedule", return_value=True) as schedule:
+            handle_comment_event(_payload())
+        d.assert_called_once()
+        event, payload, _repo, delay, _id = schedule.call_args[0]
+        assert event == "autopilot.reply" and delay >= 30
+        assert payload["body"].startswith("some response")
+        assert payload["installation_id"] == _payload()["installation"]["id"]
+
+    def test_a_reply_that_cannot_be_parked_is_raised(self, common_mocks):
+        from app.github.client import GitHubError
+
+        common_mocks["post"].side_effect = GitHubError("posting failed", 502)
+        with patch("app.handlers.comments.service._dispatch", return_value="some response"), \
+             patch("app.core.event_queue.schedule", return_value=False), \
+             pytest.raises(GitHubError):
+            handle_comment_event(_payload())
+
+    def test_a_permanent_refusal_is_raised_not_parked(self, common_mocks):
+        from app.github.client import GitHubError
+
+        common_mocks["post"].side_effect = GitHubError("issue is locked", 403)
+        with patch("app.handlers.comments.service._dispatch", return_value="some response"), \
+             patch("app.core.event_queue.schedule") as schedule, \
+             pytest.raises(GitHubError):
+            handle_comment_event(_payload())
+        schedule.assert_not_called()
 
 
 class TestDispatchRoutingTable:

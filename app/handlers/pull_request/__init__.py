@@ -36,6 +36,7 @@ from app.core.logger import EventLogger
 from app.core.confidence import ConfidenceGate
 from app.core.guardrails import check_pr_title_update
 from app.core.sanitizer import InjectionRejected, wrap_user_content
+from app.core.transient import is_transient, once
 
 from .analysis import _analyze_pr, _build_pr_summary
 from .classify import (
@@ -137,11 +138,10 @@ def handle(payload: dict):
     if author in SKIP_AUTHORS or author.endswith("[bot]"):
         return
 
-    try:
-        token = get_installation_token(installation_id)
-    except Exception as e:
-        log.error(f"Auth failed: {e}")
-        return
+    # Raised, not logged: nothing has been posted yet, so the queue retrying
+    # the event is the whole recovery. Returning here reported the event as
+    # handled and the PR was never reviewed.
+    token = get_installation_token(installation_id)
 
     config = load_config(repo, token)
     gate = ConfidenceGate(config)
@@ -185,9 +185,11 @@ def handle(payload: dict):
         # Nothing below can be judged without the diff. This used to carry on
         # with no files: the risk analysis ran on the title alone, recorded a
         # risk level for this head that auto-merge then trusted, and the
-        # report said "Files: 0 · +0 −0". The next push runs it again.
+        # report said "Files: 0 · +0 −0". It then returned, which reported
+        # the event as handled: a 502 here meant the PR was never reviewed.
+        # Raised so the queue retries it.
         log.error(f"pr.files_unavailable — not analysed: {e}")
-        return
+        raise
 
     context = ""
     try:
@@ -217,7 +219,8 @@ def handle(payload: dict):
     analysis_md = summary_md = review_md = gaps_md = ""
     inline_comments: list = []
 
-    if action == "opened":
+    # once(): a retried event must not announce the same PR twice.
+    if action == "opened" and once(f"pr_opened:{repo}#{pr_number}"):
         try:
             notify_pr_opened(
                 repo=repo,
@@ -247,6 +250,11 @@ def handle(payload: dict):
     # running out mid-event escaped handle(), nothing was written, and on a
     # push the old report kept showing the previous head's findings as current.
     failed: list[str] = []
+    # A section that failed for a reason that passes (a provider outage, a
+    # GitHub 5xx) is retried: the report is written with what did run, then
+    # the event is raised so the queue runs it again and the next report
+    # replaces the "not run" notice.
+    retryable: list[BaseException] = []
 
     def _guarded(section, fn, default):
         try:
@@ -260,6 +268,8 @@ def handle(payload: dict):
             from app.core.guardrails import AIBudgetExceeded
 
             log.error(f"pr.{section}_failed: {type(e).__name__}: {e}")
+            if is_transient(e):
+                retryable.append(e)
             if isinstance(e, AIBudgetExceeded):
                 why = str(e)
             elif isinstance(e, AllProvidersDown):
@@ -321,6 +331,8 @@ def handle(payload: dict):
 
     if not any([analysis_md, summary_md, review_md, gaps_md]):
         log.info("pr.nothing_to_report — staying silent")
+        if retryable:
+            raise retryable[0]
         return
 
     # A push with nothing to flag never CREATES a comment — "still fine" is not
@@ -350,8 +362,16 @@ def handle(payload: dict):
                 log.done("pr_report_refreshed")
             else:
                 log.info("pr.nothing_to_flag — no report to refresh, staying silent")
+            if retryable:
+                raise retryable[0]
             return
         upsert_sticky(repo, pr_number, token, MARKER_PR_REPORT, body + config.footer)
         log.done("pr_report_upserted")
     except GitHubError as e:
         log.error(f"Failed to upsert PR report: {e}")
+        # The report is the product of this event. A 5xx here used to end the
+        # event as handled with nothing posted.
+        if is_transient(e):
+            raise
+    if retryable:
+        raise retryable[0]

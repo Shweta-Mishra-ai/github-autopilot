@@ -18,6 +18,7 @@ from app.core.guardrails import check_pr_description_update, check_pr_title_upda
 from app.core.sanitizer import InjectionRejected, one_line, wrap_user_content
 from app.github.client import gh_patch
 from app.github.notifications import notify_high_risk_pr
+from app.core.transient import once
 
 RISK_EMOJI = {"low": "🟢", "medium": "🟡", "high": "🔴"}
 
@@ -295,7 +296,10 @@ Return JSON:
         if description and check_pr_description_update(pr, config).passed:
             payload["body"] = description
 
-        if payload:
+        # once(): a retried event carries the payload as it was when the PR
+        # opened. Written again minutes later, it would overwrite a
+        # description the author typed in the meantime.
+        if payload and once(f"pr_metadata:{repo}#{pr_number}"):
             try:
                 # PATCH. This was gh_put, and GitHub has no PUT on a pull
                 # request — only on its /merge — so every title and
@@ -335,7 +339,12 @@ Return JSON:
     except Exception as e:
         log.debug(f"record_pr_risk skipped: {e}")
 
-    if apply_metadata and r.get("risk_level") == "high":
+    # once(): a retried event must not raise the same alert twice.
+    if (
+        apply_metadata
+        and r.get("risk_level") == "high"
+        and once(f"pr_high_risk:{repo}#{pr_number}")
+    ):
         try:
             notify_high_risk_pr(repo, pr_number, title, config=config)
         except Exception as e:

@@ -179,7 +179,11 @@ class TestAPRSectionThatFailsIsReported:
              patch.object(pr_mod, "_detect_test_gaps", return_value=""), \
              patch.object(pr_mod, "upsert_sticky") as upsert, \
              patch.object(pr_mod, "update_sticky_if_present") as update:
-            pr_mod.handle(self._payload())
+            try:
+                pr_mod.handle(self._payload())
+                self.raised = None
+            except Exception as e:  # the transient ones are raised for the queue
+                self.raised = e
         return upsert, update
 
     def test_providers_down_is_reported_not_swallowed(self):
@@ -188,6 +192,9 @@ class TestAPRSectionThatFailsIsReported:
         upsert, update = self._run(AllProvidersDown())
         body = upsert.call_args[0][4] if upsert.called else update.call_args[0][4]
         assert "Not run on this commit" in body and "code review" in body and "unavailable" in body
+        # Written first, then raised: an outage passes, and the queue's retry
+        # replaces the notice with the review. Returning ended the event.
+        assert isinstance(self.raised, AllProvidersDown)
 
     def test_budget_refusal_is_reported(self):
         from app.core.guardrails import AIBudgetExceeded
@@ -195,6 +202,7 @@ class TestAPRSectionThatFailsIsReported:
         upsert, update = self._run(AIBudgetExceeded("Daily AI call limit (3) for this repository reached."))
         body = upsert.call_args[0][4] if upsert.called else update.call_args[0][4]
         assert "limit (3)" in body
+        assert self.raised is None, "a spent daily budget is not retried within minutes"
 
     def test_unreadable_files_stop_the_analysis(self):
         from unittest.mock import patch
@@ -206,7 +214,8 @@ class TestAPRSectionThatFailsIsReported:
              patch.object(pr_mod, "load_config") as cfg, \
              patch.object(pr_mod, "gh_get", return_value={}), \
              patch.object(pr_mod, "_analyze_pr") as analyze, \
-             patch.object(pr_mod, "upsert_sticky") as upsert:
+             patch.object(pr_mod, "upsert_sticky") as upsert, \
+             pytest.raises(RuntimeError, match="502"):
             cfg.return_value.pr_enabled.return_value = True
             pr_mod.handle(self._payload())
         analyze.assert_not_called()

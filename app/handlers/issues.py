@@ -16,6 +16,7 @@ import re
 
 from app.github.auth import get_installation_token
 from app.github.client import gh_get, gh_post, GitHubError
+from app.github.deferred_reply import post_comment
 from app.github.notifications import notify_new_issue
 from app.ai.router import router
 from app.ai.validator import validate_issue_triage
@@ -79,11 +80,9 @@ def handle(payload: dict):
 
     log.info(f"Issue #{issue_number} opened by @{author}")
 
-    try:
-        token = get_installation_token(installation_id)
-    except Exception as e:
-        log.error(f"Auth failed: {e}")
-        return
+    # Raised, not logged: nothing has run yet, so the queue retrying the
+    # event is the whole recovery. Returning reported it as handled.
+    token = get_installation_token(installation_id)
 
     config = load_config(repo, token)
     if not config.issues_enabled():
@@ -180,19 +179,19 @@ Return JSON:
     # than a table of fabricated type/priority/complexity values.
     if result.get("_degraded"):
         log.error(f"issues.triage_degraded issue=#{issue_number} — posting plain acknowledgement")
-        with contextlib.suppress(GitHubError):
-            gh_post(
-                f"/repos/{repo}/issues/{issue_number}/comments",
-                token,
-                {
-                    "body": (
-                        f"## 👋 Thanks for the issue, @{author}!\n\n"
-                        "A maintainer will take a look shortly.\n\n"
-                        "> Automated triage was unavailable for this issue."
-                        f"{config.footer}"
-                    )
-                },
-            )
+        post_comment(
+            repo,
+            issue_number,
+            token,
+            installation_id,
+            (
+                f"## 👋 Thanks for the issue, @{author}!\n\n"
+                "A maintainer will take a look shortly.\n\n"
+                "> Automated triage was unavailable for this issue."
+                f"{config.footer}"
+            ),
+            post=gh_post,
+        )
         return
 
     # Priority → emoji + label
@@ -230,7 +229,7 @@ Return JSON:
 
     label_guard = check_auto_label(issue, all_labels, config)
     if label_guard.passed:
-        with contextlib.suppress(GitHubError):
+        try:
             gh_post(
                 f"/repos/{repo}/issues/{issue_number}/labels",
                 token,
@@ -247,6 +246,10 @@ Return JSON:
                 from app.core.snapshot import record_action
 
                 record_action(repo, {"type": "add_labels", "number": issue_number, "labels": added})
+        except GitHubError as e:
+            # Was suppressed without a trace: the triage comment then named a
+            # priority whose label was never applied, and nothing said why.
+            log.error(f"issues.labels_failed issue=#{issue_number}: {e}")
 
     # Build questions section
     q_section = ""
@@ -273,11 +276,16 @@ Return JSON:
 💡 *Use `/explain`, `/fix`, or `/improve` on this issue for AI assistance.*
 {config.footer}"""
 
+    # The triage comment is posted once: a transient refusal parks it on the
+    # queue (labels are already applied and the model is not asked again).
+    # It used to be logged and dropped.
+    lost: GitHubError | None = None
     try:
-        gh_post(f"/repos/{repo}/issues/{issue_number}/comments", token, {"body": comment})
+        post_comment(repo, issue_number, token, installation_id, comment, post=gh_post)
         log.done(f"Issue #{issue_number} triaged: {result['type']}/{priority}")
     except GitHubError as e:
         log.error(f"Comment failed: {e}")
+        lost = e
 
     # Remember the shape of this issue so recurring patterns surface later.
     with contextlib.suppress(Exception):
@@ -292,6 +300,10 @@ Return JSON:
     # Notification
     with contextlib.suppress(Exception):
         notify_new_issue(repo=repo, issue_number=issue_number, title=title, labels=all_labels)
+
+    # Counted as a failed event, not logged as a triaged one.
+    if lost is not None:
+        raise lost
 
 
 # The labels this bot manages. Triage applies only these: the model's

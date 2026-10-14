@@ -44,7 +44,9 @@ def _posted_by_this_app(comment: dict) -> bool:
     return (comment.get("user") or {}).get("type") == "Bot"
 
 
-def find_sticky(repo: str, issue_number: int, token: str, marker: str) -> int | None:
+def find_sticky(
+    repo: str, issue_number: int, token: str, marker: str, strict: bool = False
+) -> int | None:
     """
     Comment id of the bot's marker-bearing comment, or None.
 
@@ -61,6 +63,9 @@ def find_sticky(repo: str, issue_number: int, token: str, marker: str) -> int | 
 
     Never raises: a lookup failure means "post a fresh one", which is the safe
     direction — a duplicate comment is recoverable, a lost report is not.
+    Except with `strict`, for a caller that merges into the existing body:
+    for it "not found" means "discard what is there", so it must not be
+    told that when the truth is "could not look".
     """
     try:
         path = f"/repos/{repo}/issues/{issue_number}/comments"
@@ -76,6 +81,8 @@ def find_sticky(repo: str, issue_number: int, token: str, marker: str) -> int | 
             if len(comments) < PER_PAGE:
                 return None  # short page: that was the end of the thread
     except Exception as e:
+        if strict:
+            raise
         log.debug(f"sticky.find_failed repo={repo} issue={issue_number}: {e}")
     return None
 

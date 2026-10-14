@@ -439,8 +439,8 @@
       "id": "app.core.idempotency",
       "path": "app/core/idempotency.py",
       "layer": "core",
-      "loc": 145,
-      "functions": 6,
+      "loc": 156,
+      "functions": 7,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
@@ -450,6 +450,7 @@
         "hashlib",
         "json",
         "logging",
+        "threading",
         "time"
       ]
     },
@@ -757,11 +758,11 @@
       "id": "app.github.auth",
       "path": "app/github/auth.py",
       "layer": "github",
-      "loc": 159,
-      "functions": 6,
+      "loc": 197,
+      "functions": 7,
       "classes": 0,
       "is_package": false,
-      "fan_in": 10,
+      "fan_in": 11,
       "fan_out": 0,
       "external_deps": [
         "jwt",
@@ -877,12 +878,12 @@
       "id": "app.github.sticky",
       "path": "app/github/sticky.py",
       "layer": "github",
-      "loc": 131,
+      "loc": 143,
       "functions": 5,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 2,
+      "fan_out": 3,
       "external_deps": [
         "__future__",
         "logging",
@@ -2184,6 +2185,11 @@
     {
       "source": "app.github.rate_limit",
       "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.github.sticky",
+      "target": "app.github.auth",
       "kind": "runtime"
     },
     {
@@ -3614,8 +3620,8 @@
   ],
   "stats": {
     "modules": 100,
-    "edges": 397,
-    "total_loc": 27632,
+    "edges": 398,
+    "total_loc": 27693,
     "layers": [
       "ai",
       "core",

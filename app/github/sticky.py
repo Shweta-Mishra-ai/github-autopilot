@@ -41,7 +41,19 @@ def _posted_by_this_app(comment: dict) -> bool:
     app_id = os.environ.get("GITHUB_APP_ID", "").strip()
     if app and app_id:
         return str(app.get("id", "")) == app_id
-    return (comment.get("user") or {}).get("type") == "Bot"
+    user = comment.get("user") or {}
+    if user.get("type") != "Bot":
+        return False
+    # Without performed_via_github_app this accepted ANY bot account, so
+    # another installed App could plant the marker and have this report
+    # written into its comment. The comment's author must be this App's own
+    # bot login. Only when that login cannot be read does any bot pass —
+    # the alternative, a fresh report on every push, is worse than the
+    # narrow case it guards against.
+    from app.github.auth import app_bot_login
+
+    login = app_bot_login()
+    return user.get("login") == login if login else True
 
 
 def find_sticky(

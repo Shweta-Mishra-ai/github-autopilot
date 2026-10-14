@@ -259,7 +259,7 @@
       "id": "app.ai.validator",
       "path": "app/ai/validator.py",
       "layer": "ai",
-      "loc": 314,
+      "loc": 332,
       "functions": 12,
       "classes": 0,
       "is_package": false,
@@ -1236,7 +1236,7 @@
       "id": "app.handlers.pull_request.grounding",
       "path": "app/handlers/pull_request/grounding.py",
       "layer": "handlers",
-      "loc": 101,
+      "loc": 131,
       "functions": 4,
       "classes": 0,
       "is_package": false,
@@ -1282,7 +1282,7 @@
       "id": "app.handlers.pull_request.review",
       "path": "app/handlers/pull_request/review.py",
       "layer": "handlers",
-      "loc": 653,
+      "loc": 658,
       "functions": 10,
       "classes": 0,
       "is_package": false,
@@ -3612,7 +3612,7 @@
   "stats": {
     "modules": 102,
     "edges": 391,
-    "total_loc": 27893,
+    "total_loc": 27946,
     "layers": [
       "ai",
       "core",
@@ -3675,7 +3675,7 @@
       },
       {
         "id": "app.ai.validator",
-        "loc": 314,
+        "loc": 332,
         "fan_in": 10,
         "fan_out": 0
       },

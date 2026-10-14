@@ -14,6 +14,7 @@ from app.core.confidence import ConfidenceGate
 from app.handlers.pull_request import review
 from app.handlers.pull_request.context import fetch_file, surrounding_code
 from app.handlers.pull_request.grounding import (
+    CONTEXT,
     GROUNDED,
     MISQUOTED,
     REMOVED,
@@ -42,8 +43,16 @@ class TestGrounding:
             ({"line": "11", "code": "db.execute(user_input)"}, (MISQUOTED, None)),
             ({"line": "11"}, (GROUNDED, 11)),
             ({"line": "99"}, (UNQUOTED, None)),
-            ({"line": "13", "code": "ok()"}, (GROUNDED, 13)),
+            # Unchanged code: real, but not this PR's change, so never anchored.
+            ({"line": "13", "code": "ok()"}, (CONTEXT, None)),
+            ({"line": "10", "code": "cfg = read()"}, (CONTEXT, None)),
+            ({"line": "10"}, (UNQUOTED, None)),
             ({"line": "11", "code": "ok()"}, (UNQUOTED, None)),
+            # A quote over consecutive lines is grounded on its changed line...
+            ({"line": "11", "code": 'if cfg is None: raise ConfigError("missing")'}, (GROUNDED, 11)),
+            ({"line": "10", "code": "cfg = read() if cfg is None:"}, (GROUNDED, 11)),
+            # ...but containing a real line is not enough: all of it must be real.
+            ({"line": "11", "code": "if cfg is None: cursor.execute(f\"SELECT {x}\")"}, (MISQUOTED, None)),
         ],
     )
     def test_each_outcome(self, issue, expected):

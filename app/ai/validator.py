@@ -17,6 +17,21 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 
+_SEVERITY_SYNONYMS = {
+    "blocker": "critical",
+    "severe": "critical",
+    "high": "major",
+    "error": "major",
+    "medium": "minor",
+    "moderate": "minor",
+    "warning": "minor",
+    "low": "nit",
+    "info": "nit",
+    "style": "nit",
+    "suggestion": "nit",
+}
+
+
 def _get(data: dict, key: str, default: Any = None) -> Any:
     val = data.get(key, default)
     return val if val is not None else default
@@ -276,7 +291,10 @@ def validate_code_review(raw: dict) -> dict:
     for item in raw_issues[:50]:
         if not isinstance(item, dict):
             continue
-        sev = str(item.get("severity", "minor")).lower()
+        sev = str(item.get("severity", "minor")).strip().lower()
+        # The model's own scale, mapped rather than flattened: "high" fell to
+        # the minor default, under findings it had ranked below it.
+        sev = _SEVERITY_SYNONYMS.get(sev, sev)
         if sev not in VALID_SEVERITIES:
             sev = "minor"
         clean_issues.append(

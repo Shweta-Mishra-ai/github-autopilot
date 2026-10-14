@@ -17,7 +17,7 @@ from app.github.client import gh_get, gh_post
 
 from .classify import _is_generated, _review_sort_key
 from .context import fetch_file, surrounding_code
-from .grounding import GROUNDED, MISQUOTED, REMOVED, ground_finding
+from .grounding import CONTEXT, GROUNDED, MISQUOTED, REMOVED, ground_finding
 
 # Per-file caps. Named rather than inline so the review budget is visible in one
 # place instead of buried in three slices.
@@ -482,18 +482,24 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
         # Ground every finding in the diff before anything is rendered or
         # anchored: a quote that is not a line of this file's diff is a finding
         # about code that does not exist, however confident its prose.
-        issues, withheld = [], []
+        issues, withheld, seen = [], [], set()
         for i in r.get("issues", []):
             status, line = ground_finding(i, f.get("patch") or "")
+            # The same finding twice (the model repeats itself across a long
+            # answer) was posted twice. One per line and wording.
+            key = (status, line, " ".join(str(i.get("issue", "")).lower().split()))
+            if key in seen:
+                continue
+            seen.add(key)
             if status == GROUNDED:
                 issues.append({**i, "line": str(line)})
             elif status == MISQUOTED:
                 withheld.append(i)
             else:
-                # REMOVED is about a deleted line; UNQUOTED has no verified
-                # line. Either way: reported in the body, never anchored to a
-                # line it may not be about.
-                issues.append({**i, "line": "", "_unverified": status != REMOVED})
+                # REMOVED is about a deleted line, CONTEXT about code this PR
+                # did not change, UNQUOTED has no verified line. Reported in
+                # the body, never anchored to a line it may not be about.
+                issues.append({**i, "line": "", "_where": status})
         if withheld:
             log.info(f"code_review.findings_withheld file={filename} n={len(withheld)}")
         issues.sort(key=lambda i: _SEVERITY_RANK.get(str(i.get("severity", "minor")).lower(), 2))
@@ -511,11 +517,10 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
             target = parse_line_ref(i.get("line"))
             anchor = nearest_commentable(target, diff_lines)
             if anchor is None:
-                where = (
-                    "_(unverified — no line of the diff was quoted)_"
-                    if i.get("_unverified")
-                    else "_(on a removed line)_"
-                )
+                where = {
+                    REMOVED: "_(on a removed line)_",
+                    CONTEXT: "_(about unchanged code, not this PR's change)_",
+                }.get(i.get("_where"), "_(unverified — no line of the diff was quoted)_")
                 unanchored.append(f"- **{severity}** {where}: {issue_text} → `{fix[:80]}`")
                 continue
 

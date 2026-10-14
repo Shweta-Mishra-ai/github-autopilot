@@ -36,6 +36,9 @@ def post_comment(
     it on. A caller that catches nothing lets the event runner count it.
     `post` is the caller's own gh_post, so the caller's patch target holds.
     """
+    from app.github.helpers import fit_comment
+
+    body = fit_comment(body)
     try:
         post(f"/repos/{repo}/issues/{number}/comments", token, {"body": body})
         return

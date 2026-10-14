@@ -7,6 +7,36 @@ import logging
 log = logging.getLogger(__name__)
 
 
+# GitHub refuses an issue or comment body over 65,536 characters with a 422.
+GITHUB_BODY_LIMIT = 65536
+
+
+def fit_comment(body: str, reserve: int = 0) -> str:
+    """
+    The body, cut to fit GitHub's limit, saying so when it is cut.
+
+    Nothing checked the size. /secfull on a repository at the scanner's own
+    page limits rendered 69,000 characters; the POST was refused and the
+    person who asked got no reply at all — on the repository with the most
+    findings. Cut at a line boundary, with what was left out stated.
+    `reserve` leaves room for text the caller appends (a sticky's marker).
+    """
+    limit = GITHUB_BODY_LIMIT - reserve
+    if len(body) <= limit:
+        return body
+    note = (
+        "\n\n> ✂️ **Cut to fit GitHub's comment limit** — {n:,} characters "
+        "of this report are not shown."
+    )
+    room = limit - len(note.format(n=len(body))) - 4  # 4: a closing fence
+    cut = body.rfind("\n", 0, room)
+    head = body[: cut if cut > room // 2 else room]
+    hidden = len(body) - len(head)
+    if head.count("```") % 2:  # cut inside a code block: close it
+        head += "\n```"
+    return head + note.format(n=hidden)
+
+
 def fmt_error(label: str, e: Exception, limit: int = 200) -> str:
     """Standard error comment format used by all slash commands."""
     return f"## ⚠️ {label}\n\n`{str(e)[:limit]}`"

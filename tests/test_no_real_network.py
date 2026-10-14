@@ -27,19 +27,26 @@ import pytest
 
 
 class TestTheGuardIsActive:
-    def test_an_outbound_connection_is_refused(self):
+    # Each test here makes an attempt on purpose, then clears the record the
+    # guard keeps — otherwise teardown fails it, as it would any test whose
+    # attempt the app swallowed.
+
+    def test_an_outbound_connection_is_refused(self, no_real_network):
         with pytest.raises(RuntimeError, match="real connection"):
             socket.create_connection(("pypi.org", 443), timeout=1)
+        assert no_real_network == ["pypi.org"]
+        no_real_network.clear()
 
-    def test_the_error_names_the_host_and_says_what_to_do(self):
+    def test_the_error_names_the_host_and_says_what_to_do(self, no_real_network):
         with pytest.raises(RuntimeError) as exc:
             socket.create_connection(("api.groq.com", 443), timeout=1)
         message = str(exc.value)
         assert "api.groq.com" in message, "the message must name the host"
         assert "Mock the client" in message
         assert "integration" in message, "it must say how to opt out legitimately"
+        no_real_network.clear()
 
-    def test_a_raw_socket_connect_is_also_refused(self):
+    def test_a_raw_socket_connect_is_also_refused(self, no_real_network):
         """create_connection is not the only route to the network."""
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
@@ -47,6 +54,17 @@ class TestTheGuardIsActive:
                 s.connect(("1.1.1.1", 443))
         finally:
             s.close()
+        no_real_network.clear()
+
+    def test_a_swallowed_attempt_is_still_recorded(self, no_real_network):
+        """The app catches broad exceptions on its network paths. An attempt
+        it swallowed must still fail the test, at teardown."""
+        try:
+            socket.create_connection(("api.github.com", 443), timeout=1)
+        except Exception:  # what the app does
+            pass
+        assert no_real_network == ["api.github.com"]
+        no_real_network.clear()
 
 
 class TestLoopbackStillWorks:

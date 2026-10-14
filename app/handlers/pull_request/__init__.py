@@ -192,15 +192,11 @@ def handle(payload: dict):
         log.error(f"pr.files_unavailable — not analysed: {e}")
         raise
 
+    # Extra codebase context for the prompts. The embedding "retrieval" that
+    # used to fill this was a stub — its search always answered nothing — and
+    # has been removed rather than kept as a feature that did not exist. The
+    # review's real context is the code around each change (context.py).
     context = ""
-    try:
-        from app.intelligence.retrieval import get_context_for_pr
-
-        context = get_context_for_pr(repo, files)
-        if context:
-            log.info("intelligence.context_retrieved")
-    except Exception as e:
-        log.debug(f"Context retrieval skipped: {e}")
 
     # Local triage gate. Inert unless OLLAMA_HOST is configured, and it can
     # only ever SKIP work: every error path answers "review it", which is what

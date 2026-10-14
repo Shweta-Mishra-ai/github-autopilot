@@ -124,18 +124,20 @@ class TestAddConfidenceFooter:
         assert output == comment
         assert "Confidence" not in output
 
-    def test_medium_confidence_adds_footer(self):
-        result  = HallucinationResult(confidence=0.6)
+    def test_medium_confidence_names_what_was_found_not_a_percentage(self):
+        """It printed "AI Confidence: 60%" — a pattern-penalty score shown as
+        if it were a measured probability."""
+        result  = HallucinationResult(confidence=0.6, warnings=["Hallucination signal: hedging"])
         comment = "## Fix\n\nSomething."
         output  = add_confidence_footer(comment, result)
-        assert "Confidence" in output or "confidence" in output.lower()
-        assert "60%" in output
+        assert "Verify before applying" in output and "hedging" in output
+        assert "%" not in output
 
     def test_low_confidence_adds_warning_footer(self):
         result  = HallucinationResult(confidence=0.3)
         comment = "## Fix\n\nSomething."
         output  = add_confidence_footer(comment, result)
-        assert "⚠️" in output or "Low confidence" in output
+        assert "⚠️" in output and "%" not in output
 
     def test_footer_appended_after_comment(self):
         result  = HallucinationResult(confidence=0.5)

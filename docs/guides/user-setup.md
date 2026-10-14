@@ -35,7 +35,6 @@
 
 **Optional:**
 - Discord server (for notifications)
-- Qdrant Cloud account (for vector code context) — [qdrant.tech](https://qdrant.tech)
 
 ---
 
@@ -125,8 +124,6 @@ Copy this value. You will need it again in step 4 when creating the GitHub App.
 |----------|---------|---------|
 | `DISCORD_WEBHOOK_URL` | — | Discord notifications on high-risk events |
 | `SLACK_WEBHOOK_URL` | — | Slack notifications |
-| `QDRANT_URL` | — | Vector DB for code context enrichment |
-| `QDRANT_API_KEY` | — | Qdrant Cloud authentication |
 | `METRICS_AUTH_TOKEN` | — | Protects `/metrics` endpoint (any string) |
 | `MAX_DISPATCH_WORKERS` | `6` | Thread pool size |
 | `REPO_DAILY_AI_LIMIT` | `150` | Max AI calls per repo per day |

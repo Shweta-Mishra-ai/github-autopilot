@@ -522,3 +522,31 @@ def _no_external_network(request, monkeypatch):
 
     monkeypatch.setattr(requests.Session, "request", guarded)
     yield
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """
+    Fail the run if a test left a mock installed in an application module.
+
+    A test that monkeypatched a name another fixture had already patched
+    "restored" the mock on teardown, and service.gh_post stayed a MagicMock
+    for every later test in the process: those tests posted nowhere and
+    passed or failed depending on the random order. Nothing pointed at the
+    cause. This names it.
+    """
+    import sys
+    from unittest import mock
+
+    leaked = []
+    for name, module in list(sys.modules.items()):
+        if module is None or not (name == "server" or name.startswith("app.")):
+            continue
+        for attr, value in list(vars(module).items()):
+            if isinstance(value, mock.Base):
+                leaked.append(f"{name}.{attr}")
+    if leaked:
+        sys.stderr.write(
+            "\nA test left these patched after it finished (restore them):\n  "
+            + "\n  ".join(sorted(leaked)) + "\n"
+        )
+        session.exitstatus = 1

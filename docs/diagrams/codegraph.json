@@ -63,8 +63,8 @@
       "id": "app.ai.guarded",
       "path": "app/ai/guarded.py",
       "layer": "ai",
-      "loc": 192,
-      "functions": 5,
+      "loc": 215,
+      "functions": 6,
       "classes": 0,
       "is_package": false,
       "fan_in": 5,
@@ -78,7 +78,7 @@
       "id": "app.ai.hallucination",
       "path": "app/ai/hallucination.py",
       "layer": "ai",
-      "loc": 298,
+      "loc": 302,
       "functions": 6,
       "classes": 1,
       "is_package": false,
@@ -993,11 +993,11 @@
       "id": "app.handlers.comments.dispatcher",
       "path": "app/handlers/comments/dispatcher.py",
       "layer": "handlers",
-      "loc": 346,
-      "functions": 17,
+      "loc": 394,
+      "functions": 19,
       "classes": 0,
       "is_package": false,
-      "fan_in": 2,
+      "fan_in": 3,
       "fan_out": 9,
       "external_deps": [
         "__future__",
@@ -1011,12 +1011,12 @@
       "id": "app.handlers.comments.generator",
       "path": "app/handlers/comments/generator.py",
       "layer": "handlers",
-      "loc": 510,
-      "functions": 11,
+      "loc": 532,
+      "functions": 12,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 10,
+      "fan_out": 11,
       "external_deps": [
         "__future__",
         "logging",
@@ -1098,7 +1098,7 @@
       "id": "app.handlers.comments.service",
       "path": "app/handlers/comments/service.py",
       "layer": "handlers",
-      "loc": 287,
+      "loc": 289,
       "functions": 3,
       "classes": 0,
       "is_package": false,
@@ -1144,12 +1144,12 @@
       "id": "app.handlers.pull_request",
       "path": "app/handlers/pull_request/__init__.py",
       "layer": "handlers",
-      "loc": 386,
+      "loc": 382,
       "functions": 2,
       "classes": 0,
       "is_package": true,
       "fan_in": 2,
-      "fan_out": 26,
+      "fan_out": 25,
       "external_deps": [
         "__future__",
         "logging"
@@ -1348,7 +1348,7 @@
       "id": "app.intelligence",
       "path": "app/intelligence/__init__.py",
       "layer": "intelligence",
-      "loc": 16,
+      "loc": 9,
       "functions": 0,
       "classes": 0,
       "is_package": true,
@@ -1375,23 +1375,6 @@
         "logging",
         "os",
         "pathlib"
-      ]
-    },
-    {
-      "id": "app.intelligence.embeddings",
-      "path": "app/intelligence/embeddings.py",
-      "layer": "intelligence",
-      "loc": 100,
-      "functions": 5,
-      "classes": 0,
-      "is_package": false,
-      "fan_in": 1,
-      "fan_out": 0,
-      "external_deps": [
-        "logging",
-        "os",
-        "sentence_transformers",
-        "threading"
       ]
     },
     {
@@ -1429,20 +1412,6 @@
         "os",
         "re",
         "time"
-      ]
-    },
-    {
-      "id": "app.intelligence.retrieval",
-      "path": "app/intelligence/retrieval.py",
-      "layer": "intelligence",
-      "loc": 113,
-      "functions": 3,
-      "classes": 0,
-      "is_package": false,
-      "fan_in": 1,
-      "fan_out": 1,
-      "external_deps": [
-        "logging"
       ]
     },
     {
@@ -2430,6 +2399,11 @@
     },
     {
       "source": "app.handlers.comments.generator",
+      "target": "app.handlers.comments.dispatcher",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.generator",
       "target": "app.handlers.pull_request.analysis",
       "kind": "runtime"
     },
@@ -2944,11 +2918,6 @@
       "kind": "import"
     },
     {
-      "source": "app.handlers.pull_request",
-      "target": "app.intelligence.retrieval",
-      "kind": "runtime"
-    },
-    {
       "source": "app.handlers.pull_request.analysis",
       "target": "app.ai.hallucination",
       "kind": "runtime"
@@ -3289,11 +3258,6 @@
       "kind": "runtime"
     },
     {
-      "source": "app.intelligence.retrieval",
-      "target": "app.intelligence.embeddings",
-      "kind": "runtime"
-    },
-    {
       "source": "app.intelligence.summarizer",
       "target": "app.ai.router",
       "kind": "import"
@@ -3610,9 +3574,9 @@
     }
   ],
   "stats": {
-    "modules": 102,
-    "edges": 391,
-    "total_loc": 27946,
+    "modules": 100,
+    "edges": 390,
+    "total_loc": 27821,
     "layers": [
       "ai",
       "core",

@@ -480,31 +480,6 @@ class TestSanitizer(unittest.TestCase):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# FIX 7: Intelligence module graceful no-op
-# ═══════════════════════════════════════════════════════════════════════════════
-
-class TestIntelligenceGraceful(unittest.TestCase):
-    def test_embed_file_returns_false_without_deps(self):
-        """embed_file must return False (not ImportError) when sentence-transformers missing."""
-        with patch.dict(sys.modules, {"sentence_transformers": None}):
-            import app.intelligence.embeddings as emb
-            emb._DEPS_AVAILABLE = None  # Reset lazy check
-            # Patch the import inside the function
-            with patch("app.intelligence.embeddings._check_deps", return_value=False):
-                result = emb.embed_file("org/repo", "app/foo.py", "print('hello')")
-                self.assertFalse(result)
-
-    def test_search_similar_returns_empty_without_deps(self):
-        """search_similar must return [] (not ImportError) when deps missing."""
-        import app.intelligence.embeddings as emb
-        with patch("app.intelligence.embeddings._check_deps", return_value=False):
-            result = emb.search_similar("org/repo", "authentication bug")
-            self.assertEqual(result, [])
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# FIX 8: Idempotency warns on memory fallback
-# ═══════════════════════════════════════════════════════════════════════════════
 
 class TestIdempotencyFallbackWarning(unittest.TestCase):
     def test_memory_fallback_logs_warning(self):

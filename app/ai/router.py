@@ -624,7 +624,7 @@ class LLMRouter:
             return (
                 {
                     "_providers_down": True,
-                    "retry_in": e.retry_in_seconds,
+                    "_retry_in": e.retry_in_seconds,
                     "message": config_fault or degraded_message,
                     "_configuration_error": bool(config_fault),
                 },

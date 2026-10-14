@@ -76,6 +76,60 @@ def _locate_command(body: str) -> tuple[str | None, int, int]:
 # Commands whose argument is a block of text rather than the rest of a line.
 BLOCK_ARGUMENT_COMMANDS = frozenset({"/ci"})
 
+# pr_context() puts this before the diff. Its presence is how a command knows
+# it was shown code rather than only an issue's title and body.
+DIFF_MARKER = "Diff (start of each file):"
+
+# Commands whose answer is about the repository's code.
+CODE_ANSWER_COMMANDS = frozenset(
+    {"/fix", "/explain", "/improve", "/test", "/docs", "/refactor", "/gaps", "/perf"}
+)
+_FILE_REF = re.compile(
+    r"(?<![\w/.-])((?:[\w.-]+/)*[\w.-]+\.(?:py|js|jsx|ts|tsx|go|rb|java|kt|rs|php|cs|"
+    r"cpp|cc|c|h|hpp|swift|scala|sh|sql|ya?ml|toml|json|cfg|ini))(?![\w/])"
+)
+
+
+def has_code(context: str) -> bool:
+    return DIFF_MARKER in (context or "")
+
+
+def ground_answer(cmd: str, response, context: str, repo: str, token: str) -> object:
+    """
+    What a code answer was based on, and which files it named that do not exist.
+
+    An answer from an issue's text alone read the same as one from the diff,
+    and nothing checked the file paths a model put in it. The reply now says
+    when no code was seen, and lists named files the repository does not
+    have. When the tree cannot be read nothing is claimed either way.
+    """
+    if cmd not in CODE_ANSWER_COMMANDS or not isinstance(response, str) or not response:
+        return response
+    notes = []
+    if not has_code(context):
+        notes.append(
+            "> ℹ️ Based on the issue's text only — this answer has not seen the "
+            "repository's code. Check any file or function it names before acting."
+        )
+    named = sorted(set(_FILE_REF.findall(response)))
+    if named and repo and token:
+        from app.github.helpers import repo_file_context
+
+        known = set((repo_file_context(repo, token, get=gh_get) or {}).get("files") or [])
+        if known:
+            # Files the PR adds are not on the default branch yet; anything the
+            # model was shown is real.
+            known |= set(_FILE_REF.findall(context or ""))
+            missing = [
+                n for n in named if n not in known and not any(k.endswith("/" + n) for k in known)
+            ]
+            if missing:
+                listed = ", ".join(f"`{m}`" for m in missing[:8])
+                notes.append(
+                    f"> ⚠️ Not in this repository: {listed} — named by the model, not found."
+                )
+    return "\n\n".join([response, *notes]) if notes else response
+
 
 def command_block(body: str) -> str:
     """
@@ -229,7 +283,7 @@ def pr_context(repo: str, number: int, issue: dict, token: str, log_ctx) -> str:
             f"Title: {issue.get('title', '')}\n"
             f"Body: {(issue.get('body') or '')[:500]}\n\n"
             f"Changed files ({len(files)}):\n{listing}\n\n"
-            f"Diff (start of each file):\n{diff or '(no diff available)'}"
+            f"{DIFF_MARKER}\n{diff or '(no diff available)'}"
         )
     except Exception as exc:
         log_ctx.warning("pr_context_unavailable", reason=str(exc)[:100])
@@ -328,19 +382,13 @@ def is_providers_down(result: dict) -> bool:
 
 def make_degraded_response(result: dict) -> str:
     """
-    The reply when no provider answered. It read `_retry_in`, a key the router
-    never sets (`retry_in`), so every reply said ~60s; and it ignored the
-    router's `_configuration_error`, so a missing or rejected API key was
-    reported as "Transient issue — no action needed" — the one case where
-    waiting cannot help.
+    The reply when no provider answered. It ignored the configuration-error
+    flag, so a missing or rejected API key was reported as "Transient issue —
+    no action needed" — the one case where waiting cannot help.
     """
+    from app.ai.guarded import not_configured_comment
+
     result = result if isinstance(result, dict) else {}
     if result.get("_configuration_error"):
-        return (
-            "## ⚠️ AI Not Configured\n\n"
-            f"{result.get('message') or 'No language model provider is usable.'}\n\n"
-            "This will not resolve by waiting: a maintainer needs to fix the "
-            "deployment's provider settings. `/health` shows what is wrong.\n\n"
-            "---\n*🤖 GitHub Autopilot*"
-        )
-    return providers_down_comment(int(result.get("retry_in") or 60))
+        return not_configured_comment(result.get("message", ""), "answer")
+    return providers_down_comment(int(result.get("_retry_in") or result.get("retry_in") or 60))

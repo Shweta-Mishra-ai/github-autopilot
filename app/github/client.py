@@ -142,6 +142,9 @@ def _handle_response(r: requests.Response, method: str, path: str, token: str = 
                     f"github.secondary_rate_limit path={path} "
                     f"retry_after={retry_after}s — raising immediately (no sleep)"
                 )
+                from app.core.metrics import metrics
+
+                metrics.increment("github.secondary_rate_limited")
                 raise GitHubSecondaryRateLimitError(
                     f"Secondary rate limit on {path}. Retry after {retry_after}s.",
                     retry_after=retry_after,

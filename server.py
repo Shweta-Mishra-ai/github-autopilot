@@ -239,51 +239,76 @@ def setup():
     same permission list published in the README, and the only secret in this
     flow appears on the callback, which requires a code GitHub issues.
     """
-    from app.setup_flow import setup_page
+    from app.setup_flow import STATE_COOKIE, STATE_TTL_SECONDS, new_state, setup_page
 
-    return setup_page(_base_url()), 200, {"Content-Type": "text/html; charset=utf-8"}
+    state = new_state()
+    resp = app.make_response(
+        (setup_page(_base_url(), state), 200, {"Content-Type": "text/html; charset=utf-8"})
+    )
+    # Bound to this browser: the callback must present the same value.
+    # SameSite=Lax still sends it on GitHub's top-level redirect back here.
+    resp.set_cookie(
+        STATE_COOKIE,
+        state,
+        max_age=STATE_TTL_SECONDS,
+        path="/setup",
+        httponly=True,
+        secure=request.is_secure or _base_url().startswith("https://"),
+        samesite="Lax",
+    )
+    return resp
 
 
 @app.route("/setup/callback", methods=["GET"])
 def setup_callback():
     """Exchange GitHub's one-time code for the App credentials, and show them once."""
-    from app.setup_flow import consume_state, credentials_page, exchange_code
+    import html as _html
+
+    from app.setup_flow import (
+        STATE_COOKIE,
+        consume_state,
+        credentials_page,
+        exchange_code,
+        valid_code,
+    )
 
     code = (request.args.get("code") or "").strip()
     state = (request.args.get("state") or "").strip()
+    cookie = request.cookies.get(STATE_COOKIE, "")
 
-    if not code:
-        return (
-            "<h1>Missing code</h1><p>Start again at <a href='/setup'>/setup</a>.</p>",
-            400,
-            {"Content-Type": "text/html; charset=utf-8"},
+    def _page(body, status, extra=None):
+        resp = app.make_response(
+            (body, status, {"Content-Type": "text/html; charset=utf-8", **(extra or {})})
         )
-    if not consume_state(state):
-        # A callback this server did not initiate, or one already used.
-        log.warning("setup.callback_state_rejected")
-        return (
-            "<h1>This link is no longer valid</h1><p>Setup links are single-use. "
-            "Start again at <a href='/setup'>/setup</a>.</p>",
+        # Single use, whatever the outcome.
+        resp.delete_cookie(STATE_COOKIE, path="/setup")
+        return resp
+
+    if not valid_code(code):
+        return _page(
+            "<h1>Missing or malformed code</h1><p>Start again at <a href='/setup'>/setup</a>.</p>",
             400,
-            {"Content-Type": "text/html; charset=utf-8"},
+        )
+    if not consume_state(state, cookie):
+        # Not the browser that started this setup, or a link already used.
+        log.warning("setup.callback_state_rejected cookie_present=%s", bool(cookie))
+        return _page(
+            "<h1>This link is not valid here</h1><p>Setup links work once, in the "
+            "browser that opened /setup. Start again at <a href='/setup'>/setup</a>.</p>",
+            400,
         )
 
     data, error = exchange_code(code)
     if error:
-        return (
-            f"<h1>Setup could not complete</h1><p>{error}</p>"
+        return _page(
+            f"<h1>Setup could not complete</h1><p>{_html.escape(error)}</p>"
             "<p><a href='/setup'>Start again</a></p>",
             502,
-            {"Content-Type": "text/html; charset=utf-8"},
         )
 
     # Deliberately no logging of `data` — it carries the private key.
     log.info("setup.app_created app_id=%s", data.get("id"))
-    return (
-        credentials_page(data, _base_url()),
-        200,
-        {"Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store"},
-    )
+    return _page(credentials_page(data, _base_url()), 200, {"Cache-Control": "no-store"})
 
 
 @app.route("/setup/doctor", methods=["GET"])

@@ -510,7 +510,7 @@
 <circle cx="307.9" cy="173.0" r="1.89" fill="#9ca3af"/>
 <circle cx="322.8" cy="167.3" r="4.18" fill="#9ca3af"/>
 <circle cx="338.0" cy="162.4" r="6.73" fill="#9ca3af"/>
-<circle cx="353.4" cy="158.5" r="4.7" fill="#9ca3af"/>
+<circle cx="353.4" cy="158.5" r="4.84" fill="#9ca3af"/>
 <circle cx="369.1" cy="155.5" r="7.5" fill="#9ca3af"/>
 <circle cx="384.9" cy="153.4" r="3.23" fill="#9ca3af"/>
 <text x="412.0" y="136.0" font-size="7.6" fill="#22d3ee" text-anchor="start" dominant-baseline="middle" opacity="0.92" transform="rotate(270.0 412.0 136.0)">handlers</text>
@@ -618,7 +618,7 @@
 <line x1="800.0" y1="110.0" x2="1280" y2="110.0" stroke="#1f2937" stroke-width="1"/>
 <text x="800.0" y="133.0" font-size="12" fill="#9ca3af">Modules</text><text x="1280" y="133.0" font-size="12" fill="#e5e7eb" text-anchor="end" font-weight="600">100</text>
 <text x="800.0" y="156.0" font-size="12" fill="#9ca3af">Imports</text><text x="1280" y="156.0" font-size="12" fill="#e5e7eb" text-anchor="end" font-weight="600">397</text>
-<text x="800.0" y="179.0" font-size="12" fill="#9ca3af">Lines of code</text><text x="1280" y="179.0" font-size="12" fill="#e5e7eb" text-anchor="end" font-weight="600">27,458</text>
+<text x="800.0" y="179.0" font-size="12" fill="#9ca3af">Lines of code</text><text x="1280" y="179.0" font-size="12" fill="#e5e7eb" text-anchor="end" font-weight="600">27,502</text>
 <text x="800.0" y="202.0" font-size="12" fill="#9ca3af">Import cycles</text><text x="1280" y="202.0" font-size="12" fill="#22c55e" text-anchor="end" font-weight="600">none</text>
 <text x="800.0" y="225.0" font-size="12" fill="#9ca3af">Unreferenced modules</text><text x="1280" y="225.0" font-size="12" fill="#22c55e" text-anchor="end" font-weight="600">none</text>
 <text x="800.0" y="255.0" font-size="10" fill="#9ca3af" font-weight="600">LAYERS</text>

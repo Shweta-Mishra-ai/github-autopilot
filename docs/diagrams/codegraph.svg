@@ -427,7 +427,7 @@
 <circle cx="575.1" cy="207.3" r="4.43" fill="#22d3ee"/>
 <circle cx="587.5" cy="217.4" r="5.14" fill="#22d3ee"/>
 <circle cx="599.2" cy="228.2" r="5.38" fill="#22d3ee"/>
-<circle cx="610.3" cy="239.7" r="5.9" fill="#22d3ee"/>
+<circle cx="610.3" cy="239.7" r="5.92" fill="#22d3ee"/>
 <circle cx="620.6" cy="251.8" r="5.74" fill="#22d3ee"/>
 <circle cx="630.3" cy="264.5" r="5.83" fill="#22d3ee"/>
 <circle cx="639.1" cy="277.7" r="4.65" fill="#22d3ee"/>
@@ -460,7 +460,7 @@
 <circle cx="526.3" cy="662.4" r="2.02" fill="#a78bfa"/>
 <circle cx="511.7" cy="668.8" r="6.72" fill="#a78bfa"/>
 <circle cx="496.7" cy="674.3" r="6.38" fill="#a78bfa"/>
-<circle cx="481.5" cy="678.8" r="5.69" fill="#a78bfa"/>
+<circle cx="481.5" cy="678.8" r="5.75" fill="#a78bfa"/>
 <circle cx="466.0" cy="682.5" r="3.39" fill="#a78bfa"/>
 <circle cx="439.1" cy="686.6" r="1.8" fill="#818cf8"/>
 <circle cx="423.2" cy="687.8" r="4.63" fill="#818cf8"/>
@@ -618,7 +618,7 @@
 <line x1="800.0" y1="110.0" x2="1280" y2="110.0" stroke="#1f2937" stroke-width="1"/>
 <text x="800.0" y="133.0" font-size="12" fill="#9ca3af">Modules</text><text x="1280" y="133.0" font-size="12" fill="#e5e7eb" text-anchor="end" font-weight="600">100</text>
 <text x="800.0" y="156.0" font-size="12" fill="#9ca3af">Imports</text><text x="1280" y="156.0" font-size="12" fill="#e5e7eb" text-anchor="end" font-weight="600">397</text>
-<text x="800.0" y="179.0" font-size="12" fill="#9ca3af">Lines of code</text><text x="1280" y="179.0" font-size="12" fill="#e5e7eb" text-anchor="end" font-weight="600">27,577</text>
+<text x="800.0" y="179.0" font-size="12" fill="#9ca3af">Lines of code</text><text x="1280" y="179.0" font-size="12" fill="#e5e7eb" text-anchor="end" font-weight="600">27,592</text>
 <text x="800.0" y="202.0" font-size="12" fill="#9ca3af">Import cycles</text><text x="1280" y="202.0" font-size="12" fill="#22c55e" text-anchor="end" font-weight="600">none</text>
 <text x="800.0" y="225.0" font-size="12" fill="#9ca3af">Unreferenced modules</text><text x="1280" y="225.0" font-size="12" fill="#22c55e" text-anchor="end" font-weight="600">none</text>
 <text x="800.0" y="255.0" font-size="10" fill="#9ca3af" font-weight="600">LAYERS</text>

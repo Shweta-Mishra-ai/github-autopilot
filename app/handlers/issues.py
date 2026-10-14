@@ -11,6 +11,7 @@ IMPROVED:
 """
 
 import contextlib
+import json
 import logging
 import re
 
@@ -23,7 +24,7 @@ from app.ai.validator import validate_issue_triage
 from app.core.config import load_config
 from app.core.guardrails import check_auto_label
 from app.core.logger import EventLogger
-from app.core.sanitizer import wrap_user_content
+from app.core.sanitizer import one_line, wrap_user_content
 
 logger = logging.getLogger(__name__)
 
@@ -322,9 +323,12 @@ Return JSON:
             raise LookupError("not classified")
         from app.intelligence.memory import remember
 
+        # The title is anyone's text on a public repository and is recalled
+        # into later prompts: one line, bounded, quoted as the author's.
         remember(
             repo,
-            f"Issue #{issue_number} '{title}' triaged as {result['type']}/{priority}",
+            f"Issue #{issue_number} (title by its author: {json.dumps(one_line(title, 150))}) "
+            f"triaged as {result['type']}/{priority}",
             kind="pattern",
         )
 

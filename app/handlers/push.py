@@ -489,7 +489,7 @@ def _scan_dependencies(repo, commits, token, config, log, ref: str = "") -> None
             path = f"/repos/{repo}/contents/{dep_file}" + (f"?ref={ref}" if ref else "")
             file_data = gh_get(path, token)
             content = base64.b64decode(file_data["content"]).decode("utf-8")
-            all_findings = scan_requirements_txt(content)
+            all_findings = scan_requirements_txt(content, token, get=gh_get)
 
             if not all_findings:
                 log.info(f"push.dep_scan_clean file={dep_file}")

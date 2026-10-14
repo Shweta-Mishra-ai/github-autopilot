@@ -783,7 +783,7 @@
       "functions": 12,
       "classes": 2,
       "is_package": false,
-      "fan_in": 26,
+      "fan_in": 27,
       "fan_out": 2,
       "external_deps": [
         "logging",
@@ -1082,7 +1082,7 @@
       "id": "app.handlers.comments.security",
       "path": "app/handlers/comments/security.py",
       "layer": "handlers",
-      "loc": 174,
+      "loc": 190,
       "functions": 4,
       "classes": 0,
       "is_package": false,
@@ -1502,16 +1502,17 @@
       "id": "app.security.dependencies",
       "path": "app/security/dependencies.py",
       "layer": "security",
-      "loc": 397,
-      "functions": 10,
-      "classes": 1,
+      "loc": 231,
+      "functions": 7,
+      "classes": 2,
       "is_package": false,
       "fan_in": 3,
-      "fan_out": 0,
+      "fan_out": 1,
       "external_deps": [
         "dataclasses",
         "logging",
-        "re"
+        "re",
+        "urllib"
       ]
     },
     {
@@ -3364,6 +3365,11 @@
       "kind": "import"
     },
     {
+      "source": "app.security.dependencies",
+      "target": "app.github.client",
+      "kind": "runtime"
+    },
+    {
       "source": "app.security.licenses",
       "target": "app.core.logger",
       "kind": "import"
@@ -3581,8 +3587,8 @@
   ],
   "stats": {
     "modules": 100,
-    "edges": 391,
-    "total_loc": 27828,
+    "edges": 392,
+    "total_loc": 27678,
     "layers": [
       "ai",
       "core",
@@ -3610,7 +3616,7 @@
       {
         "id": "app.github.client",
         "loc": 324,
-        "fan_in": 26,
+        "fan_in": 27,
         "fan_out": 2
       },
       {

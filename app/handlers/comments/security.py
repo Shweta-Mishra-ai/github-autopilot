@@ -39,7 +39,11 @@ def cmd_security(repo: str, issue_number: int, issue: dict, token: str) -> str:
 
     try:
         from app.security.enhanced_secrets import format_findings as fmt_secrets, scan_diff
-        from app.security.dependencies import scan_requirements_txt, format_dep_findings
+        from app.security.dependencies import (
+            format_dep_findings,
+            scan_requirements_txt,
+            unpinned_requirements,
+        )
 
         from app.github.helpers import pr_files as fetch_pr_files
 
@@ -66,6 +70,7 @@ def cmd_security(repo: str, issue_number: int, issue: dict, token: str) -> str:
         dep_findings = []
         dep_scanned = False
         dep_error = ""
+        dep_unpinned: list[str] = []
         # The contents API defaults to the repository's default branch. Reading
         # requirements.txt without a ref therefore scanned the *base* file and
         # reported "no vulnerable dependencies" for a PR whose whole change was
@@ -85,7 +90,8 @@ def cmd_security(repo: str, issue_number: int, issue: dict, token: str) -> str:
             try:
                 raw = gh_get(path, token)
                 content = base64.b64decode(raw["content"]).decode()
-                dep_findings.extend(scan_requirements_txt(content))
+                dep_findings.extend(scan_requirements_txt(content, token, get=gh_get))
+                dep_unpinned = unpinned_requirements(content)
                 dep_scanned = True
             except Exception as e:
                 dep_error = f"{type(e).__name__}"
@@ -110,12 +116,22 @@ def cmd_security(repo: str, issue_number: int, issue: dict, token: str) -> str:
         if dep_findings:
             lines.append(format_dep_findings(dep_findings))
         elif dep_scanned:
-            lines.append("✅ **No vulnerable dependencies** found in `requirements.txt`.\n")
-        elif dep_error:
             lines.append(
-                f"⚠️ **Dependencies not checked** — `requirements.txt` could not be read ({dep_error}).\n"
+                "✅ **No known advisories** for the versions pinned in `requirements.txt` "
+                "(GitHub's advisory database).\n"
             )
-        else:
+        if dep_scanned and dep_unpinned:
+            shown = ", ".join(f"`{n}`" for n in dep_unpinned[:10])
+            lines.append(
+                f"ℹ️ **{len(dep_unpinned)} unpinned package(s) not checked** — no exact "
+                f"version to look up: {shown}.\n"
+            )
+        if dep_error:
+            lines.append(
+                f"⚠️ **Dependencies not checked** — `requirements.txt` or the advisory "
+                f"database could not be read ({dep_error}).\n"
+            )
+        elif not dep_scanned:
             lines.append(
                 "ℹ️ **Dependencies not checked** — this PR does not change a root "
                 "`requirements.txt`, the only manifest this command checks.\n"

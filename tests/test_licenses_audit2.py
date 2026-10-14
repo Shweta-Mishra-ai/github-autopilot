@@ -28,7 +28,11 @@ class TestPinsTheScannerUsedToSkip:
         assert parse_requirements("flask == 3.0.0\n") == [{"name": "flask", "version": "3.0.0"}]
 
     def test_a_spaced_pin_is_scanned_for_cves(self):
-        assert scan_requirements_txt("flask == 3.0.0\n")
+        from unittest.mock import MagicMock
+
+        get = MagicMock(return_value=[])
+        scan_requirements_txt("flask == 3.0.0\n", "tok", get=get)
+        assert "affects=flask@3.0.0" in get.call_args[0][0]
 
     def test_dotted_names_and_markers(self):
         out = parse_requirements('zope.interface==6.0 ; python_version<"3.9"\n')

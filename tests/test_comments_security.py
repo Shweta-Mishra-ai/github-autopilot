@@ -27,11 +27,13 @@ def _pr_issue():
     return {"pull_request": {"url": "https://api.github.com/..."}}
 
 
-def _route(files, *, head_sha="headsha123", contents_by_ref=None):
+def _route(files, *, head_sha="headsha123", contents_by_ref=None, advisories=()):
     """Route gh_get by path, recording which ref the contents read used."""
     contents_by_ref = contents_by_ref or {}
 
     def _side_effect(path, token, *a, **kw):
+        if path.startswith("/advisories?"):
+            return list(advisories)
         # Match on the path alone: the files list is fetched paginated, with
         # a ?per_page=&page= query.
         if path.split("?", 1)[0].endswith("/files"):
@@ -115,6 +117,11 @@ class TestDependencyScanUsesPrHead:
             [{"filename": "requirements.txt", "patch": "+flask==3.1.3"}],
             head_sha="abc123",
             contents_by_ref={"abc123": "flask==3.1.3"},
+            advisories=[{
+                "ghsa_id": "GHSA-test-test-test", "severity": "high", "summary": "s",
+                "vulnerabilities": [{"package": {"name": "flask"},
+                                     "vulnerable_version_range": "< 3.2", "first_patched_version": "3.2"}],
+            }],
         )
         out = S.cmd_security("o/r", 1, _pr_issue(), "tok")
 
@@ -136,13 +143,15 @@ class TestDependencyScanUsesPrHead:
                 return [{"filename": "requirements.txt", "patch": "+x"}]
             if "/pulls/" in path:
                 raise RuntimeError("pr fetch failed")
+            if path.startswith("/advisories?"):
+                return []
             import base64
 
             return {"content": base64.b64encode(b"rich==13.7.0").decode()}
 
         gh.side_effect = _side_effect
         out = S.cmd_security("o/r", 1, _pr_issue(), "tok")
-        assert "No vulnerable dependencies" in out
+        assert "No known advisories" in out
 
     def test_pr_without_requirements_skips_the_contents_read(self, gh):
         gh.side_effect = _route([{"filename": "app/a.py", "patch": "+x"}])
@@ -155,9 +164,22 @@ class TestDependencyScanUsesPrHead:
             head_sha="s1",
             contents_by_ref={"s1": "rich==13.7.0"},
         )
-        assert "No vulnerable dependencies" in S.cmd_security(
-            "o/r", 1, _pr_issue(), "tok"
-        )
+        assert "No known advisories" in S.cmd_security("o/r", 1, _pr_issue(), "tok")
+
+    def test_an_unreadable_advisory_database_is_not_called_clean(self, gh):
+        from app.github.client import GitHubError
+
+        route = _route([{"filename": "requirements.txt", "patch": "+x"}],
+                       head_sha="s1", contents_by_ref={"s1": "rich==13.7.0"})
+
+        def side(path, token, *a, **kw):
+            if path.startswith("/advisories?"):
+                raise GitHubError("bad gateway", 502)
+            return route(path, token)
+
+        gh.side_effect = side
+        out = S.cmd_security("o/r", 1, _pr_issue(), "tok")
+        assert "Dependencies not checked" in out and "No known advisories" not in out
 
 
 class TestCmdSecfull:

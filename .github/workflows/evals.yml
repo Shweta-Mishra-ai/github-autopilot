@@ -154,6 +154,17 @@ jobs:
               "Cases that DID get an answer were scored normally and are in the" \
               "summary; the pass-rate is withheld because averaging unscored cases" \
               "into it would report a provider limit as a drop in review quality." )
+          elif [ "${{ steps.run.outputs.exit_code }}" = "5" ]; then
+            TITLE="Nightly AI evals crashed — the harness or the code under test raised"
+            BODY=$(printf '%s\n' \
+              "The suite did not produce a quality result. It is NOT a model regression:" \
+              "one or more cases raised an exception, which is a code fault." \
+              "" \
+              "Run: $RUN_URL" \
+              "" \
+              "The run log names the cases and the exception. The usual cause is a" \
+              "production function whose signature changed under evals/run.py;" \
+              "tests/test_evals_harness.py runs the whole suite offline to catch that." )
           elif [ "${{ steps.run.outputs.exit_code }}" = "3" ]; then
             TITLE="Nightly AI evals cannot run — the configured model no longer exists"
             BODY=$(printf '%s\n' \
@@ -187,7 +198,8 @@ jobs:
           else
             TITLE="Nightly AI evals are failing"
             BODY=$(printf '%s\n' \
-              "The nightly AI-output eval suite fell below its pass-rate threshold." \
+              "The nightly AI-output eval suite fell below its pass-rate threshold" \
+              "(overall, or for detection or restraint on their own)." \
               "" \
               "Run: $RUN_URL" \
               "" \

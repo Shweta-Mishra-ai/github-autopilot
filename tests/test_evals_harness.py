@@ -458,3 +458,95 @@ class TestGapHarnessWiring:
 def _gap_case_count() -> int:
     """Read, not hard-coded: adding a case must not mean editing a test."""
     return len(json.loads((_ROOT / "evals" / "cases" / "gaps_cases.json").read_text(encoding="utf-8")))
+
+
+class TestTheWholeSuiteAgainstAModelThatFindsNothing:
+    """
+    Round-3 audit T1/F14: the real task functions, run offline with a model
+    that names no bug, fixes nothing and reports no gaps. It scored 0.72 and
+    passed the 0.7 gate — the review cases matched their patterns against the
+    file summaries, the confidence gate was a MagicMock, and the gap cases
+    queried the real GitHub API. This runs the whole suite in-process, so a
+    change to a production call signature that breaks the harness fails here
+    instead of in the nightly run.
+    """
+
+    NEUTRAL = "Straightforward change; nothing to flag."
+
+    def _useless(self, fix_cases):
+        import json as _json
+        import re
+
+        from app.ai.providers.base import LLMResponse
+
+        def stub(_self, provider, system, user, *a, **k):
+            if "one entry per file" in user:
+                files = re.findall(r"### FILE: (\S+)", user)
+                body = {
+                    "files": [{"file": f, "summary": self.NEUTRAL, "issues": []} for f in files],
+                    "confidence": 0.9,
+                }
+            elif "test coverage gaps" in user:
+                body = {"has_gaps": False, "gaps": [], "summary": "Tests look adequate."}
+            else:  # /fix: restates the title and hands back the code unchanged
+                case = next(c for c in fix_cases if c["title"] in user)
+                body = {
+                    "root_cause": case["title"],
+                    "fix": case["context"].split("\n\n")[0],
+                    "explanation": "Applies the change.",
+                    "test": "assert True",
+                    "confidence": 0.9,
+                }
+            return body, LLMResponse(text=_json.dumps(body), provider="groq", model="stub")
+
+        return stub
+
+    def test_it_fails_the_gate_and_no_case_crashes(self, monkeypatch):
+        from app.ai import router as router_mod
+        from evals import run as er
+        from evals.scorers import gate, summarize
+
+        monkeypatch.setattr(er, "CASE_DELAY_SECONDS", 0)
+        monkeypatch.setattr(er, "THROTTLE_BACKOFF_SECONDS", 0)
+        monkeypatch.setattr(
+            router_mod.LLMRouter, "_call_provider", self._useless(er._load("fix_cases.json"))
+        )
+
+        results, blocked = [], []
+        for task in (er.run_fix_cases, er.run_review_cases, er.run_gaps_cases):
+            r, b = task()
+            results += r
+            blocked += b
+
+        crashed = [r.case_id for r in results if any(f.startswith("exception:") for f in r.failures)]
+        assert crashed == [], f"the harness no longer matches the code: {crashed}"
+        assert blocked == []
+        stats = summarize(results)
+        ok, detail = gate(stats, 0.7)
+        assert not ok, f"a model that finds nothing passed: {detail}"
+        assert stats["by_kind"]["detect"] < 0.2, stats
+
+        review = {r.case_id: r for r in results if r.case_id.startswith("review-")}
+        assert not review["review-off-by-one-page"].passed, "passed on its summary, no finding"
+
+
+class TestGateNeedsBothKinds:
+    def test_a_noisy_model_fails_on_restraint(self):
+        from evals.scorers import gate
+
+        ok, detail = gate({"pass_rate": 0.8, "by_kind": {"detect": 1.0, "restraint": 0.4}}, 0.7)
+        assert not ok and "restraint" in detail
+
+    def test_both_kinds_clear_it(self):
+        from evals.scorers import gate
+
+        assert gate({"pass_rate": 0.9, "by_kind": {"detect": 0.8, "restraint": 1.0}}, 0.7)[0]
+
+    def test_findings_text_is_what_must_mention_reads(self):
+        from evals.scorers import score_output
+
+        case = {"id": "x", "must_mention": [r"\+ ?1"], "min_length": 0}
+        summary_only = score_output("Computes end as start + size + 1.", case, findings="")
+        assert not summary_only.passed
+        named = score_output("x", case, findings="- **MAJOR** `a.py:3`: slice is size + 1 long")
+        assert named.passed

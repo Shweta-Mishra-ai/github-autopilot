@@ -174,7 +174,8 @@ def enqueue(
 def _claim_id(raw: str) -> str:
     import hashlib
 
-    return hashlib.sha1(raw.encode("utf-8", "surrogatepass")).hexdigest()
+    # An identity key for the claims hash, not a security boundary.
+    return hashlib.sha1(raw.encode("utf-8", "surrogatepass"), usedforsecurity=False).hexdigest()
 
 
 def _claim(r, raw: str) -> None:

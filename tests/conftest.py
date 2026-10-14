@@ -399,6 +399,21 @@ def clean_redis_singleton():
 
 
 @pytest.fixture(autouse=True)
+def clean_idempotency_memory():
+    """Every test starts with no event recorded as seen.
+
+    Without Redis the dedup set is a module-level dict. The fingerprint is a
+    hash of the payload alone, and many tests send the same three-key payload,
+    so one test's webhook marked another test's event as a duplicate — which
+    test failed depended on the random order.
+    """
+    import app.core.idempotency as idem
+    idem._seen_local.clear()
+    yield
+    idem._seen_local.clear()
+
+
+@pytest.fixture(autouse=True)
 def clean_circuit_breakers():
     """Every test starts with every provider's circuit closed.
 

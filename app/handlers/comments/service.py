@@ -22,6 +22,7 @@ from .dispatcher import (
     command_disabled_comment,
     empty_response_comment,
     parse_command,
+    ground_answer,
     is_providers_down,
     make_degraded_response,
     pr_context,
@@ -157,6 +158,7 @@ def handle_comment_event(payload: dict) -> None:
     # ── Check for providers-down sentinel ─────────────────────────────────
     if isinstance(response, dict) and is_providers_down(response):
         response = make_degraded_response(response)
+    response = ground_answer(cmd, response, context, repo, token)
 
     # ── Post to GitHub (with model disclosure) ─────────────────────────────
     footer = getattr(config, "footer", "")

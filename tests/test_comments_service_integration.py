@@ -387,21 +387,20 @@ class TestNoCommandEverAnswersWithSilence:
             "sender": {"login": "someone"},
         }
 
-    def test_an_empty_handler_result_still_posts_a_comment(self, monkeypatch):
+    def test_an_empty_handler_result_still_posts_a_comment(self, common_mocks):
+        # Configured through common_mocks. This monkeypatched the same names
+        # common_mocks had already patched; monkeypatch was set up first (the
+        # conftest's autouse env fixture requests it), so it was torn down
+        # last and "restored" the MOCKS — service.gh_post stayed a MagicMock
+        # for every later test in the process, which then posted nowhere.
         from app.handlers.comments import service
 
         posted = []
-        monkeypatch.setattr(service, "get_installation_token", lambda _id: "tok")
-        monkeypatch.setattr(service, "load_config", lambda *a, **k: _PermissiveConfig())
-        monkeypatch.setattr(service, "check_user_rate_limit", lambda *a: True)
-        monkeypatch.setattr(service, "check_command_permission", lambda *a: (True, ""))
-        monkeypatch.setattr(service, "augment_with_memory", lambda ctx, *a: ctx)
-        monkeypatch.setattr(service, "_dispatch", lambda **kw: "")
-        monkeypatch.setattr(
-            service, "gh_post", lambda path, token, body: posted.append(body["body"])
-        )
-
-        service.handle_comment_event(self._payload())
+        common_mocks["config"].return_value = _PermissiveConfig()
+        common_mocks["post"].side_effect = lambda path, token, body: posted.append(body["body"])
+        with patch.object(service, "augment_with_memory", lambda ctx, *a: ctx), \
+             patch.object(service, "_dispatch", lambda **kw: ""):
+            service.handle_comment_event(self._payload())
 
         assert posted, "a command that produced nothing posted no comment at all"
         assert "/explain" in posted[0]

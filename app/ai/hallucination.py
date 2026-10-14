@@ -199,18 +199,22 @@ def check_response(
 
 def add_confidence_footer(comment: str, result: HallucinationResult) -> str:
     """
-    Optionally append a confidence note to GitHub comment.
-    Only shown when confidence is below 0.7.
+    Append what the reliability check found, when it found something.
+
+    This printed "AI Confidence: 50%". The number is not the model's
+    confidence or a probability of anything: it is 1.0 minus penalties for
+    matched phrases ("I'm not sure", "TODO") and short fields. Shown as a
+    percentage it read as a measured likelihood that the fix is right. The
+    warnings themselves are what the check knows, so they are what is said.
+    Nothing is added when the check found nothing (confidence >= 0.7).
     """
     if result.confidence >= 0.7:
         return comment
-
-    if result.confidence >= 0.5:
-        note = f"\n\n> 🤔 **AI Confidence: {int(result.confidence * 100)}%** — Please verify before applying."
-    else:
-        note = f"\n\n> ⚠️ **Low confidence ({int(result.confidence * 100)}%)** — This response may need manual review."
-
-    return comment + note
+    found = "; ".join(w for w in (result.warnings or [])[:3]) or "patterns of a guessed answer"
+    lead = (
+        "⚠️ **Treat with caution**" if result.confidence < 0.5 else "🤔 **Verify before applying**"
+    )
+    return f"{comment}\n\n> {lead} — the reliability check flagged: {found}."
 
 
 _MAX_EXTRACT_DEPTH = 6

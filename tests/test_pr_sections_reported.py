@@ -43,7 +43,6 @@ def _run(ask, ask_text):
          patch.object(prh, "load_config", return_value=Config({})), \
          patch.object(prh, "gh_get", return_value={"archived": False}), \
          patch("app.github.helpers.pr_files", return_value=FILES), \
-         patch("app.intelligence.retrieval.get_context_for_pr", return_value=""), \
          patch("app.ai.gatekeeper.is_substantive", return_value=(True, "")), \
          patch("app.ai.router.router.ask", side_effect=ask), \
          patch("app.ai.router.router.ask_text", side_effect=ask_text), \

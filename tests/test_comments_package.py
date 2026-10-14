@@ -175,16 +175,14 @@ class TestProvidersDown:
 
     def test_make_degraded_response_contains_retry(self):
         from app.handlers.comments.dispatcher import make_degraded_response
-        # `retry_in` is the key the router sets; this test used `_retry_in`,
-        # which nothing sets, so the reply always said 60s and it passed.
-        result = make_degraded_response({"_providers_down": True, "retry_in": 45})
+        result = make_degraded_response({"_providers_down": True, "_retry_in": 45})
         assert "45" in result
         assert "unavailable" in result.lower() or "AI" in result
 
     def test_a_configuration_fault_is_not_called_transient(self):
         from app.handlers.comments.dispatcher import make_degraded_response
         result = make_degraded_response({
-            "_providers_down": True, "retry_in": 60, "_configuration_error": True,
+            "_providers_down": True, "_retry_in": 60, "_configuration_error": True,
             "message": "GROQ_API_KEY is invalid (401).",
         })
         assert "AI Not Configured" in result and "GROQ_API_KEY is invalid" in result
@@ -404,3 +402,37 @@ class TestTheImportPathSurvivedDeletingTheShim:
                 f"{twin.relative_to(root)} can never be imported — "
                 f"{pkg.relative_to(root)}/ shadows it"
             )
+
+
+class TestTheConfigurationFaultReachesTheReply:
+    """The sentinel commands actually return comes from guarded.safe_router_ask;
+    it carried no configuration-fault flag, so a missing key still read as an
+    outage on that path."""
+
+    def test_guarded_carries_the_fault(self):
+        from unittest.mock import patch
+
+        from app.ai import guarded
+        from app.ai.circuit_breaker import AllProvidersDown
+        from app.ai.router import router
+
+        with patch.object(router, "ask", side_effect=AllProvidersDown()), \
+             patch.object(router, "configuration_error", return_value="GROQ_API_KEY is invalid (401)."), \
+             patch.object(guarded, "_alert_providers_down"):
+            payload, _v = guarded.guarded_ask("s", "u", task="fix")
+        out = guarded.degraded_comment(payload, "fix")
+        assert "AI Not Configured" in out and "GROQ_API_KEY is invalid" in out
+
+    def test_an_outage_is_still_an_outage(self):
+        from unittest.mock import patch
+
+        from app.ai import guarded
+        from app.ai.circuit_breaker import AllProvidersDown
+        from app.ai.router import router
+
+        with patch.object(router, "ask", side_effect=AllProvidersDown(45)), \
+             patch.object(router, "configuration_error", return_value=""), \
+             patch.object(guarded, "_alert_providers_down"):
+            payload, _v = guarded.guarded_ask("s", "u", task="fix")
+        out = guarded.degraded_comment(payload, "fix")
+        assert "Temporarily Unavailable" in out and "45" in out

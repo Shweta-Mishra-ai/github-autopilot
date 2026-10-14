@@ -38,10 +38,6 @@ dev = [
     "ruff>=0.8.0",
     "pip-audit>=2.7.0",
 ]
-intelligence = [
-    "qdrant-client>=1.9.0",
-    "sentence-transformers>=3.0.0",
-]
 
 [project.scripts]
 github-autopilot = "github_autopilot.cli:main"

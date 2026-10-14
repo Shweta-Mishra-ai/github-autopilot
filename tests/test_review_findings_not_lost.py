@@ -482,62 +482,62 @@ class TestNonNumericConfidenceKeepsTheAnalysis:
 
 
 class TestReleaseStopsAtTheTag:
-    """`/release` said "commits since last tag" in its docstring and listed the
-    last 20 commits on the branch regardless, so every draft re-announced work
-    already shipped in that tag. It also duplicated the fetch instead of using
-    the shared helper, which is how the two drifted apart."""
+    """`/release` said "commits since last tag" and listed the last 20 commits
+    on the branch regardless, so every draft re-announced work already
+    shipped. It now asks GitHub for exactly the commits since the tag."""
 
-    COMMITS = [
-        {"sha": "NEW", "commit": {"message": "feat: unreleased thing"}},
-        {"sha": "TAGGED", "commit": {"message": "feat: shipped in v1.1.0"}},
-    ]
-
-    def _release(self, tags, commits):
+    def _release(self, tags, since_tag):
         from app.handlers.comments import _cmd_release
 
-        plan = {
-            "version": "v1.2.0",
-            "title": "t",
-            "highlights": [],
-            "breaking_changes": [],
-            "release_notes": "n",
-        }
         prompts = []
+        gh = _release_gh(tags, since_tag)
         with (
             patch(
                 "app.handlers.comments.router.ask",
-                side_effect=lambda s, u, **k: (prompts.append(u), (plan, MagicMock()))[1],
+                side_effect=lambda s, u, **k: (prompts.append(u), ({"title": "t", "release_notes": "n"}, MagicMock()))[1],
             ),
-            patch("app.handlers.comments.gh_get", side_effect=[tags, commits]),
-            patch(
-                "app.handlers.comments.gh_post",
-                return_value={"html_url": "u", "number": 1},
-            ) as post,
+            patch("app.handlers.comments.gh_get", side_effect=gh),
+            patch("app.handlers.comments.gh_post", return_value={"html_url": "u", "number": 1}) as post,
         ):
             out = _cmd_release("o/r", "t", "a")
-        return out, prompts, post
+        return out, prompts, post, gh.seen
 
-    def test_released_commits_are_not_re_announced(self):
-        _out, prompts, _post = self._release(
-            [{"name": "v1.1.0", "commit": {"sha": "TAGGED"}}], self.COMMITS
+    def test_only_commits_since_the_tag_are_used(self):
+        _out, prompts, _post, seen = self._release(
+            [{"name": "v1.1.0"}], [{"sha": "NEW", "commit": {"message": "feat: unreleased thing"}}]
         )
+        assert any("/compare/v1.1.0...HEAD" in p for p in seen)
         assert "unreleased thing" in prompts[0]
-        assert "shipped in v1.1.0" not in prompts[0]
 
     def test_nothing_new_drafts_nothing(self):
-        out, prompts, post = self._release(
-            [{"name": "v1.1.0", "commit": {"sha": "TAGGED"}}],
-            [{"sha": "TAGGED", "commit": {"message": "feat: shipped in v1.1.0"}}],
-        )
+        out, prompts, post, _seen = self._release([{"name": "v1.1.0"}], [])
         assert prompts == [], "spent an LLM call with nothing to release"
         post.assert_not_called()
         assert "Nothing to Release" in out and "v1.1.0" in out
 
-    def test_a_tag_payload_without_a_sha_still_works(self):
-        """The shape the existing suite mocks — no `commit` key at all."""
-        _out, prompts, _post = self._release([{"name": "v1.1.0"}], self.COMMITS)
-        assert "unreleased thing" in prompts[0]
-        assert "shipped in v1.1.0" in prompts[0]
+    def test_the_highest_version_tag_is_the_latest(self):
+        """GitHub lists tags by name, so v1.9.0 came before v1.10.0."""
+        _out, _prompts, _post, seen = self._release(
+            [{"name": "v1.9.0"}, {"name": "v1.10.0"}], [{"commit": {"message": "fix: y"}}]
+        )
+        assert any("/compare/v1.10.0...HEAD" in p for p in seen)
+
+
+def _release_gh(tags, since_tag, commits=()):
+    seen = []
+
+    def get(path, token):
+        seen.append(path)
+        if "/tags" in path:
+            return tags
+        if "/compare/" in path:
+            return {"commits": list(since_tag), "total_commits": len(since_tag)}
+        if "/commits" in path:
+            return list(commits)
+        raise AssertionError(f"unexpected GET {path}")
+
+    get.seen = seen
+    return get
 
 
 class TestReviewFalsePositiveSources:
@@ -894,10 +894,9 @@ class TestJunkFieldDoesNotDiscardTheAnalysis:
             patch("app.handlers.comments.router.ask", return_value=(plan, MagicMock())),
             patch(
                 "app.handlers.comments.gh_get",
-                side_effect=[
-                    [{"name": "v1.1.0"}],
-                    [{"sha": "a", "commit": {"message": "feat: x"}}],
-                ],
+                side_effect=_release_gh(
+                    [{"name": "v1.1.0"}], [{"sha": "a", "commit": {"message": "feat: x"}}]
+                ),
             ),
             patch(
                 "app.handlers.comments.gh_post", return_value={"html_url": "u", "number": 1}
@@ -906,8 +905,9 @@ class TestJunkFieldDoesNotDiscardTheAnalysis:
             out = _cmd_release("o/r", "t", "a")
 
         post.assert_called_once()
-        # A bad version falls back to a patch bump rather than losing the draft.
-        assert post.call_args[0][2]["tag_name"] == "v1.1.1"
+        # The version is computed from the commits (a feat: is a minor bump),
+        # so a junk version from the model cannot lose or mislabel the draft.
+        assert post.call_args[0][2]["tag_name"] == "v1.2.0"
         assert "Error" not in out and "Failed" not in out
 
     def test_as_text_coerces_without_raising(self):

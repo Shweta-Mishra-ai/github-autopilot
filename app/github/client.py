@@ -243,6 +243,24 @@ def gh_get(path: str, token: str) -> dict | list:
     return _request("GET", path, token)
 
 
+def gh_get_text(path: str, token: str, max_chars: int = 200_000) -> str:
+    """
+    A text resource (a job log), following GitHub's redirect to its storage
+    host. requests drops the Authorization header when a redirect leaves the
+    original host, so the token is never sent to the storage URL, which is
+    pre-signed. Only the last `max_chars` are kept: a failure is at the end.
+    """
+    check_and_wait(token)
+    url = _resolve_url(path)
+    try:
+        r = _session.get(url, headers=_headers(token), timeout=DEFAULT_TIMEOUT)
+    except requests.exceptions.RequestException as e:
+        raise GitHubError(f"{type(e).__name__}: {e}", 0) from e
+    if r.status_code != 200:
+        raise GitHubError(f"GET {path} returned {r.status_code}", r.status_code)
+    return r.text[-max_chars:]
+
+
 def gh_get_all(path: str, token: str, max_pages: int = 5) -> list:
     """Auto-paginate. Returns up to max_pages * 100 results.
 

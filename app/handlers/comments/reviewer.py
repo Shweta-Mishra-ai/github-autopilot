@@ -414,21 +414,52 @@ Return JSON:
         if is_degraded(r):
             return degraded_comment(r, "impact analysis")
 
-        bc_risk = r.get("breaking_change_risk", "low")
-        bc_emoji = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(bc_risk, "🟡")
-        migration = "⚠️ Yes" if r.get("requires_migration") else "✅ No"
-        systems = ", ".join(f"`{s}`" for s in r.get("affected_systems", [])[:5])
-        notes_sec = f"\n> ℹ️ {r.get('notes')}" if r.get("notes") else ""
+        from app.ai.validator import as_text, flag, verdict
+        from app.handlers.pull_request.risk import _HIGH_PATH
+
+        # Only what the model actually answered is shown as its estimate; a
+        # missing or malformed field reads "not given", never a default. A
+        # migration is decided by the files themselves: the model saw names
+        # only, and called `db/migrations/0042_drop_users.sql` "No".
+        bc_risk = verdict(r, "breaking_change_risk", {"low", "medium", "high"})
+        bc_emoji = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(bc_risk or "", "⚪")
+        migration_files = [
+            fn
+            for fn in (f.get("filename", "") for f in files)
+            if re.search(r"(^|/)(migrations?|alembic|db/migrate)/|\.sql$", fn, re.I)
+        ]
+        said = flag(r, "requires_migration")
+        if migration_files:
+            migration = "⚠️ Yes — " + ", ".join(f"`{one_line(m)}`" for m in migration_files[:3])
+        else:
+            migration = {True: "⚠️ Model says yes", False: "✅ No migration files"}.get(
+                said, "✅ No migration files"
+            )
+        if bc_risk is None and not as_text(r.get("summary")).strip():
+            return (
+                "## 💥 Blast Radius\n\nThe model's answer contained no assessment, so "
+                "there is nothing to report. Retry `/impact`."
+            )
+        priority = verdict(r, "review_priority", {"low", "medium", "high"})
+        if _HIGH_PATH.search(" ".join(f.get("filename", "") for f in files)) and priority != "high":
+            priority = "high (sensitive paths)"
+        raw_systems = r.get("affected_systems")
+        systems = ", ".join(
+            f"`{one_line(as_text(s), 60)}`"
+            for s in (raw_systems if isinstance(raw_systems, list) else [])[:5]
+        )
+        notes_sec = f"\n> ℹ️ {as_text(r.get('notes'))}" if r.get("notes") else ""
 
         return (
             f"## 💥 Blast Radius — PR #{issue_number}\n\n"
             f"**Summary:** {r.get('summary', '')}\n\n"
             f"### Layers Affected\n{blast}\n\n"
             f"### Impact Assessment\n| | |\n|---|---|\n"
-            f"| **Breaking Change Risk** | {bc_emoji} {bc_risk.capitalize()} |\n"
+            f"| **Breaking Change Risk** (model estimate) | "
+            f"{bc_emoji} {(bc_risk or 'not given').capitalize()} |\n"
             f"| **Requires Migration** | {migration} |\n"
-            f"| **Review Priority** | `{r.get('review_priority', 'medium')}` |\n"
-            f"| **Affected Systems** | {systems or 'none identified'} |"
+            f"| **Review Priority** | `{priority or 'not given'}` |\n"
+            f"| **Affected Systems** (model estimate) | {systems or 'none named'} |"
             f"{notes_sec}"
         )
 

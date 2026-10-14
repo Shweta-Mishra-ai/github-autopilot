@@ -7,6 +7,7 @@ AI-driven comment generation commands:
 from __future__ import annotations
 
 import logging
+import re
 
 from app.ai.hallucination import add_confidence_footer
 from app.ai.guarded import degraded_comment, guarded_ask, is_degraded
@@ -298,8 +299,20 @@ Return JSON:
     if not r:
         return "## ⚡ Performance Analysis\n\n_Could not complete analysis._"
 
-    rating = r.get("overall_rating", "acceptable")
-    r_emoji = {"fast": "🟢", "acceptable": "🟡", "slow": "🟠", "critical": "🔴"}.get(rating, "🟡")
+    from app.ai.validator import verdict
+
+    # Not defaulted to "acceptable": a rating the model did not give is not
+    # a rating. Without one and without findings there is no analysis.
+    rating = verdict(r, "overall_rating", {"fast", "acceptable", "slow", "critical"})
+    if rating is None and not r.get("complexity_issues") and not r.get("summary"):
+        return (
+            "## ⚡ Performance Analysis\n\nThe model's answer contained no assessment. "
+            "Retry `/perf`."
+        )
+    r_emoji = {"fast": "🟢", "acceptable": "🟡", "slow": "🟠", "critical": "🔴"}.get(
+        rating or "", "⚪"
+    )
+    rating = rating or "not given"
 
     issues_md = ""
     for i, issue in enumerate(r.get("complexity_issues", [])[:4], 1):
@@ -333,15 +346,29 @@ def cmd_arch(repo: str, issue_number: int, issue: dict, token: str) -> str:
         try:
             from app.github.helpers import pr_files as fetch_pr_files
 
+            from app.handlers.pull_request.analysis import _diff_excerpt
+
             files = fetch_pr_files(repo, issue_number, token, get=gh_get)
             pr_files = [f.get("filename") for f in files if isinstance(f, dict)]
-            context = "Files changed:\n" + "\n".join(f["filename"] for f in files[:15])
+            # The diff, not just the names: asked for god classes and circular
+            # imports from a list of file names, the model could only invent.
+            context = (
+                "Files changed:\n"
+                + "\n".join(f["filename"] for f in files[:30])
+                + "\n\n"
+                + _diff_excerpt(files, 3500)
+            )
         except Exception as e:
-            log.debug(f"generator.cmd_arch_files_fetch_failed repo={repo} pr={issue_number}: {e}")
+            log.warning(f"generator.cmd_arch_files_fetch_failed repo={repo} pr={issue_number}: {e}")
+            return (
+                "## 🏗️ Architecture Review\n\n⚠️ Could not read this PR's changes, so "
+                "there is nothing to review. Retry `/arch`."
+            )
 
     if not context:
         context = f"Title: {issue.get('title', '')}\nBody: {(issue.get('body') or '')[:500]}"
 
+    known_files = repo_file_context(repo, token, extra=pr_files, get=gh_get)
     r, _ = guarded_ask(
         "Software architect with 15+ years. Review architecture. JSON only.",
         f"""Review this for architectural issues:
@@ -368,7 +395,7 @@ Return JSON:
         max_tokens=1500,
         # Checked against the whole tree: an architecture review is about how
         # the change sits in the codebase, so naming other files is the job.
-        context=repo_file_context(repo, token, extra=pr_files, get=gh_get),
+        context=known_files,
     )
     if is_degraded(r):
         return degraded_comment(r, "architecture review")
@@ -377,10 +404,24 @@ Return JSON:
 
     from app.ai.validator import as_text
 
-    health = as_text(r.get("health"), "good")
+    from app.ai.validator import verdict
+
+    health = verdict(r, "health", {"excellent", "good", "needs_work", "critical"})
+    if health is None and not isinstance(r.get("violations"), list) and not r.get("summary"):
+        return (
+            "## 🏗️ Architecture Review\n\nThe model's answer contained no assessment. "
+            "Retry `/arch`."
+        )
     h_emoji = {"excellent": "🟢", "good": "🟡", "needs_work": "🟠", "critical": "🔴"}.get(
-        health, "🟡"
+        health or "", "⚪"
     )
+    health = health or "not_given"
+    known = set(known_files.get("files") or [])
+
+    def _located(location: str) -> bool:
+        # A violation must name a file that exists. Unknown tree: not checkable.
+        path = re.split(r"[:\s(]|::", location.strip("`"), maxsplit=1)[0]
+        return not known or path in known or any(k.endswith("/" + path) for k in known)
 
     # Every field below is rendered with a string method. A model answering any
     # one of them with a number, a list or null used to raise into cmd_arch's
@@ -388,8 +429,12 @@ Return JSON:
     # error string — so the analysis was paid for, produced, and thrown away.
     violations = r.get("violations")
     violations_md = ""
-    for v in (violations if isinstance(violations, list) else [])[:5]:
+    dropped = 0
+    for v in (violations if isinstance(violations, list) else [])[:8]:
         if not isinstance(v, dict):
+            continue
+        if not _located(as_text(v.get("location"))):
+            dropped += 1
             continue
         sev = as_text(v.get("severity"), "medium")
         s_em = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(sev, "🟡")
@@ -406,8 +451,14 @@ Return JSON:
         )
         or ""
     )
-    priority = as_text(r.get("refactoring_priority"), "planned")
-    p_emoji = {"immediate": "🔴", "planned": "🟡", "backlog": "🟢"}.get(priority, "🟡")
+    priority = verdict(r, "refactoring_priority", {"immediate", "planned", "backlog"})
+    p_emoji = {"immediate": "🔴", "planned": "🟡", "backlog": "🟢"}.get(priority or "", "⚪")
+    priority = priority or "not given"
+    if dropped:
+        violations_md += (
+            f"\n\n_{dropped} reported issue(s) named a location that does not exist in "
+            "this repository and were not shown._"
+        )
 
     return (
         f"## 🏗️ Architecture Review\n\n"

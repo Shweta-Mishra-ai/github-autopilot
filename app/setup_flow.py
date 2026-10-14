@@ -54,9 +54,12 @@ def build_manifest(base_url: str, name: str = "") -> dict:
     """
     The App GitHub should create.
 
-    Permissions are the ones the endpoints in this codebase actually call.
-    Events are the four the handlers subscribe to — a fifth would be delivered
-    and dropped, which costs the operator quota for nothing.
+    Permissions are the ones the endpoints in this codebase actually call:
+    /secfull reads Dependabot, code-scanning and secret-scanning alerts, and
+    the CI handler reads Actions job logs. Events are the five the handlers
+    subscribe to. `check_run` was missing, so app/handlers/ci.py — which
+    server.py routes it to — never received an event from an App created
+    here; an unsubscribed event is simply never delivered.
     """
     return {
         "name": name or "GitHub Autopilot",
@@ -72,8 +75,10 @@ def build_manifest(base_url: str, name: str = "") -> dict:
             "actions": "write",
             "checks": "read",
             "security_events": "read",
+            "vulnerability_alerts": "read",
+            "secret_scanning_alerts": "read",
         },
-        "default_events": ["push", "pull_request", "issues", "issue_comment"],
+        "default_events": ["push", "pull_request", "issues", "issue_comment", "check_run"],
     }
 
 

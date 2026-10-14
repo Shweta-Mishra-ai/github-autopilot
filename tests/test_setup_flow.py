@@ -78,13 +78,26 @@ class TestTheManifestMatchesWhatTheCodeCalls:
         allowed = {
             "metadata", "issues", "pull_requests", "contents",
             "actions", "checks", "security_events",
+            # /secfull reads Dependabot and secret-scanning alerts
+            # (app/security/scanner.py); without these it can only report
+            # both sources as "no permission".
+            "vulnerability_alerts", "secret_scanning_alerts",
         }
         assert set(build_manifest(BASE)["default_permissions"]) <= allowed
 
     def test_it_subscribes_to_exactly_the_handled_events(self):
-        """An event with no handler is delivered, dropped, and billed."""
+        """An event with no handler is delivered, dropped, and billed — and a
+        handled event that is not subscribed is never delivered at all, which
+        is how the CI handler never ran. The handled set is read from
+        server.py's own dispatch, so the two cannot drift again."""
+        import pathlib
+
+        source = pathlib.Path("server.py").read_text(encoding="utf-8")
+        handled = set(re.findall(r'elif webhook_event == "(\w+)"|if webhook_event == "(\w+)":\n\s+_run', source))
+        handled = {a or b for a, b in handled} | {"pull_request"}
         events = set(build_manifest(BASE)["default_events"])
-        assert events == {"push", "pull_request", "issues", "issue_comment"}
+        assert events == {"push", "pull_request", "issues", "issue_comment", "check_run"}
+        assert events == handled
 
     def test_the_webhook_and_callback_point_at_this_deployment(self):
         m = build_manifest(BASE)

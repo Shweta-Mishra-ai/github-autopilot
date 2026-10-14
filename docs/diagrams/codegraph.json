@@ -1605,7 +1605,7 @@
       "id": "server",
       "path": "server.py",
       "layer": "other",
-      "loc": 961,
+      "loc": 964,
       "functions": 33,
       "classes": 0,
       "is_package": false,
@@ -3646,7 +3646,7 @@
   "stats": {
     "modules": 101,
     "edges": 400,
-    "total_loc": 27727,
+    "total_loc": 27730,
     "layers": [
       "ai",
       "core",

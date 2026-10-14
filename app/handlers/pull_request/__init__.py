@@ -135,6 +135,9 @@ def handle(payload: dict):
     pr_number = pr["number"]
 
     log = EventLogger("pull_request", repo=repo, pr=pr_number)
+    from app.ai.router import last_model_disclosure, reset_last_call
+
+    reset_last_call()  # the report names the models THIS event used
 
     if author in SKIP_AUTHORS or author.endswith("[bot]"):
         return
@@ -359,6 +362,11 @@ def handle(payload: dict):
             review_md = f"{review_md}\n\n{unposted_md}".strip()
 
     body = _build_pr_report(analysis_md, summary_md, review_md, gaps_md, pr, files, notices_md)
+    # "Every comment discloses which model wrote it" was true of command
+    # replies only; the report, the comment most people read, named none.
+    disclosed = last_model_disclosure()
+    if disclosed:
+        body += f"\n*Written with AI{disclosed}*"
     try:
         if edit_only:
             if update_sticky_if_present(

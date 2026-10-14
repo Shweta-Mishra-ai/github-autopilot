@@ -95,7 +95,9 @@ def handle(payload: dict):
 
     try:
         from app.ai.guarded import guarded_ask, is_degraded
+        from app.ai.router import last_model_disclosure, reset_last_call
 
+        reset_last_call()
         r, _verdict = guarded_ask(
             "Senior DevOps engineer. Analyze CI failures concisely. JSON only.",
             f"Analyze this CI failure and suggest a fix. Name a cause only if the log "
@@ -159,8 +161,13 @@ def handle(payload: dict):
                 "not a flake."
             )
 
+        # Per section: each check's analysis is its own event and may be a
+        # different model.
+        disclosed = last_model_disclosure()
+        written = f"\n\n*Written with AI{disclosed}*" if disclosed else ""
         section = (
-            f"### {cat_emoji} `{check_name}`\n\n{cause_md}\n\n#### Fix\n{fix_text}{pattern_note}"
+            f"### {cat_emoji} `{check_name}`\n\n{cause_md}\n\n#### Fix\n{fix_text}"
+            f"{pattern_note}{written}"
         )
 
         from app.github.sticky import MARKER_CI_REPORT, upsert_sticky

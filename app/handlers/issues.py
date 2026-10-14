@@ -135,6 +135,9 @@ def handle(payload: dict):
             _ensure_labels(repo, token)
 
     allowed_labels = ", ".join(_TYPE_LABELS.values())
+    from app.ai.router import last_model_disclosure, reset_last_call
+
+    reset_last_call()
     raw, _meta = router.ask(
         "You are an expert open source maintainer and technical lead. "
         "Triage GitHub issues with precision. Return valid JSON only.",
@@ -298,6 +301,7 @@ Return JSON:
 
 ---
 💡 *Use `/explain`, `/fix`, or `/improve` on this issue for AI assistance.*
+{"*Triaged with AI" + last_model_disclosure() + "*" if last_model_disclosure() else ""}
 {config.footer}"""
 
     # The triage comment is posted once: a transient refusal parks it on the

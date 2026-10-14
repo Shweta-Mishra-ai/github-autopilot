@@ -1049,7 +1049,7 @@
       "classes": 0,
       "is_package": false,
       "fan_in": 3,
-      "fan_out": 12,
+      "fan_out": 13,
       "external_deps": [
         "__future__",
         "contextlib",
@@ -1064,11 +1064,11 @@
       "id": "app.handlers.comments.reviewer",
       "path": "app/handlers/comments/reviewer.py",
       "layer": "handlers",
-      "loc": 575,
-      "functions": 13,
+      "loc": 588,
+      "functions": 14,
       "classes": 0,
       "is_package": false,
-      "fan_in": 3,
+      "fan_in": 4,
       "fan_out": 13,
       "external_deps": [
         "__future__",
@@ -2510,6 +2510,11 @@
     },
     {
       "source": "app.handlers.comments.publisher",
+      "target": "app.handlers.comments.reviewer",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.publisher",
       "target": "app.intelligence.memory",
       "kind": "runtime"
     },
@@ -3606,8 +3611,8 @@
   ],
   "stats": {
     "modules": 102,
-    "edges": 390,
-    "total_loc": 27880,
+    "edges": 391,
+    "total_loc": 27893,
     "layers": [
       "ai",
       "core",

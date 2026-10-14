@@ -467,11 +467,11 @@ def next_version(latest: str, messages: list[str]) -> str:
 def _commits_since(repo: str, token: str, tag: str | None) -> tuple[list, int]:
     """(commits since `tag` oldest first, total count). Without a tag, the
     latest 100 commits of the default branch."""
-    if tag:
-        data = gh_get(f"/repos/{repo}/compare/{quote(tag, safe='')}...HEAD", token)
-        commits = data.get("commits") if isinstance(data, dict) else None
-        if isinstance(commits, list):
-            return commits, int(data.get("total_commits") or len(commits))
+    from .reviewer import compare_since_tag
+
+    data = compare_since_tag(repo, tag, token) if tag else None
+    if data is not None:
+        return data["commits"], int(data.get("total_commits") or len(data["commits"]))
     commits = gh_get(f"/repos/{repo}/commits?per_page=100", token)
     commits = [c for c in (commits if isinstance(commits, list) else []) if isinstance(c, dict)]
     return list(reversed(commits)), len(commits)

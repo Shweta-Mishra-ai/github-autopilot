@@ -40,6 +40,21 @@ def commits_since(commits: list, tag_sha: str | None) -> list:
     return commits
 
 
+def compare_since_tag(repo: str, tag: str, token: str) -> dict | None:
+    """GitHub's compare of `tag`...HEAD, or None when it cannot be had (a tag
+    not reachable from HEAD answers 404) — the caller then reads the commit
+    list instead. Any other failure is raised."""
+    from urllib.parse import quote
+
+    try:
+        data = gh_get(f"/repos/{repo}/compare/{quote(tag, safe='')}...HEAD", token)
+    except GitHubError as e:
+        if e.status_code != 404:
+            raise
+        return None
+    return data if isinstance(data, dict) and isinstance(data.get("commits"), list) else None
+
+
 def _fetch_commits_since_tag(repo: str, token: str) -> tuple[list, str]:
     """
     Fetch the commits made SINCE the latest tag, plus that tag's name.
@@ -70,10 +85,8 @@ def _fetch_commits_since_tag(repo: str, token: str) -> tuple[list, str]:
     tag_sha = (tag.get("commit") or {}).get("sha") if tag else None
 
     if tag:
-        from urllib.parse import quote
-
-        data = gh_get(f"/repos/{repo}/compare/{quote(tag['name'], safe='')}...HEAD", token)
-        if isinstance(data, dict) and isinstance(data.get("commits"), list):
+        data = compare_since_tag(repo, tag["name"], token)
+        if data is not None:
             return list(reversed(data["commits"])), latest_tag
     commits = gh_get(f"/repos/{repo}/commits?per_page=100", token)
     return commits_since(commits if isinstance(commits, list) else [], tag_sha), latest_tag

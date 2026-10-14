@@ -88,9 +88,32 @@ def test_release_notes_are_told_when_they_see_part_of_the_release():
         raise AssertionError(path)
 
     prompts = []
-    with patch.object(P, "gh_get", side_effect=gh), \
+    # The package-level name: publisher and reviewer both delegate to it.
+    with patch("app.handlers.comments.gh_get", side_effect=gh), \
          patch("app.handlers.comments.router.ask",
                side_effect=lambda s, u, **k: (prompts.append(u), ({"error": "stop"}, None))[1]), \
          patch.object(P, "gh_post", return_value={"html_url": "u"}):
         P.cmd_release("o/r", "t", "maint")
     assert "latest 40 of 55 commits" in prompts[0]
+
+
+def test_a_tag_not_reachable_from_head_falls_back_to_the_commit_list():
+    """compare/<tag>...HEAD answers 404 for a tag not in HEAD's history; that
+    failed the whole command instead of reading the list."""
+    from app.github.client import GitHubError
+
+    def gh(path, token, *a, **kw):
+        if "/tags" in path:
+            return [{"name": "v1.2.0", "commit": {"sha": "TAG"}}]
+        if "/compare/" in path:
+            raise GitHubError(f"Not found: {path}", 404)
+        return [{"sha": "NEW", "commit": {"message": "unreleased"}},
+                {"sha": "TAG", "commit": {"message": "shipped"}}]
+
+    prompts = []
+    with patch.object(rv, "gh_get", side_effect=gh), \
+         patch.object(rv.router, "ask_text",
+                      side_effect=lambda s, u, **k: (prompts.append(u), ("## [1.2.1]", "m"))[1]):
+        out = rv.cmd_changelog("o/r", "t")
+    assert "CHANGELOG Entry" in out
+    assert "unreleased" in prompts[0] and "shipped" not in prompts[0]

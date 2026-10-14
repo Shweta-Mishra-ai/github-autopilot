@@ -1659,17 +1659,21 @@ class TestEveryFileInAPullRequest:
         with pytest.raises(RuntimeError):
             pr_files("o/r", 1, "t", get=get)
 
-    def test_a_later_page_failure_keeps_what_was_fetched(self):
+    def test_a_later_page_failure_is_raised_not_returned_as_the_whole_pr(self):
+        # It kept the first page and logged, and every caller then presented
+        # 100 files as the PR: "Files: 100", a risk judged on 100, and
+        # "no secrets in the 100 files scanned" with the secret in file 180.
         from app.github.helpers import pr_files
 
-        files, _calls, good = self._pages(250)
+        _files, _calls, good = self._pages(250)
 
         def get(path, token):
             if path.endswith("page=2"):
                 raise RuntimeError("blip")
             return good(path, token)
 
-        assert pr_files("o/r", 1, "t", get=get) == files[:100]
+        with pytest.raises(RuntimeError, match="blip"):
+            pr_files("o/r", 1, "t", get=get)
 
     def test_it_stops_at_githubs_cap(self):
         from app.github.helpers import PR_FILES_MAX_PAGES, pr_files

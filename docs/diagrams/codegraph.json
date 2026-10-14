@@ -706,7 +706,7 @@
       "functions": 2,
       "classes": 0,
       "is_package": false,
-      "fan_in": 5,
+      "fan_in": 6,
       "fan_out": 4,
       "external_deps": [
         "logging",
@@ -811,11 +811,11 @@
       "id": "app.github.helpers",
       "path": "app/github/helpers.py",
       "layer": "github",
-      "loc": 100,
+      "loc": 97,
       "functions": 3,
       "classes": 0,
       "is_package": false,
-      "fan_in": 12,
+      "fan_in": 13,
       "fan_out": 1,
       "external_deps": [
         "logging"
@@ -993,12 +993,12 @@
       "id": "app.handlers.comments.dispatcher",
       "path": "app/handlers/comments/dispatcher.py",
       "layer": "handlers",
-      "loc": 320,
+      "loc": 331,
       "functions": 17,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 8,
+      "fan_out": 9,
       "external_deps": [
         "__future__",
         "logging",
@@ -1266,12 +1266,12 @@
       "id": "app.handlers.pull_request.report",
       "path": "app/handlers/pull_request/report.py",
       "layer": "handlers",
-      "loc": 51,
+      "loc": 58,
       "functions": 1,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 0,
+      "fan_out": 1,
       "external_deps": [
         "__future__",
         "datetime"
@@ -1580,7 +1580,7 @@
       "id": "app.security.scanner",
       "path": "app/security/scanner.py",
       "layer": "security",
-      "loc": 394,
+      "loc": 400,
       "functions": 7,
       "classes": 2,
       "is_package": false,
@@ -2339,6 +2339,11 @@
     },
     {
       "source": "app.handlers.comments.dispatcher",
+      "target": "app.core.transient",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.dispatcher",
       "target": "app.github.helpers",
       "kind": "runtime"
     },
@@ -3053,6 +3058,11 @@
       "kind": "runtime"
     },
     {
+      "source": "app.handlers.pull_request.report",
+      "target": "app.github.helpers",
+      "kind": "runtime"
+    },
+    {
       "source": "app.handlers.pull_request.review",
       "target": "app.ai.hallucination",
       "kind": "runtime"
@@ -3560,8 +3570,8 @@
   ],
   "stats": {
     "modules": 102,
-    "edges": 381,
-    "total_loc": 27626,
+    "edges": 383,
+    "total_loc": 27647,
     "layers": [
       "ai",
       "core",

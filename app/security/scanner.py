@@ -265,8 +265,14 @@ def run_pr_security_scan(repo: str, pr_number: int, token: str) -> SecurityRepor
 
         pr_files = fetch_pr_files(repo, pr_number, token, get=gh_get)
         changed_paths = {f["filename"] for f in pr_files}
-    except Exception:
+    except Exception as e:
         changed_paths = set()
+        # Not silently: the alerts below are then the whole repository's,
+        # listed as though they were this PR's.
+        report.truncated.append(
+            f"This PR's file list could not be read ({type(e).__name__}), so CodeQL "
+            "alerts are shown for the whole repository, not only this PR's files."
+        )
 
     all_dep = _scan_dependabot(repo, token, report.errors, report.truncated)
     all_codeql = _scan_codeql(repo, token, report.errors, report.truncated)

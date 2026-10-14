@@ -233,7 +233,18 @@ def pr_context(repo: str, number: int, issue: dict, token: str, log_ctx) -> str:
         )
     except Exception as exc:
         log_ctx.warning("pr_context_unavailable", reason=str(exc)[:100])
-        return ""
+        from app.core.transient import is_transient
+
+        if is_transient(exc):
+            raise  # retried by the queue rather than answered without the code
+        # Not "" — the caller fell back to the title and body, and the command
+        # answered about code it had not been shown as though it had.
+        return (
+            f"Title: {issue.get('title', '')}\n"
+            f"Body: {(issue.get('body') or '')[:1500]}\n\n"
+            f"The pull request's changed files could not be read ({type(exc).__name__}). "
+            "Do not describe or judge its code; say that it could not be read."
+        )
 
 
 def command_disabled_comment(cmd: str) -> str:

@@ -227,11 +227,11 @@
       "id": "app.ai.router",
       "path": "app/ai/router.py",
       "layer": "ai",
-      "loc": 836,
+      "loc": 848,
       "functions": 10,
       "classes": 1,
       "is_package": false,
-      "fan_in": 17,
+      "fan_in": 20,
       "fan_out": 16,
       "external_deps": [
         "datetime",
@@ -940,12 +940,12 @@
       "id": "app.handlers.ci",
       "path": "app/handlers/ci.py",
       "layer": "handlers",
-      "loc": 335,
+      "loc": 342,
       "functions": 8,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 9,
+      "fan_out": 10,
       "external_deps": [
         "logging",
         "re"
@@ -1129,12 +1129,12 @@
       "id": "app.handlers.issues",
       "path": "app/handlers/issues.py",
       "layer": "handlers",
-      "loc": 414,
+      "loc": 418,
       "functions": 5,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 16,
+      "fan_out": 17,
       "external_deps": [
         "contextlib",
         "logging",
@@ -1145,12 +1145,12 @@
       "id": "app.handlers.pull_request",
       "path": "app/handlers/pull_request/__init__.py",
       "layer": "handlers",
-      "loc": 382,
+      "loc": 390,
       "functions": 2,
       "classes": 0,
       "is_package": true,
       "fan_in": 2,
-      "fan_out": 25,
+      "fan_out": 26,
       "external_deps": [
         "__future__",
         "logging"
@@ -2241,6 +2241,11 @@
     },
     {
       "source": "app.handlers.ci",
+      "target": "app.ai.router",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.ci",
       "target": "app.core.config",
       "kind": "import"
     },
@@ -2746,6 +2751,11 @@
     },
     {
       "source": "app.handlers.issues",
+      "target": "app.ai.router",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.issues",
       "target": "app.ai.validator",
       "kind": "import"
     },
@@ -2838,6 +2848,11 @@
       "source": "app.handlers.pull_request",
       "target": "app.ai.router",
       "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.ai.router",
+      "kind": "runtime"
     },
     {
       "source": "app.handlers.pull_request",
@@ -3607,8 +3622,8 @@
   ],
   "stats": {
     "modules": 100,
-    "edges": 396,
-    "total_loc": 27665,
+    "edges": 399,
+    "total_loc": 27696,
     "layers": [
       "ai",
       "core",
@@ -3622,16 +3637,16 @@
     "cycles": [],
     "hotspots": [
       {
+        "id": "app.ai.router",
+        "loc": 848,
+        "fan_in": 20,
+        "fan_out": 16
+      },
+      {
         "id": "app.core.redis_client",
         "loc": 557,
         "fan_in": 30,
         "fan_out": 1
-      },
-      {
-        "id": "app.ai.router",
-        "loc": 836,
-        "fan_in": 17,
-        "fan_out": 16
       },
       {
         "id": "app.github.client",

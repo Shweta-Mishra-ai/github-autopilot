@@ -537,6 +537,12 @@ class LLMRouter:
         # actually produced the output (handlers run one event per thread).
         _last_call.provider = meta.provider
         _last_call.model = meta.model
+        used = getattr(_last_call, "models", None)
+        if used is None:
+            used = _last_call.models = []
+        name = meta.model or meta.provider
+        if name and name not in used:
+            used.append(name)
         meta.provider_key = key
         cost_est = (meta.total_tokens / 1000) * COST_PER_1K.get(key, 0)
         log.info(
@@ -703,19 +709,25 @@ def reset_last_call() -> None:
     """Clear this thread's model record (call at the start of each event)."""
     _last_call.provider = ""
     _last_call.model = ""
+    _last_call.models = []
 
 
 def last_model_disclosure() -> str:
     """
-    Human-readable "which model wrote this" line for bot output, from the
-    last completed LLM call on this thread. Empty string when nothing has
-    run yet — callers append it blindly.
+    " · model: `a`, `b`" — every model that answered on this thread since the
+    last reset, in order; "" when none did. Callers append it blindly.
+
+    It named only the LAST call's model, so a PR report written by three
+    calls (possibly to different providers after a fallback) credited one.
     """
-    provider = getattr(_last_call, "provider", "")
-    model = getattr(_last_call, "model", "")
-    if not provider:
+    models = list(getattr(_last_call, "models", None) or [])
+    if not models:
+        provider = getattr(_last_call, "provider", "")
+        model = getattr(_last_call, "model", "")
+        models = [model or provider] if provider else []
+    if not models:
         return ""
-    return f" · model: `{model or provider}`"
+    return " · model: " + ", ".join(f"`{m}`" for m in models)
 
 
 # Module-level singleton — thread-safe via instance locks above

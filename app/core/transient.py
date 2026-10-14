@@ -19,11 +19,19 @@ def is_transient(e: BaseException) -> bool:
     import requests
 
     from app.ai.circuit_breaker import AllProvidersDown
+    from app.core.config import ConfigUnavailable
     from app.github.client import GitHubError
     from app.github.rate_limit import GitHubRateLimitExhausted
 
     if isinstance(
-        e, (GitHubRateLimitExhausted, AllProvidersDown, requests.ConnectionError, requests.Timeout)
+        e,
+        (
+            GitHubRateLimitExhausted,
+            AllProvidersDown,
+            ConfigUnavailable,
+            requests.ConnectionError,
+            requests.Timeout,
+        ),
     ):
         return True
     if isinstance(e, GitHubError):

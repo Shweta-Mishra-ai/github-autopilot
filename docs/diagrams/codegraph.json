@@ -345,11 +345,11 @@
       "id": "app.core.config",
       "path": "app/core/config.py",
       "layer": "core",
-      "loc": 471,
+      "loc": 491,
       "functions": 5,
-      "classes": 1,
+      "classes": 2,
       "is_package": false,
-      "fan_in": 7,
+      "fan_in": 8,
       "fan_out": 1,
       "external_deps": [
         "base64",
@@ -702,12 +702,12 @@
       "id": "app.core.transient",
       "path": "app/core/transient.py",
       "layer": "core",
-      "loc": 54,
+      "loc": 62,
       "functions": 2,
       "classes": 0,
       "is_package": false,
       "fan_in": 6,
-      "fan_out": 4,
+      "fan_out": 5,
       "external_deps": [
         "logging",
         "requests"
@@ -2095,6 +2095,11 @@
     {
       "source": "app.core.transient",
       "target": "app.ai.circuit_breaker",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.transient",
+      "target": "app.core.config",
       "kind": "runtime"
     },
     {
@@ -3570,8 +3575,8 @@
   ],
   "stats": {
     "modules": 102,
-    "edges": 383,
-    "total_loc": 27647,
+    "edges": 384,
+    "total_loc": 27675,
     "layers": [
       "ai",
       "core",
@@ -3621,15 +3626,15 @@
         "fan_out": 4
       },
       {
-        "id": "app.core.guardrails",
-        "loc": 368,
-        "fan_in": 11,
+        "id": "app.core.config",
+        "loc": 491,
+        "fan_in": 8,
         "fan_out": 1
       },
       {
-        "id": "app.core.config",
-        "loc": 471,
-        "fan_in": 7,
+        "id": "app.core.guardrails",
+        "loc": 368,
+        "fan_in": 11,
         "fan_out": 1
       },
       {

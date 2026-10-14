@@ -147,10 +147,14 @@ def test_reviewer_commands(mock_guarded_ask, mock_router, mock_gh_get):
     res = R.cmd_impact("repo", 1, {"pull_request": {}}, "token")
     assert "Impact" in res
 
-    # cmd_changelog
+    # cmd_changelog: "some text" is not a changelog entry, and is no longer
+    # published inside a "CHANGELOG Entry" block as though it were one.
     mock_gh_get.side_effect = gh_get_side_effect
     res = R.cmd_changelog("repo", "token")
-    assert "CHANGELOG" in res
+    assert "No Changelog Entry Produced" in res
+    mock_router.ask_text.return_value = ("## [1.0.1] - 2026-10-14\n### Fixed\n- x", None)
+    res = R.cmd_changelog("repo", "token")
+    assert "CHANGELOG Entry" in res
 
 # Patched at the package level, not on publisher: /runtests and /notify live in
 # integrations.py now, and every module in this package delegates to

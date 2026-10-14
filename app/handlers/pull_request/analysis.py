@@ -12,10 +12,11 @@ from __future__ import annotations
 
 import re
 
+from .errors import SectionUnavailable
 from app.ai.router import router
 from app.ai.validator import validate_pr_analysis
 from app.core.guardrails import check_pr_description_update, check_pr_title_update
-from app.core.sanitizer import InjectionRejected, one_line, wrap_user_content
+from app.core.sanitizer import one_line, wrap_user_content
 from app.github.client import gh_patch
 from app.github.notifications import notify_high_risk_pr
 from app.core.transient import once
@@ -211,8 +212,8 @@ Return JSON:
 
     r = validate_pr_analysis(r)
     if r.get("_degraded"):
-        log.warning("pr_analysis.degraded — omitting section")
-        return ""
+        log.warning("pr_analysis.degraded")
+        raise SectionUnavailable("the model's answer could not be used")
 
     # Evidence, not just the model's own confidence: that alone decided
     # whether the PR's title and description were rewritten.
@@ -354,24 +355,23 @@ Return JSON:
 
 
 def _build_pr_summary(pr, repo, pr_number, files, token, config, log) -> str:
-    """Generate the reviewer-facing summary. Returns markdown, empty on failure."""
-    try:
-        title = pr.get("title", "")
-        body = pr.get("body", "") or ""
-        author = (pr.get("user") or {}).get("login", "unknown")
-        base_ref = (pr.get("base") or {}).get("ref", "")
+    """The reviewer-facing summary. Raises when there is none to show."""
+    title = pr.get("title", "")
+    body = pr.get("body", "") or ""
+    author = (pr.get("user") or {}).get("login", "unknown")
+    base_ref = (pr.get("base") or {}).get("ref", "")
 
-        files_list = "\n".join(
-            f"- {f.get('filename', '')} (+{f.get('additions', 0)} -{f.get('deletions', 0)})"
-            for f in files[:10]
-        )
+    files_list = "\n".join(
+        f"- {f.get('filename', '')} (+{f.get('additions', 0)} -{f.get('deletions', 0)})"
+        for f in files[:10]
+    )
 
-        total_additions = sum(f.get("additions", 0) for f in files)
-        total_deletions = sum(f.get("deletions", 0) for f in files)
+    total_additions = sum(f.get("additions", 0) for f in files)
+    total_deletions = sum(f.get("deletions", 0) for f in files)
 
-        summary, _meta = router.ask_text(
-            "Senior engineer. Write clear, concise PR summaries for reviewers.",
-            f"""Write a reviewer-friendly summary for this Pull Request.
+    summary, _meta = router.ask_text(
+        "Senior engineer. Write clear, concise PR summaries for reviewers.",
+        f"""Write a reviewer-friendly summary for this Pull Request.
 
 Author: {author}
 Base branch: {base_ref}
@@ -394,18 +394,12 @@ Write 3-5 sentences covering:
 2. Key technical changes made
 3. What reviewers should focus on
 Keep it concise and helpful.""",
-            task="pr_summary",
-        )
+        task="pr_summary",
+    )
 
-        # ask_text returns "" on a provider error — don't render an empty section.
-        if not summary or not summary.strip():
-            log.warning("pr_summary.empty — omitting section")
-            return ""
+    # ask_text returns "" on a provider error — don't render an empty section.
+    if not summary or not summary.strip():
+        log.warning("pr_summary.empty")
+        raise SectionUnavailable("the model returned nothing")
 
-        return summary.strip()
-
-    except InjectionRejected:
-        raise  # handle() reports it; swallowing it here hid it
-    except Exception as e:
-        log.error(f"PR summary failed: {e}")
-        return ""
+    return summary.strip()

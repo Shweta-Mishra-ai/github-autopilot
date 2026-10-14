@@ -1143,12 +1143,12 @@
       "id": "app.handlers.pull_request",
       "path": "app/handlers/pull_request/__init__.py",
       "layer": "handlers",
-      "loc": 377,
+      "loc": 383,
       "functions": 2,
       "classes": 0,
       "is_package": true,
       "fan_in": 2,
-      "fan_out": 24,
+      "fan_out": 25,
       "external_deps": [
         "__future__",
         "logging"
@@ -1158,12 +1158,12 @@
       "id": "app.handlers.pull_request.analysis",
       "path": "app/handlers/pull_request/analysis.py",
       "layer": "handlers",
-      "loc": 411,
+      "loc": 405,
       "functions": 6,
       "classes": 0,
       "is_package": false,
       "fan_in": 4,
-      "fan_out": 14,
+      "fan_out": 15,
       "external_deps": [
         "__future__",
         "re"
@@ -1202,15 +1202,27 @@
       ]
     },
     {
+      "id": "app.handlers.pull_request.errors",
+      "path": "app/handlers/pull_request/errors.py",
+      "layer": "handlers",
+      "loc": 14,
+      "functions": 0,
+      "classes": 1,
+      "is_package": false,
+      "fan_in": 4,
+      "fan_out": 0,
+      "external_deps": []
+    },
+    {
       "id": "app.handlers.pull_request.gaps",
       "path": "app/handlers/pull_request/gaps.py",
       "layer": "handlers",
-      "loc": 628,
+      "loc": 623,
       "functions": 18,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 7,
+      "fan_out": 8,
       "external_deps": [
         "__future__",
         "ast",
@@ -1254,7 +1266,7 @@
       "id": "app.handlers.pull_request.report",
       "path": "app/handlers/pull_request/report.py",
       "layer": "handlers",
-      "loc": 48,
+      "loc": 51,
       "functions": 1,
       "classes": 0,
       "is_package": false,
@@ -1269,12 +1281,12 @@
       "id": "app.handlers.pull_request.review",
       "path": "app/handlers/pull_request/review.py",
       "layer": "handlers",
-      "loc": 652,
+      "loc": 653,
       "functions": 10,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 12,
+      "fan_out": 13,
       "external_deps": [
         "__future__"
       ]
@@ -2867,6 +2879,11 @@
     },
     {
       "source": "app.handlers.pull_request",
+      "target": "app.handlers.pull_request.errors",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
       "target": "app.handlers.pull_request.gaps",
       "kind": "import"
     },
@@ -2957,6 +2974,11 @@
     },
     {
       "source": "app.handlers.pull_request.analysis",
+      "target": "app.handlers.pull_request.errors",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.analysis",
       "target": "app.handlers.pull_request.risk",
       "kind": "runtime"
     },
@@ -2999,6 +3021,11 @@
       "source": "app.handlers.pull_request.gaps",
       "target": "app.handlers.pull_request.context",
       "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request.gaps",
+      "target": "app.handlers.pull_request.errors",
+      "kind": "import"
     },
     {
       "source": "app.handlers.pull_request.grounding",
@@ -3073,6 +3100,11 @@
     {
       "source": "app.handlers.pull_request.review",
       "target": "app.handlers.pull_request.context",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.review",
+      "target": "app.handlers.pull_request.errors",
       "kind": "import"
     },
     {
@@ -3527,9 +3559,9 @@
     }
   ],
   "stats": {
-    "modules": 101,
-    "edges": 377,
-    "total_loc": 27613,
+    "modules": 102,
+    "edges": 381,
+    "total_loc": 27626,
     "layers": [
       "ai",
       "core",

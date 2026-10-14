@@ -9,6 +9,7 @@ package that writes to GitHub outside the sticky comment.
 
 from __future__ import annotations
 
+from .errors import SectionUnavailable
 from app.ai.router import MAX_USER_CHARS, prompt_budget, router
 from app.ai.validator import is_unusable, validate_code_review
 from app.core.sanitizer import one_line, wrap_user_content
@@ -387,7 +388,7 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
 
     if is_unusable(batch):
         log.warning("code_review.degraded — no review produced")
-        return "", []
+        raise SectionUnavailable("the model's answer could not be used")
 
     # Say what was NOT reviewed. The report used to read as a review of the
     # whole PR when only the first four files had been sent — and on a large

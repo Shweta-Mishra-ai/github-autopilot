@@ -191,7 +191,10 @@ class TestUntrustedNamesStayInsideTheirBlocks:
         pr = {"title": "t", "body": "", "head": {"ref": "evil\nbranch", "sha": "s"}, "base": {"ref": "main"}, "user": {"login": "u"}}
         cfg = MagicMock()
         cfg.get.side_effect = lambda *a, **k: k.get("default", True)
-        with patch.object(analysis.router, "ask", side_effect=ask):
+        from app.handlers.pull_request.errors import SectionUnavailable
+
+        # The stub's answer is unusable on purpose: only the prompt is checked.
+        with patch.object(analysis.router, "ask", side_effect=ask), pytest.raises(SectionUnavailable):
             analysis._analyze_pr(pr, "o/r", 1, [{"filename": evil, "patch": "+x"}], "t", cfg,
                                  ConfidenceGate(None), "", MagicMock())
         prompt = seen["user"]

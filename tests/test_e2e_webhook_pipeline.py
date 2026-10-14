@@ -227,9 +227,11 @@ def pytest_runtest_makereport(item, call):
 
 # ── Scripted model answers ───────────────────────────────────────────────────
 
+# The change is inside `lookup`, the function the scripted gap names: a gap
+# is published only for a function the PR actually changes.
 SQL_PATCH = (
-    "@@ -1,3 +1,4 @@\n import os\n-q = 'x'\n"
-    "+q = 'SELECT * FROM t WHERE id=' + uid\n+cur.execute(q)\n"
+    "@@ -1,3 +1,4 @@ def lookup(uid):\n     import os\n-    q = 'x'\n"
+    "+    q = 'SELECT * FROM t WHERE id=' + uid\n+    cur.execute(q)\n"
 )
 SQL_FILE = {
     "filename": "app/db.py",
@@ -341,7 +343,8 @@ class TestPullRequestOpened:
         assert len(review) == 1
         comments = review[0]["body"]["comments"]
         assert comments[0]["line"] == 3
-        assert "```suggestion\ncur.execute(q, (uid,))\n```" in comments[0]["body"]
+        # Re-indented to the line it replaces: a suggestion is committed as-is.
+        assert "```suggestion\n    cur.execute(q, (uid,))\n```" in comments[0]["body"]
         assert review[0]["body"]["commit_id"] == "HEADSHA1"
 
     def test_prose_gets_no_commit_button_and_an_unproven_line_no_anchor(self, world):

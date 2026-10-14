@@ -254,6 +254,17 @@ class TestNoCommittableProse:
         assert "```suggestion" not in body
 
 
+# A diff that changes the body of `f`, the function the gaps below name. A
+# gap is published only for a function the PR actually changes.
+GAP_FILES = [
+    {
+        "filename": "app/a.py",
+        "patch": "@@ -1,2 +1,2 @@\n def load_rows(x):\n-    return 0\n+    raise ValueError(x)\n",
+        "status": "modified",
+    }
+]
+
+
 class TestGapSectionSurvivesItsOwnInput:
     def _gaps(self, payload, files=None, log=None):
         with patch.object(gaps_mod.router, "ask", return_value=(payload, MagicMock())):
@@ -261,7 +272,7 @@ class TestGapSectionSurvivesItsOwnInput:
                 {},
                 "o/r",
                 1,
-                files if files is not None else FILES,
+                files if files is not None else GAP_FILES,
                 "t",
                 _cfg(),
                 log or MagicMock(),
@@ -273,7 +284,7 @@ class TestGapSectionSurvivesItsOwnInput:
         "gaps": [
             {
                 "file": "app/a.py",
-                "function": "f",
+                "function": "load_rows",
                 "risk": "high",
                 "suggested_test": "cover the raise",
             }
@@ -353,7 +364,7 @@ class TestGapSectionSurvivesItsOwnInput:
                     },
                     {
                         "file": "app/a.py",
-                        "function": "f",
+                        "function": "load_rows",
                         "risk": "high",
                         "suggested_test": "genuine",
                     },
@@ -371,7 +382,7 @@ class TestGapSectionSurvivesItsOwnInput:
                 "gaps": [
                     {
                         "file": "app/a.py",
-                        "function": "f",
+                        "function": "load_rows",
                         "risk": "CATASTROPHIC",
                         "suggested_test": "t",
                     }
@@ -1456,7 +1467,8 @@ class TestGapModelSeesWhatTheTestsReference:
 
     SOURCE = (
         "@@ -1,3 +1,9 @@ def scan_repo(repo, installation_id):\n"
-        " x = 1\n"
+        "     x = 1\n"
+        "+    y = 2\n"
         "+_SHA_REF = re.compile('x')\n"
         "+def as_text(value, default=''):\n"
         "+    return value\n"

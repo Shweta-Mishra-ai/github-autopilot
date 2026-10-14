@@ -289,10 +289,10 @@ Reported cost in local mode is always `0`.
 | | |
 |---|---|
 | Modules | 98 |
-| Lines of code | 26,375 |
+| Lines of code | 26,612 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 353 |
+| Internal imports | 355 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>
@@ -328,7 +328,7 @@ and anything irreversible asks for confirmation first.
 | `/impact` | Pull request blast radius | Anyone |
 | `/merge` | Merge a PR once checks pass | Maintainers |
 | `/apply` | Open a PR from an autofix branch | Maintainers |
-| `/rollback N` | Restore to snapshot N | Maintainers |
+| `/rollback N confirm` | Undo the bot's recorded actions in snapshot N | Maintainers |
 | `/release` | Draft a GitHub release | Maintainers |
 | `/runtests` | Trigger a CI workflow | Maintainers |
 | `/notify` | Send a Discord or Slack alert | Maintainers |

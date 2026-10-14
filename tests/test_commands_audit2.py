@@ -341,3 +341,56 @@ class TestSummarize:
         prompt = ask.call_args[0][1]
         assert "c0-" in prompt and "RESOLVED in v2.1" in prompt
         assert "omitted for length" in prompt
+
+
+class TestCiTakesTheLogBelowIt:
+    """/ci's own help says to paste the log on the lines after `/ci`; the
+    line-only argument rule silently dropped it."""
+
+    def test_a_log_pasted_below_ci_is_its_argument(self):
+        from app.handlers.comments.dispatcher import parse_command
+
+        cmd, args = parse_command("/ci\n```\nE   ImportError: no module named foo\n```")
+        assert cmd == "/ci"
+        assert "ImportError: no module named foo" in args
+
+    def test_other_commands_still_take_only_their_line(self):
+        from app.handlers.comments.dispatcher import parse_command
+
+        assert parse_command("/rollback 2\nconfirm later, maybe") == ("/rollback", "2")
+
+    def test_the_end_of_a_long_log_is_kept(self):
+        from app.handlers.comments.reviewer import _log_tail
+
+        log = "setup\n" * 2000 + "FAILED test_x - AssertionError"
+        out = _log_tail(log)
+        assert out.endswith("FAILED test_x - AssertionError")
+        assert "earlier characters omitted" in out
+
+
+def test_denied_commands_are_not_counted_as_used():
+    from unittest.mock import MagicMock, patch
+
+    from app.handlers.comments import service
+
+    payload = {
+        "action": "created",
+        "comment": {"body": "/merge", "user": {"login": "stranger", "type": "User"}, "id": 1},
+        "sender": {"login": "stranger"},
+        "issue": {"number": 3, "title": "t", "pull_request": {}},
+        "repository": {"full_name": "o/r"},
+        "installation": {"id": 1},
+    }
+    cfg = MagicMock()
+    cfg.command_enabled.return_value = True
+    with (
+        patch.object(service, "get_installation_token", return_value="t"),
+        patch.object(service, "load_config", return_value=cfg),
+        patch.object(service, "check_user_rate_limit", return_value=True),
+        patch.object(service, "check_command_permission", return_value=(False, "no")) as perm,
+        patch.object(service, "_post_comment"),
+        patch.object(service, "record_command_used") as rec,
+    ):
+        service.handle_comment_event(payload)
+    assert perm.called, "the handler returned before the permission check"
+    rec.assert_not_called()

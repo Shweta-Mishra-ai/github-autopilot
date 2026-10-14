@@ -222,6 +222,17 @@ def cmd_summarize(repo: str, issue_number: int, token: str) -> str:
         return fmt_error("Summarize failed", exc)
 
 
+_CI_LOG_CHARS = 3000
+
+
+def _log_tail(text: str) -> str:
+    """The END of a long log: a CI failure is reported at the bottom, and
+    keeping the first 3,000 characters kept the setup output instead."""
+    if len(text) <= _CI_LOG_CHARS:
+        return text
+    return f"[… {len(text) - _CI_LOG_CHARS:,} earlier characters omitted]\n" + text[-_CI_LOG_CHARS:]
+
+
 def cmd_ci(context: str, repo: str = "", token: str = "") -> str:
     """Analyze a CI failure — from pasted log or latest failed run."""
     ci_context = context.strip() if context else ""
@@ -275,7 +286,7 @@ def cmd_ci(context: str, repo: str = "", token: str = "") -> str:
         r, _verdict = guarded_ask(
             "DevOps expert. Analyze CI failures precisely. JSON only.",
             f"""Analyze this CI failure.
-{limits}{wrap_user_content(ci_context[:3000], "CI_CONTEXT")}
+{limits}{wrap_user_content(_log_tail(ci_context), "CI_CONTEXT")}
 
 Return JSON:
 {{

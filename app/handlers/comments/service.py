@@ -72,7 +72,6 @@ def handle_comment_event(payload: dict) -> None:
 
     log_ctx = EventLogger("comments", repo=repo, issue=issue_number, cmd=cmd, author=author)
     log_ctx.info("command_received")
-    record_command_used(repo, cmd.lstrip("/"))  # /report's usage table; never raises
 
     # ── Auth ──────────────────────────────────────────────────────────────
     try:
@@ -125,6 +124,7 @@ def handle_comment_event(payload: dict) -> None:
         return
 
     # ── Context building & Memory ─────────────────────────────────────────
+    record_command_used(repo, cmd.lstrip("/"))  # only commands that will run; never raises
     context = f"Title: {issue.get('title', '')}\nBody: {(issue.get('body') or '')[:1500]}"
     if "pull_request" in issue and cmd in DIFF_CONTEXT_COMMANDS:
         context = pr_context(repo, issue_number, issue, token, log_ctx) or context

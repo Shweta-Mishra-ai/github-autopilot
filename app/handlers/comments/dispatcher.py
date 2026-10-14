@@ -60,13 +60,49 @@ _LINE_START = r"(?m)^[ \t]*(?:@[\w-]+(?:\[bot\])?[ \t,:]+)?"
 _COMMAND_AT_LINE_START = re.compile(r"^[ \t]*(?:@[\w-]+(?:\[bot\])?[ \t,:]+)?(/[A-Za-z]+)(?!\w)")
 
 
+def _locate_command(body: str) -> tuple[str | None, int, int]:
+    """(command, line index, column after the command) of the first command."""
+    original = (body or "").split("\n")
+    for i, line in enumerate(_strip_non_instructions(body or "").split("\n")):
+        m = _COMMAND_AT_LINE_START.match(line)
+        if not m or m.group(1).lower() not in ALL_COMMANDS:
+            continue
+        source = original[i] if i < len(original) else line
+        om = _COMMAND_AT_LINE_START.match(source)
+        return m.group(1).lower(), i, (om.end() if om else m.end())
+    return None, -1, 0
+
+
+# Commands whose argument is a block of text rather than the rest of a line.
+BLOCK_ARGUMENT_COMMANDS = frozenset({"/ci"})
+
+
+def command_block(body: str) -> str:
+    """
+    Everything after the first command: the rest of its line AND the lines
+    below it, verbatim (code fences included).
+
+    For commands whose input is a block of text — /ci takes a pasted log, and
+    its own help says to paste it on the lines after `/ci`. parse_command()
+    gives only the rest of the line, which is right for /rollback and /apply
+    (prose after them must never become arguments) and wrong here: a log
+    pasted below /ci was silently ignored and only run metadata analysed.
+    """
+    cmd, i, col = _locate_command(body)
+    if cmd is None:
+        return ""
+    lines = (body or "").split("\n")
+    return "\n".join([lines[i][col:], *lines[i + 1 :]]).strip()
+
+
 def parse_command(body: str) -> tuple[str | None, str]:
     """
     (command, arguments) for the FIRST command a comment issues, or (None, "").
 
     A command counts only at the start of a line (after an optional
     @mention), and never inside a quote, code or an HTML comment. Its
-    arguments are the rest of THAT line, in their original case.
+    arguments are the rest of THAT line, in their original case — except for
+    BLOCK_ARGUMENT_COMMANDS, whose argument is everything after the command.
 
     Two defects this replaces. The command picked was the LONGEST one found
     anywhere, so "/fix" then "/autofix" ran /autofix, while the documentation
@@ -77,16 +113,12 @@ def parse_command(body: str) -> tuple[str | None, str]:
     the arguments "2 confirm is scary…", and "Our /circleci job fails\n/ci"
     gave /ci "rcleci job fails".
     """
-    original = (body or "").split("\n")
-    for i, line in enumerate(_strip_non_instructions(body or "").split("\n")):
-        m = _COMMAND_AT_LINE_START.match(line)
-        if not m or m.group(1).lower() not in ALL_COMMANDS:
-            continue
-        source = original[i] if i < len(original) else line
-        om = _COMMAND_AT_LINE_START.match(source)
-        args = source[om.end() :] if om else line[m.end() :]
-        return m.group(1).lower(), args.strip()
-    return None, ""
+    cmd, i, col = _locate_command(body)
+    if cmd is None:
+        return None, ""
+    if cmd in BLOCK_ARGUMENT_COMMANDS:
+        return cmd, command_block(body)
+    return cmd, (body or "").split("\n")[i][col:].strip()
 
 
 def extract_command(body: str) -> str | None:

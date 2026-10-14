@@ -362,8 +362,9 @@ flowchart TB
 ### The real dependency graph
 
 The diagram above is the request flow, drawn by hand. The one below is not
-drawn at all — it is generated from the import graph on every CI run, so it
-cannot drift from the code:
+drawn at all — it is generated from the import graph, and every CI run
+regenerates it and fails if the committed copy differs, so it cannot drift
+from the code unnoticed:
 
 <img src="docs/diagrams/codegraph.svg" alt="Module dependency map: every Python module in this repository on a ring grouped by layer, with imports drawn as curves through the centre" width="100%"/>
 
@@ -373,11 +374,14 @@ body, which this codebase uses deliberately to break cycles. Dot size is lines
 of code.
 
 **Read the panel, not the middle.** A chord diagram draws every edge, and past
-roughly fifty the centre is texture — all 292 imports are in there and not one
+roughly fifty the centre is texture — every import is in there and not one
 of them can be traced from dot to dot. So the panel answers the question the
-picture cannot: which layers actually touch, and how hard. `handlers → core` at
-45 is expected; `core → github` at 9 is the sort of thing worth knowing about
-your own architecture, and it was invisible in the hairball.
+picture cannot: which layers actually touch, and how hard. Heavy
+`handlers → core` traffic is expected; any `core → github` count is the sort of
+thing worth knowing about your own architecture, and it was invisible in the
+hairball. The counts themselves are in the panel, which is regenerated with
+the picture; they are not repeated here because prose numbers drift, and
+these had (the text said 292 imports when the graph held 397).
 
 The panel also reports the three things that are defects rather than facts —
 import cycles, modules nothing imports, and two files claiming one import path

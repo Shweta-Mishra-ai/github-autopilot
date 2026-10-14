@@ -412,7 +412,12 @@ def health():
 
     redis_ok = is_redis_available()
     redis_mem = redis_memory_status()
-    gh_ok = gh_rl_status().get("remaining", 5000) > 50
+    # No call since start means no rate-limit headers have been seen: the
+    # 5000 get_status() falls back to is a default, not a reading.
+    gh_rl = gh_rl_status()
+    gh_measured = bool(gh_rl.get("installations"))
+    gh_ok = not gh_measured or gh_rl.get("remaining", 0) > 50
+    gh_check = ("ok" if gh_ok else "rate_limited") if gh_measured else "unknown (no call since start)"
     breaker_status = status_all()
     any_llm_ok = any(s["state"] == "closed" for s in breaker_status.values())
 
@@ -464,7 +469,7 @@ def health():
             "checks": {
                 "redis": "ok" if redis_ok else "unavailable",
                 "redis_memory": redis_mem,
-                "github_api": "ok" if gh_ok else "rate_limited",
+                "github_api": gh_check,
                 "llm_providers": breaker_status,
                 "llm_models": llm_models,
                 # Non-empty means the provider is answering, and refusing:
@@ -488,7 +493,7 @@ def health():
                 "events_total": metrics.get("events.total", 0),
                 "errors_total": metrics.get("events.error", 0),
                 "events_dropped": metrics.get("events.dropped", 0),
-                "secondary_rate_limited": metrics.get("events.secondary_rate_limited", 0),
+                "secondary_rate_limited": metrics.get("github.secondary_rate_limited", 0),
                 # Non-zero means the collaborator-permission API is failing, so
                 # every maintainer-only command is being denied regardless of who
                 # runs it. Surfaced here because the symptom (commands "not

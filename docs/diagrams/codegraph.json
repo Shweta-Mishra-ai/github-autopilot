@@ -423,14 +423,13 @@
       "id": "app.core.health_check",
       "path": "app/core/health_check.py",
       "layer": "core",
-      "loc": 182,
-      "functions": 5,
-      "classes": 1,
+      "loc": 91,
+      "functions": 3,
+      "classes": 0,
       "is_package": false,
       "fan_in": 3,
-      "fan_out": 3,
+      "fan_out": 2,
       "external_deps": [
-        "dataclasses",
         "json",
         "logging",
         "time"
@@ -550,7 +549,7 @@
       "functions": 1,
       "classes": 1,
       "is_package": false,
-      "fan_in": 9,
+      "fan_in": 10,
       "fan_out": 0,
       "external_deps": [
         "collections",
@@ -777,12 +776,12 @@
       "id": "app.github.client",
       "path": "app/github/client.py",
       "layer": "github",
-      "loc": 324,
+      "loc": 327,
       "functions": 12,
       "classes": 2,
       "is_package": false,
       "fan_in": 27,
-      "fan_out": 2,
+      "fan_out": 3,
       "external_deps": [
         "logging",
         "requests",
@@ -861,7 +860,7 @@
       "functions": 10,
       "classes": 1,
       "is_package": false,
-      "fan_in": 4,
+      "fan_in": 3,
       "fan_out": 1,
       "external_deps": [
         "__future__",
@@ -1586,7 +1585,7 @@
       "id": "server",
       "path": "server.py",
       "layer": "other",
-      "loc": 929,
+      "loc": 934,
       "functions": 33,
       "classes": 0,
       "is_package": false,
@@ -1968,11 +1967,6 @@
       "kind": "runtime"
     },
     {
-      "source": "app.core.health_check",
-      "target": "app.github.rate_limit",
-      "kind": "runtime"
-    },
-    {
       "source": "app.core.idempotency",
       "target": "app.core.redis_client",
       "kind": "import"
@@ -2115,6 +2109,11 @@
     {
       "source": "app.core.webhook_security",
       "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.github.client",
+      "target": "app.core.metrics",
       "kind": "runtime"
     },
     {
@@ -3611,7 +3610,7 @@
   "stats": {
     "modules": 100,
     "edges": 397,
-    "total_loc": 27541,
+    "total_loc": 27458,
     "layers": [
       "ai",
       "core",
@@ -3638,9 +3637,9 @@
       },
       {
         "id": "app.github.client",
-        "loc": 324,
+        "loc": 327,
         "fan_in": 27,
-        "fan_out": 2
+        "fan_out": 3
       },
       {
         "id": "app.security.enhanced_secrets",

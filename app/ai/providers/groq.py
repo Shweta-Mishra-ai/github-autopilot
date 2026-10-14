@@ -19,6 +19,8 @@ from app.ai.providers.base import (
     client_error_detail,
     substituted_model,
     throttle_pause,
+    truncated_error,
+    was_cut_off,
 )
 
 log = logging.getLogger(__name__)
@@ -251,7 +253,8 @@ class GroqProvider(LLMProvider):
             c_tok = usage.get("completion_tokens", 0)
             t_tok = usage.get("total_tokens", 0)
             cost = (t_tok / 1000) * GROQ_COST.get(self.provider_key, 0)
-            text = data["choices"][0]["message"]["content"]
+            choice = data["choices"][0]
+            text = (choice.get("message") or {}).get("content") or ""
 
             breaker.record_success()
 
@@ -263,6 +266,9 @@ class GroqProvider(LLMProvider):
                 completion_tokens=c_tok,
                 total_tokens=t_tok,
                 cost_usd=round(cost, 6),
+                error=truncated_error(max_tokens)
+                if was_cut_off(choice.get("finish_reason"))
+                else None,
             )
 
         except http_requests.exceptions.Timeout:

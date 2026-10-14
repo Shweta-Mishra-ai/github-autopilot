@@ -269,3 +269,48 @@ class TestTriageFlow:
             handle(_payload())
             mock_notif.assert_called_once()
 
+
+
+class TestTriageStatesOnlyWhatTheModelDecided:
+    """"Login returns 500 for all users — prod is down", answered with only a
+    welcome line, was posted as Type: Question, Priority: Medium and labelled
+    `priority: medium`: defaults rendered as a judgement."""
+
+    def _triage(self, answer):
+        from app.handlers import issues
+
+        posts = []
+        cfg = MagicMock()
+        cfg.issues_enabled.return_value = True
+        cfg.get.side_effect = lambda *a, **k: k.get("default", True)
+        cfg.footer = ""
+        payload = {"action": "opened", "repository": {"full_name": "o/r"}, "installation": {"id": 1},
+                   "issue": {"number": 4, "title": "Login returns 500", "body": "Prod is down.",
+                             "user": {"login": "alice"}, "labels": []}}
+        meta = MagicMock(total_tokens=0)
+        with patch.object(issues.router, "ask", return_value=(answer, meta)), \
+             patch.object(issues, "get_installation_token", return_value="t"), \
+             patch.object(issues, "load_config", return_value=cfg), \
+             patch.object(issues, "gh_get", return_value={}), \
+             patch.object(issues, "gh_post", side_effect=lambda p, t, b: posts.append((p, b)) or {}), \
+             patch.object(issues, "_ensure_labels"), \
+             patch.object(issues, "notify_new_issue"), \
+             patch("app.core.guardrails.check_repo_rate_limit",
+                   return_value=MagicMock(passed=True)):
+            issues.handle(payload)
+        return posts
+
+    def test_a_welcome_only_answer_asserts_nothing_and_labels_nothing(self):
+        posts = self._triage({"welcome": "Thanks for reporting!"})
+        assert not any(p.endswith("/labels") for p, _ in posts), "labelled a priority nobody gave"
+        comment = next(b["body"] for p, b in posts if p.endswith("/comments"))
+        assert "Not assessed: type, priority, complexity" in comment
+        assert "Medium" not in comment and "Question" not in comment
+
+    def test_a_full_answer_is_shown_and_labelled(self):
+        posts = self._triage({"welcome": "w", "type": "bug", "priority": "critical",
+                              "complexity": "simple", "labels": []})
+        labels = next(b["labels"] for p, b in posts if p.endswith("/labels"))
+        assert labels == ["priority: critical 🚨"]
+        comment = next(b["body"] for p, b in posts if p.endswith("/comments"))
+        assert "Critical" in comment and "Not assessed" not in comment

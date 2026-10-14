@@ -259,7 +259,7 @@
       "id": "app.ai.validator",
       "path": "app/ai/validator.py",
       "layer": "ai",
-      "loc": 352,
+      "loc": 356,
       "functions": 13,
       "classes": 0,
       "is_package": false,
@@ -1128,7 +1128,7 @@
       "id": "app.handlers.issues",
       "path": "app/handlers/issues.py",
       "layer": "handlers",
-      "loc": 387,
+      "loc": 414,
       "functions": 5,
       "classes": 0,
       "is_package": false,
@@ -3581,7 +3581,7 @@
   "stats": {
     "modules": 100,
     "edges": 391,
-    "total_loc": 27844,
+    "total_loc": 27875,
     "layers": [
       "ai",
       "core",
@@ -3644,7 +3644,7 @@
       },
       {
         "id": "app.ai.validator",
-        "loc": 352,
+        "loc": 356,
         "fan_in": 11,
         "fan_out": 0
       },

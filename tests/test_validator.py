@@ -114,15 +114,15 @@ class TestIssueTriageValidator:
         assert result["priority"] == "medium"
         assert result["labels"] == []
 
-    def test_invalid_priority_clamped_to_medium(self):
-        data = {"priority": "critical_blocker"}
-        result = validate_issue_triage(data)
-        assert result["priority"] == "medium"
+    def test_an_invalid_priority_is_none_not_medium(self):
+        """A default was rendered as the model's verdict."""
+        assert validate_issue_triage({"priority": "critical_blocker"})["priority"] is None
 
-    def test_invalid_type_clamped_to_question(self):
-        data = {"type": "random_type"}
-        result = validate_issue_triage(data)
-        assert result["type"] == "question"
+    def test_an_invalid_type_is_none_not_question(self):
+        assert validate_issue_triage({"type": "random_type"})["type"] is None
+
+    def test_a_given_synonym_still_maps(self):
+        assert validate_issue_triage({"priority": "Urgent"})["priority"] == "critical"
 
     def test_error_dict_returns_safe_defaults(self):
         result = validate_issue_triage({"error": "timeout"})

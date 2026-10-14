@@ -237,19 +237,23 @@ def validate_issue_triage(raw: dict) -> dict:
             "_degraded": True,
         }
 
-    issue_type = _word(raw, "type", "question")
+    # None, not a default, for a field the model did not answer validly. The
+    # defaults were rendered as its judgement: "Login returns 500 for all
+    # users — prod is down", answered with a welcome line only, was posted as
+    # Type: Question, Priority: Medium and labelled `priority: medium`.
+    issue_type = _word(raw, "type", "")
     if issue_type not in VALID_TYPES:
-        issue_type = "question"
+        issue_type = None
 
-    priority = _word(raw, "priority", "medium")
+    priority = _word(raw, "priority", "")
     if priority in ("urgent", "blocker", "severe"):
         priority = "critical"
     if priority not in VALID_PRIORITIES:
-        priority = "medium"
+        priority = None
 
-    complexity = _word(raw, "complexity", "moderate")
+    complexity = _word(raw, "complexity", "")
     if complexity not in VALID_COMPLEXITY:
-        complexity = "moderate"
+        complexity = None
 
     questions = raw.get("questions", [])
     if not isinstance(questions, list):
@@ -265,7 +269,7 @@ def validate_issue_triage(raw: dict) -> dict:
         "priority": priority,
         "labels": _list_of_str(raw.get("labels"), max_items=8, max_item_len=50),
         "welcome": _str(raw.get("welcome", "Thanks for reporting this!"), 500),
-        "needs_info": _bool(raw.get("needs_info", False)),
+        "needs_info": bool(flag(raw, "needs_info")),
         "questions": questions,
         "complexity": complexity,
         "time_estimate": time_estimate,

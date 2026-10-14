@@ -24,6 +24,8 @@ from app.ai.providers.base import (
     redact_secrets,
     substituted_model,
     throttle_pause,
+    truncated_error,
+    was_cut_off,
 )
 
 log = logging.getLogger(__name__)
@@ -230,7 +232,8 @@ class OpenRouterProvider(LLMProvider):
 
             resp.raise_for_status()
             data = resp.json()
-            raw_text = data["choices"][0]["message"]["content"]
+            choice = data["choices"][0]
+            raw_text = (choice.get("message") or {}).get("content") or ""
             usage = data.get("usage", {})
             p_tok = usage.get("prompt_tokens", 0)
             c_tok = usage.get("completion_tokens", 0)
@@ -238,10 +241,8 @@ class OpenRouterProvider(LLMProvider):
 
             from app.ai.providers.base import _extract_json as _ej
 
-            result = _ej(raw_text)
-
             breaker.record_success()
-            return result, LLMResponse(
+            meta = LLMResponse(
                 text=raw_text,
                 provider="openrouter",
                 model=self._model,
@@ -250,6 +251,10 @@ class OpenRouterProvider(LLMProvider):
                 total_tokens=p_tok + c_tok,
                 latency_ms=latency_ms,
             )
+            if was_cut_off(choice.get("finish_reason")):
+                meta.error = truncated_error(max_tokens)
+                return {"error": meta.error}, meta
+            return _ej(raw_text), meta
 
         except Exception as e:
             latency_ms = int((time.time() - start) * 1000)
@@ -300,14 +305,15 @@ class OpenRouterProvider(LLMProvider):
 
             resp.raise_for_status()
             data = resp.json()
-            text = data["choices"][0]["message"]["content"]
+            choice = data["choices"][0]
+            text = (choice.get("message") or {}).get("content") or ""
             usage = data.get("usage", {})
             p_tok = usage.get("prompt_tokens", 0)
             c_tok = usage.get("completion_tokens", 0)
             latency_ms = int((time.time() - start) * 1000)
 
             breaker.record_success()
-            return text, LLMResponse(
+            meta = LLMResponse(
                 text=text,
                 provider="openrouter",
                 model=self._model,
@@ -316,6 +322,10 @@ class OpenRouterProvider(LLMProvider):
                 total_tokens=p_tok + c_tok,
                 latency_ms=latency_ms,
             )
+            if was_cut_off(choice.get("finish_reason")):
+                meta.error = truncated_error(max_tokens)
+                return "", meta
+            return text.strip(), meta
 
         except Exception as e:
             latency_ms = int((time.time() - start) * 1000)

@@ -92,57 +92,66 @@ def _mock_context():
 
 class TestCommandParsing:
 
-    def test_handle_skips_non_created_action(self):
+    def test_handle_skips_an_edit_that_did_not_add_the_command(self):
+        # This was "skips non-created action" and asserted only `result is
+        # None`. Edits are handled now, and its token patch missed the module
+        # that mints it: a real mint failed on the fake key, the failure was
+        # swallowed, and None came back — the test passed without reaching the
+        # code it named. The real rule: an edit runs a command only if the
+        # edit added it, so nothing — not even a token — is spent here.
         from app.handlers.comments import handle
         payload = _make_payload()
         payload["action"] = "edited"
-        with _mock_token(), _mock_config(), _mock_gh_post():
-            result = handle(payload)
-        assert result is None
+        payload["changes"] = {"body": {"from": "/fix"}}
+        with patch("app.handlers.comments.service.get_installation_token") as mint, \
+             _mock_config(), _mock_gh_post() as post:
+            handle(payload)
+        mint.assert_not_called()
+        post.assert_not_called()
+
+    # The three tests below had no assertion at all, and patched the token
+    # mint on the package rather than on service.py, where it is called — so
+    # they could not have failed. Each now asserts that nothing was spent:
+    # the token is minted only for a command that will be answered.
 
     def test_handle_skips_bot_sender(self):
         from app.handlers.comments import handle
         payload = _make_payload(sender="ai-repo-manager[bot]")
         payload["sender"]["type"] = "Bot"
-        with _mock_token(), _mock_config():
+        with patch("app.handlers.comments.service.get_installation_token") as mint:
             handle(payload)
-        # Should return early — no exception
+        mint.assert_not_called()
 
     def test_handle_skips_non_command(self):
         from app.handlers.comments import handle
         payload = _make_payload(body="This is a regular comment")
-        with _mock_token(), _mock_config(), _mock_gh_post():
+        with patch("app.handlers.comments.service.get_installation_token") as mint:
             handle(payload)
-        # gh_post should not have been called with a bot response
-        # (no command to dispatch)
+        mint.assert_not_called()
 
-    def test_unknown_command_returns_help(self):
+    def test_unknown_command_is_not_a_command(self):
+        # It was named "returns help" and asserted nothing. An unknown
+        # /word is not a command: anything else would answer every
+        # comment that mentions a path such as /usr/bin.
         from app.handlers.comments import handle
         payload = _make_payload(body="/unknowncommand123")
-        with _mock_token(), _mock_config(), _mock_gh_post():
+        with patch("app.handlers.comments.service.get_installation_token") as mint:
             handle(payload)
-        # Should post "unknown command" or help message
+        mint.assert_not_called()
 
+    # These three split a string inline and asserted on their own result;
+    # the app's parser was never called.
     def test_command_with_args_parsed(self):
-        """Test /rollback 2 parsing — inline since _parse_command is internal."""
-        body   = "/rollback 2"
-        parts  = body.strip().split(None, 1)
-        cmd    = parts[0].lower()
-        args   = parts[1] if len(parts) > 1 else ""
-        assert cmd == "/rollback"
-        assert args.strip() == "2"
+        from app.handlers.comments.dispatcher import parse_command
+        assert parse_command("/rollback 2") == ("/rollback", "2")
 
     def test_command_case_insensitive(self):
-        body  = "/FIX"
-        parts = body.strip().split(None, 1)
-        cmd   = parts[0].lower()
-        assert cmd == "/fix"
+        from app.handlers.comments.dispatcher import parse_command
+        assert parse_command("/FIX")[0] == "/fix"
 
     def test_command_strips_whitespace(self):
-        body  = "  /fix  "
-        parts = body.strip().split(None, 1)
-        cmd   = parts[0].lower()
-        assert cmd == "/fix"
+        from app.handlers.comments.dispatcher import parse_command
+        assert parse_command("  /fix  ") == ("/fix", "")
 
 
 # ── Command Response Tests ────────────────────────────────────────────────────
@@ -160,14 +169,15 @@ class TestFixCommand:
         }
         with _mock_router_ask(fix_resp):
             result = _cmd_fix("Bug: crashes on None input", "def process(data):\n    return data.strip()")
-        assert "🔧" in result or "Fix" in result
-        assert "Null check" in result or "root_cause" in result.lower() or result
+        assert "## 🔧 Fix" in result
+        assert "Null check missing on line 42" in result
 
     def test_fix_handles_empty_context(self):
         from app.handlers.comments import _cmd_fix
         with _mock_router_ask():
             result = _cmd_fix("Title", "")
-        assert result  # Should return something, not crash
+        # No code shown: the answer must say so rather than read as a diagnosis.
+        assert "have not seen" in result.lower() or "not been shown" in result.lower() or "## 🔧 Fix" in result
 
     def test_fix_includes_root_cause(self):
         from app.handlers.comments import _cmd_fix
@@ -207,14 +217,14 @@ class TestBudgetCommand:
         with patch("app.ai.metrics.format_budget_comment",
                    return_value="## 💰 Budget\n\n| Provider |"):
             result = _cmd_budget()
-        assert result  # Should return something
+        assert result == "## 💰 Budget\n\n| Provider |"
 
     def test_budget_handles_redis_failure(self):
         from app.handlers.comments import _cmd_budget
         with patch("app.ai.metrics.format_budget_comment",
                    side_effect=Exception("Redis down")):
             result = _cmd_budget()
-        assert "failed" in result.lower() or result
+        assert "Budget check failed" in result
 
 
 class TestImproveCommand:
@@ -236,8 +246,10 @@ class TestImproveCommand:
         }
         with _mock_router_ask(improve_resp):
             result = _cmd_improve("def process(): return data.strip()")
-        assert "Improvements" in result or result
-        assert "7" in result or result
+        # `problem` is not a field the /improve prompt asks for; area,
+        # suggestion and example are what it renders.
+        assert "`ERROR_HANDLING` — Add try/except" in result
+        assert "Code is decent but could be improved" in result
 
 
 class TestRollbackCommand:
@@ -248,7 +260,7 @@ class TestRollbackCommand:
         with patch("app.core.snapshot.format_snapshot_list",
                    return_value="## 📸 No Snapshots"):
             result = _cmd_rollback("test/repo", 1, "token", "", "shweta")
-        assert result  # Should return something
+        assert result == "## 📸 No Snapshots"
 
     def test_rollback_invalid_number(self):
         from app.handlers.comments import _cmd_rollback
@@ -260,7 +272,7 @@ class TestRollbackCommand:
         # get_snapshot_by_number imported inside function, patch at source
         with patch("app.core.snapshot.get_snapshot_by_number", return_value=None):
             result = _cmd_rollback("test/repo", 1, "token", "99", "shweta")
-        assert "Not Found" in result or "not found" in result.lower() or result
+        assert "not found" in result.lower()
 
 
 class TestIgnoreCommand:

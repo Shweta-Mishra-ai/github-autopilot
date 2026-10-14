@@ -7,6 +7,7 @@ FIXED (ruff E741 line 282): Renamed ambiguous `l` → `lbl` in notify_new_issue(
 
 import logging
 import os
+import re
 import threading
 from datetime import datetime, timezone
 
@@ -17,6 +18,34 @@ from app import __version__
 from app.core.redaction import redact_secrets
 
 log = logging.getLogger(__name__)
+
+
+# ── Escaping ──────────────────────────────────────────────────────────────────
+# Issue and PR titles, labels and the /notify note are anyone's text on a
+# public repository, and they went into these messages as written. In Slack,
+# `<!channel>` pinged the whole channel and `<https://evil|Reset password>`
+# rendered as a disguised link; in Discord, `@everyone` pinged everyone and
+# `[Reset password](https://evil)` did the same as a masked link.
+
+# Discord pings nobody from these messages, whatever the text contains.
+NO_PINGS = {"parse": []}
+
+_MASKED_LINK = re.compile(r"\]\(")
+
+
+def slack_escape(text) -> str:
+    """Slack's own escaping for message text: only &, < and > are special."""
+    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def plain(text) -> str:
+    """
+    Untrusted text that must not become a link: `[label](url)` is broken
+    with a zero-width space, which renders as nothing on either service.
+    Mentions are handled per channel (slack_escape, NO_PINGS).
+    """
+    return _MASKED_LINK.sub("]\u200b(", str(text))
+
 
 # Read at call time, not import time.
 #
@@ -92,6 +121,11 @@ _CONFIG_EVENT_KEYS = {
 }
 
 
+# The most recent outcome per channel ("sent" / "failed"). /health used the
+# cumulative counters, so one failure months ago read "failing" forever.
+last_outcome: dict[str, str] = {}
+
+
 def _count(metric: str) -> None:
     """
     Record a delivery outcome.
@@ -100,6 +134,9 @@ def _count(metric: str) -> None:
     log line in a thread nobody reads. Counting makes it visible on /metrics
     and /health, where "notifications stopped arriving" is actually diagnosable.
     """
+    parts = metric.split(".")
+    if len(parts) == 3 and parts[2] in ("sent", "failed"):
+        last_outcome[parts[1]] = parts[2]
     try:
         from app.core.metrics import metrics
 
@@ -198,8 +235,8 @@ def _send_slack(title: str, message: str, severity: str):
             "attachments": [
                 {
                     "color": color_map.get(severity, "#3498DB"),
-                    "title": title,
-                    "text": message[:1000],
+                    "title": slack_escape(title),
+                    "text": slack_escape(plain(message))[:1000],
                     "footer": "GitHub Autopilot",
                     "ts": int(datetime.now(timezone.utc).timestamp()),
                 }
@@ -232,7 +269,7 @@ def _send_discord(
         color = _COLORS.get(severity, _COLORS["info"])
         embed: dict = {
             "title": title[:256],
-            "description": message[:4096],
+            "description": plain(message)[:4096],
             "color": color,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "footer": {"text": "GitHub Autopilot"},
@@ -243,13 +280,13 @@ def _send_discord(
             embed["fields"] = [
                 {
                     "name": str(f.get("name", ""))[:256],
-                    "value": str(f.get("value", "\u200b"))[:1024],
+                    "value": plain(f.get("value", "\u200b"))[:1024],
                     "inline": bool(f.get("inline", True)),
                 }
                 for f in fields[:25]
             ]
 
-        payload = {"embeds": [embed]}
+        payload = {"embeds": [embed], "allowed_mentions": NO_PINGS}
         resp = requests.post(
             discord_webhook_url(),
             json=payload,
@@ -396,7 +433,8 @@ def test_discord() -> tuple[bool, str]:
                         {"name": "Version", "value": __version__, "inline": True},
                     ],
                 }
-            ]
+            ],
+            "allowed_mentions": NO_PINGS,
         }
         resp = requests.post(
             discord_webhook_url(),
@@ -408,7 +446,7 @@ def test_discord() -> tuple[bool, str]:
             return True, "Discord notification sent successfully ✅"
         return False, f"Discord returned HTTP {resp.status_code}: {resp.text[:150]}"
     except Exception as e:
-        return False, f"Exception: {e}"
+        return False, f"Exception: {redact_secrets(str(e))}"
 
 
 def send_rich_discord(
@@ -442,14 +480,17 @@ def send_rich_discord(
                 }
                 for f in fields[:25]
             ]
-        payload = {"embeds": [embed]}
+        # The caller escapes untrusted text with plain(); this description may
+        # carry the bot's own links (notify_autofix_created). Pings are off
+        # here regardless.
+        payload = {"embeds": [embed], "allowed_mentions": NO_PINGS}
         r = requests.post(webhook_url, json=payload, timeout=10)
         ok = r.status_code in (200, 204)
         _count(f"notifications.discord.{'sent' if ok else 'failed'}")
         return ok, f"HTTP {r.status_code}"
     except Exception as e:
         _count("notifications.discord.failed")
-        return False, str(e)
+        return False, redact_secrets(str(e))
 
 
 def send_rich_slack(
@@ -472,8 +513,8 @@ def send_rich_slack(
     try:
         attachment: dict = {
             "color": color,
-            "title": title[:256],
-            "text": description[:3000],
+            "title": slack_escape(title)[:256],
+            "text": slack_escape(description)[:3000],
             "footer": "GitHub Autopilot",
             "ts": int(datetime.now(timezone.utc).timestamp()),
         }
@@ -482,8 +523,8 @@ def send_rich_slack(
         if fields:
             attachment["fields"] = [
                 {
-                    "title": str(f.get("name", ""))[:256],
-                    "value": str(f.get("value", ""))[:1024],
+                    "title": slack_escape(f.get("name", ""))[:256],
+                    "value": slack_escape(f.get("value", ""))[:1024],
                     "short": bool(f.get("inline", False)),
                 }
                 for f in fields[:10]
@@ -494,7 +535,7 @@ def send_rich_slack(
         return ok, f"HTTP {r.status_code}"
     except Exception as e:
         _count("notifications.slack.failed")
-        return False, str(e)
+        return False, redact_secrets(str(e))
 
 
 def notify_autofix_created(repo: str, issue_number: int, pr_number: int, pr_url: str):

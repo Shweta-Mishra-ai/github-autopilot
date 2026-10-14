@@ -47,6 +47,8 @@ class SecurityReport:
     codeql: list[SecurityFinding] = field(default_factory=list)
     secrets: list[SecurityFinding] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    # Sources with more open alerts than were read.
+    truncated: list[str] = field(default_factory=list)
 
     @property
     def all_findings(self) -> list[SecurityFinding]:
@@ -168,6 +170,8 @@ class SecurityReport:
 
         if self.errors:
             lines.append(f"\n> ⚠️ Some APIs unavailable: {', '.join(self.errors)}")
+        for note in self.truncated:
+            lines.append(f"\n> ℹ️ {note}")
 
         lines.append("\n---")
         lines.append("*🤖 GitHub Autopilot — GitHub Security APIs*")
@@ -198,23 +202,52 @@ def _record_failure(source: str, e: Exception, errors: list) -> None:
     log.warning(f"security.source_unavailable source={source}: {e}")
 
 
-def _alerts(path: str, token: str) -> list:
-    """GET a list of alerts, refusing anything that is not a list."""
+ALERT_PAGE_SIZE = 100
+ALERT_MAX_PAGES = 5
+
+
+def _alerts(
+    path: str,
+    token: str,
+    source: str = "",
+    truncated: list | None = None,
+    pages: int = ALERT_MAX_PAGES,
+) -> list:
+    """
+    GET every open alert, up to `pages` pages of 100, refusing anything that
+    is not a list.
+
+    This read one page of 30 — so a repository with 31 open alerts was
+    reported with 30, and the 31st could be the critical one. Pages are
+    fetched with gh_get rather than gh_get_all on purpose: gh_get_all turns a
+    403 on the first page into an empty list, which is the "All Clear" for an
+    unread source that _record_failure exists to prevent. When the last page
+    read was full, the source is noted in `truncated`.
+    """
     from app.github.client import gh_get
 
-    alerts = gh_get(path, token)
-    if not isinstance(alerts, list):
-        # Iterating a dict walks its keys, and `"key".get(...)` raised
-        # AttributeError into the same silent branch as everything else.
-        raise ValueError(f"expected a list of alerts, got {type(alerts).__name__}")
-    return alerts
+    out: list = []
+    for page in range(1, pages + 1):
+        sep = "&" if "?" in path else "?"
+        paged = f"{path}{sep}per_page={ALERT_PAGE_SIZE}" + (f"&page={page}" if pages > 1 else "")
+        alerts = gh_get(paged, token)
+        if not isinstance(alerts, list):
+            # Iterating a dict walks its keys, and `"key".get(...)` raised
+            # AttributeError into the same silent branch as everything else.
+            raise ValueError(f"expected a list of alerts, got {type(alerts).__name__}")
+        out.extend(a for a in alerts if isinstance(a, dict))
+        if len(alerts) < ALERT_PAGE_SIZE:
+            return out
+    if truncated is not None and source:
+        truncated.append(f"{source}: only the first {len(out)} open alerts were read; more exist.")
+    return out
 
 
 def run_security_scan(repo: str, token: str) -> SecurityReport:
     report = SecurityReport(repo=repo)
-    report.dependabot = _scan_dependabot(repo, token, report.errors)
-    report.codeql = _scan_codeql(repo, token, report.errors)
-    report.secrets = _scan_secrets(repo, token, report.errors)
+    report.dependabot = _scan_dependabot(repo, token, report.errors, report.truncated)
+    report.codeql = _scan_codeql(repo, token, report.errors, report.truncated)
+    report.secrets = _scan_secrets(repo, token, report.errors, report.truncated)
 
     log.info(
         f"security.scan_complete repo={repo} total={report.total_count} critical={report.critical_count}"
@@ -232,12 +265,18 @@ def run_pr_security_scan(repo: str, pr_number: int, token: str) -> SecurityRepor
 
         pr_files = fetch_pr_files(repo, pr_number, token, get=gh_get)
         changed_paths = {f["filename"] for f in pr_files}
-    except Exception:
+    except Exception as e:
         changed_paths = set()
+        # Not silently: the alerts below are then the whole repository's,
+        # listed as though they were this PR's.
+        report.truncated.append(
+            f"This PR's file list could not be read ({type(e).__name__}), so CodeQL "
+            "alerts are shown for the whole repository, not only this PR's files."
+        )
 
-    all_dep = _scan_dependabot(repo, token, report.errors)
-    all_codeql = _scan_codeql(repo, token, report.errors)
-    all_sec = _scan_secrets(repo, token, report.errors)
+    all_dep = _scan_dependabot(repo, token, report.errors, report.truncated)
+    all_codeql = _scan_codeql(repo, token, report.errors, report.truncated)
+    all_sec = _scan_secrets(repo, token, report.errors, report.truncated)
 
     if changed_paths:
         report.codeql = [f for f in all_codeql if not f.file_path or f.file_path in changed_paths]
@@ -250,17 +289,25 @@ def run_pr_security_scan(repo: str, pr_number: int, token: str) -> SecurityRepor
     return report
 
 
-def _scan_dependabot(repo: str, token: str, errors: list) -> list[SecurityFinding]:
+def _scan_dependabot(
+    repo: str, token: str, errors: list, truncated: list | None = None
+) -> list[SecurityFinding]:
     try:
-        alerts = _alerts(f"/repos/{repo}/dependabot/alerts?state=open&per_page=30", token)
+        # One page: Dependabot alerts paginate by cursor (`after`), which the
+        # client does not expose, so a full page is reported as truncated
+        # rather than walked with a `page` parameter this endpoint deprecates.
+        alerts = _alerts(
+            f"/repos/{repo}/dependabot/alerts?state=open", token, "Dependabot", truncated, pages=1
+        )
         findings = []
         for alert in alerts:
-            adv = alert.get("security_advisory", {})
-            dep = alert.get("dependency", {})
-            pkg = dep.get("package", {}).get("name", "")
-            severity = adv.get("severity", "medium").lower()
-            cve_ids = [i["value"] for i in adv.get("identifiers", []) if i["type"] == "CVE"]
-            ghsa_ids = [i["value"] for i in adv.get("identifiers", []) if i["type"] == "GHSA"]
+            adv = alert.get("security_advisory") or {}
+            dep = alert.get("dependency") or {}
+            pkg = (dep.get("package") or {}).get("name", "")
+            severity = str(adv.get("severity") or "medium").lower()
+            ids = [i for i in adv.get("identifiers") or [] if isinstance(i, dict)]
+            cve_ids = [i.get("value", "") for i in ids if i.get("type") == "CVE"]
+            ghsa_ids = [i.get("value", "") for i in ids if i.get("type") == "GHSA"]
             cve_id = cve_ids[0] if cve_ids else (ghsa_ids[0] if ghsa_ids else "")
             url = alert.get("html_url", "")
 
@@ -281,14 +328,24 @@ def _scan_dependabot(repo: str, token: str, errors: list) -> list[SecurityFindin
         return []
 
 
-def _scan_codeql(repo: str, token: str, errors: list) -> list[SecurityFinding]:
+def _scan_codeql(
+    repo: str, token: str, errors: list, truncated: list | None = None
+) -> list[SecurityFinding]:
     try:
-        alerts = _alerts(f"/repos/{repo}/code-scanning/alerts?state=open&per_page=30", token)
+        alerts = _alerts(
+            f"/repos/{repo}/code-scanning/alerts?state=open", token, "CodeQL", truncated
+        )
         findings = []
         for alert in alerts:
-            rule = alert.get("rule", {})
-            location = alert.get("most_recent_instance", {}).get("location", {})
-            severity = rule.get("severity", "medium").lower()
+            rule = alert.get("rule") or {}
+            location = (alert.get("most_recent_instance") or {}).get("location") or {}
+            # A security rule carries its real severity in
+            # security_severity_level (critical/high/medium/low). `severity`
+            # is the generic error/warning/note level, which mapped every
+            # critical SQL injection to "high" at best.
+            severity = str(
+                rule.get("security_severity_level") or rule.get("severity") or "medium"
+            ).lower()
             if severity == "error":
                 severity = "high"
             elif severity == "warning":
@@ -301,7 +358,12 @@ def _scan_codeql(repo: str, token: str, errors: list) -> list[SecurityFinding]:
                     source="codeql",
                     severity=severity,
                     title=rule.get("description", rule.get("id", "CodeQL finding"))[:100],
-                    description=alert.get("message", {}).get("text", "")[:200],
+                    # The message lives on the instance; the alert has none.
+                    description=str(
+                        ((alert.get("most_recent_instance") or {}).get("message") or {}).get(
+                            "text", ""
+                        )
+                    )[:200],
                     file_path=location.get("path", ""),
                     line_number=location.get("start_line", 0),
                     url=alert.get("html_url", ""),
@@ -313,9 +375,13 @@ def _scan_codeql(repo: str, token: str, errors: list) -> list[SecurityFinding]:
         return []
 
 
-def _scan_secrets(repo: str, token: str, errors: list) -> list[SecurityFinding]:
+def _scan_secrets(
+    repo: str, token: str, errors: list, truncated: list | None = None
+) -> list[SecurityFinding]:
     try:
-        alerts = _alerts(f"/repos/{repo}/secret-scanning/alerts?state=open&per_page=30", token)
+        alerts = _alerts(
+            f"/repos/{repo}/secret-scanning/alerts?state=open", token, "Secret Scanning", truncated
+        )
         findings = []
         for alert in alerts:
             secret_type = alert.get("secret_type_display_name", alert.get("secret_type", "Secret"))

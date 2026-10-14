@@ -10,18 +10,21 @@ IMPROVED:
 - Similar issues detection to prevent duplicates
 """
 
-import logging
 import contextlib
+import json
+import logging
+import re
 
 from app.github.auth import get_installation_token
 from app.github.client import gh_get, gh_post, GitHubError
+from app.github.deferred_reply import post_comment
 from app.github.notifications import notify_new_issue
 from app.ai.router import router
 from app.ai.validator import validate_issue_triage
 from app.core.config import load_config
 from app.core.guardrails import check_auto_label
 from app.core.logger import EventLogger
-from app.core.sanitizer import wrap_user_content
+from app.core.sanitizer import one_line, wrap_user_content
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +37,26 @@ SKIP_AUTHORS = {
 }
 
 
+def _record_close(payload: dict) -> None:
+    """Feed /report: a closed issue and how long it was open. Never raises."""
+    issue = payload.get("issue") or {}
+    if "pull_request" in issue:
+        return
+    try:
+        from app.core.analytics import hours_between, record_issue_closed
+
+        hours = hours_between(issue.get("created_at"), issue.get("closed_at"))
+        if hours is not None:
+            record_issue_closed(payload["repository"]["full_name"], issue.get("number", 0), hours)
+    except Exception as e:
+        logger.debug(f"analytics.record_close_failed: {e}")
+
+
 def handle(payload: dict):
     action = payload.get("action")
+    if action == "closed":
+        _record_close(payload)
+        return
     if action != "opened":
         return
 
@@ -60,11 +81,9 @@ def handle(payload: dict):
 
     log.info(f"Issue #{issue_number} opened by @{author}")
 
-    try:
-        token = get_installation_token(installation_id)
-    except Exception as e:
-        log.error(f"Auth failed: {e}")
-        return
+    # Raised, not logged: nothing has run yet, so the queue retrying the
+    # event is the whole recovery. Returning reported it as handled.
+    token = get_installation_token(installation_id)
 
     config = load_config(repo, token)
     if not config.issues_enabled():
@@ -116,6 +135,10 @@ def handle(payload: dict):
         with contextlib.suppress(Exception):
             _ensure_labels(repo, token)
 
+    allowed_labels = ", ".join(_TYPE_LABELS.values())
+    from app.ai.router import last_model_disclosure, reset_last_call
+
+    reset_last_call()
     raw, _meta = router.ask(
         "You are an expert open source maintainer and technical lead. "
         "Triage GitHub issues with precision. Return valid JSON only.",
@@ -145,9 +168,9 @@ Return JSON:
   "priority": "critical|high|medium|low",
   "complexity": "trivial|simple|moderate|complex|epic",
   "time_estimate": "< 1 hour|1-4 hours|1-3 days|1-2 weeks|> 2 weeks",
-  "labels": ["bug 🐛"],
+  "labels": ["zero or more of: {allowed_labels}"],
   "welcome": "2-3 sentence personalized response that acknowledges their specific issue",
-  "needs_info": true,
+  "needs_info": "true or false",
   "questions": ["specific question about reproduction steps", "version/environment info"]
 }}""",
         task="issue_triage",
@@ -160,19 +183,19 @@ Return JSON:
     # than a table of fabricated type/priority/complexity values.
     if result.get("_degraded"):
         log.error(f"issues.triage_degraded issue=#{issue_number} — posting plain acknowledgement")
-        with contextlib.suppress(GitHubError):
-            gh_post(
-                f"/repos/{repo}/issues/{issue_number}/comments",
-                token,
-                {
-                    "body": (
-                        f"## 👋 Thanks for the issue, @{author}!\n\n"
-                        "A maintainer will take a look shortly.\n\n"
-                        "> Automated triage was unavailable for this issue."
-                        f"{config.footer}"
-                    )
-                },
-            )
+        post_comment(
+            repo,
+            issue_number,
+            token,
+            installation_id,
+            (
+                f"## 👋 Thanks for the issue, @{author}!\n\n"
+                "A maintainer will take a look shortly.\n\n"
+                "> Automated triage was unavailable for this issue."
+                f"{config.footer}"
+            ),
+            post=gh_post,
+        )
         return
 
     # Priority → emoji + label
@@ -183,7 +206,7 @@ Return JSON:
         "medium": ("📌", "priority: medium 📌"),
         "low": ("💤", "priority: low 💤"),
     }
-    p_emoji, p_label = p_map.get(priority, ("📌", "priority: medium 📌"))
+    p_emoji, p_label = p_map.get(priority, ("", None))
 
     # Type → emoji
     t_emoji = {
@@ -194,7 +217,7 @@ Return JSON:
         "performance": "⚡",
         "security": "🔒",
         "refactor": "♻️",
-    }.get(result["type"], "📋")
+    }.get(result["type"] or "", "📋")
 
     # Complexity → emoji
     c_emoji = {
@@ -203,19 +226,35 @@ Return JSON:
         "moderate": "🟡",
         "complex": "🔴",
         "epic": "🏔️",
-    }.get(result["complexity"], "🟡")
+    }.get(result["complexity"] or "", "")
 
-    # Labels
-    all_labels = result["labels"] + [p_label]
+    # Labels: only what the model decided. A priority it did not give gets no
+    # priority label (it was labelled "medium").
+    all_labels = triage_labels(result["labels"], p_label)
 
     label_guard = check_auto_label(issue, all_labels, config)
-    if label_guard.passed:
-        with contextlib.suppress(GitHubError):
+    if all_labels and label_guard.passed:
+        try:
             gh_post(
                 f"/repos/{repo}/issues/{issue_number}/labels",
                 token,
                 {"labels": all_labels},
             )
+            # Only labels the author did not set themselves: /rollback removes
+            # what is recorded here.
+            had = {
+                (lab.get("name") if isinstance(lab, dict) else str(lab))
+                for lab in issue.get("labels") or []
+            }
+            added = [lab for lab in all_labels if lab not in had]
+            if added:
+                from app.core.snapshot import record_action
+
+                record_action(repo, {"type": "add_labels", "number": issue_number, "labels": added})
+        except GitHubError as e:
+            # Was suppressed without a trace: the triage comment then named a
+            # priority whose label was never applied, and nothing said why.
+            log.error(f"issues.labels_failed issue=#{issue_number}: {e}")
 
     # Build questions section
     q_section = ""
@@ -227,34 +266,69 @@ Return JSON:
     time_est = result.get("time_estimate", "")
     time_row = f"\n| **Est. Effort** | {time_est} |" if time_est else ""
 
+    # A row per field the model actually assessed; the rest are named as not
+    # assessed rather than filled in.
+    rows = [
+        (name, f"{emoji} {value.capitalize()}")
+        for name, emoji, value in (
+            ("Type", t_emoji, result["type"]),
+            ("Priority", p_emoji, priority),
+            ("Complexity", c_emoji, result["complexity"]),
+        )
+        if value
+    ]
+    missing = [
+        n
+        for n, v in (
+            ("type", result["type"]),
+            ("priority", priority),
+            ("complexity", result["complexity"]),
+        )
+        if not v
+    ]
+    table = (
+        "| | |\n|---|---|\n" + "\n".join(f"| **{n}** | {v.strip()} |" for n, v in rows) + time_row
+        if rows
+        else ""
+    )
+    not_assessed = f"\n\n> Not assessed: {', '.join(missing)}." if missing else ""
+
     comment = f"""## {t_emoji} Thanks for the issue, @{author}!
 
 {result["welcome"]}
 
-| | |
-|---|---|
-| **Type** | {t_emoji} {result["type"].capitalize()} |
-| **Priority** | {p_emoji} {priority.capitalize()} |
-| **Complexity** | {c_emoji} {result["complexity"].capitalize()} |{time_row}
+{table}{not_assessed}
 {q_section}
 
 ---
 💡 *Use `/explain`, `/fix`, or `/improve` on this issue for AI assistance.*
+{"*Triaged with AI" + last_model_disclosure() + "*" if last_model_disclosure() else ""}
 {config.footer}"""
 
+    # The triage comment is posted once: a transient refusal parks it on the
+    # queue (labels are already applied and the model is not asked again).
+    # It used to be logged and dropped.
+    lost: GitHubError | None = None
     try:
-        gh_post(f"/repos/{repo}/issues/{issue_number}/comments", token, {"body": comment})
-        log.done(f"Issue #{issue_number} triaged: {result['type']}/{priority}")
+        post_comment(repo, issue_number, token, installation_id, comment, post=gh_post)
+        log.done(f"Issue #{issue_number} triaged: {result['type'] or '-'}/{priority or '-'}")
     except GitHubError as e:
         log.error(f"Comment failed: {e}")
+        lost = e
 
-    # Remember the shape of this issue so recurring patterns surface later.
+    # Remember the shape of this issue so recurring patterns surface later —
+    # only a classification the model made, never "triaged as None/None".
     with contextlib.suppress(Exception):
+        if not (result["type"] and priority):
+            raise LookupError("not classified")
         from app.intelligence.memory import remember
 
+        # The title is anyone's text on a public repository and is recalled
+        # into later prompts: one line, bounded, quoted as the author's.
         remember(
             repo,
-            f"Issue #{issue_number} '{title}' triaged as {result['type']}/{priority}",
+            f"Issue #{issue_number} (title by its author: {json.dumps(one_line(title, 150))}) "
+            f"triaged as {result['type']}/{priority}",
             kind="pattern",
         )
 
@@ -262,23 +336,79 @@ Return JSON:
     with contextlib.suppress(Exception):
         notify_new_issue(repo=repo, issue_number=issue_number, title=title, labels=all_labels)
 
+    # Counted as a failed event, not logged as a triaged one.
+    if lost is not None:
+        raise lost
+
+
+# The labels this bot manages. Triage applies only these: the model's
+# `labels` list used to be applied verbatim, and adding a label that does not
+# exist makes GitHub CREATE it, so a model answer of "urgent-fix-asap" (or an
+# issue author steering it) added arbitrary labels to the repository.
+BOT_LABELS = [
+    ("priority: critical 🚨", "d93f0b"),
+    ("priority: high 🔥", "e11d48"),
+    ("priority: medium 📌", "f97316"),
+    ("priority: low 💤", "6b7280"),
+    ("bug 🐛", "d73a4a"),
+    ("enhancement ✨", "a2eeef"),
+    ("question ❓", "d876e3"),
+    ("documentation 📚", "0075ca"),
+    ("performance ⚡", "e4e669"),
+    ("security 🔒", "e11d48"),
+    ("good first issue 👋", "7057ff"),
+    ("help wanted 🙏", "008672"),
+]
+
+
+def _label_key(name: str) -> str:
+    """ "bug 🐛", "Bug" and "bug" are the same label to a model."""
+    return re.sub(r"[^a-z: ]", "", str(name).lower()).strip()
+
+
+_TYPE_LABELS = {_label_key(n): n for n, _ in BOT_LABELS if not n.startswith("priority:")}
+
+
+def triage_labels(model_labels: list, priority_label: str | None) -> list[str]:
+    """The model's labels limited to the bot's own non-priority labels, plus
+    the one priority label the validated priority decided, if it decided one."""
+    out = [_TYPE_LABELS[_label_key(lab)] for lab in model_labels if _label_key(lab) in _TYPE_LABELS]
+    return list(dict.fromkeys([*out, *([priority_label] if priority_label else [])]))
+
+
+_LABELS_ENSURED_TTL = 24 * 3600
+
 
 def _ensure_labels(repo: str, token: str):
-    LABELS = [
-        ("priority: critical 🚨", "d93f0b"),
-        ("priority: high 🔥", "e11d48"),
-        ("priority: medium 📌", "f97316"),
-        ("priority: low 💤", "6b7280"),
-        ("bug 🐛", "d73a4a"),
-        ("enhancement ✨", "a2eeef"),
-        ("question ❓", "d876e3"),
-        ("documentation 📚", "0075ca"),
-        ("performance ⚡", "e4e669"),
-        ("security 🔒", "e11d48"),
-        ("good first issue 👋", "7057ff"),
-        ("help wanted 🙏", "008672"),
-    ]
-    for name, color in LABELS:
+    """
+    Create the bot's labels that the repository does not have yet.
+
+    This POSTed all twelve on every new issue and relied on the 422 for the
+    ones that existed — twelve writes per issue against the secondary rate
+    limit. It now reads the label list, creates only what is missing, and
+    remembers for a day that the repository is set up.
+    """
+    from app.core.redis_client import get_redis
+
+    key = f"labels_ensured:{repo}"
+    r = None
+    try:
+        r = get_redis()
+        if r.get(key):
+            return
+    except Exception:
+        r = None
+
+    from app.github.client import gh_get_all
+
+    existing = {
+        (lab.get("name") or "").lower()
+        for lab in gh_get_all(f"/repos/{repo}/labels", token)
+        if isinstance(lab, dict)
+    }
+    for name, color in BOT_LABELS:
+        if name.lower() in existing:
+            continue
         try:
             gh_post(f"/repos/{repo}/labels", token, {"name": name, "color": color})
         except GitHubError as e:
@@ -287,3 +417,6 @@ def _ensure_labels(repo: str, token: str):
                 logger.debug(f"Label creation skipped for {name}: {e}")
         except Exception as e:
             logger.warning(f"Unexpected error creating label {name}: {e}")
+    if r is not None:
+        with contextlib.suppress(Exception):
+            r.set(key, "1", ex=_LABELS_ENSURED_TTL)

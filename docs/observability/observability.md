@@ -69,6 +69,9 @@
 | `uptime_seconds` | Any positive | `< 60` after restart | Normal after deploy |
 | `checks.redis` | `"ok"` | `"unavailable (using in-memory)"` | Check `REDIS_URL` env var |
 | `checks.github_api` | `"ok"` | `"rate_limited"` | Wait for rate limit reset (1hr) |
+| `checks.github_api` | — | `"unknown (no call since start)"` | Not a fault: no GitHub response has been seen yet, so there is no rate-limit reading |
+| `metrics.secondary_rate_limited` | `0` | rising | GitHub secondary (abuse) limits since start; events are retried by the queue |
+| `providers.*.avg_latency_ms` | a number | `null` | `null` means no samples, or Redis could not be read — not 0 ms |
 | `checks.llm_providers.*.state` | `"closed"` | `"open"` or `"half_open"` | Check API key, provider status |
 | `checks.llm_providers.*.usage_pct` | `< 80` | `≥ 80` | Daily limit approaching, add fallback |
 | `thread_pool.pending_jobs` | `0–5` | `> 20` | Bot under load, events queueing |

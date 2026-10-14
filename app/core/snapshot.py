@@ -139,78 +139,145 @@ def record_bot_action(repo: str, snap_id: str, action: dict):
         log.error(f"snapshot.record_action_failed: {e}")
 
 
-def _get_bot_actions(r, repo: str, snap_id: str) -> list:
-    """Load bot actions from the atomic list key. Returns newest-first."""
+# Bot actions are grouped into one snapshot per repository per hour.
+ACTIVITY_WINDOW = 3600
+
+
+def record_action(repo: str, action: dict) -> None:
+    """
+    Record something the bot did, so /rollback can undo it.
+
+    record_bot_action() existed and nothing called it, and the only snapshot
+    ever taken was /rollback's own safety snapshot — so every rollback
+    reported "Rollback Complete" having undone nothing. Actions are now
+    recorded where the bot writes (issues it opens, labels it adds, PR titles
+    and descriptions it rewrites) into an hourly snapshot created on first
+    use. No GitHub reads: recording must cost nothing on the webhook path.
+    Never raises.
+    """
     try:
-        actions_key = f"snapshot_actions:{repo}:{snap_id}"
-        raw_list = r.lrange(actions_key, 0, -1)
-        return [json.loads(item) for item in raw_list if item]
-    except Exception:
-        return []
+        r = get_redis()
+        bucket = int(time.time()) // ACTIVITY_WINDOW
+        pointer = f"snapshot_activity:{repo}:{bucket}"
+        new_id = _make_id()
+        if r.set(pointer, new_id, nx=True, ex=ACTIVITY_WINDOW * 2):
+            snap_id = new_id
+            snapshot = {
+                "id": snap_id,
+                "repo": repo,
+                "trigger": "bot_activity",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp_ts": int(time.time()),
+                "state": {},
+            }
+            r.set(f"snapshot:{repo}:{snap_id}", json.dumps(snapshot), ex=SNAPSHOT_TTL)
+            index_key = f"snapshot_index:{repo}"
+            r.lpush(index_key, snap_id)
+            r.ltrim(index_key, 0, MAX_SNAPSHOTS - 1)
+            r.expire(index_key, SNAPSHOT_TTL)
+        else:
+            snap_id = r.get(pointer)
+            snap_id = snap_id.decode() if isinstance(snap_id, bytes) else snap_id
+        if snap_id:
+            record_bot_action(
+                repo, snap_id, {**action, "at": datetime.now(timezone.utc).isoformat()}
+            )
+    except Exception as e:
+        log.error(f"snapshot.record_failed repo={repo}: {e}")
+
+
+class SnapshotsUnavailable(Exception):
+    """
+    Redis could not be read. Every read here answered "nothing" on an error,
+    so with Redis down /rollback said "Nothing has been recorded for this
+    repository in the last 7 days", and a snapshot's action list read as
+    empty — "no recorded actions" to undo — when it had not been read at all.
+    """
+
+
+def _get_bot_actions(r, repo: str, snap_id: str) -> list:
+    """Load bot actions from the atomic list key. Returns newest-first.
+    Raises SnapshotsUnavailable when Redis cannot be read; skips an entry
+    that is not valid JSON."""
+    try:
+        raw_list = r.lrange(f"snapshot_actions:{repo}:{snap_id}", 0, -1)
+    except Exception as e:
+        raise SnapshotsUnavailable(f"{type(e).__name__}: {e}") from e
+    actions = []
+    for item in raw_list or []:
+        try:
+            actions.append(json.loads(item))
+        except (TypeError, ValueError):
+            log.warning(f"snapshot.action_unreadable repo={repo} id={snap_id}")
+    return actions
 
 
 def list_snapshots(repo: str) -> list[dict]:
+    """Raises SnapshotsUnavailable when Redis cannot be read."""
+    from app.core.redis_client import get_redis
+
     try:
-        from app.core.redis_client import get_redis
-
         r = get_redis()
-        index_key = f"snapshot_index:{repo}"
-        snap_ids = r.lrange(index_key, 0, MAX_SNAPSHOTS - 1)
-
-        if not snap_ids:
-            return []
-
-        summaries = []
-        for snap_id in snap_ids:
-            raw = r.get(f"snapshot:{repo}:{snap_id}")
-            if not raw:
-                continue
-
-            snap = json.loads(raw)
-            actions = _get_bot_actions(r, repo, snap_id)
-            # .get() throughout: one snapshot written by an older version, or
-            # truncated, used to raise KeyError out of the loop and take the
-            # entire list with it — so a single malformed entry made every
-            # snapshot unlistable and /rollback report "none available".
-            state = snap.get("state") or {}
-            latest_commit = state.get("latest_commit") or ""
-
-            summaries.append(
-                {
-                    "id": snap_id,
-                    "number": len(summaries) + 1,
-                    "trigger": snap.get("trigger", "unknown"),
-                    "timestamp": snap.get("timestamp", ""),
-                    "issues_count": state.get("open_issues_count", 0),
-                    "prs_count": state.get("open_prs_count", 0),
-                    "commit": latest_commit[:7] if latest_commit else "—",
-                    "bot_actions": len(actions),
-                }
-            )
-
-        return summaries
-
+        snap_ids = r.lrange(f"snapshot_index:{repo}", 0, MAX_SNAPSHOTS - 1)
+        raws = [(snap_id, r.get(f"snapshot:{repo}:{snap_id}")) for snap_id in snap_ids or []]
     except Exception as e:
         log.error(f"snapshot.list_failed repo={repo}: {e}")
-        return []
+        raise SnapshotsUnavailable(f"{type(e).__name__}: {e}") from e
+
+    summaries = []
+    for snap_id, raw in raws:
+        if not raw:
+            continue
+        try:
+            snap = json.loads(raw)
+        except (TypeError, ValueError):
+            log.warning(f"snapshot.unreadable repo={repo} id={snap_id}")
+            continue
+        actions = _get_bot_actions(r, repo, snap_id)
+        # .get() throughout: one snapshot written by an older version, or
+        # truncated, used to raise KeyError out of the loop and take the
+        # entire list with it — so a single malformed entry made every
+        # snapshot unlistable and /rollback report "none available".
+        state = snap.get("state") or {}
+        latest_commit = state.get("latest_commit") or ""
+
+        summaries.append(
+            {
+                "id": snap_id,
+                "number": len(summaries) + 1,
+                "trigger": snap.get("trigger", "unknown"),
+                "timestamp": snap.get("timestamp", ""),
+                # None for an activity snapshot, which reads no state.
+                "issues_count": state.get("open_issues_count"),
+                "prs_count": state.get("open_prs_count"),
+                "commit": latest_commit[:7] if latest_commit else "—",
+                "bot_actions": len(actions),
+            }
+        )
+
+    return summaries
 
 
 def get_snapshot(repo: str, snap_id: str) -> dict | None:
-    try:
-        from app.core.redis_client import get_redis
+    """None when there is no such snapshot; raises SnapshotsUnavailable when
+    Redis cannot be read — "not found" and "could not look" are different."""
+    from app.core.redis_client import get_redis
 
+    try:
         r = get_redis()
         raw = r.get(f"snapshot:{repo}:{snap_id}")
-        if not raw:
-            return None
-
-        snap = json.loads(raw)
-        snap["bot_actions"] = _get_bot_actions(r, repo, snap_id)
-        return snap
-
     except Exception as e:
         log.error(f"snapshot.get_failed repo={repo} id={snap_id}: {e}")
+        raise SnapshotsUnavailable(f"{type(e).__name__}: {e}") from e
+    if not raw:
         return None
+    try:
+        snap = json.loads(raw)
+    except (TypeError, ValueError):
+        log.warning(f"snapshot.unreadable repo={repo} id={snap_id}")
+        return None
+    snap["bot_actions"] = _get_bot_actions(r, repo, snap_id)
+    return snap
 
 
 def get_snapshot_by_number(repo: str, number: int) -> dict | None:
@@ -227,16 +294,22 @@ def format_snapshot_list(repo: str) -> str:
     if not snapshots:
         return (
             "## 📸 No Snapshots Available\n\n"
-            "Snapshots are taken automatically before major bot actions.\n"
-            "No recent snapshots found for this repo."
+            "The bot records the issues it opens, the labels it adds and the PR "
+            "titles and descriptions it rewrites, grouped per hour, so they can "
+            "be undone here.\n\nNothing has been recorded for this repository "
+            "in the last 7 days."
         )
 
     rows = []
     for s in snapshots:
         ts = s["timestamp"][:16].replace("T", " ") if s["timestamp"] else "—"
+        state = (
+            "—"
+            if s["issues_count"] is None
+            else f"{s['issues_count']} issues, {s['prs_count']} PRs"
+        )
         rows.append(
-            f"| **#{s['number']}** | `{s['trigger']}` | {ts} UTC | "
-            f"{s['issues_count']} issues, {s['prs_count']} PRs | "
+            f"| **#{s['number']}** | `{s['trigger']}` | {ts} UTC | {state} | "
             f"`{s['commit']}` | {s['bot_actions']} actions |"
         )
 
@@ -274,7 +347,7 @@ def format_rollback_result(repo: str, snap: dict, restored: list[str], failed: l
 
     result = f"""## ↩️ Rollback Complete
 
-**Restored to snapshot from:** `{snap_ts} UTC`
+**Undid the bot actions recorded in the snapshot from:** `{snap_ts} UTC`
 **Trigger:** `{snap.get("trigger", "unknown")}`
 
 ### Actions Taken

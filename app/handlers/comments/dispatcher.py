@@ -30,11 +30,26 @@ _LOCAL_CMD_MAX_KEYS = 5000
 _FENCED_RE = re.compile(r"```.*?(?:```|\Z)|~~~.*?(?:~~~|\Z)", re.S)
 _INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
 _QUOTE_LINE_RE = re.compile(r"(?m)^[ \t]*>.*$")
+# Also not instructions: an HTML comment (invisible on GitHub — `<!-- /merge -->`
+# ran /merge) and an indented code block (four spaces or a tab, rendered as
+# code — "Steps I ran:\n\n    /release" cut a release).
+_HTML_COMMENT_RE = re.compile(r"<!--.*?(?:-->|\Z)", re.S)
+_INDENTED_RE = re.compile(r"(?m)^(?: {4,}|\t).*$")
+
+
+def _blank_keeping_lines(m: re.Match) -> str:
+    return "\n" * m.group(0).count("\n")
 
 
 def _strip_non_instructions(body: str) -> str:
-    body = _FENCED_RE.sub(" ", body)
-    body = _QUOTE_LINE_RE.sub(" ", body)
+    """
+    The comment with everything that is not an instruction blanked out, LINE
+    FOR LINE, so a line found here is the same line in the original comment.
+    """
+    body = _FENCED_RE.sub(_blank_keeping_lines, body)
+    body = _HTML_COMMENT_RE.sub(_blank_keeping_lines, body)
+    body = _QUOTE_LINE_RE.sub("", body)
+    body = _INDENTED_RE.sub("", body)
     return _INLINE_CODE_RE.sub(" ", body)
 
 
@@ -42,23 +57,127 @@ def _strip_non_instructions(body: str) -> str:
 # used to match anywhere, so prose ran commands: "See /release for details"
 # cut a release, "I ran /test locally" generated tests.
 _LINE_START = r"(?m)^[ \t]*(?:@[\w-]+(?:\[bot\])?[ \t,:]+)?"
+_COMMAND_AT_LINE_START = re.compile(r"^[ \t]*(?:@[\w-]+(?:\[bot\])?[ \t,:]+)?(/[A-Za-z]+)(?!\w)")
+
+
+def _locate_command(body: str) -> tuple[str | None, int, int]:
+    """(command, line index, column after the command) of the first command."""
+    original = (body or "").split("\n")
+    for i, line in enumerate(_strip_non_instructions(body or "").split("\n")):
+        m = _COMMAND_AT_LINE_START.match(line)
+        if not m or m.group(1).lower() not in ALL_COMMANDS:
+            continue
+        source = original[i] if i < len(original) else line
+        om = _COMMAND_AT_LINE_START.match(source)
+        return m.group(1).lower(), i, (om.end() if om else m.end())
+    return None, -1, 0
+
+
+# Commands whose argument is a block of text rather than the rest of a line.
+BLOCK_ARGUMENT_COMMANDS = frozenset({"/ci"})
+
+# pr_context() puts this before the diff. Its presence is how a command knows
+# it was shown code rather than only an issue's title and body.
+DIFF_MARKER = "Diff (start of each file):"
+
+# Commands whose answer is about the repository's code.
+CODE_ANSWER_COMMANDS = frozenset(
+    {"/fix", "/explain", "/improve", "/test", "/docs", "/refactor", "/gaps", "/perf"}
+)
+_FILE_REF = re.compile(
+    r"(?<![\w/.-])((?:[\w.-]+/)*[\w.-]+\.(?:py|js|jsx|ts|tsx|go|rb|java|kt|rs|php|cs|"
+    r"cpp|cc|c|h|hpp|swift|scala|sh|sql|ya?ml|toml|json|cfg|ini))(?![\w/])"
+)
+
+
+def has_code(context: str) -> bool:
+    return DIFF_MARKER in (context or "")
+
+
+def ground_answer(cmd: str, response, context: str, repo: str, token: str) -> object:
+    """
+    What a code answer was based on, and which files it named that do not exist.
+
+    An answer from an issue's text alone read the same as one from the diff,
+    and nothing checked the file paths a model put in it. The reply now says
+    when no code was seen, and lists named files the repository does not
+    have. When the tree cannot be read nothing is claimed either way.
+    """
+    if cmd not in CODE_ANSWER_COMMANDS or not isinstance(response, str) or not response:
+        return response
+    notes = []
+    if not has_code(context):
+        notes.append(
+            "> ℹ️ Based on the issue's text only — this answer has not seen the "
+            "repository's code. Check any file or function it names before acting."
+        )
+    named = sorted(set(_FILE_REF.findall(response)))
+    if named and repo and token:
+        from app.github.helpers import repo_file_context
+
+        known = set((repo_file_context(repo, token, get=gh_get) or {}).get("files") or [])
+        if known:
+            # Files the PR adds are not on the default branch yet; anything the
+            # model was shown is real.
+            known |= set(_FILE_REF.findall(context or ""))
+            missing = [
+                n for n in named if n not in known and not any(k.endswith("/" + n) for k in known)
+            ]
+            if missing:
+                listed = ", ".join(f"`{m}`" for m in missing[:8])
+                notes.append(
+                    f"> ⚠️ Not in this repository: {listed} — named by the model, not found."
+                )
+    return "\n\n".join([response, *notes]) if notes else response
+
+
+def command_block(body: str) -> str:
+    """
+    Everything after the first command: the rest of its line AND the lines
+    below it, verbatim (code fences included).
+
+    For commands whose input is a block of text — /ci takes a pasted log, and
+    its own help says to paste it on the lines after `/ci`. parse_command()
+    gives only the rest of the line, which is right for /rollback and /apply
+    (prose after them must never become arguments) and wrong here: a log
+    pasted below /ci was silently ignored and only run metadata analysed.
+    """
+    cmd, i, col = _locate_command(body)
+    if cmd is None:
+        return ""
+    lines = (body or "").split("\n")
+    return "\n".join([lines[i][col:], *lines[i + 1 :]]).strip()
+
+
+def parse_command(body: str) -> tuple[str | None, str]:
+    """
+    (command, arguments) for the FIRST command a comment issues, or (None, "").
+
+    A command counts only at the start of a line (after an optional
+    @mention), and never inside a quote, code or an HTML comment. Its
+    arguments are the rest of THAT line, in their original case — except for
+    BLOCK_ARGUMENT_COMMANDS, whose argument is everything after the command.
+
+    Two defects this replaces. The command picked was the LONGEST one found
+    anywhere, so "/fix" then "/autofix" ran /autofix, while the documentation
+    says the first command is the one processed. And the arguments were
+    sliced from the first raw occurrence of the command text in the whole
+    body — which could be inside a quote, a code block, prose or a longer
+    word: "Running /rollback 2 confirm is scary…\n/rollback" gave /rollback
+    the arguments "2 confirm is scary…", and "Our /circleci job fails\n/ci"
+    gave /ci "rcleci job fails".
+    """
+    cmd, i, col = _locate_command(body)
+    if cmd is None:
+        return None, ""
+    if cmd in BLOCK_ARGUMENT_COMMANDS:
+        return cmd, command_block(body)
+    return cmd, (body or "").split("\n")[i][col:].strip()
 
 
 def extract_command(body: str) -> str | None:
-    """
-    The command a comment issues, or None.
-
-    A command counts only at the start of a line (after an optional
-    @mention), and never inside a quote or code. Longest-match first prevents
-    '/fix' matching inside '/autofix'; the trailing word boundary stops
-    '/fix' matching '/fixture'.
-    """
-    body_lower = _strip_non_instructions(body or "").lower()
-    # Sort by length descending so /autofix is tried before /fix
-    for cmd in sorted(ALL_COMMANDS, key=len, reverse=True):
-        if re.search(_LINE_START + re.escape(cmd) + r"\b", body_lower):
-            return cmd
-    return None
+    """The command a comment issues, or None. See parse_command."""
+    return parse_command(body)[0]
 
 
 def command_repeated_by_edit(payload: dict, cmd: str) -> bool:
@@ -164,11 +283,22 @@ def pr_context(repo: str, number: int, issue: dict, token: str, log_ctx) -> str:
             f"Title: {issue.get('title', '')}\n"
             f"Body: {(issue.get('body') or '')[:500]}\n\n"
             f"Changed files ({len(files)}):\n{listing}\n\n"
-            f"Diff (start of each file):\n{diff or '(no diff available)'}"
+            f"{DIFF_MARKER}\n{diff or '(no diff available)'}"
         )
     except Exception as exc:
         log_ctx.warning("pr_context_unavailable", reason=str(exc)[:100])
-        return ""
+        from app.core.transient import is_transient
+
+        if is_transient(exc):
+            raise  # retried by the queue rather than answered without the code
+        # Not "" — the caller fell back to the title and body, and the command
+        # answered about code it had not been shown as though it had.
+        return (
+            f"Title: {issue.get('title', '')}\n"
+            f"Body: {(issue.get('body') or '')[:1500]}\n\n"
+            f"The pull request's changed files could not be read ({type(exc).__name__}). "
+            "Do not describe or judge its code; say that it could not be read."
+        )
 
 
 def command_disabled_comment(cmd: str) -> str:
@@ -219,8 +349,8 @@ def providers_down_comment(retry_in: int = 60) -> str:
         "## ⚠️ AI Temporarily Unavailable\n\n"
         "All language model providers are currently unavailable "
         f"(circuit breakers open). Earliest retry: **~{retry_in}s**.\n\n"
-        "Please try again in a minute.\n\n"
-        "> Transient issue — no action needed.\n\n"
+        "Please try again in a minute. If it persists, `/health` shows each "
+        "provider's state.\n\n"
         "---\n*🤖 GitHub Autopilot*"
     )
 
@@ -251,5 +381,14 @@ def is_providers_down(result: dict) -> bool:
 
 
 def make_degraded_response(result: dict) -> str:
-    retry_in = result.get("_retry_in", 60) if isinstance(result, dict) else 60
-    return providers_down_comment(retry_in)
+    """
+    The reply when no provider answered. It ignored the configuration-error
+    flag, so a missing or rejected API key was reported as "Transient issue —
+    no action needed" — the one case where waiting cannot help.
+    """
+    from app.ai.guarded import not_configured_comment
+
+    result = result if isinstance(result, dict) else {}
+    if result.get("_configuration_error"):
+        return not_configured_comment(result.get("message", ""), "answer")
+    return providers_down_comment(int(result.get("_retry_in") or result.get("retry_in") or 60))

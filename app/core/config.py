@@ -28,8 +28,14 @@ log = logging.getLogger(__name__)
 # ── Cache (5-minute TTL, thread-safe) ────────────────────────────────────────
 _config_cache: dict[str, tuple] = {}  # {repo: (Config, timestamp)}
 _config_lock = threading.RLock()  # RLock: reentrant so invalidate can be called inside load
-_config_fetching: set = set()  # repos currently being fetched (thundering herd guard)
+# repo -> Event set when its in-flight fetch finishes (thundering herd guard).
+_config_fetching: dict = {}
 _CONFIG_TTL = 300  # 5 minutes in seconds
+# How long a config that could not be READ (as opposed to one that does not
+# exist) stands in. Short, so a transient error is retried soon.
+_CONFIG_ERROR_TTL = 30
+# How long a concurrent caller waits for an in-flight fetch of the same repo.
+_CONFIG_WAIT_SECONDS = 10
 
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
@@ -143,13 +149,96 @@ def _deep_merge(base: dict, override: dict) -> dict:
     return result
 
 
+# Sections read with an `enabled` switch that have no entry in DEFAULTS.
+# "confidence" is listed so a scalar there is dropped rather than raising.
+_SECTIONS_WITHOUT_DEFAULTS = {"ci", "confidence"}
+
+_TRUE_WORDS = {"true", "yes", "on", "1"}
+_FALSE_WORDS = {"false", "no", "off", "0"}
+
+
+def _as_bool(value):
+    """
+    True or False for a boolean or a boolean-looking string; None otherwise.
+
+    `enabled: "false"` (quoted) is a string, and bool("false") is True — the
+    switch read as on.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return None if value not in (0, 1) else bool(value)
+    if isinstance(value, str):
+        word = value.strip().lower()
+        if word in _TRUE_WORDS:
+            return True
+        if word in _FALSE_WORDS:
+            return False
+    return None
+
+
 def _validate_config(data: dict) -> dict:
     """
     Validate and sanitize user config values.
     Bad values → warning logged → default used. Never crashes.
     """
+    # A section written with nothing under it (`push:` with only commented
+    # children) is YAML null. `data.get("push", {})` returned that None, the
+    # next `.get` raised, and load_config fell back to DEFAULTS for the WHOLE
+    # file — `bot: {enabled: false}` and every maintainer_only entry ignored.
+    #
+    # A section written as a scalar did worse. `bot: false` replaced the bot
+    # dict with False, bot_enabled() then read its default of True, and the
+    # kill switch left the bot running. `confidence: high` made the next
+    # `.get` raise, which load_config reported as an unreadable config, so
+    # every event for the repo was retried and never ran. Each section is now
+    # repaired on its own: a boolean on a section with an `enabled` switch
+    # sets that switch, anything else that is not a mapping is dropped with
+    # a warning and that section alone takes its defaults.
+    for key in set(DEFAULTS) | _SECTIONS_WITHOUT_DEFAULTS:
+        if key not in data:
+            continue
+        value = data[key]
+        if value is None:
+            data[key] = {}
+        elif isinstance(value, dict):
+            pass
+        elif _as_bool(value) is not None and (
+            "enabled" in DEFAULTS.get(key, {}) or key in _SECTIONS_WITHOUT_DEFAULTS
+        ):
+            data[key] = {"enabled": _as_bool(value)}
+            log.info(f"config.section_as_switch section={key} enabled={data[key]['enabled']}")
+        else:
+            log.warning(
+                f"config.invalid_section section={key} type={type(value).__name__} "
+                "— must be a mapping; this section uses defaults"
+            )
+            del data[key]
+        section = data.get(key)
+        if not isinstance(section, dict):
+            continue
+        # Every on/off setting, not only `enabled`: `code_review: "false"`
+        # read as on for the same reason.
+        defaults = DEFAULTS.get(key, {})
+        # Only keys whose default IS a boolean: `commands.enabled` is an
+        # allow-list, and coercing it deleted the list and lifted the
+        # restriction.
+        switches = {k for k, v in defaults.items() if isinstance(v, bool)}
+        if key in _SECTIONS_WITHOUT_DEFAULTS:
+            switches.add("enabled")
+        for name in switches & set(section):
+            flag = _as_bool(section[name])
+            if flag is None:
+                log.warning(
+                    f"config.invalid_switch section={key} key={name} value={section[name]!r} "
+                    "— must be true or false; using the default"
+                )
+                del section[name]
+            else:
+                section[name] = flag
+
     # ── Confidence thresholds: must be float 0.0-1.0 ────────────────────────
-    raw_thresholds = data.get("confidence", {}).get("thresholds", {})
+    raw_thresholds = (data.get("confidence") or {}).get("thresholds") or {}
     if isinstance(raw_thresholds, dict):
         clean: dict = {}
         for k, v in raw_thresholds.items():
@@ -170,10 +259,12 @@ def _validate_config(data: dict) -> dict:
         data.setdefault("confidence", {})["thresholds"] = clean
 
     # ── max_files_reviewed: must be int 1-20 ────────────────────────────────
-    mfr = data.get("pull_requests", {}).get("max_files_reviewed")
+    mfr = (data.get("pull_requests") or {}).get("max_files_reviewed")
     if mfr is not None:
         try:
             mfr = int(mfr)
+            # Written back: a quoted "5" passed int() and stayed a string.
+            data.setdefault("pull_requests", {})["max_files_reviewed"] = mfr
             if not (1 <= mfr <= 20):
                 log.warning(f"config.invalid max_files_reviewed={mfr} (must be 1–20) — using 6")
                 data.setdefault("pull_requests", {})["max_files_reviewed"] = 6
@@ -182,10 +273,13 @@ def _validate_config(data: dict) -> dict:
             data.setdefault("pull_requests", {})["max_files_reviewed"] = 6
 
     # ── create_issue_threshold: must be int 1-20 ────────────────────────────
-    cit = data.get("push", {}).get("create_issue_threshold")
+    cit = (data.get("push") or {}).get("create_issue_threshold")
     if cit is not None:
         try:
             cit = int(cit)
+            # Written back: `"5"` stayed a string and the push handler's
+            # `len(bad_commits) < "5"` raised TypeError.
+            data.setdefault("push", {})["create_issue_threshold"] = cit
             if not (1 <= cit <= 20):
                 log.warning(f"config.invalid create_issue_threshold={cit} (must be 1–20) — using 3")
                 data.setdefault("push", {})["create_issue_threshold"] = 3
@@ -272,8 +366,12 @@ class Config:
         return cmd.lstrip("/") in {str(c).lstrip("/") for c in enabled}
 
     def is_maintainer_only(self, cmd: str) -> bool:
+        # Entries normalised like command_enabled's: `maintainer_only: ["/fix"]`
+        # restricted nothing, because "/fix" was compared with "fix".
         mo = self.get("commands", "permissions", "maintainer_only", default=[])
-        return cmd.lstrip("/") in mo
+        if not isinstance(mo, list):
+            return False
+        return cmd.lstrip("/") in {str(c).lstrip("/") for c in mo}
 
     @property
     def footer(self) -> str:
@@ -304,10 +402,22 @@ class Config:
 # ── Loader ────────────────────────────────────────────────────────────────────
 
 
+class ConfigUnavailable(Exception):
+    """
+    The repository's config could not be read and no earlier copy is held.
+
+    Not defaults: the config holds the kill switch (bot.enabled), the command
+    allow-list and who may run /merge. Running on defaults after one 502 —
+    on a fresh process, or once the cached copy had expired — ignored all
+    three. The event is retried instead (app.core.transient).
+    """
+
+
 def load_config(repo: str, token: str) -> Config:
     """
     Load .ai-repo-manager.yml from repo with 5-minute cache.
-    Falls back to defaults if file missing or invalid.
+    Falls back to defaults if the file is missing or invalid; raises
+    ConfigUnavailable if it could not be read and no earlier copy is held.
     Thread-safe: uses RLock + per-repo fetch sentinel to prevent
     thundering herd (multiple threads simultaneously fetching same config
     on cache miss, wasting GitHub API calls).
@@ -327,12 +437,21 @@ def load_config(repo: str, token: str) -> Config:
                 return cached_config
 
         # Thundering herd guard: if another thread is already fetching this
-        # repo's config, return defaults rather than pile-on with a 2nd fetch.
-        if repo in _config_fetching:
-            log.debug(f"config.fetch_in_progress repo={repo} — returning defaults")
-            return Config({})
+        # repo's config, WAIT for it. This returned Config({}) instead — the
+        # defaults — so an event arriving alongside another for the same repo
+        # ran with bot.enabled true and no maintainer_only restrictions, on a
+        # repo whose config said otherwise.
+        in_flight = _config_fetching.get(repo)
+        if in_flight is None:
+            _config_fetching[repo] = threading.Event()
 
-        _config_fetching.add(repo)
+    if in_flight is not None:
+        in_flight.wait(_CONFIG_WAIT_SECONDS)
+        with _config_lock:
+            if repo in _config_cache:
+                return _config_cache[repo][0]
+        log.warning(f"config.concurrent_fetch_timed_out repo={repo}")
+        raise ConfigUnavailable(f"config for {repo}: concurrent fetch timed out")
 
     # Cache miss — fetch from GitHub (outside lock so other repos aren't blocked)
     try:
@@ -355,26 +474,58 @@ def load_config(repo: str, token: str) -> Config:
         # branch — the same trust boundary GitHub Actions applies to workflow
         # permissions. tests/test_prelaunch_audit.py pins this.
         data = gh_get(f"/repos/{repo}/contents/.ai-repo-manager.yml", token)
-        raw = base64.b64decode(data["content"]).decode("utf-8")
 
         import yaml
 
-        parsed = yaml.safe_load(raw) or {}
+        # A file that was READ but is not valid config is the maintainer's to
+        # fix, and stays on defaults as documented — retrying cannot change
+        # it. Only a failed read (below) is refused.
+        try:
+            raw = base64.b64decode(data["content"]).decode("utf-8")
+            parsed = yaml.safe_load(raw) or {}
+        except Exception as parse_error:
+            log.warning(f"config.invalid repo={repo}: {parse_error} — using defaults")
+            parsed = {}
         if not isinstance(parsed, dict):
             log.warning(f"config.invalid_yaml repo={repo} — using defaults")
             parsed = {}
 
         config = Config(parsed)
+        cached_at = now
         log.info(f"config.loaded repo={repo}")
 
     except Exception as e:
-        log.debug(f"config.using_defaults repo={repo} reason={e}")
-        config = Config({})
+        # No config file is a legitimate state: defaults, cached normally.
+        # Anything else (a 5xx, a network error, bad base64) means the config
+        # could not be READ, which is not evidence it is empty. That used to
+        # cache Config({}) for the full five minutes, ignoring the repo's kill
+        # switch and command restrictions after one transient 502. The last
+        # good config is kept when there is one; otherwise defaults stand in
+        # only briefly.
+        missing = getattr(e, "status_code", None) == 404
+        with _config_lock:
+            previous = _config_cache.get(repo)
+        if missing:
+            config = Config({})
+            log.debug(f"config.not_found repo={repo} — using defaults")
+        elif previous is None:
+            log.warning(f"config.unreadable repo={repo}: {e} — event not run on defaults")
+            with _config_lock:
+                done = _config_fetching.pop(repo, None)
+            if done is not None:
+                done.set()  # a waiting thread finds no cache entry and raises too
+            raise ConfigUnavailable(f"config for {repo}: {type(e).__name__}: {e}") from e
+        else:
+            config = previous[0]
+            log.warning(f"config.unreadable repo={repo}: {e} — keeping the last loaded config")
+        cached_at = now if missing else now - (_CONFIG_TTL - _CONFIG_ERROR_TTL)
 
     with _config_lock:
-        _config_fetching.discard(repo)
+        done = _config_fetching.pop(repo, None)
         _prune_config_cache(now)
-        _config_cache[repo] = (config, now)
+        _config_cache[repo] = (config, cached_at)
+    if done is not None:
+        done.set()
 
     return config
 
@@ -404,9 +555,13 @@ def invalidate_config_cache(repo: str = None):
     with _config_lock:
         if repo:
             _config_cache.pop(repo, None)
-            _config_fetching.discard(repo)
+            done = _config_fetching.pop(repo, None)
+            if done is not None:
+                done.set()
             log.debug(f"config.cache_invalidated repo={repo}")
         else:
             _config_cache.clear()
+            for done in _config_fetching.values():
+                done.set()
             _config_fetching.clear()
         log.debug("config.cache_invalidated all")

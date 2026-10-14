@@ -226,8 +226,6 @@ Then paste the single-line result.
 |----------|---------|---------|
 | `DISCORD_WEBHOOK_URL` | None | Discord channel for high-risk PR + secret alerts |
 | `SLACK_WEBHOOK_URL` | None | Slack channel notifications |
-| `QDRANT_URL` | None | Qdrant Cloud URL for vector code context |
-| `QDRANT_API_KEY` | None | Qdrant Cloud API key |
 | `METRICS_AUTH_TOKEN` | None | Bearer token to protect `/metrics` endpoint |
 | `MAX_DISPATCH_WORKERS` | `6` | Thread pool worker count (integer) |
 | `REPO_DAILY_AI_LIMIT` | `150` | Max AI calls per repo per day (integer) |

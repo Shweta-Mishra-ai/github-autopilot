@@ -7,6 +7,7 @@ commit, one secret alert per repo per window, and silence when there is
 genuinely nothing to say.
 """
 
+import pytest
 from unittest.mock import MagicMock, patch
 
 from app.handlers import pull_request as pr_mod
@@ -84,6 +85,10 @@ class TestSilenceWhenNothingToSay:
                     MagicMock(),
                 ),
             ),
+            # The summary goes through ask_text. Unstubbed, it reached the real
+            # router, failed with no providers, and the failure was swallowed —
+            # so this "clean push" was a push whose summary never ran.
+            patch.object(pr_mod.router, "ask_text", return_value=("Changes x.", MagicMock())),
             patch.object(pr_mod, "upsert_sticky") as sticky,
             patch.object(pr_mod, "update_sticky_if_present", return_value=None) as refresh,
         ):
@@ -362,10 +367,11 @@ class TestBatchedReview:
         cfg.footer = ""
         cfg.get.return_value = 4
 
-        with patch.object(pr_mod.router, "ask", return_value=({"raw": "nope"}, MagicMock())):
-            md, inline = pr_mod._review_code(
+        from app.handlers.pull_request.errors import SectionUnavailable
+
+        # No review — and handle() is told so, instead of receiving "".
+        with patch.object(pr_mod.router, "ask", return_value=({"raw": "nope"}, MagicMock())), \
+             pytest.raises(SectionUnavailable):
+            pr_mod._review_code(
                 {"head": {"sha": "s"}}, "o/r", 1, files, "t", cfg, MagicMock(), "", MagicMock()
             )
-
-        assert md == ""
-        assert inline == []

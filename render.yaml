@@ -20,6 +20,10 @@ services:
           name: github-autopilot-redis
           type: redis
           property: connectionString
+      # Redis is required: fail loudly without it rather than keep dedupe,
+      # budgets and memory in process memory (app/core/redis_client.py).
+      - key: ENVIRONMENT
+        value: production
       - key: GITHUB_APP_ID
         sync: false
       - key: GITHUB_PRIVATE_KEY

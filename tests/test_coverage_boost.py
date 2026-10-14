@@ -147,10 +147,14 @@ def test_reviewer_commands(mock_guarded_ask, mock_router, mock_gh_get):
     res = R.cmd_impact("repo", 1, {"pull_request": {}}, "token")
     assert "Impact" in res
 
-    # cmd_changelog
+    # cmd_changelog: "some text" is not a changelog entry, and is no longer
+    # published inside a "CHANGELOG Entry" block as though it were one.
     mock_gh_get.side_effect = gh_get_side_effect
     res = R.cmd_changelog("repo", "token")
-    assert "CHANGELOG" in res
+    assert "No Changelog Entry Produced" in res
+    mock_router.ask_text.return_value = ("## [1.0.1] - 2026-10-14\n### Fixed\n- x", None)
+    res = R.cmd_changelog("repo", "token")
+    assert "CHANGELOG Entry" in res
 
 # Patched at the package level, not on publisher: /runtests and /notify live in
 # integrations.py now, and every module in this package delegates to
@@ -167,7 +171,8 @@ def test_publisher_commands(mock_router, mock_gh_delete, mock_gh_put, mock_gh_po
         if "reviews" in url:
             return []
         if "check-runs" in url:
-            return {"check_runs": []}
+            # One passing run: zero checks is refused ("nothing reported yet").
+            return {"check_runs": [{"name": "ci", "conclusion": "success"}], "total_count": 1}
         if "tags" in url:
             return [{"name": "v1.0.0"}]
         if "releases" in url:
@@ -354,35 +359,23 @@ def test_licenses_scan(mock_get):
     assert "permissive" in empty_formatted
 
 @patch("app.ai.circuit_breaker.status_all")
-@patch("app.github.rate_limit.get_status")
-@patch("app.core.redis_client.is_redis_available")
 @patch("app.core.redis_client.get_redis")
-def test_system_health(mock_get_redis, mock_redis_avail, mock_gh_status, mock_breakers):
-    # Set mock configurations
-    mock_redis_avail.return_value = True
-    mock_gh_status.return_value = {"remaining": 5000, "resets_in": 3600}
+def test_system_health(mock_get_redis, mock_breakers):
     mock_breakers.return_value = {
         "groq": {"state": "closed"},
-        "gemini": {"state": "open"} # degraded
+        "gemini": {"state": "open"},  # degraded
     }
-
-    # Mock redis instance for record_latency
     mock_redis = MagicMock()
     mock_redis.get.return_value = None
     mock_get_redis.return_value = mock_redis
 
-    # Record latency
     hc_mod.record_latency("groq", 150)
     mock_redis.set.assert_called()
 
-    # Get system health
     health = hc_mod.get_system_health()
-    assert health["status"] == "partial"
-    assert health["is_degraded"] is True
     assert health["providers"]["gemini"]["is_degraded"] is True
     assert health["providers"]["groq"]["is_degraded"] is False
-
-    # Get degraded message
-    msg = hc_mod.get_degraded_message()
-    assert "gemini" in msg
+    # No samples read back: unknown, not "0 ms, 0% errors".
+    assert health["providers"]["groq"]["avg_latency_ms"] is None
+    assert health["providers"]["groq"]["error_rate"] is None
 

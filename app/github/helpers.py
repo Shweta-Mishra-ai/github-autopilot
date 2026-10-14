@@ -7,6 +7,36 @@ import logging
 log = logging.getLogger(__name__)
 
 
+# GitHub refuses an issue or comment body over 65,536 characters with a 422.
+GITHUB_BODY_LIMIT = 65536
+
+
+def fit_comment(body: str, reserve: int = 0) -> str:
+    """
+    The body, cut to fit GitHub's limit, saying so when it is cut.
+
+    Nothing checked the size. /secfull on a repository at the scanner's own
+    page limits rendered 69,000 characters; the POST was refused and the
+    person who asked got no reply at all — on the repository with the most
+    findings. Cut at a line boundary, with what was left out stated.
+    `reserve` leaves room for text the caller appends (a sticky's marker).
+    """
+    limit = GITHUB_BODY_LIMIT - reserve
+    if len(body) <= limit:
+        return body
+    note = (
+        "\n\n> ✂️ **Cut to fit GitHub's comment limit** — {n:,} characters "
+        "of this report are not shown."
+    )
+    room = limit - len(note.format(n=len(body))) - 4  # 4: a closing fence
+    cut = body.rfind("\n", 0, room)
+    head = body[: cut if cut > room // 2 else room]
+    hidden = len(body) - len(head)
+    if head.count("```") % 2:  # cut inside a code block: close it
+        head += "\n```"
+    return head + note.format(n=hidden)
+
+
 def fmt_error(label: str, e: Exception, limit: int = 200) -> str:
     """Standard error comment format used by all slash commands."""
     return f"## ⚠️ {label}\n\n`{str(e)[:limit]}`"
@@ -68,11 +98,14 @@ def pr_files(repo: str, number: int, token: str, get=None) -> list:
     repository's own PR #108, at 32 files, was reported as "Files: 30 ·
     +2101 −235" when it was +3,618 −249.
 
-    A first-page failure raises, exactly as the single fetch did, so every
-    caller's existing error handling is unchanged. A later-page failure keeps
-    the pages already fetched and logs — losing 100 files is better than losing
-    all of them. `get` defaults to the GitHub client and exists so a caller can
-    pass the name its own tests patch.
+    Any page failing raises. A later-page failure used to keep the pages
+    already fetched and only log, and no caller could tell: the PR report said
+    "Files: 100" for a 250-file PR, the risk recorded for the head (which
+    /merge trusts) was judged on 100 of them, and /security said "No secrets
+    detected in the 100 changed file(s) scanned" with the secret in file 180.
+    A partial list presented as the whole PR is worse than none. `get`
+    defaults to the GitHub client and exists so a caller can pass the name its
+    own tests patch.
     """
     if get is None:
         from app.github.client import gh_get as get
@@ -80,13 +113,7 @@ def pr_files(repo: str, number: int, token: str, get=None) -> list:
     files: list = []
     for page in range(1, PR_FILES_MAX_PAGES + 1):
         path = f"/repos/{repo}/pulls/{number}/files?per_page={PR_FILES_PER_PAGE}&page={page}"
-        try:
-            batch = get(path, token)
-        except Exception as e:
-            if page == 1:
-                raise
-            log.warning(f"pr_files.partial repo={repo} pr={number} pages={page - 1}: {e}")
-            break
+        batch = get(path, token)
         if not isinstance(batch, list) or not batch:
             break
         files.extend(batch)

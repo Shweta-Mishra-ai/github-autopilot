@@ -4,7 +4,7 @@
       "id": "app",
       "path": "app/__init__.py",
       "layer": "other",
-      "loc": 6,
+      "loc": 5,
       "functions": 0,
       "classes": 0,
       "is_package": true,
@@ -16,7 +16,7 @@
       "id": "app.ai",
       "path": "app/ai/__init__.py",
       "layer": "ai",
-      "loc": 2,
+      "loc": 1,
       "functions": 0,
       "classes": 0,
       "is_package": true,
@@ -28,14 +28,13 @@
       "id": "app.ai.circuit_breaker",
       "path": "app/ai/circuit_breaker.py",
       "layer": "ai",
-      "loc": 179,
+      "loc": 178,
       "functions": 6,
       "classes": 3,
       "is_package": false,
-      "fan_in": 13,
+      "fan_in": 15,
       "fan_out": 1,
       "external_deps": [
-        "app",
         "dataclasses",
         "enum",
         "logging",
@@ -47,7 +46,7 @@
       "id": "app.ai.gatekeeper",
       "path": "app/ai/gatekeeper.py",
       "layer": "ai",
-      "loc": 156,
+      "loc": 155,
       "functions": 4,
       "classes": 0,
       "is_package": false,
@@ -55,7 +54,6 @@
       "fan_out": 3,
       "external_deps": [
         "__future__",
-        "app",
         "logging",
         "os",
         "re"
@@ -65,15 +63,14 @@
       "id": "app.ai.guarded",
       "path": "app/ai/guarded.py",
       "layer": "ai",
-      "loc": 181,
-      "functions": 5,
+      "loc": 215,
+      "functions": 6,
       "classes": 0,
       "is_package": false,
       "fan_in": 5,
-      "fan_out": 6,
+      "fan_out": 8,
       "external_deps": [
         "__future__",
-        "app",
         "logging"
       ]
     },
@@ -81,11 +78,11 @@
       "id": "app.ai.hallucination",
       "path": "app/ai/hallucination.py",
       "layer": "ai",
-      "loc": 295,
+      "loc": 302,
       "functions": 6,
       "classes": 1,
       "is_package": false,
-      "fan_in": 3,
+      "fan_in": 4,
       "fan_out": 0,
       "external_deps": [
         "dataclasses",
@@ -97,14 +94,13 @@
       "id": "app.ai.metrics",
       "path": "app/ai/metrics.py",
       "layer": "ai",
-      "loc": 173,
+      "loc": 137,
       "functions": 3,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 2,
+      "fan_out": 6,
       "external_deps": [
-        "app",
         "datetime",
         "logging",
         "os"
@@ -114,14 +110,13 @@
       "id": "app.ai.model_catalog",
       "path": "app/ai/model_catalog.py",
       "layer": "ai",
-      "loc": 356,
-      "functions": 12,
+      "loc": 383,
+      "functions": 13,
       "classes": 0,
       "is_package": false,
       "fan_in": 6,
-      "fan_out": 1,
+      "fan_out": 2,
       "external_deps": [
-        "app",
         "logging",
         "os",
         "re",
@@ -134,7 +129,7 @@
       "id": "app.ai.providers",
       "path": "app/ai/providers/__init__.py",
       "layer": "ai",
-      "loc": 2,
+      "loc": 1,
       "functions": 0,
       "classes": 0,
       "is_package": true,
@@ -146,15 +141,14 @@
       "id": "app.ai.providers.base",
       "path": "app/ai/providers/base.py",
       "layer": "ai",
-      "loc": 348,
-      "functions": 7,
-      "classes": 2,
+      "loc": 372,
+      "functions": 9,
+      "classes": 3,
       "is_package": false,
-      "fan_in": 7,
+      "fan_in": 8,
       "fan_out": 3,
       "external_deps": [
         "abc",
-        "app",
         "dataclasses",
         "json",
         "os",
@@ -166,15 +160,13 @@
       "id": "app.ai.providers.gemini",
       "path": "app/ai/providers/gemini.py",
       "layer": "ai",
-      "loc": 257,
+      "loc": 238,
       "functions": 2,
       "classes": 1,
       "is_package": false,
-      "fan_in": 1,
-      "fan_out": 4,
+      "fan_in": 2,
+      "fan_out": 3,
       "external_deps": [
-        "app",
-        "datetime",
         "logging",
         "os",
         "requests",
@@ -185,15 +177,13 @@
       "id": "app.ai.providers.groq",
       "path": "app/ai/providers/groq.py",
       "layer": "ai",
-      "loc": 308,
+      "loc": 290,
       "functions": 1,
       "classes": 1,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 5,
+      "fan_out": 4,
       "external_deps": [
-        "app",
-        "datetime",
         "logging",
         "os",
         "requests",
@@ -204,14 +194,13 @@
       "id": "app.ai.providers.ollama",
       "path": "app/ai/providers/ollama.py",
       "layer": "ai",
-      "loc": 153,
+      "loc": 159,
       "functions": 1,
       "classes": 1,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 2,
+      "fan_out": 3,
       "external_deps": [
-        "app",
         "logging",
         "os",
         "requests"
@@ -221,14 +210,13 @@
       "id": "app.ai.providers.openrouter",
       "path": "app/ai/providers/openrouter.py",
       "layer": "ai",
-      "loc": 327,
+      "loc": 336,
       "functions": 1,
       "classes": 1,
       "is_package": false,
-      "fan_in": 1,
+      "fan_in": 2,
       "fan_out": 4,
       "external_deps": [
-        "app",
         "logging",
         "os",
         "requests",
@@ -239,14 +227,13 @@
       "id": "app.ai.router",
       "path": "app/ai/router.py",
       "layer": "ai",
-      "loc": 734,
-      "functions": 8,
+      "loc": 848,
+      "functions": 10,
       "classes": 1,
       "is_package": false,
-      "fan_in": 15,
-      "fan_out": 15,
+      "fan_in": 20,
+      "fan_out": 16,
       "external_deps": [
-        "app",
         "datetime",
         "logging",
         "os",
@@ -257,11 +244,11 @@
       "id": "app.ai.routing_policy",
       "path": "app/ai/routing_policy.py",
       "layer": "ai",
-      "loc": 136,
-      "functions": 7,
+      "loc": 188,
+      "functions": 10,
       "classes": 0,
       "is_package": false,
-      "fan_in": 2,
+      "fan_in": 5,
       "fan_out": 0,
       "external_deps": [
         "__future__",
@@ -272,11 +259,11 @@
       "id": "app.ai.validator",
       "path": "app/ai/validator.py",
       "layer": "ai",
-      "loc": 247,
-      "functions": 8,
+      "loc": 356,
+      "functions": 13,
       "classes": 0,
       "is_package": false,
-      "fan_in": 9,
+      "fan_in": 11,
       "fan_out": 0,
       "external_deps": [
         "logging",
@@ -287,11 +274,11 @@
       "id": "app.core",
       "path": "app/core/__init__.py",
       "layer": "core",
-      "loc": 2,
+      "loc": 1,
       "functions": 0,
       "classes": 0,
       "is_package": true,
-      "fan_in": 1,
+      "fan_in": 2,
       "fan_out": 0,
       "external_deps": []
     },
@@ -299,29 +286,45 @@
       "id": "app.core.analytics",
       "path": "app/core/analytics.py",
       "layer": "core",
-      "loc": 240,
-      "functions": 17,
-      "classes": 0,
+      "loc": 215,
+      "functions": 15,
+      "classes": 1,
       "is_package": false,
-      "fan_in": 1,
-      "fan_out": 2,
+      "fan_in": 4,
+      "fan_out": 3,
       "external_deps": [
         "datetime",
         "logging"
       ]
     },
     {
+      "id": "app.core.audit",
+      "path": "app/core/audit.py",
+      "layer": "core",
+      "loc": 50,
+      "functions": 1,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 2,
+      "external_deps": [
+        "__future__",
+        "json",
+        "logging",
+        "time"
+      ]
+    },
+    {
       "id": "app.core.authorization",
       "path": "app/core/authorization.py",
       "layer": "core",
-      "loc": 221,
+      "loc": 220,
       "functions": 5,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
       "fan_out": 3,
       "external_deps": [
-        "app",
         "logging",
         "threading",
         "time"
@@ -331,11 +334,11 @@
       "id": "app.core.commands",
       "path": "app/core/commands.py",
       "layer": "core",
-      "loc": 88,
+      "loc": 87,
       "functions": 0,
       "classes": 0,
       "is_package": false,
-      "fan_in": 3,
+      "fan_in": 4,
       "fan_out": 0,
       "external_deps": [
         "__future__"
@@ -345,14 +348,13 @@
       "id": "app.core.confidence",
       "path": "app/core/confidence.py",
       "layer": "core",
-      "loc": 159,
+      "loc": 158,
       "functions": 2,
       "classes": 1,
       "is_package": false,
       "fan_in": 2,
       "fan_out": 1,
       "external_deps": [
-        "app",
         "contextlib"
       ]
     },
@@ -360,14 +362,13 @@
       "id": "app.core.config",
       "path": "app/core/config.py",
       "layer": "core",
-      "loc": 413,
-      "functions": 5,
-      "classes": 1,
+      "loc": 567,
+      "functions": 6,
+      "classes": 2,
       "is_package": false,
-      "fan_in": 7,
+      "fan_in": 8,
       "fan_out": 1,
       "external_deps": [
-        "app",
         "base64",
         "copy",
         "logging",
@@ -379,38 +380,53 @@
       ]
     },
     {
+      "id": "app.core.env",
+      "path": "app/core/env.py",
+      "layer": "core",
+      "loc": 31,
+      "functions": 1,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 3,
+      "fan_out": 0,
+      "external_deps": [
+        "__future__",
+        "logging",
+        "os"
+      ]
+    },
+    {
       "id": "app.core.event_queue",
       "path": "app/core/event_queue.py",
       "layer": "core",
-      "loc": 284,
-      "functions": 7,
-      "classes": 1,
+      "loc": 526,
+      "functions": 17,
+      "classes": 2,
       "is_package": false,
-      "fan_in": 2,
-      "fan_out": 2,
+      "fan_in": 3,
+      "fan_out": 5,
       "external_deps": [
         "__future__",
-        "app",
+        "hashlib",
         "json",
         "logging",
-        "os",
         "threading",
         "time",
-        "typing"
+        "typing",
+        "uuid"
       ]
     },
     {
       "id": "app.core.guardrails",
       "path": "app/core/guardrails.py",
       "layer": "core",
-      "loc": 298,
-      "functions": 13,
-      "classes": 1,
+      "loc": 368,
+      "functions": 16,
+      "classes": 2,
       "is_package": false,
-      "fan_in": 9,
+      "fan_in": 11,
       "fan_out": 1,
       "external_deps": [
-        "app",
         "contextlib",
         "contextvars",
         "dataclasses",
@@ -424,15 +440,13 @@
       "id": "app.core.health_check",
       "path": "app/core/health_check.py",
       "layer": "core",
-      "loc": 183,
-      "functions": 5,
-      "classes": 1,
+      "loc": 91,
+      "functions": 3,
+      "classes": 0,
       "is_package": false,
       "fan_in": 3,
-      "fan_out": 3,
+      "fan_out": 2,
       "external_deps": [
-        "app",
-        "dataclasses",
         "json",
         "logging",
         "time"
@@ -442,17 +456,18 @@
       "id": "app.core.idempotency",
       "path": "app/core/idempotency.py",
       "layer": "core",
-      "loc": 134,
-      "functions": 5,
+      "loc": 156,
+      "functions": 7,
       "classes": 0,
       "is_package": false,
-      "fan_in": 1,
+      "fan_in": 2,
       "fan_out": 1,
       "external_deps": [
-        "app",
         "collections",
         "hashlib",
+        "json",
         "logging",
+        "threading",
         "time"
       ]
     },
@@ -460,7 +475,7 @@
       "id": "app.core.installations",
       "path": "app/core/installations.py",
       "layer": "core",
-      "loc": 148,
+      "loc": 167,
       "functions": 7,
       "classes": 0,
       "is_package": false,
@@ -468,7 +483,6 @@
       "fan_out": 1,
       "external_deps": [
         "__future__",
-        "app",
         "logging",
         "time"
       ]
@@ -477,16 +491,13 @@
       "id": "app.core.learning",
       "path": "app/core/learning.py",
       "layer": "core",
-      "loc": 192,
-      "functions": 14,
+      "loc": 54,
+      "functions": 4,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
       "fan_out": 1,
       "external_deps": [
-        "app",
-        "datetime",
-        "json",
         "logging"
       ]
     },
@@ -494,7 +505,7 @@
       "id": "app.core.logger",
       "path": "app/core/logger.py",
       "layer": "core",
-      "loc": 128,
+      "loc": 127,
       "functions": 2,
       "classes": 2,
       "is_package": false,
@@ -510,15 +521,14 @@
       "id": "app.core.maintenance",
       "path": "app/core/maintenance.py",
       "layer": "core",
-      "loc": 316,
-      "functions": 12,
+      "loc": 352,
+      "functions": 13,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
       "fan_out": 6,
       "external_deps": [
         "__future__",
-        "app",
         "contextlib",
         "json",
         "logging",
@@ -531,7 +541,7 @@
       "id": "app.core.memory_backup",
       "path": "app/core/memory_backup.py",
       "layer": "core",
-      "loc": 353,
+      "loc": 373,
       "functions": 13,
       "classes": 0,
       "is_package": false,
@@ -539,7 +549,6 @@
       "fan_out": 3,
       "external_deps": [
         "__future__",
-        "app",
         "argparse",
         "base64",
         "cryptography",
@@ -554,11 +563,11 @@
       "id": "app.core.metrics",
       "path": "app/core/metrics.py",
       "layer": "core",
-      "loc": 59,
+      "loc": 58,
       "functions": 1,
       "classes": 1,
       "is_package": false,
-      "fan_in": 9,
+      "fan_in": 11,
       "fan_out": 0,
       "external_deps": [
         "collections",
@@ -570,7 +579,7 @@
       "id": "app.core.preflight",
       "path": "app/core/preflight.py",
       "layer": "core",
-      "loc": 310,
+      "loc": 311,
       "functions": 5,
       "classes": 4,
       "is_package": false,
@@ -578,7 +587,6 @@
       "fan_out": 4,
       "external_deps": [
         "__future__",
-        "app",
         "dataclasses",
         "logging",
         "os"
@@ -588,7 +596,7 @@
       "id": "app.core.process_guard",
       "path": "app/core/process_guard.py",
       "layer": "core",
-      "loc": 142,
+      "loc": 153,
       "functions": 4,
       "classes": 0,
       "is_package": false,
@@ -596,7 +604,6 @@
       "fan_out": 1,
       "external_deps": [
         "__future__",
-        "app",
         "logging",
         "os",
         "time"
@@ -606,15 +613,14 @@
       "id": "app.core.redaction",
       "path": "app/core/redaction.py",
       "layer": "core",
-      "loc": 116,
-      "functions": 2,
+      "loc": 144,
+      "functions": 3,
       "classes": 0,
       "is_package": false,
-      "fan_in": 4,
+      "fan_in": 6,
       "fan_out": 1,
       "external_deps": [
         "__future__",
-        "app",
         "re"
       ]
     },
@@ -622,12 +628,12 @@
       "id": "app.core.redis_client",
       "path": "app/core/redis_client.py",
       "layer": "core",
-      "loc": 510,
+      "loc": 557,
       "functions": 6,
       "classes": 1,
       "is_package": false,
-      "fan_in": 28,
-      "fan_out": 0,
+      "fan_in": 30,
+      "fan_out": 1,
       "external_deps": [
         "__future__",
         "fnmatch",
@@ -643,7 +649,7 @@
       "id": "app.core.retry_after",
       "path": "app/core/retry_after.py",
       "layer": "core",
-      "loc": 73,
+      "loc": 72,
       "functions": 1,
       "classes": 0,
       "is_package": false,
@@ -659,11 +665,11 @@
       "id": "app.core.sanitizer",
       "path": "app/core/sanitizer.py",
       "layer": "core",
-      "loc": 180,
-      "functions": 3,
+      "loc": 284,
+      "functions": 5,
       "classes": 1,
       "is_package": false,
-      "fan_in": 13,
+      "fan_in": 16,
       "fan_out": 0,
       "external_deps": [
         "contextlib",
@@ -676,14 +682,13 @@
       "id": "app.core.snapshot",
       "path": "app/core/snapshot.py",
       "layer": "core",
-      "loc": 290,
-      "functions": 9,
-      "classes": 0,
+      "loc": 362,
+      "functions": 10,
+      "classes": 1,
       "is_package": false,
-      "fan_in": 1,
+      "fan_in": 4,
       "fan_out": 3,
       "external_deps": [
-        "app",
         "datetime",
         "json",
         "logging",
@@ -695,32 +700,45 @@
       "id": "app.core.thread_pool",
       "path": "app/core/thread_pool.py",
       "layer": "core",
-      "loc": 145,
+      "loc": 144,
       "functions": 5,
       "classes": 1,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 0,
+      "fan_out": 1,
       "external_deps": [
         "concurrent",
         "logging",
-        "os",
         "threading",
         "typing"
+      ]
+    },
+    {
+      "id": "app.core.transient",
+      "path": "app/core/transient.py",
+      "layer": "core",
+      "loc": 62,
+      "functions": 2,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 6,
+      "fan_out": 5,
+      "external_deps": [
+        "logging",
+        "requests"
       ]
     },
     {
       "id": "app.core.webhook_security",
       "path": "app/core/webhook_security.py",
       "layer": "core",
-      "loc": 521,
+      "loc": 527,
       "functions": 16,
       "classes": 0,
       "is_package": false,
       "fan_in": 4,
       "fan_out": 1,
       "external_deps": [
-        "app",
         "hashlib",
         "hmac",
         "logging",
@@ -733,7 +751,7 @@
       "id": "app.dashboard",
       "path": "app/dashboard.py",
       "layer": "other",
-      "loc": 161,
+      "loc": 160,
       "functions": 1,
       "classes": 0,
       "is_package": false,
@@ -745,7 +763,7 @@
       "id": "app.github",
       "path": "app/github/__init__.py",
       "layer": "github",
-      "loc": 2,
+      "loc": 1,
       "functions": 0,
       "classes": 0,
       "is_package": true,
@@ -757,11 +775,11 @@
       "id": "app.github.auth",
       "path": "app/github/auth.py",
       "layer": "github",
-      "loc": 160,
-      "functions": 6,
+      "loc": 197,
+      "functions": 7,
       "classes": 0,
       "is_package": false,
-      "fan_in": 9,
+      "fan_in": 11,
       "fan_out": 0,
       "external_deps": [
         "jwt",
@@ -776,14 +794,13 @@
       "id": "app.github.client",
       "path": "app/github/client.py",
       "layer": "github",
-      "loc": 307,
-      "functions": 11,
+      "loc": 327,
+      "functions": 12,
       "classes": 2,
       "is_package": false,
-      "fan_in": 23,
-      "fan_out": 2,
+      "fan_in": 27,
+      "fan_out": 3,
       "external_deps": [
-        "app",
         "logging",
         "requests",
         "urllib",
@@ -791,17 +808,31 @@
       ]
     },
     {
+      "id": "app.github.deferred_reply",
+      "path": "app/github/deferred_reply.py",
+      "layer": "github",
+      "loc": 68,
+      "functions": 2,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 4,
+      "fan_out": 5,
+      "external_deps": [
+        "hashlib",
+        "logging"
+      ]
+    },
+    {
       "id": "app.github.helpers",
       "path": "app/github/helpers.py",
       "layer": "github",
-      "loc": 101,
-      "functions": 3,
+      "loc": 127,
+      "functions": 4,
       "classes": 0,
       "is_package": false,
-      "fan_in": 12,
+      "fan_in": 16,
       "fan_out": 1,
       "external_deps": [
-        "app",
         "logging"
       ]
     },
@@ -809,17 +840,17 @@
       "id": "app.github.notifications",
       "path": "app/github/notifications.py",
       "layer": "github",
-      "loc": 527,
-      "functions": 20,
+      "loc": 567,
+      "functions": 22,
       "classes": 0,
       "is_package": false,
       "fan_in": 8,
       "fan_out": 4,
       "external_deps": [
-        "app",
         "datetime",
         "logging",
         "os",
+        "re",
         "requests",
         "threading"
       ]
@@ -828,11 +859,11 @@
       "id": "app.github.patch_parser",
       "path": "app/github/patch_parser.py",
       "layer": "github",
-      "loc": 255,
-      "functions": 6,
+      "loc": 291,
+      "functions": 8,
       "classes": 0,
       "is_package": false,
-      "fan_in": 1,
+      "fan_in": 4,
       "fan_out": 0,
       "external_deps": [
         "__future__",
@@ -844,15 +875,14 @@
       "id": "app.github.rate_limit",
       "path": "app/github/rate_limit.py",
       "layer": "github",
-      "loc": 269,
+      "loc": 294,
       "functions": 10,
-      "classes": 0,
+      "classes": 1,
       "is_package": false,
       "fan_in": 3,
       "fan_out": 1,
       "external_deps": [
         "__future__",
-        "app",
         "hashlib",
         "logging",
         "os",
@@ -865,23 +895,23 @@
       "id": "app.github.sticky",
       "path": "app/github/sticky.py",
       "layer": "github",
-      "loc": 102,
-      "functions": 3,
+      "loc": 143,
+      "functions": 5,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 1,
+      "fan_out": 3,
       "external_deps": [
         "__future__",
-        "app",
-        "logging"
+        "logging",
+        "os"
       ]
     },
     {
       "id": "app.graphview",
       "path": "app/graphview.py",
       "layer": "other",
-      "loc": 589,
+      "loc": 588,
       "functions": 1,
       "classes": 0,
       "is_package": false,
@@ -893,7 +923,7 @@
       "id": "app.handlers",
       "path": "app/handlers/__init__.py",
       "layer": "handlers",
-      "loc": 2,
+      "loc": 1,
       "functions": 0,
       "classes": 0,
       "is_package": true,
@@ -905,54 +935,55 @@
       "id": "app.handlers.autofix",
       "path": "app/handlers/autofix.py",
       "layer": "handlers",
-      "loc": 608,
-      "functions": 13,
+      "loc": 724,
+      "functions": 17,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 6,
+      "fan_out": 8,
       "external_deps": [
-        "app",
         "base64",
+        "difflib",
         "logging",
         "posixpath",
-        "typing"
+        "re",
+        "time",
+        "typing",
+        "urllib"
       ]
     },
     {
       "id": "app.handlers.ci",
       "path": "app/handlers/ci.py",
       "layer": "handlers",
-      "loc": 209,
-      "functions": 4,
+      "loc": 342,
+      "functions": 8,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 7,
+      "fan_out": 10,
       "external_deps": [
-        "app",
-        "logging"
+        "logging",
+        "re"
       ]
     },
     {
       "id": "app.handlers.comments",
       "path": "app/handlers/comments/__init__.py",
       "layer": "handlers",
-      "loc": 107,
+      "loc": 106,
       "functions": 0,
       "classes": 0,
       "is_package": true,
       "fan_in": 6,
       "fan_out": 10,
-      "external_deps": [
-        "app"
-      ]
+      "external_deps": []
     },
     {
       "id": "app.handlers.comments._client",
       "path": "app/handlers/comments/_client.py",
       "layer": "handlers",
-      "loc": 70,
+      "loc": 69,
       "functions": 5,
       "classes": 1,
       "is_package": false,
@@ -966,29 +997,26 @@
       "id": "app.handlers.comments.constants",
       "path": "app/handlers/comments/constants.py",
       "layer": "handlers",
-      "loc": 38,
+      "loc": 37,
       "functions": 0,
       "classes": 0,
       "is_package": false,
       "fan_in": 3,
       "fan_out": 1,
-      "external_deps": [
-        "app"
-      ]
+      "external_deps": []
     },
     {
       "id": "app.handlers.comments.dispatcher",
       "path": "app/handlers/comments/dispatcher.py",
       "layer": "handlers",
-      "loc": 256,
-      "functions": 13,
+      "loc": 394,
+      "functions": 19,
       "classes": 0,
       "is_package": false,
-      "fan_in": 2,
-      "fan_out": 8,
+      "fan_in": 3,
+      "fan_out": 9,
       "external_deps": [
         "__future__",
-        "app",
         "logging",
         "re",
         "threading",
@@ -999,78 +1027,76 @@
       "id": "app.handlers.comments.generator",
       "path": "app/handlers/comments/generator.py",
       "layer": "handlers",
-      "loc": 453,
-      "functions": 11,
+      "loc": 520,
+      "functions": 12,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 9,
+      "fan_out": 10,
       "external_deps": [
         "__future__",
-        "app",
-        "logging"
+        "logging",
+        "re"
       ]
     },
     {
       "id": "app.handlers.comments.integrations",
       "path": "app/handlers/comments/integrations.py",
       "layer": "handlers",
-      "loc": 192,
-      "functions": 2,
+      "loc": 243,
+      "functions": 4,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
       "fan_out": 3,
       "external_deps": [
         "__future__",
-        "app",
         "logging",
-        "os"
+        "os",
+        "re"
       ]
     },
     {
       "id": "app.handlers.comments.publisher",
       "path": "app/handlers/comments/publisher.py",
       "layer": "handlers",
-      "loc": 504,
-      "functions": 5,
+      "loc": 576,
+      "functions": 9,
       "classes": 0,
       "is_package": false,
-      "fan_in": 2,
+      "fan_in": 3,
       "fan_out": 12,
       "external_deps": [
         "__future__",
-        "app",
         "contextlib",
-        "json",
         "logging",
         "re",
-        "time"
+        "urllib"
       ]
     },
     {
       "id": "app.handlers.comments.reviewer",
       "path": "app/handlers/comments/reviewer.py",
       "layer": "handlers",
-      "loc": 484,
-      "functions": 11,
+      "loc": 575,
+      "functions": 14,
       "classes": 0,
       "is_package": false,
       "fan_in": 4,
-      "fan_out": 10,
+      "fan_out": 13,
       "external_deps": [
         "__future__",
-        "app",
         "datetime",
         "logging",
-        "re"
+        "re",
+        "urllib"
       ]
     },
     {
       "id": "app.handlers.comments.security",
       "path": "app/handlers/comments/security.py",
       "layer": "handlers",
-      "loc": 152,
+      "loc": 190,
       "functions": 4,
       "classes": 0,
       "is_package": false,
@@ -1078,7 +1104,6 @@
       "fan_out": 7,
       "external_deps": [
         "__future__",
-        "app",
         "base64",
         "logging"
       ]
@@ -1087,15 +1112,14 @@
       "id": "app.handlers.comments.service",
       "path": "app/handlers/comments/service.py",
       "layer": "handlers",
-      "loc": 290,
+      "loc": 289,
       "functions": 3,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 16,
+      "fan_out": 18,
       "external_deps": [
         "__future__",
-        "app",
         "logging"
       ]
     },
@@ -1103,73 +1127,74 @@
       "id": "app.handlers.commit_message",
       "path": "app/handlers/commit_message.py",
       "layer": "handlers",
-      "loc": 282,
-      "functions": 8,
+      "loc": 328,
+      "functions": 10,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
       "fan_out": 6,
       "external_deps": [
         "__future__",
-        "app",
-        "logging"
+        "logging",
+        "re"
       ]
     },
     {
       "id": "app.handlers.issues",
       "path": "app/handlers/issues.py",
       "layer": "handlers",
-      "loc": 290,
-      "functions": 2,
+      "loc": 422,
+      "functions": 5,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 11,
+      "fan_out": 17,
       "external_deps": [
-        "app",
         "contextlib",
-        "logging"
+        "json",
+        "logging",
+        "re"
       ]
     },
     {
       "id": "app.handlers.pull_request",
       "path": "app/handlers/pull_request/__init__.py",
       "layer": "handlers",
-      "loc": 308,
-      "functions": 1,
+      "loc": 390,
+      "functions": 2,
       "classes": 0,
       "is_package": true,
       "fan_in": 2,
-      "fan_out": 20,
+      "fan_out": 26,
       "external_deps": [
         "__future__",
-        "app"
+        "logging"
       ]
     },
     {
       "id": "app.handlers.pull_request.analysis",
       "path": "app/handlers/pull_request/analysis.py",
       "layer": "handlers",
-      "loc": 250,
-      "functions": 3,
+      "loc": 405,
+      "functions": 6,
       "classes": 0,
       "is_package": false,
-      "fan_in": 3,
-      "fan_out": 9,
+      "fan_in": 4,
+      "fan_out": 15,
       "external_deps": [
         "__future__",
-        "app"
+        "re"
       ]
     },
     {
       "id": "app.handlers.pull_request.classify",
       "path": "app/handlers/pull_request/classify.py",
       "layer": "handlers",
-      "loc": 212,
+      "loc": 218,
       "functions": 5,
       "classes": 0,
       "is_package": false,
-      "fan_in": 4,
+      "fan_in": 5,
       "fan_out": 0,
       "external_deps": [
         "__future__",
@@ -1177,18 +1202,80 @@
       ]
     },
     {
+      "id": "app.handlers.pull_request.context",
+      "path": "app/handlers/pull_request/context.py",
+      "layer": "handlers",
+      "loc": 131,
+      "functions": 5,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 2,
+      "fan_out": 1,
+      "external_deps": [
+        "__future__",
+        "ast",
+        "base64",
+        "logging"
+      ]
+    },
+    {
+      "id": "app.handlers.pull_request.errors",
+      "path": "app/handlers/pull_request/errors.py",
+      "layer": "handlers",
+      "loc": 14,
+      "functions": 0,
+      "classes": 1,
+      "is_package": false,
+      "fan_in": 4,
+      "fan_out": 0,
+      "external_deps": []
+    },
+    {
       "id": "app.handlers.pull_request.gaps",
       "path": "app/handlers/pull_request/gaps.py",
       "layer": "handlers",
-      "loc": 257,
-      "functions": 5,
+      "loc": 623,
+      "functions": 18,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 8,
+      "external_deps": [
+        "__future__",
+        "ast",
+        "base64",
+        "re",
+        "urllib"
+      ]
+    },
+    {
+      "id": "app.handlers.pull_request.grounding",
+      "path": "app/handlers/pull_request/grounding.py",
+      "layer": "handlers",
+      "loc": 131,
+      "functions": 4,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 1,
+      "external_deps": [
+        "__future__",
+        "re"
+      ]
+    },
+    {
+      "id": "app.handlers.pull_request.outcomes",
+      "path": "app/handlers/pull_request/outcomes.py",
+      "layer": "handlers",
+      "loc": 74,
+      "functions": 1,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
       "fan_out": 4,
       "external_deps": [
         "__future__",
-        "app",
+        "contextlib",
         "re"
       ]
     },
@@ -1196,12 +1283,12 @@
       "id": "app.handlers.pull_request.report",
       "path": "app/handlers/pull_request/report.py",
       "layer": "handlers",
-      "loc": 49,
+      "loc": 58,
       "functions": 1,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 0,
+      "fan_out": 1,
       "external_deps": [
         "__future__",
         "datetime"
@@ -1211,30 +1298,44 @@
       "id": "app.handlers.pull_request.review",
       "path": "app/handlers/pull_request/review.py",
       "layer": "handlers",
-      "loc": 468,
-      "functions": 7,
+      "loc": 662,
+      "functions": 10,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 9,
+      "fan_out": 13,
+      "external_deps": [
+        "__future__"
+      ]
+    },
+    {
+      "id": "app.handlers.pull_request.risk",
+      "path": "app/handlers/pull_request/risk.py",
+      "layer": "handlers",
+      "loc": 87,
+      "functions": 2,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 2,
+      "fan_out": 1,
       "external_deps": [
         "__future__",
-        "app"
+        "re"
       ]
     },
     {
       "id": "app.handlers.push",
       "path": "app/handlers/push.py",
       "layer": "handlers",
-      "loc": 524,
-      "functions": 11,
+      "loc": 624,
+      "functions": 16,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 14,
+      "fan_out": 15,
       "external_deps": [
-        "app",
         "base64",
+        "hashlib",
         "logging",
         "re"
       ]
@@ -1243,15 +1344,14 @@
       "id": "app.handlers.readme",
       "path": "app/handlers/readme.py",
       "layer": "handlers",
-      "loc": 389,
-      "functions": 13,
+      "loc": 428,
+      "functions": 15,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
       "fan_out": 6,
       "external_deps": [
         "__future__",
-        "app",
         "argparse",
         "base64",
         "logging",
@@ -1264,7 +1364,7 @@
       "id": "app.intelligence",
       "path": "app/intelligence/__init__.py",
       "layer": "intelligence",
-      "loc": 17,
+      "loc": 8,
       "functions": 0,
       "classes": 0,
       "is_package": true,
@@ -1276,7 +1376,7 @@
       "id": "app.intelligence.codegraph",
       "path": "app/intelligence/codegraph.py",
       "layer": "intelligence",
-      "loc": 578,
+      "loc": 585,
       "functions": 7,
       "classes": 4,
       "is_package": false,
@@ -1284,7 +1384,6 @@
       "fan_out": 1,
       "external_deps": [
         "__future__",
-        "app",
         "argparse",
         "ast",
         "dataclasses",
@@ -1295,27 +1394,10 @@
       ]
     },
     {
-      "id": "app.intelligence.embeddings",
-      "path": "app/intelligence/embeddings.py",
-      "layer": "intelligence",
-      "loc": 101,
-      "functions": 5,
-      "classes": 0,
-      "is_package": false,
-      "fan_in": 2,
-      "fan_out": 0,
-      "external_deps": [
-        "logging",
-        "os",
-        "sentence_transformers",
-        "threading"
-      ]
-    },
-    {
       "id": "app.intelligence.graph_svg",
       "path": "app/intelligence/graph_svg.py",
       "layer": "intelligence",
-      "loc": 514,
+      "loc": 513,
       "functions": 15,
       "classes": 0,
       "is_package": false,
@@ -1331,15 +1413,14 @@
       "id": "app.intelligence.memory",
       "path": "app/intelligence/memory.py",
       "layer": "intelligence",
-      "loc": 328,
-      "functions": 15,
+      "loc": 391,
+      "functions": 17,
       "classes": 1,
       "is_package": false,
-      "fan_in": 5,
+      "fan_in": 7,
       "fan_out": 2,
       "external_deps": [
         "__future__",
-        "app",
         "dataclasses",
         "hashlib",
         "json",
@@ -1350,32 +1431,16 @@
       ]
     },
     {
-      "id": "app.intelligence.retrieval",
-      "path": "app/intelligence/retrieval.py",
-      "layer": "intelligence",
-      "loc": 114,
-      "functions": 3,
-      "classes": 0,
-      "is_package": false,
-      "fan_in": 1,
-      "fan_out": 1,
-      "external_deps": [
-        "app",
-        "logging"
-      ]
-    },
-    {
       "id": "app.intelligence.summarizer",
       "path": "app/intelligence/summarizer.py",
       "layer": "intelligence",
-      "loc": 145,
-      "functions": 2,
+      "loc": 82,
+      "functions": 1,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 1,
+      "fan_out": 3,
       "external_deps": [
-        "app",
         "logging"
       ]
     },
@@ -1383,28 +1448,25 @@
       "id": "app.mcp",
       "path": "app/mcp/__init__.py",
       "layer": "mcp",
-      "loc": 10,
+      "loc": 9,
       "functions": 0,
       "classes": 0,
       "is_package": true,
       "fan_in": 0,
       "fan_out": 1,
-      "external_deps": [
-        "app"
-      ]
+      "external_deps": []
     },
     {
       "id": "app.mcp.handlers",
       "path": "app/mcp/handlers.py",
       "layer": "mcp",
-      "loc": 572,
+      "loc": 612,
       "functions": 12,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
       "fan_out": 11,
       "external_deps": [
-        "app",
         "logging",
         "os",
         "pathlib"
@@ -1414,14 +1476,13 @@
       "id": "app.mcp.mcp_server",
       "path": "app/mcp/mcp_server.py",
       "layer": "mcp",
-      "loc": 164,
+      "loc": 169,
       "functions": 4,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
       "fan_out": 4,
       "external_deps": [
-        "app",
         "hmac",
         "logging",
         "os",
@@ -1432,19 +1493,19 @@
       "id": "app.mcp.tools",
       "path": "app/mcp/tools.py",
       "layer": "mcp",
-      "loc": 179,
+      "loc": 198,
       "functions": 0,
       "classes": 0,
       "is_package": false,
       "fan_in": 3,
-      "fan_out": 0,
+      "fan_out": 1,
       "external_deps": []
     },
     {
       "id": "app.security",
       "path": "app/security/__init__.py",
       "layer": "security",
-      "loc": 2,
+      "loc": 1,
       "functions": 0,
       "classes": 0,
       "is_package": true,
@@ -1456,27 +1517,28 @@
       "id": "app.security.dependencies",
       "path": "app/security/dependencies.py",
       "layer": "security",
-      "loc": 375,
-      "functions": 8,
-      "classes": 1,
+      "loc": 231,
+      "functions": 7,
+      "classes": 2,
       "is_package": false,
       "fan_in": 3,
-      "fan_out": 0,
+      "fan_out": 1,
       "external_deps": [
         "dataclasses",
         "logging",
-        "re"
+        "re",
+        "urllib"
       ]
     },
     {
       "id": "app.security.enhanced_secrets",
       "path": "app/security/enhanced_secrets.py",
       "layer": "security",
-      "loc": 898,
-      "functions": 22,
+      "loc": 1071,
+      "functions": 26,
       "classes": 1,
       "is_package": false,
-      "fan_in": 4,
+      "fan_in": 5,
       "fan_out": 0,
       "external_deps": [
         "dataclasses",
@@ -1489,14 +1551,13 @@
       "id": "app.security.licenses",
       "path": "app/security/licenses.py",
       "layer": "security",
-      "loc": 345,
-      "functions": 10,
+      "loc": 378,
+      "functions": 11,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
       "fan_out": 2,
       "external_deps": [
-        "app",
         "re",
         "requests",
         "time"
@@ -1506,14 +1567,13 @@
       "id": "app.security.scanner",
       "path": "app/security/scanner.py",
       "layer": "security",
-      "loc": 335,
+      "loc": 400,
       "functions": 7,
       "classes": 2,
       "is_package": false,
       "fan_in": 2,
       "fan_out": 2,
       "external_deps": [
-        "app",
         "dataclasses",
         "logging",
         "re"
@@ -1523,18 +1583,20 @@
       "id": "app.setup_flow",
       "path": "app/setup_flow.py",
       "layer": "other",
-      "loc": 221,
-      "functions": 7,
+      "loc": 244,
+      "functions": 8,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
       "fan_out": 0,
       "external_deps": [
         "__future__",
+        "hmac",
         "html",
         "json",
         "logging",
         "os",
+        "re",
         "requests",
         "secrets"
       ]
@@ -1543,16 +1605,16 @@
       "id": "server",
       "path": "server.py",
       "layer": "other",
-      "loc": 827,
-      "functions": 30,
+      "loc": 964,
+      "functions": 33,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 33,
+      "fan_out": 35,
       "external_deps": [
-        "app",
         "flask",
         "hmac",
+        "html",
         "logging",
         "os",
         "signal",
@@ -1564,17 +1626,15 @@
       "id": "worker",
       "path": "worker.py",
       "layer": "other",
-      "loc": 66,
+      "loc": 69,
       "functions": 1,
       "classes": 0,
       "is_package": false,
       "fan_in": 0,
       "fan_out": 4,
       "external_deps": [
-        "app",
         "logging",
         "os",
-        "server",
         "signal",
         "sys",
         "time"
@@ -1624,7 +1684,17 @@
     },
     {
       "source": "app.ai.guarded",
+      "target": "app.core.guardrails",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.guarded",
       "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.guarded",
+      "target": "app.core.sanitizer",
       "kind": "runtime"
     },
     {
@@ -1639,7 +1709,32 @@
     },
     {
       "source": "app.ai.metrics",
+      "target": "app.ai.providers.gemini",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.metrics",
+      "target": "app.ai.providers.openrouter",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.metrics",
+      "target": "app.ai.router",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.metrics",
+      "target": "app.ai.routing_policy",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.metrics",
       "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.model_catalog",
+      "target": "app.ai.routing_policy",
       "kind": "runtime"
     },
     {
@@ -1678,11 +1773,6 @@
       "kind": "import"
     },
     {
-      "source": "app.ai.providers.gemini",
-      "target": "app.core.redis_client",
-      "kind": "runtime"
-    },
-    {
       "source": "app.ai.providers.groq",
       "target": "app.ai.circuit_breaker",
       "kind": "import"
@@ -1703,11 +1793,6 @@
       "kind": "runtime"
     },
     {
-      "source": "app.ai.providers.groq",
-      "target": "app.core.redis_client",
-      "kind": "import"
-    },
-    {
       "source": "app.ai.providers.ollama",
       "target": "app.ai.circuit_breaker",
       "kind": "import"
@@ -1715,6 +1800,11 @@
     {
       "source": "app.ai.providers.ollama",
       "target": "app.ai.providers.base",
+      "kind": "import"
+    },
+    {
+      "source": "app.ai.providers.ollama",
+      "target": "app.core.redaction",
       "kind": "import"
     },
     {
@@ -1804,6 +1894,11 @@
     },
     {
       "source": "app.ai.router",
+      "target": "app.core.redaction",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.router",
       "target": "app.core.redis_client",
       "kind": "runtime"
     },
@@ -1819,8 +1914,23 @@
     },
     {
       "source": "app.core.analytics",
+      "target": "app.core.commands",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.analytics",
       "target": "app.core.redis_client",
       "kind": "import"
+    },
+    {
+      "source": "app.core.audit",
+      "target": "app.core.metrics",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.audit",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
     },
     {
       "source": "app.core.authorization",
@@ -1849,6 +1959,16 @@
     },
     {
       "source": "app.core.event_queue",
+      "target": "app.core.env",
+      "kind": "import"
+    },
+    {
+      "source": "app.core.event_queue",
+      "target": "app.core.idempotency",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.event_queue",
       "target": "app.core.metrics",
       "kind": "import"
     },
@@ -1856,6 +1976,11 @@
       "source": "app.core.event_queue",
       "target": "app.core.redis_client",
       "kind": "import"
+    },
+    {
+      "source": "app.core.event_queue",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
     },
     {
       "source": "app.core.guardrails",
@@ -1870,11 +1995,6 @@
     {
       "source": "app.core.health_check",
       "target": "app.core.redis_client",
-      "kind": "runtime"
-    },
-    {
-      "source": "app.core.health_check",
-      "target": "app.github.rate_limit",
       "kind": "runtime"
     },
     {
@@ -1968,6 +2088,11 @@
       "kind": "runtime"
     },
     {
+      "source": "app.core.redis_client",
+      "target": "app.core.env",
+      "kind": "import"
+    },
+    {
       "source": "app.core.snapshot",
       "target": "app.core.redis_client",
       "kind": "import"
@@ -1983,8 +2108,43 @@
       "kind": "import"
     },
     {
+      "source": "app.core.thread_pool",
+      "target": "app.core.env",
+      "kind": "import"
+    },
+    {
+      "source": "app.core.transient",
+      "target": "app.ai.circuit_breaker",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.transient",
+      "target": "app.core.config",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.transient",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.transient",
+      "target": "app.github.client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.transient",
+      "target": "app.github.rate_limit",
+      "kind": "runtime"
+    },
+    {
       "source": "app.core.webhook_security",
       "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.github.client",
+      "target": "app.core.metrics",
       "kind": "runtime"
     },
     {
@@ -1996,6 +2156,31 @@
       "source": "app.github.client",
       "target": "app.github.rate_limit",
       "kind": "import"
+    },
+    {
+      "source": "app.github.deferred_reply",
+      "target": "app.core.event_queue",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.github.deferred_reply",
+      "target": "app.core.transient",
+      "kind": "import"
+    },
+    {
+      "source": "app.github.deferred_reply",
+      "target": "app.github.auth",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.github.deferred_reply",
+      "target": "app.github.client",
+      "kind": "import"
+    },
+    {
+      "source": "app.github.deferred_reply",
+      "target": "app.github.helpers",
+      "kind": "runtime"
     },
     {
       "source": "app.github.helpers",
@@ -2029,8 +2214,18 @@
     },
     {
       "source": "app.github.sticky",
+      "target": "app.github.auth",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.github.sticky",
       "target": "app.github.client",
       "kind": "import"
+    },
+    {
+      "source": "app.github.sticky",
+      "target": "app.github.helpers",
+      "kind": "runtime"
     },
     {
       "source": "app.handlers.autofix",
@@ -2054,6 +2249,16 @@
     },
     {
       "source": "app.handlers.autofix",
+      "target": "app.ai.validator",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.autofix",
+      "target": "app.core.learning",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.autofix",
       "target": "app.core.sanitizer",
       "kind": "import"
     },
@@ -2065,6 +2270,11 @@
     {
       "source": "app.handlers.ci",
       "target": "app.ai.guarded",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.ci",
+      "target": "app.ai.router",
       "kind": "runtime"
     },
     {
@@ -2089,8 +2299,18 @@
     },
     {
       "source": "app.handlers.ci",
+      "target": "app.core.transient",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.ci",
       "target": "app.github.auth",
       "kind": "import"
+    },
+    {
+      "source": "app.handlers.ci",
+      "target": "app.github.client",
+      "kind": "runtime"
     },
     {
       "source": "app.handlers.ci",
@@ -2174,6 +2394,11 @@
     },
     {
       "source": "app.handlers.comments.dispatcher",
+      "target": "app.core.transient",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.dispatcher",
       "target": "app.github.helpers",
       "kind": "runtime"
     },
@@ -2214,11 +2439,6 @@
     },
     {
       "source": "app.handlers.comments.generator",
-      "target": "app.core.learning",
-      "kind": "runtime"
-    },
-    {
-      "source": "app.handlers.comments.generator",
       "target": "app.core.sanitizer",
       "kind": "import"
     },
@@ -2236,6 +2456,16 @@
       "source": "app.handlers.comments.generator",
       "target": "app.handlers.comments.constants",
       "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.generator",
+      "target": "app.handlers.comments.dispatcher",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.generator",
+      "target": "app.handlers.pull_request.analysis",
+      "kind": "runtime"
     },
     {
       "source": "app.handlers.comments.generator",
@@ -2264,17 +2494,17 @@
     },
     {
       "source": "app.handlers.comments.publisher",
+      "target": "app.core.audit",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.publisher",
       "target": "app.core.guardrails",
       "kind": "runtime"
     },
     {
       "source": "app.handlers.comments.publisher",
-      "target": "app.core.learning",
-      "kind": "runtime"
-    },
-    {
-      "source": "app.handlers.comments.publisher",
-      "target": "app.core.redis_client",
+      "target": "app.core.sanitizer",
       "kind": "runtime"
     },
     {
@@ -2329,6 +2559,11 @@
     },
     {
       "source": "app.handlers.comments.reviewer",
+      "target": "app.ai.validator",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.reviewer",
       "target": "app.core.analytics",
       "kind": "runtime"
     },
@@ -2359,7 +2594,17 @@
     },
     {
       "source": "app.handlers.comments.reviewer",
+      "target": "app.handlers.comments.publisher",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.reviewer",
       "target": "app.handlers.pull_request",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.reviewer",
+      "target": "app.handlers.pull_request.risk",
       "kind": "runtime"
     },
     {
@@ -2409,12 +2654,22 @@
     },
     {
       "source": "app.handlers.comments.service",
+      "target": "app.core.analytics",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.service",
       "target": "app.core.authorization",
       "kind": "import"
     },
     {
       "source": "app.handlers.comments.service",
       "target": "app.core.config",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.service",
+      "target": "app.core.guardrails",
       "kind": "import"
     },
     {
@@ -2429,7 +2684,7 @@
     },
     {
       "source": "app.handlers.comments.service",
-      "target": "app.github.client",
+      "target": "app.github.deferred_reply",
       "kind": "import"
     },
     {
@@ -2519,8 +2774,18 @@
     },
     {
       "source": "app.handlers.issues",
+      "target": "app.ai.router",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.issues",
       "target": "app.ai.validator",
       "kind": "import"
+    },
+    {
+      "source": "app.handlers.issues",
+      "target": "app.core.analytics",
+      "kind": "runtime"
     },
     {
       "source": "app.handlers.issues",
@@ -2544,8 +2809,18 @@
     },
     {
       "source": "app.handlers.issues",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.issues",
       "target": "app.core.sanitizer",
       "kind": "import"
+    },
+    {
+      "source": "app.handlers.issues",
+      "target": "app.core.snapshot",
+      "kind": "runtime"
     },
     {
       "source": "app.handlers.issues",
@@ -2555,6 +2830,16 @@
     {
       "source": "app.handlers.issues",
       "target": "app.github.client",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.issues",
+      "target": "app.github.client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.issues",
+      "target": "app.github.deferred_reply",
       "kind": "import"
     },
     {
@@ -2569,7 +2854,17 @@
     },
     {
       "source": "app.handlers.pull_request",
+      "target": "app.ai.circuit_breaker",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request",
       "target": "app.ai.gatekeeper",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.ai.providers.base",
       "kind": "runtime"
     },
     {
@@ -2579,8 +2874,18 @@
     },
     {
       "source": "app.handlers.pull_request",
+      "target": "app.ai.router",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request",
       "target": "app.ai.validator",
       "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.core.analytics",
+      "kind": "runtime"
     },
     {
       "source": "app.handlers.pull_request",
@@ -2610,6 +2915,11 @@
     {
       "source": "app.handlers.pull_request",
       "target": "app.core.sanitizer",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.core.transient",
       "kind": "import"
     },
     {
@@ -2649,7 +2959,17 @@
     },
     {
       "source": "app.handlers.pull_request",
+      "target": "app.handlers.pull_request.errors",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
       "target": "app.handlers.pull_request.gaps",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request",
+      "target": "app.handlers.pull_request.outcomes",
       "kind": "import"
     },
     {
@@ -2663,8 +2983,8 @@
       "kind": "import"
     },
     {
-      "source": "app.handlers.pull_request",
-      "target": "app.intelligence.retrieval",
+      "source": "app.handlers.pull_request.analysis",
+      "target": "app.ai.hallucination",
       "kind": "runtime"
     },
     {
@@ -2675,6 +2995,11 @@
     {
       "source": "app.handlers.pull_request.analysis",
       "target": "app.ai.router",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request.analysis",
+      "target": "app.ai.routing_policy",
       "kind": "runtime"
     },
     {
@@ -2695,6 +3020,16 @@
     {
       "source": "app.handlers.pull_request.analysis",
       "target": "app.core.sanitizer",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.analysis",
+      "target": "app.core.snapshot",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request.analysis",
+      "target": "app.core.transient",
       "kind": "import"
     },
     {
@@ -2713,6 +3048,21 @@
       "kind": "runtime"
     },
     {
+      "source": "app.handlers.pull_request.analysis",
+      "target": "app.handlers.pull_request.errors",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.analysis",
+      "target": "app.handlers.pull_request.risk",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request.context",
+      "target": "app.github.patch_parser",
+      "kind": "import"
+    },
+    {
       "source": "app.handlers.pull_request.gaps",
       "target": "app.ai.router",
       "kind": "import"
@@ -2729,8 +3079,58 @@
     },
     {
       "source": "app.handlers.pull_request.gaps",
+      "target": "app.github.client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request.gaps",
+      "target": "app.github.patch_parser",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.gaps",
       "target": "app.handlers.pull_request.classify",
       "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.gaps",
+      "target": "app.handlers.pull_request.context",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request.gaps",
+      "target": "app.handlers.pull_request.errors",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.grounding",
+      "target": "app.github.patch_parser",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.outcomes",
+      "target": "app.core",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request.outcomes",
+      "target": "app.core.learning",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request.outcomes",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request.outcomes",
+      "target": "app.intelligence.memory",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request.report",
+      "target": "app.github.helpers",
+      "kind": "runtime"
     },
     {
       "source": "app.handlers.pull_request.review",
@@ -2778,6 +3178,31 @@
       "kind": "import"
     },
     {
+      "source": "app.handlers.pull_request.review",
+      "target": "app.handlers.pull_request.context",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.review",
+      "target": "app.handlers.pull_request.errors",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.review",
+      "target": "app.handlers.pull_request.grounding",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.review",
+      "target": "app.intelligence.memory",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request.risk",
+      "target": "app.handlers.pull_request.classify",
+      "kind": "runtime"
+    },
+    {
       "source": "app.handlers.push",
       "target": "app.core.authorization",
       "kind": "runtime"
@@ -2809,12 +3234,22 @@
     },
     {
       "source": "app.handlers.push",
+      "target": "app.core.snapshot",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.push",
       "target": "app.github.auth",
       "kind": "import"
     },
     {
       "source": "app.handlers.push",
       "target": "app.github.client",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.push",
+      "target": "app.github.helpers",
       "kind": "import"
     },
     {
@@ -2830,11 +3265,6 @@
     {
       "source": "app.handlers.push",
       "target": "app.handlers.readme",
-      "kind": "runtime"
-    },
-    {
-      "source": "app.handlers.push",
-      "target": "app.intelligence.embeddings",
       "kind": "runtime"
     },
     {
@@ -2893,14 +3323,19 @@
       "kind": "runtime"
     },
     {
-      "source": "app.intelligence.retrieval",
-      "target": "app.intelligence.embeddings",
-      "kind": "runtime"
+      "source": "app.intelligence.summarizer",
+      "target": "app.ai.router",
+      "kind": "import"
     },
     {
       "source": "app.intelligence.summarizer",
       "target": "app.ai.router",
-      "kind": "import"
+      "kind": "runtime"
+    },
+    {
+      "source": "app.intelligence.summarizer",
+      "target": "app.core.sanitizer",
+      "kind": "runtime"
     },
     {
       "source": "app.mcp",
@@ -2981,6 +3416,16 @@
       "source": "app.mcp.mcp_server",
       "target": "app.mcp.tools",
       "kind": "import"
+    },
+    {
+      "source": "app.mcp.tools",
+      "target": "app.security.enhanced_secrets",
+      "kind": "import"
+    },
+    {
+      "source": "app.security.dependencies",
+      "target": "app.github.client",
+      "kind": "runtime"
     },
     {
       "source": "app.security.licenses",
@@ -3094,6 +3539,11 @@
     },
     {
       "source": "server",
+      "target": "app.core.transient",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
       "target": "app.core.webhook_security",
       "kind": "import"
     },
@@ -3109,7 +3559,12 @@
     },
     {
       "source": "server",
-      "target": "app.github.client",
+      "target": "app.github.deferred_reply",
+      "kind": "import"
+    },
+    {
+      "source": "server",
+      "target": "app.github.deferred_reply",
       "kind": "runtime"
     },
     {
@@ -3189,9 +3644,9 @@
     }
   ],
   "stats": {
-    "modules": 94,
-    "edges": 321,
-    "total_loc": 24023,
+    "modules": 101,
+    "edges": 400,
+    "total_loc": 27730,
     "layers": [
       "ai",
       "core",
@@ -3205,64 +3660,64 @@
     "cycles": [],
     "hotspots": [
       {
-        "id": "app.core.redis_client",
-        "loc": 510,
-        "fan_in": 28,
-        "fan_out": 0
+        "id": "app.ai.router",
+        "loc": 848,
+        "fan_in": 20,
+        "fan_out": 16
       },
       {
-        "id": "app.ai.router",
-        "loc": 734,
-        "fan_in": 15,
-        "fan_out": 15
+        "id": "app.core.redis_client",
+        "loc": 557,
+        "fan_in": 30,
+        "fan_out": 1
       },
       {
         "id": "app.github.client",
-        "loc": 307,
-        "fan_in": 23,
-        "fan_out": 2
-      },
-      {
-        "id": "app.github.notifications",
-        "loc": 527,
-        "fan_in": 8,
-        "fan_out": 4
+        "loc": 327,
+        "fan_in": 27,
+        "fan_out": 3
       },
       {
         "id": "app.security.enhanced_secrets",
-        "loc": 898,
-        "fan_in": 4,
+        "loc": 1071,
+        "fan_in": 5,
         "fan_out": 0
       },
       {
         "id": "app.core.config",
-        "loc": 413,
-        "fan_in": 7,
+        "loc": 567,
+        "fan_in": 8,
         "fan_out": 1
       },
       {
-        "id": "app.core.guardrails",
-        "loc": 298,
-        "fan_in": 9,
-        "fan_out": 1
-      },
-      {
-        "id": "app.ai.providers.base",
-        "loc": 348,
-        "fan_in": 7,
-        "fan_out": 3
-      },
-      {
-        "id": "app.core.webhook_security",
-        "loc": 521,
-        "fan_in": 4,
-        "fan_out": 1
+        "id": "app.github.notifications",
+        "loc": 567,
+        "fan_in": 8,
+        "fan_out": 4
       },
       {
         "id": "app.core.sanitizer",
-        "loc": 180,
-        "fan_in": 13,
+        "loc": 284,
+        "fan_in": 16,
         "fan_out": 0
+      },
+      {
+        "id": "app.core.guardrails",
+        "loc": 368,
+        "fan_in": 11,
+        "fan_out": 1
+      },
+      {
+        "id": "app.ai.validator",
+        "loc": 356,
+        "fan_in": 11,
+        "fan_out": 0
+      },
+      {
+        "id": "app.ai.providers.base",
+        "loc": 372,
+        "fan_in": 8,
+        "fan_out": 3
       }
     ],
     "collisions": {},

@@ -5,10 +5,12 @@ from __future__ import annotations
 import logging
 
 from app.core.authorization import check_command_permission
+from app.core.analytics import record_command_used
 from app.core.config import load_config
+from app.core.guardrails import budget_refusal, reset_budget_refusal
 from app.core.logger import EventLogger
 from app.github.auth import get_installation_token
-from app.github.client import GitHubError
+from app.github.deferred_reply import post_comment
 from app.github.helpers import fmt_error
 
 from ._client import gh_post
@@ -19,7 +21,8 @@ from .dispatcher import (
     command_repeated_by_edit,
     command_disabled_comment,
     empty_response_comment,
-    extract_command,
+    parse_command,
+    ground_answer,
     is_providers_down,
     make_degraded_response,
     pr_context,
@@ -33,7 +36,8 @@ def handle_comment_event(payload: dict) -> None:
     Main webhook handler for issue_comment events.
 
     Called from _run_handler() in server.py inside the thread pool.
-    Never raises — all exceptions are caught and logged.
+    Raises when the command could not be answered, so the queue retries a
+    transient failure and counts the rest. Returning reported them as handled.
     """
     # ── Payload extraction ────────────────────────────────────────────────
     action = payload.get("action", "")
@@ -61,7 +65,7 @@ def handle_comment_event(payload: dict) -> None:
         return
 
     # ── Command detection ─────────────────────────────────────────────────
-    cmd = extract_command(body)
+    cmd, cmd_args = parse_command(body)
     if not cmd:
         return
 
@@ -76,22 +80,19 @@ def handle_comment_event(payload: dict) -> None:
         token = get_installation_token(installation_id)
     except Exception as exc:
         log_ctx.error("auth_failed", reason=str(exc)[:100])
-        return
+        raise  # nothing has run yet; the queue retries the whole command
 
     config = load_config(repo, token)
 
+    def reply(text: str) -> None:
+        _post_comment(repo, issue_number, token, text, log_ctx, installation_id)
+
     # ── Per-user rate limit ───────────────────────────────────────────────
     if not check_user_rate_limit(repo, author):
-        _post_comment(
-            repo,
-            issue_number,
-            token,
-            (
-                f"## ⏳ Rate Limit Reached\n\n"
-                f"@{author} — you've used the command limit (10/hour) for this repo.\n\n"
-                "Please try again in an hour."
-            ),
-            log_ctx,
+        reply(
+            f"## ⏳ Rate Limit Reached\n\n"
+            f"@{author} — you've used the command limit (10/hour) for this repo.\n\n"
+            "Please try again in an hour."
         )
         return
 
@@ -102,7 +103,7 @@ def handle_comment_event(payload: dict) -> None:
     # command never costs a GitHub permission API call.
     if not config.command_enabled(cmd):
         log_ctx.info("command_disabled_by_config")
-        _post_comment(repo, issue_number, token, command_disabled_comment(cmd), log_ctx)
+        reply(command_disabled_comment(cmd))
         return
 
     # ── Authorization ─────────────────────────────────────────────────────
@@ -112,19 +113,11 @@ def handle_comment_event(payload: dict) -> None:
     # the maintainer looking at their own account instead of the App install.
     allowed, reason = check_command_permission(cmd, repo, author, token, config)
     if not allowed:
-        _post_comment(
-            repo,
-            issue_number,
-            token,
-            f"## 🚫 `{cmd}` Not Run\n\n@{author} — {reason}",
-            log_ctx,
-        )
+        reply(f"## 🚫 `{cmd}` Not Run\n\n@{author} — {reason}")
         return
 
-    idx = body.lower().find(cmd)  # slice ORIGINAL body so args keep their case
-    cmd_args = body[idx + len(cmd) :].strip() if idx != -1 else ""
-
     # ── Context building & Memory ─────────────────────────────────────────
+    record_command_used(repo, cmd.lstrip("/"))  # only commands that will run; never raises
     context = f"Title: {issue.get('title', '')}\nBody: {(issue.get('body') or '')[:1500]}"
     if "pull_request" in issue and cmd in DIFF_CONTEXT_COMMANDS:
         context = pr_context(repo, issue_number, issue, token, log_ctx) or context
@@ -135,6 +128,7 @@ def handle_comment_event(payload: dict) -> None:
     from app.ai.router import last_model_disclosure, reset_last_call
 
     reset_last_call()
+    reset_budget_refusal()
     response = _dispatch(
         cmd=cmd,
         cmd_args=cmd_args,
@@ -147,6 +141,10 @@ def handle_comment_event(payload: dict) -> None:
         config=config,
         log_ctx=log_ctx,
     )
+    # The router refuses AI calls once today's budget is spent; commands word
+    # failures their own way, which would hide that reason.
+    if budget_refusal():
+        response = f"## ⏳ AI Budget Reached\n\n{budget_refusal()}"
 
     # Reached only after the comment carried a real command the author was
     # allowed to run — so somebody is waiting for an answer. This used to
@@ -154,19 +152,20 @@ def handle_comment_event(payload: dict) -> None:
     # the worst reply available here.
     if not response:
         log_ctx.warning("empty_response")
-        _post_comment(repo, issue_number, token, empty_response_comment(cmd), log_ctx)
+        reply(empty_response_comment(cmd))
         return
 
     # ── Check for providers-down sentinel ─────────────────────────────────
     if isinstance(response, dict) and is_providers_down(response):
         response = make_degraded_response(response)
+    response = ground_answer(cmd, response, context, repo, token)
 
     # ── Post to GitHub (with model disclosure) ─────────────────────────────
     footer = getattr(config, "footer", "")
     full = (
         f"{response}\n\n---\n*🤖 `{cmd}` — requested by @{author}{last_model_disclosure()}*{footer}"
     )
-    _post_comment(repo, issue_number, token, full, log_ctx)
+    reply(full)
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
@@ -178,15 +177,16 @@ def _post_comment(
     token: str,
     body: str,
     log_ctx: EventLogger,
+    installation_id: int = 0,
 ) -> None:
-    """Post a comment to GitHub. Logs on failure, never raises."""
+    """Post the reply; a transient refusal parks it on the queue (the command
+    is not run again — see deferred_reply). Raises when the reply is lost."""
     try:
-        gh_post(f"/repos/{repo}/issues/{issue_number}/comments", token, {"body": body})
+        post_comment(repo, issue_number, token, installation_id, body, post=gh_post)
         log_ctx.done("comment_posted")
-    except GitHubError as exc:
-        log_ctx.error("post_failed", reason=str(exc)[:100])
     except Exception as exc:
-        log_ctx.error("post_unexpected", reason=str(exc)[:100])
+        log_ctx.error("post_failed", reason=f"{type(exc).__name__}: {str(exc)[:100]}")
+        raise
 
 
 def _dispatch(
@@ -218,7 +218,7 @@ def _dispatch(
         match cmd:
             # ── Generator: AI content ──────────────────────────────────
             case "/fix":
-                return G.cmd_fix(ctx_title, context, repo)
+                return G.cmd_fix(ctx_title, context)
             case "/explain":
                 return G.cmd_explain(context)
             case "/improve":
@@ -266,9 +266,9 @@ def _dispatch(
             case "/release":
                 return P.cmd_release(repo, token, author)
             case "/runtests":
-                return P.cmd_runtests(repo, token)
+                return P.cmd_runtests(repo, issue_number, token, issue=issue)
             case "/notify":
-                return P.cmd_notify(repo, issue_number, issue, token, cmd_args)
+                return P.cmd_notify(repo, issue_number, issue, token, cmd_args, config)
             case "/security":
                 return SEC.cmd_security(repo, issue_number, issue, token)
             case "/secfull":

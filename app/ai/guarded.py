@@ -46,10 +46,30 @@ def safe_router_ask(
         return router.ask(system, user, task=task, max_tokens=max_tokens)
     except AllProvidersDown as exc:
         log.error(f"router.all_providers_down task={task} retry_in={exc.retry_in_seconds}s")
-        return {"_providers_down": True, "_retry_in": exc.retry_in_seconds}, None
+        # A missing or rejected key also ends here, and "down, retry shortly"
+        # is the one thing that cannot fix it: say which it is.
+        fault = router.configuration_error()
+        return {
+            "_providers_down": True,
+            "_retry_in": exc.retry_in_seconds,
+            "_configuration_error": bool(fault),
+            "message": fault,
+        }, None
     except Exception as exc:
+        # {} used to be returned here. It has no "error", so is_unusable()
+        # passed it and the hallucination check then reported
+        # "low_confidence" — "the generated review did not pass the
+        # reliability check, please retry" — for a request that never reached
+        # a model and would fail the same way on every retry.
+        from app.core.guardrails import AIBudgetExceeded
+        from app.core.sanitizer import InjectionRejected
+
         log.error(f"router.ask failed task={task}: {exc}")
-        return {}, None
+        if isinstance(exc, InjectionRejected):
+            return {"error": "input_rejected", "_reason": "input_rejected"}, None
+        if isinstance(exc, AIBudgetExceeded):
+            return {"error": str(exc), "_reason": "budget"}, None
+        return {"error": type(exc).__name__, "_reason": "error"}, None
 
 
 # One alert per outage, not one per affected request. A total provider outage
@@ -104,6 +124,8 @@ def guarded_ask(
                 "_degraded": True,
                 "_reason": "providers_down",
                 "_retry_in": payload.get("_retry_in", 60),
+                "_configuration_error": payload.get("_configuration_error", False),
+                "message": payload.get("message", ""),
             },
             HallucinationResult(
                 confidence=0.0,
@@ -141,6 +163,17 @@ def guarded_ask(
     return payload, verdict
 
 
+def not_configured_comment(message: str, what: str = "answer") -> str:
+    """No provider is usable because of the deployment's settings — a missing
+    or rejected API key — which waiting cannot fix."""
+    return (
+        "## ⚠️ AI Not Configured\n\n"
+        f"{message or 'No language model provider is usable.'} No {what} was produced.\n\n"
+        "This will not resolve by waiting: a maintainer needs to fix the "
+        "deployment's provider settings. `/health` shows what is wrong."
+    )
+
+
 def is_degraded(payload) -> bool:
     """True when a payload must not be rendered as a real answer."""
     return isinstance(payload, dict) and payload.get("_degraded") is True
@@ -156,12 +189,14 @@ def degraded_comment(payload: dict, what: str = "analysis") -> str:
     reason = payload.get("_reason", "unknown") if isinstance(payload, dict) else "unknown"
 
     if reason == "providers_down":
+        if payload.get("_configuration_error"):
+            return not_configured_comment(payload.get("message", ""), what)
         retry = payload.get("_retry_in", 60)
         return (
             f"## ⚠️ AI Temporarily Unavailable\n\n"
             f"All model providers are currently down (earliest retry ~{retry}s). "
             f"No {what} was produced.\n\n"
-            "> Transient issue — please try again shortly."
+            "> Please try again shortly. If it persists, `/health` shows each provider's state."
         )
 
     if reason == "unparseable":

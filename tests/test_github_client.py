@@ -427,3 +427,45 @@ class TestPagination:
             with patch.object(client.log, "warning") as warn:
                 gh_get_all("/x", "t")
         assert warn.call_count == 0
+
+
+class TestRateLimitTrackingAudit2:
+    """Found by the 2026-10-08 audit."""
+
+    def setup_method(self):
+        from app.github import rate_limit
+
+        rate_limit.reset_state()
+
+    def test_lowercase_headers_are_read(self):
+        import time
+
+        from app.github import rate_limit
+
+        rate_limit.update_from_headers(
+            {"x-ratelimit-remaining": "3", "x-ratelimit-reset": str(int(time.time()) + 3600)}, "tok"
+        )
+        assert rate_limit.get_status("tok")["remaining"] == 3
+
+    def test_search_limit_does_not_throttle_core_calls(self):
+        import time
+
+        from app.github import rate_limit
+
+        rate_limit.update_from_headers(
+            {"X-RateLimit-Remaining": "29", "X-RateLimit-Reset": str(int(time.time()) + 50),
+             "X-RateLimit-Resource": "search"}, "tok"
+        )
+        rate_limit.check_and_wait("tok")  # must not raise or sleep
+        assert rate_limit.get_status("tok")["remaining"] == 5000
+
+    def test_an_expired_low_entry_does_not_report_rate_limited(self):
+        import time
+
+        from app.github import rate_limit
+
+        rate_limit.update_from_headers(
+            {"X-RateLimit-Remaining": "10", "X-RateLimit-Reset": str(int(time.time()) - 5)}, "old"
+        )
+        assert rate_limit.get_status()["low"] is False
+        rate_limit.check_and_wait("old")  # the window is over: no refusal

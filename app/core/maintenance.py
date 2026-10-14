@@ -43,6 +43,11 @@ MIN_INTERVAL_DAYS = 1.0
 # Hourly: fine-grained enough that a 15-day schedule lands the same day, cheap
 # enough to be invisible (one Redis GET per hour per process).
 TICK_SECONDS = 3600
+# The first check comes soon after boot. It slept a full TICK_SECONDS first,
+# so a process restarted more often than hourly — a deploy, or a free-tier
+# instance spun down when idle — never checked at all and the pass never ran.
+# Checking early is safe: claim_due_run() decides whether anything is due.
+FIRST_TICK_SECONDS = 60
 
 _DUE_KEY = "maintenance:due_at"
 _LAST_RUN_KEY = "maintenance:last_run"
@@ -143,7 +148,7 @@ def scan_repo(repo: str, installation_id: int) -> dict:
     Never raises: one repository failing must not stop the pass, and the record
     says which repositories were not scanned rather than quietly omitting them.
     """
-    record = {"repo": repo, "ok": False, "critical": 0, "total": 0, "error": ""}
+    record = {"repo": repo, "ok": False, "critical": 0, "total": 0, "error": "", "missed": []}
     try:
         from app.github.auth import get_installation_token
         from app.security.scanner import run_security_scan
@@ -154,16 +159,44 @@ def scan_repo(repo: str, installation_id: int) -> dict:
         # report — so reaching this line proved nothing. A repository none of
         # whose sources could be read was counted as scanned with 0 findings,
         # which is exactly the "quietly omitting" this record exists to stop.
+        # A scan that could read some sources but not others was "ok" with
+        # nothing saying which were missed, and its 0 read as clean.
         record.update(
             ok=not report.scanned_nothing,
             critical=report.critical_count,
             total=report.total_count,
             error="; ".join(report.errors)[:150] if report.scanned_nothing else "",
+            missed=list(report.unavailable) + list(report.truncated),
         )
     except Exception as e:
         record["error"] = str(e)[:150]
         log.warning(f"maintenance.scan_failed repo={repo}: {e}")
     return record
+
+
+_CURSOR_KEY = "maintenance:cursor"
+
+
+def _this_cycles_batch(ordered: list) -> list:
+    """
+    Up to MAX_REPOS_PER_RUN repositories, continuing where the last cycle
+    stopped. This was `sorted(...)[:25]` — the same first 25 every cycle, so
+    on a deployment with more, the rest were never scanned, while the comment
+    said they were "picked up on the next cycle".
+    """
+    n = len(ordered)
+    if n <= MAX_REPOS_PER_RUN:
+        return ordered
+    start = 0
+    try:
+        from app.core.redis_client import get_redis
+
+        r = get_redis()
+        start = int(r.get(_CURSOR_KEY) or 0) % n
+        r.set(_CURSOR_KEY, str((start + MAX_REPOS_PER_RUN) % n))
+    except Exception as e:
+        log.debug(f"maintenance.cursor_unavailable: {e}")
+    return (ordered[start:] + ordered[:start])[:MAX_REPOS_PER_RUN]
 
 
 def run_pass() -> dict:
@@ -179,7 +212,7 @@ def run_pass() -> dict:
     installs = known_installations()
     scanned: list[dict] = []
 
-    for repo, inst in sorted(installs.items())[:MAX_REPOS_PER_RUN]:
+    for repo, inst in _this_cycles_batch(sorted(installs.items())):
         scanned.append(scan_repo(repo, inst))
 
     findings = sum(s["critical"] for s in scanned)
@@ -200,6 +233,8 @@ def run_pass() -> dict:
         "repos_known": len(installs),
         "repos_scanned": sum(1 for s in scanned if s["ok"]),
         "repos_failed": sum(1 for s in scanned if not s["ok"]),
+        # Scanned, but not every source could be read in full.
+        "repos_partial": sorted(s["repo"] for s in scanned if s["ok"] and s["missed"]),
         "critical_findings": findings,
         "memory_backed_up": backed_up,
     }
@@ -282,8 +317,10 @@ def start_scheduler() -> bool:
     import threading
 
     def _loop() -> None:
+        delay = FIRST_TICK_SECONDS
         while True:
-            time.sleep(TICK_SECONDS)
+            time.sleep(delay)
+            delay = TICK_SECONDS
             try:
                 tick()
             except Exception as e:  # never let the schedule die with one pass

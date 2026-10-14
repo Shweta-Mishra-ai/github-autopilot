@@ -15,7 +15,8 @@ Two properties carry this feature and are what these tests defend:
     commands silently; asking for more is a permission grab a reader is right
     to refuse.
   * A page that renders a private key must be unreplayable and unlogged. The
-    callback is single-use, and nothing about it reaches the logs.
+    callback works once, only in the browser that opened /setup, and nothing
+    about it reaches the logs.
 """
 
 from __future__ import annotations
@@ -78,13 +79,26 @@ class TestTheManifestMatchesWhatTheCodeCalls:
         allowed = {
             "metadata", "issues", "pull_requests", "contents",
             "actions", "checks", "security_events",
+            # /secfull reads Dependabot and secret-scanning alerts
+            # (app/security/scanner.py); without these it can only report
+            # both sources as "no permission".
+            "vulnerability_alerts", "secret_scanning_alerts",
         }
         assert set(build_manifest(BASE)["default_permissions"]) <= allowed
 
     def test_it_subscribes_to_exactly_the_handled_events(self):
-        """An event with no handler is delivered, dropped, and billed."""
+        """An event with no handler is delivered, dropped, and billed — and a
+        handled event that is not subscribed is never delivered at all, which
+        is how the CI handler never ran. The handled set is read from
+        server.py's own dispatch, so the two cannot drift again."""
+        import pathlib
+
+        source = pathlib.Path("server.py").read_text(encoding="utf-8")
+        handled = set(re.findall(r'elif webhook_event == "(\w+)"|if webhook_event == "(\w+)":\n\s+_run', source))
+        handled = {a or b for a, b in handled} | {"pull_request"}
         events = set(build_manifest(BASE)["default_events"])
-        assert events == {"push", "pull_request", "issues", "issue_comment"}
+        assert events == {"push", "pull_request", "issues", "issue_comment", "check_run"}
+        assert events == handled
 
     def test_the_webhook_and_callback_point_at_this_deployment(self):
         m = build_manifest(BASE)
@@ -101,7 +115,7 @@ class TestTheManifestMatchesWhatTheCodeCalls:
         button rather than a visible error."""
         import html as html_mod
 
-        page = setup_page(BASE)
+        page = setup_page(BASE, new_state())
         raw = re.search(r"""name=["']manifest["']\s+value='([^']+)'""", page)
         assert raw, "manifest field missing from the form"
 
@@ -112,20 +126,25 @@ class TestTheManifestMatchesWhatTheCodeCalls:
     def test_the_manifest_attribute_is_quote_safe(self):
         """The JSON is embedded in a single-quoted attribute. An unescaped
         quote would truncate it and GitHub would receive a fragment."""
-        page = setup_page(BASE)
+        page = setup_page(BASE, new_state())
         raw = re.search(r"""name=["']manifest["']\s+value='([^']+)'""", page)
         assert '"' not in raw.group(1), "raw double quote survived into the attribute"
         assert "'" not in raw.group(1), "raw single quote would close the attribute"
 
 
-class TestTheCallbackCannotBeReplayed:
-    def test_a_state_works_exactly_once(self):
-        s = new_state()
-        assert consume_state(s) is True
-        assert consume_state(s) is False
+def _started(client) -> str:
+    """Load /setup in this client and return the state it was given."""
+    body = client.get("/setup").get_data(as_text=True)
+    return re.search(r"state=([A-Za-z0-9_\-]+)", body).group(1)
 
-    def test_a_state_this_server_never_issued_is_rejected(self):
-        assert consume_state("forged-value") is False
+
+class TestTheCallbackIsBoundToTheBrowser:
+    def test_the_state_must_match_the_cookie(self):
+        s = new_state()
+        assert consume_state(s, s) is True
+        assert consume_state(s, new_state()) is False
+        assert consume_state(s, "") is False
+        assert consume_state("", "") is False
 
     def test_the_endpoint_refuses_a_forged_state(self, client):
         assert client.get("/setup/callback?code=abc&state=forged").status_code == 400
@@ -133,14 +152,58 @@ class TestTheCallbackCannotBeReplayed:
     def test_the_endpoint_refuses_a_missing_code(self, client):
         assert client.get("/setup/callback").status_code == 400
 
-    def test_state_storage_is_bounded(self):
-        """An unbounded set of tokens is a memory leak reachable by anyone who
-        can load a public page."""
-        from app.setup_flow import _MAX_STATES, _STATES
+    def test_a_code_that_is_not_a_token_is_refused_before_it_is_sent(self, client, monkeypatch):
+        """The code goes into a GitHub API URL path."""
+        from app import setup_flow
 
-        for _ in range(_MAX_STATES * 3):
-            new_state()
-        assert len(_STATES) <= _MAX_STATES
+        sent = []
+        monkeypatch.setattr(setup_flow, "exchange_code", lambda code: (sent.append(code), ({}, "x"))[1])
+        state = _started(client)
+        resp = client.get(f"/setup/callback?code=../../user&state={state}")
+        assert resp.status_code == 400 and sent == []
+
+    def test_another_browsers_state_is_refused(self, monkeypatch):
+        """Round-3 audit C3: the attacker loads /setup, then walks the
+        victim's browser through the callback with the attacker's code and
+        state. The victim was shown an install link for the attacker's App."""
+        monkeypatch.setenv("EVENT_QUEUE_CONSUMERS", "0")
+        import server
+        from app import setup_flow
+
+        sent = []
+        monkeypatch.setattr(
+            setup_flow, "exchange_code", lambda code: (sent.append(code), ({"id": 9, "slug": "evil"}, ""))[1]
+        )
+        attacker, victim = server.app.test_client(), server.app.test_client()
+        state = _started(attacker)
+        resp = victim.get(f"/setup/callback?code=ATTACKERCODE&state={state}")
+        assert resp.status_code == 400
+        assert sent == []
+
+    def test_page_loads_by_others_do_not_void_a_setup_in_flight(self, client, monkeypatch):
+        """The state set was cleared at 32 entries, so 32 anonymous GETs of a
+        public page cancelled the operator's setup."""
+        import server
+        from app import setup_flow
+
+        monkeypatch.setattr(setup_flow, "exchange_code", lambda code: ({"id": 1, "slug": "mine"}, ""))
+        state = _started(client)
+        others = server.app.test_client()
+        for _ in range(40):
+            others.get("/setup")
+        assert client.get(f"/setup/callback?code=GOOD&state={state}").status_code == 200
+
+    def test_the_state_works_once(self, client, monkeypatch):
+        from app import setup_flow
+
+        monkeypatch.setattr(setup_flow, "exchange_code", lambda code: ({"id": 1, "slug": "mine"}, ""))
+        state = _started(client)
+        assert client.get(f"/setup/callback?code=GOOD&state={state}").status_code == 200
+        assert client.get(f"/setup/callback?code=GOOD&state={state}").status_code == 400
+
+    def test_the_cookie_is_httponly_and_scoped(self, client):
+        cookie = client.get("/setup").headers.get("Set-Cookie", "")
+        assert "HttpOnly" in cookie and "Path=/setup" in cookie and "SameSite=Lax" in cookie
 
 
 class TestCredentialsAreHandledLikeCredentials:
@@ -172,7 +235,7 @@ class TestCredentialsAreHandledLikeCredentials:
         aggregator, backup and support ticket downstream of it."""
         from app import setup_flow
 
-        state = new_state()
+        state = _started(client)
         monkeypatch.setattr(setup_flow, "exchange_code", lambda code: (self.SAMPLE, ""))
 
         with caplog.at_level(logging.DEBUG):
@@ -186,7 +249,7 @@ class TestCredentialsAreHandledLikeCredentials:
     def test_the_credentials_response_is_not_cacheable(self, client, monkeypatch):
         from app import setup_flow
 
-        state = new_state()
+        state = _started(client)
         monkeypatch.setattr(setup_flow, "exchange_code", lambda code: (self.SAMPLE, ""))
         resp = client.get(f"/setup/callback?code=abc&state={state}")
         assert "no-store" in resp.headers.get("Cache-Control", "")
@@ -194,7 +257,7 @@ class TestCredentialsAreHandledLikeCredentials:
     def test_a_failed_exchange_does_not_render_a_page(self, client, monkeypatch):
         from app import setup_flow
 
-        state = new_state()
+        state = _started(client)
         monkeypatch.setattr(setup_flow, "exchange_code", lambda code: ({}, "code expired"))
         resp = client.get(f"/setup/callback?code=abc&state={state}")
         assert resp.status_code == 502
@@ -283,3 +346,48 @@ class TestTheDoctorReportsEvidence:
         for cap in CAPABILITIES:
             assert cap.enables, f"{cap.name} does not say what it enables"
             assert "{repo}" in cap.path
+
+
+class TestDoctorWithoutAToken:
+    """With METRICS_AUTH_TOKEN unset the doctor was public — including repo
+    probes that mint an installation token (2026-10-08 audit)."""
+
+    def test_a_repo_probe_is_refused(self, client, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, "METRICS_TOKEN", "")
+        r = client.get("/setup/doctor?repo=o/r&installation_id=1")
+        assert r.status_code == 403 and "METRICS_AUTH_TOKEN" in r.get_json()["error"]
+
+    def test_the_settings_report_still_works(self, client, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, "METRICS_TOKEN", "")
+        assert client.get("/setup/doctor").status_code == 400  # no repo: settings only
+
+
+class TestSigtermExits:
+    def test_the_previous_handler_is_chained(self, monkeypatch):
+        from unittest.mock import MagicMock
+
+        import server
+
+        prev = MagicMock()
+        monkeypatch.setattr(server, "_previous_sigterm", prev)
+        monkeypatch.setattr(server, "shutdown", lambda wait=True: None)
+        monkeypatch.setattr("app.core.event_queue.stop_consumers", lambda: None)
+        server._handle_sigterm(15, None)
+        prev.assert_called_once_with(15, None)
+
+    def test_with_no_previous_handler_it_exits(self, monkeypatch):
+        import signal
+
+        import pytest
+
+        import server
+
+        monkeypatch.setattr(server, "_previous_sigterm", signal.SIG_DFL)
+        monkeypatch.setattr(server, "shutdown", lambda wait=True: None)
+        monkeypatch.setattr("app.core.event_queue.stop_consumers", lambda: None)
+        with pytest.raises(SystemExit):
+            server._handle_sigterm(15, None)

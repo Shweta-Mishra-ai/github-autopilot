@@ -38,10 +38,6 @@ dev = [
     "ruff>=0.8.0",
     "pip-audit>=2.7.0",
 ]
-intelligence = [
-    "qdrant-client>=1.9.0",
-    "sentence-transformers>=3.0.0",
-]
 
 [project.scripts]
 github-autopilot = "github_autopilot.cli:main"
@@ -102,6 +98,7 @@ markers = [
     "e2e: end-to-end tests requiring live GitHub credentials",
     "integration: tests requiring live Redis or external services",
     "slow: tests that take more than 2 seconds",
+    "socket_egress_watch: watches and blocks egress at the socket layer itself; exempt from the requests-level network guard",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",

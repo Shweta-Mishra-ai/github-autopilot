@@ -167,7 +167,10 @@ def verify_signature(payload_bytes: bytes, signature_header: str) -> bool:
 
     expected = "sha256=" + hmac.new(secret, payload_bytes, hashlib.sha256).hexdigest()
 
-    ok = hmac.compare_digest(expected, signature_header)
+    # Bytes: a str holding any non-ASCII character makes compare_digest raise
+    # TypeError, which turned a forged signature into a 500 — and GitHub
+    # redelivers on a 5xx.
+    ok = hmac.compare_digest(expected.encode("utf-8"), signature_header.encode("utf-8"))
     if not ok:
         log.warning("webhook_security.invalid_signature")
     return ok
@@ -182,7 +185,11 @@ def verify_timestamp(headers: dict) -> bool:
     GitHub does not consistently send a timestamp — idempotency (delivery ID
     dedup) handles replay protection for the common case.
     """
-    ts_header = headers.get("X-GitHub-Event-Time") or headers.get("X-Timestamp")
+    # Case-insensitive: the caller passes dict(request.headers), and
+    # Werkzeug spells it "X-Github-Event-Time", so the exact-case lookup
+    # never matched and this check never ran.
+    lowered = {str(k).lower(): v for k, v in (headers or {}).items()}
+    ts_header = lowered.get("x-github-event-time") or lowered.get("x-timestamp")
     if not ts_header:
         return True
 

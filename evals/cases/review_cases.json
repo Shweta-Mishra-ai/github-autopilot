@@ -4,35 +4,123 @@
     "filename": "app/db/users.py",
     "patch": "@@ -10,4 +10,6 @@ def get_user(conn, username):\n     cur = conn.cursor()\n+    query = \"SELECT * FROM users WHERE name = '\" + username + \"'\"\n+    cur.execute(query)\n     return cur.fetchone()\n ",
     "planted": "string-concatenated SQL query — injection",
-    "must_mention": ["injection|parameteriz|placeholder|%s|\\?"]
+    "must_mention": [
+      "injection|parameteriz|placeholder|%s|\\?"
+    ]
   },
   {
     "id": "review-secret-in-code",
     "filename": "app/config.py",
     "patch": "@@ -3,3 +3,4 @@ import os\n \n DEBUG = False\n+PAYMENT_API_TOKEN = \"prod-9f8e7d6c5b4a32100123456789abcdef\"\n TIMEOUT = 30\n",
     "planted": "hardcoded production payment API credential (pattern chosen NOT to trip GitHub push protection — a real sk_live_ key gets the push blocked)",
-    "must_mention": ["secret|hardcode|env|credential|key|token"]
+    "must_mention": [
+      "secret|hardcode|env|credential|key|token"
+    ]
   },
   {
     "id": "review-n-plus-one",
     "filename": "app/api/orders.py",
     "patch": "@@ -20,5 +20,8 @@ def list_orders(request):\n     orders = Order.objects.all()\n+    result = []\n+    for o in orders:\n+        result.append({\"id\": o.id, \"customer\": o.customer.name, \"items\": [i.sku for i in o.items.all()]})\n     return JsonResponse(result, safe=False)\n",
     "planted": "N+1 query in loop over orders touching o.customer and o.items",
-    "must_mention": ["n\\+1|select_related|prefetch|query.*loop|loop.*quer"]
+    "must_mention": [
+      "n\\+1|select_related|prefetch|query.*loop|loop.*quer"
+    ]
   },
   {
     "id": "review-path-traversal",
     "filename": "app/files.py",
     "patch": "@@ -5,3 +5,5 @@ UPLOAD_DIR = \"/srv/uploads\"\n \n def read_upload(name):\n+    path = os.path.join(UPLOAD_DIR, name)\n+    return open(path, \"rb\").read()\n",
     "planted": "user-controlled filename joined into path — traversal via ../",
-    "must_mention": ["traversal|\\.\\.|sanitiz|basename|realpath|validate"]
+    "must_mention": [
+      "traversal|\\.\\.|sanitiz|basename|realpath|validate"
+    ]
   },
   {
     "id": "review-clean-change",
     "filename": "app/util/strings.py",
     "patch": "@@ -1,2 +1,5 @@\n+def truncate(text: str, limit: int = 80) -> str:\n+    \"\"\"Truncate text to limit chars, appending an ellipsis when cut.\"\"\"\n+    return text if len(text) <= limit else text[: limit - 1] + \"\\u2026\"\n",
     "planted": "nothing — clean helper; reviewer should NOT invent critical issues",
-    "must_not_mention": ["critical"],
+    "must_not_mention": [
+      "critical"
+    ],
     "min_length": 40
+  },
+  {
+    "id": "review-clean-handled-above-the-hunk",
+    "filename": "app/config/loader.py",
+    "patch": "@@ -9,2 +9,4 @@ def load_config(path):\n             data = json.loads(fh.read())\n+        if not isinstance(data, dict):\n+            raise ConfigError(f\"{path}: expected a JSON object\")\n     except (OSError, json.JSONDecodeError) as exc:\n",
+    "source": "import json\n\nfrom app.errors import ConfigError\n\n\ndef load_config(path):\n    try:\n        with open(path, encoding=\"utf-8\") as fh:\n            data = json.loads(fh.read())\n        if not isinstance(data, dict):\n            raise ConfigError(f\"{path}: expected a JSON object\")\n    except (OSError, json.JSONDecodeError) as exc:\n        raise ConfigError(f\"cannot load {path}\") from exc\n    return data\n",
+    "planted": "nothing — the error handling and the ConfigError import are outside the hunk; with only the diff a reviewer calls them missing or undefined",
+    "must_not_mention": [
+      "\\b\\d+ (critical|major)\\b|\\*\\*(CRITICAL|MAJOR)\\*\\*",
+      "not (defined|imported)|undefined|missing import"
+    ],
+    "min_length": 40
+  },
+  {
+    "id": "review-clean-rename",
+    "filename": "app/util/paths.py",
+    "patch": "@@ -1,6 +1,6 @@\n import os\n \n \n-def join_safe(base, name):\n+def safe_join(base, name):\n     candidate = os.path.realpath(os.path.join(base, name))\n     if not candidate.startswith(os.path.realpath(base) + os.sep):\n",
+    "planted": "nothing — a pure rename of an already-safe helper",
+    "must_not_mention": [
+      "\\b\\d+ (critical|major)\\b|\\*\\*(CRITICAL|MAJOR)\\*\\*"
+    ],
+    "min_length": 40
+  },
+  {
+    "id": "review-clean-new-test",
+    "filename": "tests/test_slug.py",
+    "patch": "@@ -6,0 +7,4 @@\n+\n+def test_slugify_collapses_repeated_separators():\n+    assert slugify(\"a  --  b\") == \"a-b\"\n+\n",
+    "planted": "nothing — a new, correct test",
+    "must_not_mention": [
+      "\\b\\d+ (critical|major)\\b|\\*\\*(CRITICAL|MAJOR)\\*\\*"
+    ],
+    "min_length": 40
+  },
+  {
+    "id": "review-clean-typed-constant",
+    "filename": "app/limits.py",
+    "patch": "@@ -1,3 +1,4 @@\n DEFAULT_PAGE_SIZE = 50\n+MAX_PAGE_SIZE: int = 500  # hard ceiling for ?per_page=\n TIMEOUT_SECONDS = 30\n",
+    "planted": "nothing — a constant with a comment",
+    "must_not_mention": [
+      "\\b\\d+ (critical|major)\\b|\\*\\*(CRITICAL|MAJOR)\\*\\*"
+    ],
+    "min_length": 40
+  },
+  {
+    "id": "review-off-by-one-page",
+    "filename": "app/api/pagination.py",
+    "patch": "@@ -4,3 +4,5 @@ def page(items, number, size):\n     start = number * size\n+    end = start + size + 1\n+    return items[start:end]\n",
+    "planted": "page slice returns size+1 items — off by one",
+    "must_mention": [
+      "off.by.one|\\+ ?1|one (extra|too many)|extra (item|element|row)|size \\+ 1"
+    ]
+  },
+  {
+    "id": "review-auth-bypass-debug-flag",
+    "filename": "app/api/admin.py",
+    "patch": "@@ -12,4 +12,5 @@ def delete_user(request, user_id):\n-    if not request.user.is_admin:\n+    if not (request.user.is_admin or request.args.get(\"debug\")):\n         return forbidden()\n     User.delete(user_id)\n",
+    "planted": "any caller passing ?debug=1 bypasses the admin check",
+    "must_mention": [
+      "debug|bypass|any (user|caller)|query (param|string)|auth"
+    ]
+  },
+  {
+    "id": "review-request-without-timeout",
+    "filename": "app/integrations/webhook.py",
+    "patch": "@@ -8,3 +8,4 @@ def notify(url, payload):\n     headers = {\"Content-Type\": \"application/json\"}\n+    return requests.post(url, json=payload, headers=headers)\n",
+    "planted": "outbound HTTP call with no timeout can hang the worker forever",
+    "must_mention": [
+      "timeout|hang|block"
+    ]
+  },
+  {
+    "id": "review-js-missing-await",
+    "filename": "web/src/api.js",
+    "patch": "@@ -1,4 +1,5 @@\n export async function loadUser(id) {\n-  const res = await fetch(`/api/users/${id}`);\n+  const res = fetch(`/api/users/${id}`);\n   return res.json();\n }\n",
+    "planted": "removed await: res is a Promise, so res.json() throws",
+    "must_mention": [
+      "await|promise"
+    ]
   }
 ]

@@ -17,6 +17,41 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 
+_SEVERITY_SYNONYMS = {
+    "blocker": "critical",
+    "severe": "critical",
+    "high": "major",
+    "error": "major",
+    "medium": "minor",
+    "moderate": "minor",
+    "warning": "minor",
+    "low": "nit",
+    "info": "nit",
+    "style": "nit",
+    "suggestion": "nit",
+}
+
+
+def self_estimate(value) -> str:
+    """
+    A model's confidence in its own answer, labelled as exactly that — or ""
+    when it gave no number.
+
+    It was printed as "Confidence: 85%", which reads as a measured
+    probability. It is the model's own guess about itself, uncalibrated, and
+    a fluent wrong answer rates itself as highly as a right one.
+    """
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if 1.0 < v <= 100.0:  # "85" meant 85%
+        v /= 100.0
+    if not 0.0 <= v <= 1.0:
+        return ""
+    return f"Model's self-estimate: {round(v * 100)}% (its own guess, not a measured probability)"
+
+
 def _get(data: dict, key: str, default: Any = None) -> Any:
     val = data.get(key, default)
     return val if val is not None else default
@@ -35,6 +70,53 @@ def as_text(value: Any, default: str = "") -> str:
     if value is None or value == "":
         return default
     return value if isinstance(value, str) else str(value)
+
+
+def _word(data: dict, key: str, default: str) -> str:
+    """A lowercase enum value. `.lower()` on the raw field raised
+    AttributeError for `{"risk_level": 2}` or `{"priority": ["high"]}`."""
+    val = _get(data, key, default)
+    return val.strip().lower() if isinstance(val, str) else default
+
+
+def _bool(val: Any) -> bool:
+    """`bool("false")` is True; a model writes booleans as strings often."""
+    if isinstance(val, str):
+        return val.strip().lower() in ("true", "yes", "1")
+    return bool(val)
+
+
+def verdict(data: Any, key: str, allowed) -> str | None:
+    """
+    The model's answer for an enum field, or None when it gave none or an
+    answer outside `allowed`.
+
+    Handlers used `r.get("health", "good")`: a model that answered with prose,
+    or a different shape, was published as "Health: Good" — a default
+    rendered as a verdict nobody made.
+    """
+    if not isinstance(data, dict):
+        return None
+    val = data.get(key)
+    if not isinstance(val, str):
+        return None
+    val = val.strip().lower().replace(" ", "_")
+    return val if val in allowed else None
+
+
+def flag(data: Any, key: str) -> bool | None:
+    """True/False only when the model actually said so; None otherwise.
+    `bool("false")` is True, so "requires_migration": "false" read as Yes."""
+    if not isinstance(data, dict):
+        return None
+    val = data.get(key)
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, str) and val.strip().lower() in ("true", "yes"):
+        return True
+    if isinstance(val, str) and val.strip().lower() in ("false", "no"):
+        return False
+    return None
 
 
 def _str(val: Any, max_len: int = 300) -> str:
@@ -58,7 +140,9 @@ def is_unusable(raw: Any) -> bool:
     their defaults and published a fabricated result (e.g. "Score: 7/10 — no
     issues found") for a review that never happened. Treat it as a hard failure.
     """
-    if not isinstance(raw, dict):
+    if not isinstance(raw, dict) or not raw:
+        # An empty object is not an answer: validate_pr_analysis({}) produced
+        # a non-degraded "risk_level: medium, confidence 0.5" from nothing.
         return True
     return bool(raw.get("error")) or ("raw" in raw)
 
@@ -91,9 +175,16 @@ def validate_pr_analysis(raw: dict) -> dict:
             "_degraded": True,
         }
 
-    risk = _get(raw, "risk_level", "medium").lower()
-    if risk not in VALID_RISK:
-        risk = "medium"
+    # A more severe word than the scale has is HIGH, never "medium" — mapping
+    # "critical" down made the gravest answer the least alarming. A missing or
+    # unrecognised value is shown as medium but marked unmeasured, so it is
+    # never recorded as the PR's risk for auto-merge to trust.
+    risk = _word(raw, "risk_level", "")
+    risk_measured = True
+    if risk in ("critical", "severe", "blocker"):
+        risk = "high"
+    elif risk not in VALID_RISK:
+        risk, risk_measured = "medium", False
 
     review_focus = raw.get("review_focus", [])
     if not isinstance(review_focus, list):
@@ -111,6 +202,7 @@ def validate_pr_analysis(raw: dict) -> dict:
         "suggested_title": _str(raw.get("suggested_title") or raw.get("improved_title", ""), 200),
         "description": _str(raw.get("description", ""), 5000),
         "risk_level": risk,
+        "risk_measured": risk_measured,
         "risk_reason": _str(raw.get("risk_reason", ""), 300),
         "review_focus": review_focus,
         "confidence": confidence,
@@ -145,17 +237,23 @@ def validate_issue_triage(raw: dict) -> dict:
             "_degraded": True,
         }
 
-    issue_type = _get(raw, "type", "question").lower()
+    # None, not a default, for a field the model did not answer validly. The
+    # defaults were rendered as its judgement: "Login returns 500 for all
+    # users — prod is down", answered with a welcome line only, was posted as
+    # Type: Question, Priority: Medium and labelled `priority: medium`.
+    issue_type = _word(raw, "type", "")
     if issue_type not in VALID_TYPES:
-        issue_type = "question"
+        issue_type = None
 
-    priority = _get(raw, "priority", "medium").lower()
+    priority = _word(raw, "priority", "")
+    if priority in ("urgent", "blocker", "severe"):
+        priority = "critical"
     if priority not in VALID_PRIORITIES:
-        priority = "medium"
+        priority = None
 
-    complexity = _get(raw, "complexity", "moderate").lower()
+    complexity = _word(raw, "complexity", "")
     if complexity not in VALID_COMPLEXITY:
-        complexity = "moderate"
+        complexity = None
 
     questions = raw.get("questions", [])
     if not isinstance(questions, list):
@@ -171,7 +269,7 @@ def validate_issue_triage(raw: dict) -> dict:
         "priority": priority,
         "labels": _list_of_str(raw.get("labels"), max_items=8, max_item_len=50),
         "welcome": _str(raw.get("welcome", "Thanks for reporting this!"), 500),
-        "needs_info": bool(raw.get("needs_info", False)),
+        "needs_info": bool(flag(raw, "needs_info")),
         "questions": questions,
         "complexity": complexity,
         "time_estimate": time_estimate,
@@ -209,21 +307,33 @@ def validate_code_review(raw: dict) -> dict:
     if not isinstance(raw_issues, list):
         raw_issues = []
 
+    # Every finding is validated and the list is ordered worst first BEFORE
+    # anything is cut. This took the first ten in the model's order, so a
+    # critical finding listed eleventh was dropped — and not counted in the
+    # "N less severe finding(s) not shown" note, which is computed later.
     clean_issues = []
-    for item in raw_issues[:10]:
+    for item in raw_issues[:50]:
         if not isinstance(item, dict):
             continue
-        sev = str(item.get("severity", "minor")).lower()
+        sev = str(item.get("severity", "minor")).strip().lower()
+        # The model's own scale, mapped rather than flattened: "high" fell to
+        # the minor default, under findings it had ranked below it.
+        sev = _SEVERITY_SYNONYMS.get(sev, sev)
         if sev not in VALID_SEVERITIES:
             sev = "minor"
         clean_issues.append(
             {
                 "severity": sev,
                 "line": _str(item.get("line", ""), 20),
+                # The quoted line, which grounding.ground_finding() checks
+                # against the diff. Read there, so not a dead field.
+                "code": _str(item.get("code", ""), 300),
                 "issue": _str(item.get("issue", ""), 300),
                 "fix": _str(item.get("fix", ""), 500),
             }
         )
+    _rank = {"critical": 0, "major": 1, "minor": 2, "nit": 3}
+    clean_issues.sort(key=lambda i: _rank[i["severity"]])
 
     confidence = 0.5
     try:

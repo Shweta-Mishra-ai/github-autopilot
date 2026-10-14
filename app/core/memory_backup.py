@@ -83,10 +83,21 @@ def export_encrypted(repos: list[str] | None = None) -> bytes | None:
         from app.intelligence.memory import known_repos
 
         repos = repos if repos is not None else known_repos()
+        dumped = _dump_repos(repos)
+        # Nothing to back up is never worth uploading. known_repos() returns
+        # [] when Redis errors, and a Redis wiped mid-life (no boot restore)
+        # is empty too: either way the scheduled backup encrypted
+        # {"repos": {}}, overwrote the good backup with it, reported success,
+        # and the next boot restored zero repositories.
+        if not any(dumped.values()):
+            log.warning(
+                "memory_backup.nothing_to_export — refusing to overwrite a backup with an empty one"
+            )
+            return None
         envelope = {
             "version": BACKUP_VERSION,
             "created_at": int(time.time()),
-            "repos": _dump_repos(repos),
+            "repos": dumped,
         }
         plaintext = json.dumps(envelope, separators=(",", ":")).encode("utf-8")
         token = _fernet().encrypt(plaintext)
@@ -168,8 +179,18 @@ def restore_from_github(target_repo: str, path: str, token: str) -> int:
         from app.github.client import gh_get
 
         data = gh_get(f"/repos/{target_repo}/contents/{path}", token)
-        b64 = (data.get("content") or "").replace("\n", "") if isinstance(data, dict) else ""
+        if not isinstance(data, dict):
+            log.error("memory_backup.github_restore_failed: contents response was not a file")
+            return 0
+        b64 = (data.get("content") or "").replace("\n", "")
+        if not b64 and data.get("size") and data.get("sha"):
+            # The contents API returns an EMPTY `content` for a file over
+            # 1 MB, so a large backup restored nothing, silently. The git
+            # blob API serves the same bytes up to 100 MB.
+            blob = gh_get(f"/repos/{target_repo}/git/blobs/{data['sha']}", token)
+            b64 = (blob.get("content") or "").replace("\n", "") if isinstance(blob, dict) else ""
         if not b64:
+            log.error(f"memory_backup.github_restore_failed: {path} has no content")
             return 0
         token_bytes = base64.b64decode(b64)
         return import_encrypted(token_bytes)

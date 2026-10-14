@@ -1,25 +1,24 @@
 """
 tests/test_dependencies.py
 
-app/security/dependencies.py sat at 42% coverage: the vulnerability matcher and
-the whole issue-body formatter were untested, despite deciding what gets filed
-as a GitHub issue on every push that touches requirements.txt.
+The dependency scan asks GitHub's advisory database about the exact pinned
+versions. It used to match a hand-written table of ten advisories for three
+packages and tell every other dependency it was not vulnerable.
 """
+
+from unittest.mock import MagicMock
 
 import pytest
 
 from app.security.dependencies import (
-    ACCEPTED_CVES,
     ISSUE_SEVERITIES,
-    KNOWN_VULNS,
+    AdvisoriesUnavailable,
     DepFinding,
     format_dep_findings,
-    format_range,
     get_actionable_findings,
-    is_vulnerable,
     parse_requirements,
-    parse_version,
     scan_requirements_txt,
+    unpinned_requirements,
 )
 
 
@@ -72,36 +71,6 @@ class TestParseRequirements:
         assert parse_requirements(None) == []
 
 
-class TestScanRequirements:
-    def test_clean_file_yields_no_findings(self):
-        assert scan_requirements_txt("boto3==1.34.0\nrich==13.7.0") == []
-
-    def test_known_vulnerable_pin_is_flagged(self):
-        findings = scan_requirements_txt("flask==3.1.3")
-        assert findings
-        assert all(f.package == "flask" for f in findings)
-
-    def test_finding_carries_the_scanned_version(self):
-        assert scan_requirements_txt("flask==3.1.3")[0].version == "3.1.3"
-
-    def test_non_matching_version_is_not_flagged(self):
-        """The flask rule matches 3.x — a 2.x pin must not trip it."""
-        assert scan_requirements_txt("flask==2.0.1") == []
-
-    def test_extras_syntax_is_still_matched(self):
-        """Regression: scan_requirements_txt duplicated the parse loop, so a
-        parser fix could land in one copy and not the other."""
-        assert scan_requirements_txt("flask[async]==3.1.3")
-
-    def test_comments_are_not_scanned(self):
-        assert scan_requirements_txt("# flask==3.1.3") == []
-
-    def test_scan_agrees_with_parse_on_what_counts_as_a_package(self):
-        content = "flask==3.1.3\n# comment\nrich>=13\ncelery[redis]==5.3.6\n"
-        parsed = {p["name"] for p in parse_requirements(content)}
-        assert {f.package for f in scan_requirements_txt(content)} <= parsed
-
-
 class TestActionability:
     @pytest.mark.parametrize("severity", sorted(ISSUE_SEVERITIES))
     def test_high_severity_unaccepted_is_actionable(self, severity):
@@ -111,15 +80,18 @@ class TestActionability:
     def test_low_severity_is_not_actionable(self, severity):
         assert _finding(severity=severity).is_actionable is False
 
-    def test_accepted_cve_is_never_actionable(self):
-        accepted = next(iter(ACCEPTED_CVES))
-        assert _finding(severity="HIGH", cve=accepted).is_actionable is False
+    def test_there_is_no_built_in_acceptance_list(self):
+        """It held this project's own "LOW risk for our use" decisions and
+        applied them to every repository."""
+        import app.security.dependencies as deps
+
+        assert not hasattr(deps, "ACCEPTED_CVES")
 
     def test_filter_keeps_only_actionable(self):
         findings = [
             _finding(severity="HIGH", cve="GHSA-aaaa-aaaa-aaaa"),
             _finding(severity="LOW", cve="GHSA-bbbb-bbbb-bbbb"),
-            _finding(severity="HIGH", cve=next(iter(ACCEPTED_CVES))),
+            _finding(severity="MODERATE", cve="GHSA-cccc-cccc-cccc"),
         ]
         assert len(get_actionable_findings(findings)) == 1
 
@@ -179,168 +151,77 @@ class TestFormatting:
         assert "mystery" in out
         assert "1 advisory across 1 package(s)." in out
 
-    def test_report_points_at_the_authoritative_source(self):
-        """The built-in table is a small fallback; Dependabot is the real one."""
-        assert "/secfull" in format_dep_findings([_finding()])
+    def test_report_names_its_source(self):
+        assert "GitHub's reviewed advisory database" in format_dep_findings([_finding()])
 
     def test_every_finding_appears_in_the_body(self):
         """Invariant across all severities, including ones added later."""
         findings = [
             _finding(severity=s, package=f"pkg{i}", cve=f"GHSA-{i}{i}{i}{i}")
-            for i, s in enumerate(["HIGH", "CRITICAL", "MODERATE", "LOW", "BUILD", "WEIRD"])
+            for i, s in enumerate(["HIGH", "CRITICAL", "MODERATE", "LOW", "WEIRD"])
         ]
         out = format_dep_findings(findings)
         for f in findings:
             assert f.package in out, f"{f.severity} finding vanished from the report"
 
 
-class TestVersionParsing:
-    @pytest.mark.parametrize(
-        "raw,expected",
-        [
-            ("2.33.0", (2, 33, 0)),
-            ("1.2", (1, 2)),
-            ("10.0.1", (10, 0, 1)),
-            ("2.32.0rc1", (2, 32, 0)),  # pre-release orders below the release
-            ("1.2.3.post1", (1, 2, 3)),
-            ("1.2.3+local.build", (1, 2, 3)),
-            ("  3.1.3  ", (3, 1, 3)),
-        ],
-    )
-    def test_parses_real_version_strings(self, raw, expected):
-        assert parse_version(raw) == expected
-
-    @pytest.mark.parametrize("raw", ["", None, "main", "latest", "v-branch", "abc"])
-    def test_unparseable_returns_none(self, raw):
-        assert parse_version(raw) is None
-
-    def test_numeric_not_lexicographic_ordering(self):
-        """The classic version-compare bug: "9" > "10" as strings."""
-        assert parse_version("2.9.0") < parse_version("2.10.0")
+def _advisory(ghsa, pkg, rng, patched, severity="high", summary="s", withdrawn=None):
+    return {
+        "ghsa_id": ghsa, "cve_id": None, "summary": summary, "severity": severity,
+        "withdrawn_at": withdrawn,
+        "vulnerabilities": [{
+            "package": {"ecosystem": "pip", "name": pkg},
+            "vulnerable_version_range": rng, "first_patched_version": patched,
+        }],
+    }
 
 
-class TestVersionRangeMatching:
-    """
-    The regression this whole rewrite exists for.
+class TestAdvisoryScan:
+    REQS = "requests==2.3.0\nFlask==3.0.0\nnumpy>=1.0\n# c\n-r other.txt\n"
 
-    KNOWN_VULNS used re.match on a regex prefix. `r"2\\.3"` is a PREFIX test, so
-    it matched requests 2.30 through 2.39 — including 2.33.0, the version this
-    project pins — for an advisory that only affects the 2.3.x series.
-    """
+    def test_it_asks_about_exactly_the_pinned_versions(self):
+        get = MagicMock(return_value=[])
+        assert scan_requirements_txt(self.REQS, "tok", get=get) == []
+        path = get.call_args[0][0]
+        assert path.startswith("/advisories?ecosystem=pip")
+        assert "affects=requests@2.3.0,flask@3.0.0" in path
+        assert "numpy" not in path, "an unpinned package has no version to ask about"
 
-    @pytest.mark.parametrize("version", ["2.30.0", "2.31.0", "2.32.0", "2.33.0", "2.39.9"])
-    def test_two_dot_thirty_something_is_not_two_dot_three_x(self, version):
-        assert is_vulnerable(version, "2.3.0", "2.4.0") is False
+    def test_an_advisory_becomes_a_finding_for_that_package(self):
+        get = MagicMock(return_value=[
+            _advisory("GHSA-aaaa-bbbb-cccc", "requests", "< 2.4.0", "2.4.0", "medium", "Temp file reuse"),
+            _advisory("GHSA-dddd-eeee-ffff", "Flask", ">= 3.0.0, < 3.0.3", "3.0.3", "critical"),
+        ])
+        found = {f.cve_id: f for f in scan_requirements_txt(self.REQS, "tok", get=get)}
+        req = found["GHSA-aaaa-bbbb-cccc"]
+        assert (req.package, req.version, req.severity, req.fixed_in) == ("requests", "2.3.0", "MODERATE", "2.4.0")
+        assert found["GHSA-dddd-eeee-ffff"].severity == "CRITICAL"
+        assert found["GHSA-dddd-eeee-ffff"].is_actionable
 
-    @pytest.mark.parametrize("version", ["2.3.0", "2.3.1", "2.3.9"])
-    def test_the_actual_affected_series_still_matches(self, version):
-        assert is_vulnerable(version, "2.3.0", "2.4.0") is True
+    def test_withdrawn_and_unrelated_advisories_are_ignored(self):
+        get = MagicMock(return_value=[
+            _advisory("GHSA-1111-1111-1111", "requests", "< 2.4.0", "2.4.0", withdrawn="2026-01-01"),
+            _advisory("GHSA-2222-2222-2222", "django", "< 5", "5.0"),
+        ])
+        assert scan_requirements_txt(self.REQS, "tok", get=get) == []
 
-    def test_lower_bound_is_inclusive(self):
-        assert is_vulnerable("3.0.0", "3.0.0", "4.0.0") is True
+    def test_a_failed_read_is_raised_not_called_clean(self):
+        from app.github.client import GitHubError
 
-    def test_upper_bound_is_exclusive(self):
-        """The fixed release itself is not vulnerable."""
-        assert is_vulnerable("4.0.0", "3.0.0", "4.0.0") is False
+        with pytest.raises(GitHubError):
+            scan_requirements_txt(self.REQS, "tok", get=MagicMock(side_effect=GitHubError("x", 502)))
+        with pytest.raises(AdvisoriesUnavailable):
+            scan_requirements_txt(self.REQS, "tok", get=MagicMock(return_value={"message": "?"}))
 
-    def test_below_the_range_is_clean(self):
-        assert is_vulnerable("2.9.9", "3.0.0", "4.0.0") is False
+    def test_nothing_pinned_asks_nothing(self):
+        get = MagicMock()
+        assert scan_requirements_txt("numpy\n", "tok", get=get) == []
+        get.assert_not_called()
 
-    def test_open_lower_bound(self):
-        assert is_vulnerable("0.0.1", None, "2.0.0") is True
+    def test_unpinned_packages_are_named(self):
+        assert unpinned_requirements(self.REQS) == ["numpy"]
 
-    def test_open_upper_bound_means_no_fix_yet(self):
-        assert is_vulnerable("99.0.0", "1.0.0", None) is True
-
-    def test_unequal_length_versions_compare_correctly(self):
-        """2.32 and 2.32.0 are the same release."""
-        assert is_vulnerable("2.32", "2.3.0", "2.4.0") is False
-        assert is_vulnerable("3.1", "3.0.0", "4.0.0") is True
-
-    def test_unparseable_version_is_never_reported(self):
-        """Never assert a vulnerability we cannot substantiate."""
-        assert is_vulnerable("main", None, None) is False
-        assert is_vulnerable("", "1.0.0", "2.0.0") is False
-
-
-class TestNoFalsePositivesOnThisRepo:
-    def _requirements(self):
-        with open("requirements.txt", encoding="utf-8") as fh:
-            return fh.read()
-
-    def test_pinned_requests_is_not_flagged(self):
-        """requests==2.33.0 was reported vulnerable for a 2.3.x advisory."""
-        flagged = {f.package for f in scan_requirements_txt(self._requirements())}
-        assert "requests" not in flagged
-
-    def test_pinned_cryptography_is_not_flagged(self):
-        """cryptography==50.0.0 builds fine; the constraint is 46.x only."""
-        flagged = {f.package for f in scan_requirements_txt(self._requirements())}
-        assert "cryptography" not in flagged
-
-    def test_nothing_actionable_in_this_repo(self):
-        """A HIGH/CRITICAL finding here would open a GitHub issue on every push."""
-        actionable = get_actionable_findings(scan_requirements_txt(self._requirements()))
-        assert actionable == [], f"would file an issue for: {actionable}"
-
-
-class TestRangeTableIntegrity:
-    def test_every_entry_has_six_fields(self):
-        for entry in KNOWN_VULNS:
-            assert len(entry) == 6, f"malformed entry: {entry}"
-
-    def test_every_bound_is_parseable(self):
-        """An unparseable bound silently disables the check."""
-        for pkg, lo, hi, *_ in KNOWN_VULNS:
-            if lo is not None:
-                assert parse_version(lo) is not None, f"{pkg}: bad lower bound {lo!r}"
-            if hi is not None:
-                assert parse_version(hi) is not None, f"{pkg}: bad upper bound {hi!r}"
-
-    def test_no_range_is_inverted(self):
-        for pkg, lo, hi, *_ in KNOWN_VULNS:
-            if lo and hi:
-                assert parse_version(lo) < parse_version(hi), f"{pkg}: {lo} >= {hi}"
-
-    def test_no_range_is_unbounded_above_without_reason(self):
-        """An open upper bound claims every future release is affected. Allowed,
-        but it must be deliberate — this pins the current count so adding one
-        is a conscious edit."""
-        open_ended = [(p, lo) for p, lo, hi, *_ in KNOWN_VULNS if hi is None]
-        assert open_ended == [], f"unbounded ranges will flag future releases: {open_ended}"
-
-    def test_severities_are_known(self):
-        valid = {"LOW", "MODERATE", "HIGH", "CRITICAL", "BUILD"}
-        for pkg, _lo, _hi, sev, *_ in KNOWN_VULNS:
-            assert sev in valid, f"{pkg}: unknown severity {sev!r}"
-
-
-class TestRangeFormatting:
-    def test_both_bounds(self):
-        assert format_range("3.0.0", "4.0.0") == ">=3.0.0,<4.0.0"
-
-    def test_upper_only(self):
-        assert format_range(None, "2.0.0") == "<2.0.0"
-
-    def test_lower_only(self):
-        assert format_range("1.0.0", None) == ">=1.0.0"
-
-    def test_finding_carries_the_range_it_matched(self):
-        f = scan_requirements_txt("flask==3.1.3")[0]
-        assert f.affected_range == ">=3.0.0,<4.0.0"
-
-    def test_report_shows_the_range_and_the_pinned_version(self):
-        out = format_dep_findings(scan_requirements_txt("flask==3.1.3"))
-        assert "flask>=3.0.0,<4.0.0" in out
-        assert "you have `3.1.3`" in out
-
-    def test_build_findings_are_rendered_not_silently_dropped(self):
-        """BUILD entries were counted in the header and rendered by no section,
-        so the reader saw "3 packages" above a list of two."""
-        out = format_dep_findings(scan_requirements_txt("cryptography==46.0.1"))
-        assert "RENDER-001" in out
-        assert "Build Constraints" in out
-
-    def test_build_findings_are_excluded_from_the_advisory_count(self):
-        out = format_dep_findings(scan_requirements_txt("cryptography==46.0.1"))
-        assert "1 advisory across 1 package(s)." in out
+    def test_the_report_shows_the_range_and_the_fix(self):
+        f = DepFinding("requests", "2.3.0", "MODERATE", "GHSA-x", "d", "< 2.4.0", "2.4.0")
+        out = format_dep_findings([f])
+        assert "Affected: `< 2.4.0` — you have `2.3.0`; fixed in `2.4.0`" in out

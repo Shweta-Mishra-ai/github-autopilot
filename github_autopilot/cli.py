@@ -134,7 +134,7 @@ def cmd_health(args):
         label = f"{var[:30]:<30}"
         checks.append(f"  {icon} {label} {'SET' if val else 'MISSING'}")
 
-    optional = ["GEMINI_API_KEY", "REDIS_URL", "DISCORD_WEBHOOK_URL", "QDRANT_URL"]
+    optional = ["GEMINI_API_KEY", "REDIS_URL", "DISCORD_WEBHOOK_URL"]
     for var in optional:
         val  = os.environ.get(var, "")
         icon = "✅" if val else "⚠️ "

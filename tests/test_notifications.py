@@ -75,11 +75,13 @@ class TestSendSlack:
         resp = MagicMock(status_code=500)
         with patch("app.github.notifications.requests.post", return_value=resp):
             notif._send_slack("Title", "Message", "warning")  # must not raise
+        assert notif.last_outcome.get("slack") == "failed"
 
     def test_send_slack_handles_exception(self, monkeypatch):
         monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://hooks.slack.example/x")
         with patch("app.github.notifications.requests.post", side_effect=Exception("boom")):
             notif._send_slack("Title", "Message", "info")  # must not raise
+        assert notif.last_outcome.get("slack") == "failed"
 
 
 class TestSendDiscord:
@@ -105,11 +107,13 @@ class TestSendDiscord:
         resp = MagicMock(status_code=400, text="bad request")
         with patch("app.github.notifications.requests.post", return_value=resp):
             notif._send_discord("T", "D", "info", [], "")  # must not raise
+        assert notif.last_outcome.get("discord") == "failed"
 
     def test_send_discord_handles_exception(self, monkeypatch):
         monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://discord.example/x")
         with patch("app.github.notifications.requests.post", side_effect=Exception("boom")):
             notif._send_discord("T", "D", "info", [], "")  # must not raise
+        assert notif.last_outcome.get("discord") == "failed"
 
 
 class TestNotificationHelpers:

@@ -6,10 +6,13 @@ Use the `analyze_pr` tool from the **github-autopilot** MCP server to analyze
 pull request **$2** in repository **$1**.
 
 Ask it to focus on code quality, security risks, test-coverage gaps, and blast
-radius. Then present, concisely:
+radius. Then present, concisely and only from what the tool returned:
 
-1. The overall grade (A–F) and a one-line rationale.
-2. The top findings, most severe first.
-3. Concrete improvement suggestions the author can act on before merging.
+1. Its recommendation (approve / request changes) and summary.
+2. Its findings, most severe first.
+3. Its improvement suggestions.
+
+The tool gives no grade or score — do not add one, or any finding it did not
+report. If it returns an error, say so.
 
 If `$1` or `$2` is missing, ask the user for the repo (owner/repo) and PR number.

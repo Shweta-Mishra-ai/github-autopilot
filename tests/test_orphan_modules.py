@@ -185,7 +185,7 @@ class TestMemoryBackupHasAnOperatorEntrypoint:
 
         monkeypatch.setenv("MEMORY_BACKUP_KEY", Fernet.generate_key().decode())
         dest = tmp_path / "backup.bin"
-        with patch.object(MB, "_dump_repos", return_value={"o/r": []}):
+        with patch.object(MB, "_dump_repos", return_value={"o/r": ["a memory"]}):
             assert MB.main(["export", "--out", str(dest)]) == 0
 
         monkeypatch.setenv("MEMORY_BACKUP_KEY", Fernet.generate_key().decode())

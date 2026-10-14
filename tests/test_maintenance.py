@@ -405,3 +405,53 @@ class TestRepoIndexIsASet:
 
         with patch("app.core.redis_client.get_redis", side_effect=Exception("down")):
             assert M.known_repos() == []
+
+
+class TestEveryRepoIsEventuallyScanned:
+    """The sweep took sorted()[:25] every cycle (2026-10-08 audit)."""
+
+    def test_successive_cycles_cover_every_repository(self, monkeypatch):
+        from app.core import maintenance
+
+        class KV(dict):
+            def get(self, k):
+                return super().get(k)
+
+            def set(self, k, v, **kw):
+                self[k] = v
+                return True
+
+        kv = KV()
+        monkeypatch.setattr("app.core.redis_client.get_redis", lambda: kv)
+        ordered = [(f"o/r{i:02d}", i) for i in range(60)]
+        seen = set()
+        for _ in range(3):
+            batch = maintenance._this_cycles_batch(ordered)
+            assert len(batch) == maintenance.MAX_REPOS_PER_RUN
+            seen.update(r for r, _ in batch)
+        assert seen == {r for r, _ in ordered}
+
+
+class TestAPartialScanIsSaidToBePartial:
+    """A repository with one of three sources unreadable was "ok" with nothing
+    saying which were missed, and its 0 findings read as clean."""
+
+    def test_the_missed_sources_are_recorded_and_counted(self):
+        from unittest.mock import patch
+
+        from app.core import maintenance
+        from app.security.scanner import SecurityReport
+
+        report = SecurityReport(repo="o/r", errors=["CodeQL (not enabled or no permission)"])
+        with patch("app.github.auth.get_installation_token", return_value="t"), \
+             patch("app.security.scanner.run_security_scan", return_value=report):
+            record = maintenance.scan_repo("o/r", 1)
+        assert record["ok"] is True
+        assert record["missed"] == ["CodeQL"]
+
+        with patch("app.core.installations.known_installations", return_value={"o/r": 1}), \
+             patch.object(maintenance, "scan_repo", return_value=record), \
+             patch("app.core.memory_backup.run_backup_once", return_value=True), \
+             patch.object(maintenance, "_store_result"):
+            result = maintenance.run_pass()
+        assert result["repos_partial"] == ["o/r"]

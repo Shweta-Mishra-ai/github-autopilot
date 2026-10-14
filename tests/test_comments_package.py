@@ -179,6 +179,16 @@ class TestProvidersDown:
         assert "45" in result
         assert "unavailable" in result.lower() or "AI" in result
 
+    def test_a_configuration_fault_is_not_called_transient(self):
+        from app.handlers.comments.dispatcher import make_degraded_response
+        result = make_degraded_response({
+            "_providers_down": True, "_retry_in": 60, "_configuration_error": True,
+            "message": "GROQ_API_KEY is invalid (401).",
+        })
+        assert "AI Not Configured" in result and "GROQ_API_KEY is invalid" in result
+        assert "will not resolve by waiting" in result
+        assert "Transient" not in result
+
     def test_providers_down_comment_default(self):
         from app.handlers.comments.dispatcher import providers_down_comment
         result = providers_down_comment()
@@ -318,7 +328,14 @@ class TestFileSize:
 
         +7 for two guards (and their imports): an edited comment re-running a command it already
         held (the decision is dispatcher.command_repeated_by_edit), and PR
-        commands getting the diff (the fetch is dispatcher.pr_context)."""
+        commands getting the diff (the fetch is dispatcher.pr_context).
+
+        +3 for the daily AI budget: the router refuses calls once it is spent
+        (guardrails.charge_ai_call), and the reply must say so rather than
+        report the command's own generic failure.
+
+        +2 for counting every command for /report (analytics.record_command_used
+        had one caller, /report itself, so its usage table only ever listed it)."""
         import os
         fpath = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -326,8 +343,8 @@ class TestFileSize:
         )
         with open(fpath, encoding='utf-8') as f:
             lines = f.readlines()
-        assert len(lines) <= 289, (
-            f"service.py has {len(lines)} lines — should stay under 289 lines as an orchestration layer."
+        assert len(lines) <= 294, (
+            f"service.py has {len(lines)} lines — should stay under 294 lines as an orchestration layer."
         )
 
 
@@ -385,3 +402,37 @@ class TestTheImportPathSurvivedDeletingTheShim:
                 f"{twin.relative_to(root)} can never be imported — "
                 f"{pkg.relative_to(root)}/ shadows it"
             )
+
+
+class TestTheConfigurationFaultReachesTheReply:
+    """The sentinel commands actually return comes from guarded.safe_router_ask;
+    it carried no configuration-fault flag, so a missing key still read as an
+    outage on that path."""
+
+    def test_guarded_carries_the_fault(self):
+        from unittest.mock import patch
+
+        from app.ai import guarded
+        from app.ai.circuit_breaker import AllProvidersDown
+        from app.ai.router import router
+
+        with patch.object(router, "ask", side_effect=AllProvidersDown()), \
+             patch.object(router, "configuration_error", return_value="GROQ_API_KEY is invalid (401)."), \
+             patch.object(guarded, "_alert_providers_down"):
+            payload, _v = guarded.guarded_ask("s", "u", task="fix")
+        out = guarded.degraded_comment(payload, "fix")
+        assert "AI Not Configured" in out and "GROQ_API_KEY is invalid" in out
+
+    def test_an_outage_is_still_an_outage(self):
+        from unittest.mock import patch
+
+        from app.ai import guarded
+        from app.ai.circuit_breaker import AllProvidersDown
+        from app.ai.router import router
+
+        with patch.object(router, "ask", side_effect=AllProvidersDown(45)), \
+             patch.object(router, "configuration_error", return_value=""), \
+             patch.object(guarded, "_alert_providers_down"):
+            payload, _v = guarded.guarded_ask("s", "u", task="fix")
+        out = guarded.degraded_comment(payload, "fix")
+        assert "Temporarily Unavailable" in out and "45" in out

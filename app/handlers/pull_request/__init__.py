@@ -36,8 +36,10 @@ from app.core.logger import EventLogger
 from app.core.confidence import ConfidenceGate
 from app.core.guardrails import check_pr_title_update
 from app.core.sanitizer import InjectionRejected, wrap_user_content
+from app.core.transient import is_transient, once
 
 from .analysis import _analyze_pr, _build_pr_summary
+from .errors import SectionUnavailable
 from .classify import (
     _blast_radius,
     _file_review_priority,
@@ -46,6 +48,7 @@ from .classify import (
     _review_sort_key,
 )
 from .gaps import _detect_test_gaps
+from .outcomes import record_autofix_outcome
 from .report import _build_pr_report
 from .review import _post_inline_review, _review_code
 
@@ -92,8 +95,30 @@ SKIP_AUTHORS = {
 }
 
 
+def _record_merge(payload: dict) -> None:
+    """Feed /report: a merged PR and how long it was open. Never raises."""
+    pr = payload.get("pull_request") or {}
+    if not pr.get("merged"):
+        return
+    try:
+        from app.core.analytics import hours_between, record_pr_merged
+
+        hours = hours_between(pr.get("created_at"), pr.get("merged_at"))
+        if hours is not None:
+            record_pr_merged(payload["repository"]["full_name"], pr.get("number", 0), hours)
+    except Exception as e:
+        import logging
+
+        logging.getLogger(__name__).debug(f"analytics.record_merge_failed: {e}")
+
+
 def handle(payload: dict):
     action = payload.get("action")
+    if action == "closed":
+        # Before the bot-author check: autofix PRs are the bot's own.
+        record_autofix_outcome(payload)
+        _record_merge(payload)
+        return
     if action not in ("opened", "reopened", "synchronize"):
         return
 
@@ -110,15 +135,17 @@ def handle(payload: dict):
     pr_number = pr["number"]
 
     log = EventLogger("pull_request", repo=repo, pr=pr_number)
+    from app.ai.router import last_model_disclosure, reset_last_call
+
+    reset_last_call()  # the report names the models THIS event used
 
     if author in SKIP_AUTHORS or author.endswith("[bot]"):
         return
 
-    try:
-        token = get_installation_token(installation_id)
-    except Exception as e:
-        log.error(f"Auth failed: {e}")
-        return
+    # Raised, not logged: nothing has been posted yet, so the queue retrying
+    # the event is the whole recovery. Returning here reported the event as
+    # handled and the PR was never reviewed.
+    token = get_installation_token(installation_id)
 
     config = load_config(repo, token)
     gate = ConfidenceGate(config)
@@ -158,18 +185,21 @@ def handle(payload: dict):
         from app.github.helpers import pr_files
 
         files = pr_files(repo, pr_number, token, get=gh_get)
-    except Exception:
-        files = []
-
-    context = ""
-    try:
-        from app.intelligence.retrieval import get_context_for_pr
-
-        context = get_context_for_pr(repo, files)
-        if context:
-            log.info("intelligence.context_retrieved")
     except Exception as e:
-        log.debug(f"Context retrieval skipped: {e}")
+        # Nothing below can be judged without the diff. This used to carry on
+        # with no files: the risk analysis ran on the title alone, recorded a
+        # risk level for this head that auto-merge then trusted, and the
+        # report said "Files: 0 · +0 −0". It then returned, which reported
+        # the event as handled: a 502 here meant the PR was never reviewed.
+        # Raised so the queue retries it.
+        log.error(f"pr.files_unavailable — not analysed: {e}")
+        raise
+
+    # Extra codebase context for the prompts. The embedding "retrieval" that
+    # used to fill this was a stub — its search always answered nothing — and
+    # has been removed rather than kept as a feature that did not exist. The
+    # review's real context is the code around each change (context.py).
+    context = ""
 
     # Local triage gate. Inert unless OLLAMA_HOST is configured, and it can
     # only ever SKIP work: every error path answers "review it", which is what
@@ -189,7 +219,8 @@ def handle(payload: dict):
     analysis_md = summary_md = review_md = gaps_md = ""
     inline_comments: list = []
 
-    if action == "opened":
+    # once(): a retried event must not announce the same PR twice.
+    if action == "opened" and once(f"pr_opened:{repo}#{pr_number}"):
         try:
             notify_pr_opened(
                 repo=repo,
@@ -214,6 +245,16 @@ def handle(payload: dict):
     # — the one PR that most needs a human to look was the one the bot went
     # quiet on.
     rejected: list[str] = []
+    # A section that FAILED is reported too. Only InjectionRejected was
+    # caught: a provider outage (AllProvidersDown) or the daily AI budget
+    # running out mid-event escaped handle(), nothing was written, and on a
+    # push the old report kept showing the previous head's findings as current.
+    failed: list[str] = []
+    # A section that failed for a reason that passes (a provider outage, a
+    # GitHub 5xx) is retried: the report is written with what did run, then
+    # the event is raised so the queue runs it again and the next report
+    # replaces the "not run" notice.
+    retryable: list[BaseException] = []
 
     def _guarded(section, fn, default):
         try:
@@ -221,6 +262,27 @@ def handle(payload: dict):
         except InjectionRejected as e:
             log.warning(f"pr.{section}_input_rejected: {e}")
             rejected.append(section)
+            return default
+        except SectionUnavailable as e:
+            failed.append(f"{section} — {e}")
+            return default
+        except Exception as e:
+            from app.ai.circuit_breaker import AllProvidersDown
+            from app.ai.providers.base import AnswerTruncated
+            from app.core.guardrails import AIBudgetExceeded
+
+            log.error(f"pr.{section}_failed: {type(e).__name__}: {e}")
+            if is_transient(e):
+                retryable.append(e)
+            if isinstance(e, AIBudgetExceeded):
+                why = str(e)
+            elif isinstance(e, AllProvidersDown):
+                why = "the AI providers were unavailable"
+            elif isinstance(e, AnswerTruncated):
+                why = "the model's answer was cut off at its length limit"
+            else:
+                why = f"it failed ({type(e).__name__})"
+            failed.append(f"{section} — {why}")
             return default
 
     analysis_md = _guarded(
@@ -259,25 +321,33 @@ def handle(payload: dict):
             "",
         )
 
+    # Shown unfolded under the header. They were put inside the collapsed
+    # "Code review" block, where a report missing three of its sections read
+    # as a short review unless someone opened it.
+    notices = []
     if rejected:
-        notice = (
+        notices.append(
             "> ⚠️ **Automated "
             + ", ".join(rejected)
             + " refused.** This PR's title, description or diff contains text "
             "matching a prompt-injection pattern, so it was not sent to the model. "
             "Review it manually."
         )
-        review_md = f"{notice}\n\n{review_md}".strip()
+    if failed:
+        notices.append("> ⚠️ **Not run on this commit:** " + "; ".join(failed) + ".")
+    notices_md = "\n\n".join(notices)
 
-    if not any([analysis_md, summary_md, review_md, gaps_md]):
+    if not any([analysis_md, summary_md, review_md, gaps_md, notices_md]):
         log.info("pr.nothing_to_report — staying silent")
+        if retryable:
+            raise retryable[0]
         return
 
     # A push with nothing to flag never CREATES a comment — "still fine" is not
     # worth a notification to every subscriber. But it must still EDIT the
     # existing report (an edit notifies nobody): this used to return here, so
     # a push that fixed every finding left the report listing them as open.
-    edit_only = action == "synchronize" and not (review_md or gaps_md)
+    edit_only = action == "synchronize" and not (review_md or gaps_md or notices_md)
 
     # Line-anchored findings still go through the Reviews API: they land on
     # the diff itself, which is the one place bot output is unambiguously
@@ -291,7 +361,12 @@ def handle(payload: dict):
         if unposted_md:
             review_md = f"{review_md}\n\n{unposted_md}".strip()
 
-    body = _build_pr_report(analysis_md, summary_md, review_md, gaps_md, pr, files)
+    body = _build_pr_report(analysis_md, summary_md, review_md, gaps_md, pr, files, notices_md)
+    # "Every comment discloses which model wrote it" was true of command
+    # replies only; the report, the comment most people read, named none.
+    disclosed = last_model_disclosure()
+    if disclosed:
+        body += f"\n*Written with AI{disclosed}*"
     try:
         if edit_only:
             if update_sticky_if_present(
@@ -300,8 +375,16 @@ def handle(payload: dict):
                 log.done("pr_report_refreshed")
             else:
                 log.info("pr.nothing_to_flag — no report to refresh, staying silent")
+            if retryable:
+                raise retryable[0]
             return
         upsert_sticky(repo, pr_number, token, MARKER_PR_REPORT, body + config.footer)
         log.done("pr_report_upserted")
     except GitHubError as e:
         log.error(f"Failed to upsert PR report: {e}")
+        # The report is the product of this event. A 5xx here used to end the
+        # event as handled with nothing posted.
+        if is_transient(e):
+            raise
+    if retryable:
+        raise retryable[0]

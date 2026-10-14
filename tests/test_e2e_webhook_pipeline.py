@@ -139,7 +139,13 @@ class World:
 
         def post_comment(r):
             self._next_id += 1
-            c = {"id": self._next_id, "body": r["body"]["body"]}
+            # As GitHub returns it: a comment posted with an installation
+            # token is authored by the App's bot account.
+            c = {
+                "id": self._next_id,
+                "body": r["body"]["body"],
+                "user": {"login": "github-autopilot[bot]", "type": "Bot"},
+            }
             thread.append(c)
             gh.route(
                 "PATCH",
@@ -221,9 +227,11 @@ def pytest_runtest_makereport(item, call):
 
 # ── Scripted model answers ───────────────────────────────────────────────────
 
+# The change is inside `lookup`, the function the scripted gap names: a gap
+# is published only for a function the PR actually changes.
 SQL_PATCH = (
-    "@@ -1,3 +1,4 @@\n import os\n-q = 'x'\n"
-    "+q = 'SELECT * FROM t WHERE id=' + uid\n+cur.execute(q)\n"
+    "@@ -1,3 +1,4 @@ def lookup(uid):\n     import os\n-    q = 'x'\n"
+    "+    q = 'SELECT * FROM t WHERE id=' + uid\n+    cur.execute(q)\n"
 )
 SQL_FILE = {
     "filename": "app/db.py",
@@ -308,7 +316,7 @@ class TestPullRequestOpened:
         description update since this shipped was a 404."""
         edits = self._metadata_edits(world)
         assert [w["method"] for w in edits] == ["PATCH"], edits
-        assert edits[0]["body"]["body"].startswith("## Summary")
+        assert "## Summary\nParameterises the query." in edits[0]["body"]["body"]
         # Title polish is off unless the repo opts in (config.py: "silent
         # rewrite off by default").
         assert "title" not in edits[0]["body"]
@@ -319,7 +327,7 @@ class TestPullRequestOpened:
         )
         assert [w["method"] for w in edits] == ["PATCH"], "title and body must be one request"
         assert edits[0]["body"]["title"] == ANALYSIS["suggested_title"]
-        assert edits[0]["body"]["body"].startswith("## Summary")
+        assert "## Summary\nParameterises the query." in edits[0]["body"]["body"]
 
     def test_an_exact_code_fix_is_a_commit_button(self, world):
         world.llm.script = script(
@@ -335,10 +343,11 @@ class TestPullRequestOpened:
         assert len(review) == 1
         comments = review[0]["body"]["comments"]
         assert comments[0]["line"] == 3
-        assert "```suggestion\ncur.execute(q, (uid,))\n```" in comments[0]["body"]
+        # Re-indented to the line it replaces: a suggestion is committed as-is.
+        assert "```suggestion\n    cur.execute(q, (uid,))\n```" in comments[0]["body"]
         assert review[0]["body"]["commit_id"] == "HEADSHA1"
 
-    def test_prose_and_moved_anchors_get_no_commit_button(self, world):
+    def test_prose_gets_no_commit_button_and_an_unproven_line_no_anchor(self, world):
         world.llm.script = script(
             _review(
                 _issue(3, "SQL injection", "Use a parameterised query instead"),
@@ -347,22 +356,22 @@ class TestPullRequestOpened:
         )
         repo = world.repo([SQL_FILE])
         world.open_pr(repo)
-        world.sticky(repo)
+        sticky = world.sticky(repo)
         world.settle(repo)
 
         posted = [w for w in world.writes(repo, "POST") if w["path"].endswith("/reviews")]
         comments = posted[0]["body"]["comments"]
-        # The diff's last commentable line is 3, so BOTH findings anchor there:
-        # match them by text, not by line.
         prose = next(c for c in comments if "SQL injection" in c["body"])
-        moved = next(c for c in comments if "never closed" in c["body"])
         assert prose["line"] == 3
         assert "```suggestion" not in prose["body"], "English prose offered as a commit"
         assert "Use a parameterised query instead" in prose["body"]
-        assert moved["line"] == 3, "expected line 6 to snap to the nearest commentable line"
-        assert "```suggestion" not in moved["body"], "fix offered as a commit on a different line"
-        assert "Reported at line 6; anchored to line 3" in moved["body"]
-        assert "cur.close()" in moved["body"], "the fix must still be shown"
+        # Line 6 is not in the diff and the finding quotes nothing, so it used
+        # to be snapped onto line 3 — a different statement. It now goes in the
+        # report, marked unverified, with its fix, and is never pinned.
+        assert not any("never closed" in c["body"] for c in comments)
+        assert "handle is never closed" in sticky["body"]
+        assert "unverified" in sticky["body"]
+        assert "cur.close()" in sticky["body"], "the fix must still be shown"
 
     def test_a_rejected_inline_review_keeps_its_findings(self, world):
         world.llm.script = script(

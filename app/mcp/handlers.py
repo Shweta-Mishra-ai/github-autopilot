@@ -14,11 +14,11 @@ log = logging.getLogger(__name__)
 
 
 def _confidence_line(value) -> str:
-    """`*Confidence: N%*`, or "" when the model did not give a number."""
-    try:
-        return f"*Confidence: {int(max(0.0, min(1.0, float(value))) * 100)}%*"
-    except (TypeError, ValueError):
-        return ""
+    """The model's self-estimate, labelled as one, or "" without a number."""
+    from app.ai.validator import self_estimate
+
+    estimate = self_estimate(value)
+    return f"*{estimate}*" if estimate else ""
 
 
 def _installation_allowed(install_id) -> bool:
@@ -101,20 +101,33 @@ Return JSON:
             max_tokens=1000,
         )
 
+        from app.ai.validator import as_text, is_unusable, verdict
+
+        # An unusable answer rendered as an analysis with blank fields, and a
+        # recommendation was whatever string came back.
+        if is_unusable(result):
+            return (
+                f"Error: the analysis of PR #{pr_number} could not be used — nothing is reported."
+            )
+        rec = verdict(result, "recommendation", {"approve", "request_changes"})
         lines = [
             f"## PR #{pr_number} Analysis — {repo}",
             "",
-            f"**Summary:** {result.get('summary', '')}",
-            f"**Recommendation:** {result.get('recommendation', '')}",
+            f"**Summary:** {as_text(result.get('summary')) or 'not given'}",
+            f"**Recommendation:** {rec.replace('_', ' ') if rec else 'not given'}",
             "",
         ]
-        if result.get("security_issues"):
-            lines += ["**Security:**"] + [f"- {i}" for i in result["security_issues"]] + [""]
-        if result.get("test_gaps"):
-            lines += ["**Test Gaps:**"] + [f"- {g}" for g in result["test_gaps"]] + [""]
-        if result.get("improvements"):
-            lines += ["**Improvements:**"] + [f"- {i}" for i in result["improvements"]]
-        return "\n".join(lines)
+        for key, heading in (
+            ("security_issues", "Security"),
+            ("test_gaps", "Test Gaps"),
+            # Asked for and never shown.
+            ("blast_radius", "Blast Radius"),
+            ("improvements", "Improvements"),
+        ):
+            items = [as_text(i) for i in (result.get(key) or []) if as_text(i)]
+            if items:
+                lines += [f"**{heading}:**"] + [f"- {i}" for i in items] + [""]
+        return "\n".join(lines).rstrip()
 
     except Exception as e:
         log.error(f"mcp.analyze_pr error: {e}")
@@ -164,9 +177,16 @@ Return JSON:
             max_tokens=1500,
         )
 
+        from app.ai.validator import is_unusable
+
+        if is_unusable(result) or not result.get("fix"):
+            return f"Error: no usable fix was produced for issue #{issue_number}."
         return "\n".join(
             [
                 f"## Fix for Issue #{issue_number}",
+                "",
+                "> Based on the issue's text (and any context given) only — the "
+                "repository's code was not read. Check every file or function it names.",
                 "",
                 f"**Root Cause:** {result.get('root_cause', '')}",
                 "",
@@ -199,7 +219,16 @@ def _handle_scan_secrets(args: dict) -> str:
         return "Error: content is required."
 
     try:
-        from app.security.enhanced_secrets import scan_diff, format_findings
+        from app.security.enhanced_secrets import format_findings, is_example_path, scan_diff
+
+        # scan_diff deliberately skips example/template files; saying "no
+        # secrets detected" for content that was never scanned is a false
+        # all-clear.
+        if is_example_path(filename):
+            return (
+                f"ℹ️ Not scanned — `{filename}` is treated as an example/template file, "
+                "which the secret scanner skips. Pass the real filename to scan it."
+            )
 
         # scan_diff reads lines starting with "+" (git diff format).
         # Prefix each line so raw content is fully scanned.
@@ -289,22 +318,34 @@ Return JSON:
 {{
   "risk_level": "low|medium|high|critical",
   "findings": [{{"issue":"","severity":"","line":0,"fix":""}}],
-  "cve_risks": [],
   "summary": ""
-}}""",
+}}
+
+Do not cite CVE or GHSA identifiers: none can be verified here.""",
             task="security_report",
             max_tokens=1200,
         )
 
-        from app.ai.validator import as_text
+        from app.ai.validator import as_text, is_unusable, verdict
 
-        risk = as_text(result.get("risk_level"), "unknown").upper()
+        if is_unusable(result):
+            return "Error: the security review could not be used — nothing is reported."
+        rec = verdict(result, "risk_level", {"low", "medium", "high", "critical"})
+        risk = rec.upper() if rec else "not given"
         findings = result.get("findings")
         findings = findings if isinstance(findings, list) else []
-        cves = result.get("cve_risks")
-        cves = cves if isinstance(cves, list) else []
 
-        lines = ["## Security Review", f"**Risk Level:** {risk}", ""]
+        # A "CVE Risks" list came from the model reading a snippet: identifiers
+        # nobody checked, printed as if looked up. Real advisories for pinned
+        # dependencies come from GitHub's database (/security on a PR).
+        lines = [
+            "## Security Review",
+            f"**Risk Level:** {risk}",
+            "",
+            "> The model's reading of the content — not checked against an advisory "
+            "database. For known advisories on pinned dependencies, run `/security` on a PR.",
+            "",
+        ]
         if findings:
             lines += ["**Findings:**"]
             for f in findings[:8]:
@@ -312,8 +353,8 @@ Return JSON:
                     continue
                 sev = as_text(f.get("severity")).upper()
                 lines.append(f"- [{sev}] {as_text(f.get('issue'))} — {as_text(f.get('fix'))}")
-        if cves:
-            lines += ["", "**CVE Risks:**"] + [f"- {as_text(c)}" for c in cves]
+        if not findings:
+            lines.append("No findings reported.")
         return "\n".join(lines)
 
     except Exception as e:
@@ -392,7 +433,6 @@ def _handle_run_command(args: dict) -> str:
     try:
         from app.github.auth import get_installation_token
         from app.github.client import gh_get
-        from app.handlers.comments import _extract_command
         import app.handlers.comments as ch
 
         token = get_installation_token(install_id)
@@ -401,9 +441,10 @@ def _handle_run_command(args: dict) -> str:
         body = (issue.get("body") or "")[:2000]
         full_context = f"{body}\n\n{context}".strip() if context else body
 
-        parsed_cmd = _extract_command(f"{cmd} {context}".strip())
-        if not parsed_cmd:
-            return f"Error: could not parse command '{command}'"
+        # The command is the validated `cmd`. It was re-parsed from
+        # f"{cmd} {context}", so the free-text context took part in choosing
+        # which command ran — the opposite of what the allow-list checked.
+        parsed_cmd = cmd
 
         # Signatures verified against comments.py
         handler_map = {

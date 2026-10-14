@@ -25,7 +25,27 @@ from ._client import gh_get, gh_post  # noqa: F401  (re-exported: tests patch th
 log = logging.getLogger(__name__)
 
 
-def cmd_runtests(repo: str, token_or_issue_number: str | int, token: str | None = None) -> str:
+_TEST_WORDS = frozenset({"test", "tests", "ci", "pytest", "check", "checks", "lint", "unit"})
+# A workflow named for any of these is never "the tests", whatever else its
+# name says: "Release: build & publish to PyPI" matched "build" as a substring
+# and /runtests published a release.
+_NEVER_WORDS = frozenset({"release", "deploy", "publish", "pages", "production", "prod"})
+
+
+def _words(text: str) -> set:
+    import re
+
+    return set(re.split(r"[^a-z0-9]+", (text or "").lower())) - {""}
+
+
+def _is_test_workflow(wf: dict) -> bool:
+    words = _words(wf.get("name", "")) | _words(wf.get("path", "").rsplit("/", 1)[-1])
+    return bool(words & _TEST_WORDS) and not (words & _NEVER_WORDS)
+
+
+def cmd_runtests(
+    repo: str, token_or_issue_number: str | int, token: str | None = None, issue: dict | None = None
+) -> str:
     """Trigger CI workflow via workflow_dispatch."""
     actual_token = token if token is not None else str(token_or_issue_number)
     try:
@@ -36,18 +56,27 @@ def cmd_runtests(repo: str, token_or_issue_number: str | int, token: str | None 
             workflows_data.get("workflows", []) if isinstance(workflows_data, dict) else []
         )
 
-        TEST_NAMES = ("test", "ci", "pytest", "check", "lint", "build")
-        test_workflow = next(
-            (
-                wf
-                for wf in all_workflows
-                if any(
-                    n in wf.get("path", "").lower() or n in wf.get("name", "").lower()
-                    for n in TEST_NAMES
-                )
-            ),
-            None,
-        )
+        test_workflow = next((wf for wf in all_workflows if _is_test_workflow(wf)), None)
+
+        # On a pull request, test the PR. This always dispatched the default
+        # branch, so the "tests triggered" reply described a run of code the
+        # PR does not contain. A fork's branch cannot be dispatched here, and
+        # the reply says so instead of implying otherwise.
+        ref, ref_note = default_branch, ""
+        if issue and "pull_request" in issue and token is not None:
+            try:
+                pr = gh_get(f"/repos/{repo}/pulls/{int(token_or_issue_number)}", actual_token)
+                head = pr.get("head") or {}
+                if (head.get("repo") or {}).get("full_name") == repo and head.get("ref"):
+                    ref = head["ref"]
+                else:
+                    ref_note = (
+                        "\n\n> ℹ️ This PR comes from a fork, whose branch cannot be "
+                        f"dispatched from here — this runs `{default_branch}`, not the PR."
+                    )
+            except Exception as e:
+                log.debug(f"cmd_runtests.pr_lookup_failed: {e}")
+                ref_note = f"\n\n> ℹ️ Could not read the PR's branch — this runs `{default_branch}`."
 
         if not test_workflow:
             wf_names = [w.get("name", w.get("path", "?")) for w in all_workflows[:5]]
@@ -68,7 +97,7 @@ def cmd_runtests(repo: str, token_or_issue_number: str | int, token: str | None 
             gh_post(
                 f"/repos/{repo}/actions/workflows/{wf_id}/dispatches",
                 actual_token,
-                {"ref": default_branch},
+                {"ref": ref},
             )
         except GitHubError as exc:
             if exc.status_code == 422:
@@ -83,8 +112,8 @@ def cmd_runtests(repo: str, token_or_issue_number: str | int, token: str | None 
         return (
             f"## 🧪 Tests Triggered\n\n"
             f"**Workflow:** `{wf_name}`\n"
-            f"**Branch:** `{default_branch}`\n\n"
-            f"[View runs]({wf_url})"
+            f"**Branch:** `{ref}`\n\n"
+            f"[View runs]({wf_url}){ref_note}"
         )
 
     except GitHubError as exc:
@@ -100,6 +129,7 @@ def cmd_notify(
     issue: dict,
     token: str,
     cmd_args: str,
+    config=None,
 ) -> str:
     """Send Discord/Slack notification about this issue or PR."""
     discord_url = os.environ.get("DISCORD_WEBHOOK_URL", "")
@@ -111,15 +141,37 @@ def cmd_notify(
             "Add `DISCORD_WEBHOOK_URL` or `SLACK_WEBHOOK_URL` to your Render env vars."
         )
 
-    try:
-        from app.github.notifications import send_rich_discord, send_rich_slack
+    # The webhooks are deployment-wide, so a repository's own
+    # notifications.discord / .slack: false is the only way it can opt out —
+    # and /notify ignored it, posting a repository that had turned a channel
+    # off into that channel anyway. The automatic notifications honour it.
+    def _repo_allows(channel: str) -> bool:
+        return config is None or bool(config.get("notifications", channel, default=True))
 
-        title = issue.get("title", f"Issue #{issue_number}")
+    disabled = [
+        name
+        for name, url, key in (("Discord", discord_url, "discord"), ("Slack", slack_url, "slack"))
+        if url and not _repo_allows(key)
+    ]
+    discord_url = discord_url if _repo_allows("discord") else ""
+    slack_url = slack_url if _repo_allows("slack") else ""
+    if not discord_url and not slack_url:
+        return (
+            "## ℹ️ Notifications Disabled\n\n"
+            f"This repository's `.ai-repo-manager.yml` turns off: {', '.join(disabled)}."
+        )
+
+    try:
+        from app.github.notifications import plain, send_rich_discord, send_rich_slack
+
+        # The title, the labels and the note are untrusted: plain() keeps them
+        # from becoming links, and the senders keep them from pinging.
+        title = plain(issue.get("title", f"Issue #{issue_number}"))
         is_pr = "pull_request" in issue
-        labels = [lb.get("name", "") for lb in issue.get("labels", [])]
+        labels = [plain(lb.get("name", "")) for lb in issue.get("labels", [])]
         kind = "PR" if is_pr else "Issue"
         url = issue.get("html_url", f"https://github.com/{repo}/issues/{issue_number}")
-        custom_msg = (cmd_args or "").strip()
+        custom_msg = plain((cmd_args or "").strip())
 
         color = 0x5865F2  # Discord blurple
         for lb in labels:

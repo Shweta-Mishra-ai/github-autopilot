@@ -59,6 +59,10 @@ _state: dict[str, dict] = {}
 _lock = threading.Lock()
 
 
+class GitHubRateLimitExhausted(RuntimeError):
+    """Too few GitHub API calls left to start this work. Transient."""
+
+
 def _max_wait_seconds() -> float:
     """Read at call time, not import time, so it can be changed per deployment."""
     raw = os.environ.get("GITHUB_MAX_RATE_LIMIT_WAIT_SECONDS", "")
@@ -112,9 +116,24 @@ def update_from_headers(headers: dict, token: str | None = None) -> None:
     """
     try:
         key = token_key(token)
-        remaining = headers.get("X-RateLimit-Remaining")
-        reset_at = headers.get("X-RateLimit-Reset")
-        resource = headers.get("X-RateLimit-Resource", "core")
+        # HTTP header names are case-insensitive, and the caller passes
+        # dict(response.headers), which is not: GitHub's edge sends
+        # `x-ratelimit-remaining` (and some proxies `X-Ratelimit-Remaining`),
+        # so the exact-case lookup always missed and the tracked figure sat
+        # at 5000 forever — no throttling, and /health reporting a number
+        # nobody had measured.
+        h = {str(k).lower(): v for k, v in (headers or {}).items()}
+        remaining = h.get("x-ratelimit-remaining")
+        reset_at = h.get("x-ratelimit-reset")
+        resource = str(h.get("x-ratelimit-resource") or "core").lower()
+
+        # Only the core limit gates ordinary REST calls. Search has its own
+        # budget of 30 a minute: recording its "29 remaining" here made every
+        # following core call look nearly exhausted and stall or refuse.
+        if resource != "core":
+            if remaining is not None:
+                _try_redis_set(f"gh_rl_{resource}_{key}_remaining", remaining)
+            return
 
         with _lock:
             entry = _state.setdefault(key, _blank(key))
@@ -153,8 +172,8 @@ def check_and_wait(token: str | None = None) -> None:
         remaining = entry["remaining"] if entry else 5000
         reset_at = entry["reset_at"] if entry else 0
 
-    if remaining >= SAFETY_BUFFER:
-        return
+    if remaining >= SAFETY_BUFFER or (reset_at and reset_at <= time.time()):
+        return  # plenty left, or the window this figure belongs to is over
 
     wait_seconds = max(0.0, reset_at - time.time())
     limit = _max_wait_seconds()
@@ -172,7 +191,7 @@ def check_and_wait(token: str | None = None) -> None:
         f"github.rate_limit_exhausted remaining={remaining} "
         f"resets_in={wait_seconds:.0f}s — refusing rather than holding a worker"
     )
-    raise RuntimeError(
+    raise GitHubRateLimitExhausted(
         f"GitHub rate limit exhausted ({remaining} remaining). " f"Resets in {wait_seconds:.0f}s."
     )
 
@@ -188,8 +207,15 @@ def get_status(token: str | None = None) -> dict:
     """
     now = time.time()
     with _lock:
-        entries = [dict(e) for e in _state.values()]
+        # An entry whose window has already reset says nothing about now.
+        # Installation tokens rotate about hourly, so one old low entry used
+        # to hold /health at "rate_limited" until the process restarted.
+        entries = [
+            dict(e) for e in _state.values() if not (e.get("reset_at") and e["reset_at"] <= now)
+        ]
         specific = dict(_state.get(token_key(token), {})) if token else {}
+        if specific.get("reset_at") and specific["reset_at"] <= now:
+            specific = {}
 
     if specific:
         worst = specific

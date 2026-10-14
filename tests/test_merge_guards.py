@@ -85,10 +85,18 @@ class TestCmdMerge:
         assert "Merged" in out
         delete.assert_not_called()
 
-    def test_a_same_repo_branch_is_still_cleaned_up(self):
+    def test_a_human_branch_is_left_to_the_repository_setting(self):
+        """GitHub deletes it when the repo enables 'delete head branches';
+        otherwise it is kept on purpose. Merging develop -> staging deleted
+        develop, and GitHub then closed every PR targeting it."""
         _, _, _, delete = _merge(PR, [{"total_count": 1, "check_runs": [OK_CHECK]}])
+        delete.assert_not_called()
+
+    def test_an_autofix_branch_this_app_created_is_cleaned_up_and_quoted(self):
+        pr = {**PR, "head": {**PR["head"], "ref": "fix/bot-issue-4#2"}}
+        _, _, _, delete = _merge(pr, [{"total_count": 1, "check_runs": [OK_CHECK]}])
         delete.assert_called_once()
-        assert delete.call_args.args[0].endswith("/git/refs/heads/feat/y")
+        assert delete.call_args.args[0].endswith("/git/refs/heads/fix/bot-issue-4%232")
 
     def test_a_failing_check_on_the_second_page_is_seen(self):
         page1 = {"total_count": 101, "check_runs": [OK_CHECK] * 100}

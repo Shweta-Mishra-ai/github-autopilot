@@ -93,13 +93,33 @@ def known_installations() -> dict[str, int]:
 
     live: dict[str, int] = {}
     stale: list[str] = []
+    unreadable = 0
     for m in members:
         repo = m.decode() if isinstance(m, bytes) else str(m)
-        inst = installation_for(repo)
+        # Read here rather than through installation_for(), which answers None
+        # for both "expired" and "Redis failed". Both were pruned, so one
+        # timeout during the maintenance pass dropped quiet repositories from
+        # every later scheduled sweep until their next webhook. Only an entry
+        # that is really gone is pruned; an unreadable one waits for the next
+        # pass.
+        try:
+            raw = r.get(_entry_key(repo))
+        except Exception as e:
+            unreadable += 1
+            log.debug(f"installations.lookup_failed repo={repo}: {e}")
+            continue
+        try:
+            inst = int(raw.decode() if isinstance(raw, bytes) else raw) if raw is not None else 0
+        except (TypeError, ValueError):
+            inst = 0
         if inst:
             live[repo] = inst
         else:
             stale.append(repo)
+    if unreadable:
+        log.warning(
+            f"installations.unreadable count={unreadable} — skipped this pass, not forgotten"
+        )
 
     if stale:
         try:

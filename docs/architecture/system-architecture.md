@@ -35,7 +35,6 @@ The system runs entirely on **free-tier infrastructure**:
 | Groq | Llama 3.3 70B + 3.1 8B | 5K + 12K req/day |
 | Gemini Flash | Long-context fallback (1M ctx) | 1.5K req/day |
 | OpenRouter | Emergency fallback | 200 req/day |
-| Qdrant Cloud | Vector DB for code context | 1GB |
 
 **Total monthly cost: $0.**
 
@@ -426,8 +425,6 @@ Redis is single-threaded internally. `SET NX` is one command. Two concurrent cal
 | 25MB Redis free tier | > 10K unique Redis keys | Redis Cluster or Upstash |
 | In-process circuit breakers | Multi-process state sharing needed | Redis-backed circuit state |
 | 5-min permission cache | Sub-second revocation needed | Redis cache with pub/sub invalidation |
-| Local ChromaDB (dev) | > 100 vector queries/day | Qdrant Cloud (already integrated) |
-| Local sentence-transformers | > 500 embedding calls/day | Dedicated embedding microservice |
 
 ---
 
@@ -445,7 +442,7 @@ Redis is single-threaded internally. `SET NX` is one command. Two concurrent cal
 
 6. **Learning loop tracks but does not close.** Acceptance rate counters exist and are readable. They do not yet affect prompt selection or provider choice.
 
-7. **Embeddings wired to PR review only.** Vector context does not yet inform `/fix`, `/explain`, or other commands.
+7. **No vector search.** An embedding layer existed only as a stub (its search always returned nothing) and was removed. Review context is the code around each change, read from the head commit.
 
 ---
 
@@ -459,8 +456,6 @@ ThreadPoolExecutor                   Celery workers + Redis broker
 Single Redis 25MB                    Redis Cluster (HA)
 In-process circuit breakers          Redis-backed circuit state
 In-memory permission cache           Redis-backed (sub-second invalidation)
-Local ChromaDB (dev only)            Qdrant Cloud exclusively
-Local sentence-transformers          Dedicated embedding microservice
 8-pattern injection blocklist        Classification LLM pre-filter
 Single-file autofix                  Multi-file patch sets
 No execution validation              Sandboxed test runner

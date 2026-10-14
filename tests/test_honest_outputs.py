@@ -39,7 +39,8 @@ class TestCiConfidenceIsNeverInvented:
 
     def test_a_given_confidence_is_printed(self):
         out = self._ci({"root_cause": "x", "fix": "y", "prevention": "z", "confidence": 0.4})
-        assert "Confidence: 40%" in out
+        # Labelled as the model's guess about itself, not a measured figure.
+        assert "Model's self-estimate: 40% (its own guess, not a measured probability)" in out
 
     def test_metadata_only_analysis_says_so(self):
         runs = {
@@ -90,3 +91,33 @@ class TestRedisUrlNeverLogged:
             "cache.example:6380"
         )
         assert "s3cr3t" not in redis_client._redis_host("redis://u:s3cr3t@h")
+
+
+def test_no_redis_url_prefix_is_logged_anywhere():
+    """get_redis() was fixed to log the host only; get_redis_blocking() still
+    logged redis_url[:30] — most of the password for rediss://default:…@host."""
+    import pathlib
+    import re
+
+    src = pathlib.Path("app/core/redis_client.py").read_text()
+    assert not re.search(r"redis_url\[", src)
+
+
+class TestSelfEstimatesAreLabelled:
+    """A model's confidence in itself was printed as "Confidence: 85%"."""
+
+    def test_the_helper(self):
+        from app.ai.validator import self_estimate
+
+        assert self_estimate(0.85).startswith("Model's self-estimate: 85%")
+        assert self_estimate("85").startswith("Model's self-estimate: 85%")
+        assert self_estimate("high") == "" and self_estimate(None) == "" and self_estimate(7000) == ""
+
+    def test_autofix_and_mcp_use_it(self):
+        from app.handlers import autofix
+        from app.mcp.handlers import _confidence_line
+
+        body = autofix._build_pr_body({"problem": "p", "fix_description": "f", "explanation": "e",
+                                       "confidence": 0.7}, 3, "t")
+        assert "Model's self-estimate: 70%" in body and "Confidence: 70%" not in body
+        assert _confidence_line(0.7) == "*Model's self-estimate: 70% (its own guess, not a measured probability)*"

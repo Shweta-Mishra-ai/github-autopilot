@@ -21,6 +21,8 @@ from app.ai.providers.base import (
     redact_secrets,
     substituted_model,
     throttle_pause,
+    truncated_error,
+    was_cut_off,
 )
 
 log = logging.getLogger(__name__)
@@ -147,8 +149,10 @@ class GeminiProvider(LLMProvider):
             if r.status_code in (400, 401, 403, 404):
                 # Same repair as the primary: a model the provider no longer
                 # serves is a question the provider itself can answer.
+                # "quality": Gemini fills a high-tier slot (long reviews), so
+                # its repair must not reach for the speed list's flash-lite.
                 replacement = substituted_model(
-                    "gemini", "gemini", "speed", model, r, r.status_code
+                    "gemini", "gemini", "quality", model, r, r.status_code
                 )
                 if replacement:
                     model = replacement
@@ -179,8 +183,12 @@ class GeminiProvider(LLMProvider):
             r.raise_for_status()
             data = r.json()
 
+            # Checked before the text: a candidate stopped at MAX_TOKENS can
+            # carry no parts at all, which was charged to the circuit as a
+            # malformed response.
+            cut = was_cut_off(((data.get("candidates") or [{}])[0] or {}).get("finishReason"))
             try:
-                text = data["candidates"][0]["content"]["parts"][0]["text"]
+                text = "" if cut else data["candidates"][0]["content"]["parts"][0]["text"]
             except (KeyError, IndexError) as exc:
                 breaker.record_failure("bad_response_format")
                 return LLMResponse(
@@ -196,7 +204,6 @@ class GeminiProvider(LLMProvider):
             t_tok = usage.get("totalTokenCount", 0)
 
             breaker.record_success()
-            self._track(t_tok)
 
             return LLMResponse(
                 text=text,
@@ -206,6 +213,7 @@ class GeminiProvider(LLMProvider):
                 completion_tokens=c_tok,
                 total_tokens=t_tok,
                 cost_usd=0.0,
+                error=truncated_error(max_tokens) if cut else None,
             )
 
         except http_requests.exceptions.Timeout:
@@ -228,29 +236,3 @@ class GeminiProvider(LLMProvider):
                 model=model,
                 error=safe[:200],
             )
-
-    def _track(self, total_tokens: int):
-        """
-        FIXED: tokens key now uses incrby(total_tokens) instead of incr(1) --
-        same V4 bug already fixed in groq.py's _track() but missed here.
-        The old code added 1 to the token counter per call regardless of how
-        many tokens were consumed, making /budget data meaningless for Gemini.
-        """
-        try:
-            import datetime
-            from app.core.redis_client import get_redis
-
-            if total_tokens <= 0:
-                return
-            r = get_redis()
-            today = datetime.date.today().isoformat()
-
-            tok_key = f"llm:tokens:gemini:{today}"
-            r.incrby(tok_key, total_tokens)
-            r.expire(tok_key, 86400)
-
-            req_key = f"llm:requests:gemini:{today}"
-            r.incr(req_key)
-            r.expire(req_key, 86400)
-        except Exception as e:
-            log.debug(f"gemini.track_usage_failed: {e}")

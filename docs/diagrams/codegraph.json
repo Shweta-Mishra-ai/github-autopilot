@@ -259,11 +259,11 @@
       "id": "app.ai.validator",
       "path": "app/ai/validator.py",
       "layer": "ai",
-      "loc": 332,
-      "functions": 12,
+      "loc": 352,
+      "functions": 13,
       "classes": 0,
       "is_package": false,
-      "fan_in": 10,
+      "fan_in": 11,
       "fan_out": 0,
       "external_deps": [
         "logging",
@@ -924,7 +924,7 @@
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 7,
+      "fan_out": 8,
       "external_deps": [
         "base64",
         "difflib",
@@ -1064,7 +1064,7 @@
       "id": "app.handlers.comments.reviewer",
       "path": "app/handlers/comments/reviewer.py",
       "layer": "handlers",
-      "loc": 588,
+      "loc": 587,
       "functions": 14,
       "classes": 0,
       "is_package": false,
@@ -1282,7 +1282,7 @@
       "id": "app.handlers.pull_request.review",
       "path": "app/handlers/pull_request/review.py",
       "layer": "handlers",
-      "loc": 658,
+      "loc": 662,
       "functions": 10,
       "classes": 0,
       "is_package": false,
@@ -2191,6 +2191,11 @@
       "source": "app.handlers.autofix",
       "target": "app.ai.routing_policy",
       "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.autofix",
+      "target": "app.ai.validator",
+      "kind": "import"
     },
     {
       "source": "app.handlers.autofix",
@@ -3575,8 +3580,8 @@
   ],
   "stats": {
     "modules": 100,
-    "edges": 390,
-    "total_loc": 27821,
+    "edges": 391,
+    "total_loc": 27844,
     "layers": [
       "ai",
       "core",
@@ -3639,8 +3644,8 @@
       },
       {
         "id": "app.ai.validator",
-        "loc": 332,
-        "fan_in": 10,
+        "loc": 352,
+        "fan_in": 11,
         "fan_out": 0
       },
       {

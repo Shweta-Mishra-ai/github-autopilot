@@ -92,7 +92,8 @@ class TestDemotionNeverDeletesAFinding:
 
     def test_demoted_file_says_why(self):
         md, _inline = _review({"files": [_entry()]}, gate=self._demoting_gate())
-        assert "Confidence 40%" in md
+        assert "scored low on the reliability checks" in md
+        assert "40%" not in md, "a weighted heuristic shown as a probability"
 
     def test_confident_file_still_anchors_and_stays_out_of_the_body(self):
         md, inline = _review({"files": [_entry()]})
@@ -478,7 +479,7 @@ class TestNonNumericConfidenceKeepsTheAnalysis:
         assert "Confidence:" not in out, "invented a percentage the model never gave"
 
     def test_a_real_confidence_is_still_shown(self):
-        assert "Confidence: 90%" in self._ci(0.9)
+        assert "Model's self-estimate: 90%" in self._ci(0.9)
 
 
 class TestReleaseStopsAtTheTag:

@@ -33,6 +33,8 @@ from app.github.client import gh_get, gh_post, gh_put, GitHubError
 from app.ai.router import router
 from app.core.sanitizer import wrap_user_content
 
+from app.ai.validator import self_estimate
+
 log = logging.getLogger(__name__)
 
 # FIXED: .yml/.yaml removed from blanket allowed set.
@@ -332,14 +334,13 @@ def run_autofix(
 
     # ── Step 6: Post diff + ask for confirmation (human in the loop) ───────
     diff_preview = _make_diff_preview(current, fixed, target)
-    conf_pct = round(_confidence(fix_plan) * 100)
 
     log.info(f"autofix.branch_ready branch={branch}")
 
     return (
         f"## 🤖 Autofix Ready — Review Required\n\n"
-        f"**File:** `{target}` | **Branch:** `{branch}` | "
-        f"**Confidence:** {conf_pct}%\n\n"
+        f"**File:** `{target}` | **Branch:** `{branch}`\n\n"
+        f"*{self_estimate(_confidence(fix_plan))}*\n\n"
         f"**Problem:** {fix_plan.get('problem', '')}\n\n"
         f"**Fix:** {fix_plan.get('explanation', '')}\n\n"
         f"### Diff Preview\n{diff_preview}\n\n"
@@ -601,7 +602,6 @@ possible (at most {_MAX_EDITS}).""",
 
 
 def _build_pr_body(fix_plan: dict, issue_number: int, title: str) -> str:
-    conf = round(_confidence(fix_plan) * 100)
     return (
         f"## 🤖 Automated Fix — Issue #{issue_number}\n\n"
         f"**Issue:** {title}\n\n"
@@ -609,7 +609,7 @@ def _build_pr_body(fix_plan: dict, issue_number: int, title: str) -> str:
         f"### Fix\n{fix_plan.get('fix_description', '')}\n\n"
         f"### Why\n{fix_plan.get('explanation', '')}\n\n"
         f"---\nCloses #{issue_number}\n\n"
-        f"> 🤖 Auto-generated | Confidence: {conf}% | Please review before merging."
+        f"> 🤖 Auto-generated | {self_estimate(_confidence(fix_plan))} | Please review before merging."
     )
 
 

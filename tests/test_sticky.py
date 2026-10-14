@@ -188,3 +188,42 @@ class TestOnlyTheAppsOwnCommentIsTheSticky:
         ]
         with patch("app.github.sticky.gh_get", return_value=comments):
             assert find_sticky("o/r", 5, "t", MARKER_PR_REPORT) == 2
+
+
+class TestWithoutPerformedViaGithubApp:
+    """Round-3 audit C10: with no performed_via_github_app on the comment, any
+    bot account's comment carrying the marker was taken as this App's."""
+
+    def _comments(self):
+        return [
+            {"id": 1, "body": MARKER_PR_REPORT, "user": {"type": "Bot", "login": "other-app[bot]"}},
+            {"id": 2, "body": MARKER_PR_REPORT, "user": {"type": "Bot", "login": "autopilot[bot]"}},
+        ]
+
+    def test_another_bots_comment_is_ignored(self):
+        with patch("app.github.auth.app_bot_login", return_value="autopilot[bot]"), \
+             patch("app.github.sticky.gh_get", return_value=self._comments()):
+            assert find_sticky("o/r", 5, "t", MARKER_PR_REPORT) == 2
+
+    def test_when_the_login_cannot_be_read_a_bot_comment_still_counts(self):
+        with patch("app.github.auth.app_bot_login", return_value=""), \
+             patch("app.github.sticky.gh_get", return_value=self._comments()):
+            assert find_sticky("o/r", 5, "t", MARKER_PR_REPORT) == 1
+
+    def test_the_login_lookup_is_cached_and_a_failure_is_not_retried_per_call(self, monkeypatch):
+        from unittest.mock import MagicMock
+
+        from app.github import auth
+
+        monkeypatch.setattr(auth, "_bot_login", {})
+        monkeypatch.setattr(auth, "get_jwt", lambda: "jwt")
+        get = MagicMock(side_effect=ConnectionError("down"))
+        monkeypatch.setattr(auth.requests, "get", get)
+        assert auth.app_bot_login() == "" and auth.app_bot_login() == ""
+        assert get.call_count == 1
+
+        monkeypatch.setattr(auth, "_bot_login", {})
+        ok = MagicMock(return_value=MagicMock(json=lambda: {"slug": "autopilot"}, raise_for_status=lambda: None))
+        monkeypatch.setattr(auth.requests, "get", ok)
+        assert auth.app_bot_login() == "autopilot[bot]" == auth.app_bot_login()
+        assert ok.call_count == 1

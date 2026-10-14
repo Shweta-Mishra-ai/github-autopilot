@@ -15,8 +15,9 @@ NOTE on fingerprint collision security:
 """
 
 import hashlib
-import time
 import logging
+import threading
+import time
 from collections import OrderedDict
 
 from app.core.redis_client import get_redis, is_redis_available
@@ -27,6 +28,10 @@ _TTL_SECONDS = 86400  # 24h — GitHub retries for up to 24h
 _MAX_LOCAL = 2000  # In-memory fallback max size
 
 _seen_local: OrderedDict = OrderedDict()
+# Webhooks are handled on several threads. Without this, two deliveries of
+# one event could both find the fingerprint absent and both run, and one
+# thread's pruning could delete the key another had just read (KeyError).
+_local_lock = threading.Lock()
 
 # Whether the last call fell back to memory. The fallback warning used to be
 # emitted on EVERY event, and "Redis is unavailable" does not become more true
@@ -91,7 +96,8 @@ def forget(fingerprint: str) -> None:
     Release a fingerprint recorded by is_duplicate(), for an event that was
     seen but NOT accepted (the server answered 503). Never raises.
     """
-    _seen_local.pop(fingerprint, None)
+    with _local_lock:
+        _seen_local.pop(fingerprint, None)
     try:
         if is_redis_available():
             get_redis().delete(f"idem:{fingerprint}")
@@ -119,7 +125,12 @@ def _leave_fallback() -> None:
 
 
 def _is_duplicate_local(fingerprint: str) -> bool:
-    """In-memory fallback. Not safe across restarts."""
+    """In-memory fallback. Not safe across restarts; safe across threads."""
+    with _local_lock:
+        return _check_and_record_local(fingerprint)
+
+
+def _check_and_record_local(fingerprint: str) -> bool:
     now = time.time()
 
     # Pop from the front while the oldest entry is expired, rather than

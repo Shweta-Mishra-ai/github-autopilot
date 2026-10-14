@@ -124,9 +124,20 @@ class TestParsing:
         with patch("app.github.client.gh_get", return_value={}):
             assert isinstance(load_config("o/r", "tok"), Config)
 
-    def test_it_never_raises(self):
-        """A config read that raises takes the whole webhook with it."""
-        with patch("app.github.client.gh_get", side_effect=RuntimeError("boom")):
+    def test_an_unreadable_config_is_not_replaced_by_defaults(self):
+        """This was "it never raises": a failed read returned defaults, and
+        the defaults ignore the repo's kill switch, command allow-list and
+        /merge restrictions. With no earlier copy the event is refused (and
+        retried) instead."""
+        from app.core.config import ConfigUnavailable
+
+        with patch("app.github.client.gh_get", side_effect=RuntimeError("boom")), \
+             pytest.raises(ConfigUnavailable, match="boom"):
+            load_config("o/r", "tok")
+
+    def test_a_file_that_is_not_valid_config_still_uses_defaults(self):
+        """Read but unparseable is the maintainer's to fix; retrying cannot."""
+        with patch("app.github.client.gh_get", return_value={"content": "%%% not base64"}):
             assert isinstance(load_config("o/r", "tok"), Config)
 
 
@@ -248,13 +259,33 @@ class TestThunderingHerd:
             cfg = load_config("o/r", "tok")
         assert cfg.bot_enabled() is False
 
-    def test_a_transient_error_with_no_history_is_retried_soon(self):
+    def test_a_transient_error_with_no_history_caches_nothing(self):
+        """Defaults were cached for 30s; nothing is cached now, so the retry
+        reads the file again."""
+        from app.core.config import ConfigUnavailable
+        from app.github.client import GitHubError
+
+        with patch("app.github.client.gh_get", side_effect=GitHubError("bad gateway", 502)), \
+             pytest.raises(ConfigUnavailable):
+            load_config("o/r", "tok")
+        assert "o/r" not in config_mod._config_cache
+
+    def test_the_kill_switch_holds_through_a_failed_read(self):
+        from app.core.config import ConfigUnavailable
         from app.github.client import GitHubError
 
         with patch("app.github.client.gh_get", side_effect=GitHubError("bad gateway", 502)):
-            load_config("o/r", "tok")
-        _cfg, cached_at = config_mod._config_cache["o/r"]
-        assert time.time() - cached_at >= config_mod._CONFIG_TTL - config_mod._CONFIG_ERROR_TTL - 1
+            try:
+                cfg = load_config("o/r", "tok")
+            except ConfigUnavailable:
+                cfg = None
+        assert cfg is None, "a failed read yielded a Config that runs the bot on defaults"
+
+    def test_a_failed_read_is_transient(self):
+        from app.core.config import ConfigUnavailable
+        from app.core.transient import is_transient
+
+        assert is_transient(ConfigUnavailable("x"))
 
     def test_a_quoted_number_is_stored_as_a_number(self):
         cfg = Config({"push": {"create_issue_threshold": "5"}})
@@ -267,7 +298,10 @@ class TestThunderingHerd:
     def test_the_sentinel_is_released_even_when_the_fetch_fails(self):
         """A repo left in the in-flight set would never be fetched again — it
         would serve defaults forever, silently."""
-        with patch("app.github.client.gh_get", side_effect=RuntimeError("boom")):
+        from app.core.config import ConfigUnavailable
+
+        with patch("app.github.client.gh_get", side_effect=RuntimeError("boom")), \
+             pytest.raises(ConfigUnavailable):
             load_config("o/r", "tok")
         assert "o/r" not in config_mod._config_fetching
 

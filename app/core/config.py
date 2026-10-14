@@ -327,10 +327,22 @@ class Config:
 # ── Loader ────────────────────────────────────────────────────────────────────
 
 
+class ConfigUnavailable(Exception):
+    """
+    The repository's config could not be read and no earlier copy is held.
+
+    Not defaults: the config holds the kill switch (bot.enabled), the command
+    allow-list and who may run /merge. Running on defaults after one 502 —
+    on a fresh process, or once the cached copy had expired — ignored all
+    three. The event is retried instead (app.core.transient).
+    """
+
+
 def load_config(repo: str, token: str) -> Config:
     """
     Load .ai-repo-manager.yml from repo with 5-minute cache.
-    Falls back to defaults if file missing or invalid.
+    Falls back to defaults if the file is missing or invalid; raises
+    ConfigUnavailable if it could not be read and no earlier copy is held.
     Thread-safe: uses RLock + per-repo fetch sentinel to prevent
     thundering herd (multiple threads simultaneously fetching same config
     on cache miss, wasting GitHub API calls).
@@ -363,8 +375,8 @@ def load_config(repo: str, token: str) -> Config:
         with _config_lock:
             if repo in _config_cache:
                 return _config_cache[repo][0]
-        log.warning(f"config.concurrent_fetch_timed_out repo={repo} — using defaults")
-        return Config({})
+        log.warning(f"config.concurrent_fetch_timed_out repo={repo}")
+        raise ConfigUnavailable(f"config for {repo}: concurrent fetch timed out")
 
     # Cache miss — fetch from GitHub (outside lock so other repos aren't blocked)
     try:
@@ -387,11 +399,18 @@ def load_config(repo: str, token: str) -> Config:
         # branch — the same trust boundary GitHub Actions applies to workflow
         # permissions. tests/test_prelaunch_audit.py pins this.
         data = gh_get(f"/repos/{repo}/contents/.ai-repo-manager.yml", token)
-        raw = base64.b64decode(data["content"]).decode("utf-8")
 
         import yaml
 
-        parsed = yaml.safe_load(raw) or {}
+        # A file that was READ but is not valid config is the maintainer's to
+        # fix, and stays on defaults as documented — retrying cannot change
+        # it. Only a failed read (below) is refused.
+        try:
+            raw = base64.b64decode(data["content"]).decode("utf-8")
+            parsed = yaml.safe_load(raw) or {}
+        except Exception as parse_error:
+            log.warning(f"config.invalid repo={repo}: {parse_error} — using defaults")
+            parsed = {}
         if not isinstance(parsed, dict):
             log.warning(f"config.invalid_yaml repo={repo} — using defaults")
             parsed = {}
@@ -411,14 +430,16 @@ def load_config(repo: str, token: str) -> Config:
         missing = getattr(e, "status_code", None) == 404
         with _config_lock:
             previous = _config_cache.get(repo)
-        if missing or previous is None:
+        if missing:
             config = Config({})
-            if missing:
-                log.debug(f"config.not_found repo={repo} — using defaults")
-            else:
-                log.warning(
-                    f"config.unreadable repo={repo}: {e} — defaults for {_CONFIG_ERROR_TTL}s"
-                )
+            log.debug(f"config.not_found repo={repo} — using defaults")
+        elif previous is None:
+            log.warning(f"config.unreadable repo={repo}: {e} — event not run on defaults")
+            with _config_lock:
+                done = _config_fetching.pop(repo, None)
+            if done is not None:
+                done.set()  # a waiting thread finds no cache entry and raises too
+            raise ConfigUnavailable(f"config for {repo}: {type(e).__name__}: {e}") from e
         else:
             config = previous[0]
             log.warning(f"config.unreadable repo={repo}: {e} — keeping the last loaded config")

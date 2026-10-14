@@ -173,39 +173,51 @@ class TestAutoPollishTitleDefault:
 # ══════════════════════════════════════════════════════
 # 4. /merge audit log
 # ══════════════════════════════════════════════════════
+def _nullctx():
+    import contextlib
+
+    return contextlib.nullcontext()
+
+
 class TestMergeAuditLog:
+    """
+    These read the function's source for the strings "audit:merge", "lpush"
+    and "except" — and passed while the write sat inside `except: pass`, so
+    a failed write left an irreversible merge unrecorded with no trace. They
+    now run /merge and read what was recorded.
+    """
 
-    def test_audit_key_in_source(self):
-        """_cmd_merge must write to audit:merge."""
-        from app.handlers.comments import _cmd_merge
-        src = inspect.getsource(_cmd_merge)
-        assert "audit:merge" in src
+    _PR = {"head": {"sha": "abc", "ref": "feature/x", "repo": {"full_name": "o/r"}}, "base": {"ref": "main"}}
 
-    def test_audit_uses_lpush(self):
-        """audit:merge must use lpush (not set/hset)."""
-        from app.handlers.comments import _cmd_merge
-        src = inspect.getsource(_cmd_merge)
-        assert "lpush" in src
+    def _merge(self, **redis_patch):
+        from unittest.mock import MagicMock, patch
 
-    def test_audit_records_author(self):
-        """Audit entry must record who triggered the merge."""
-        from app.handlers.comments import _cmd_merge
-        src = inspect.getsource(_cmd_merge)
-        assert '"by"' in src or "'by'" in src
+        from app.handlers.comments import publisher
 
-    def test_audit_records_timestamp(self):
-        """Audit entry must record when the merge happened."""
-        from app.handlers.comments import _cmd_merge
-        src = inspect.getsource(_cmd_merge)
-        assert '"at"' in src or "'at'" in src
+        with patch.object(publisher, "gh_get", side_effect=[self._PR, [], {"total_count": 0, "check_runs": []}, {"statuses": []}]), \
+             patch.object(publisher, "gh_put", return_value={"merged": True, "sha": "deadbeef12345678"}), \
+             patch.object(publisher, "gh_delete"), \
+             patch("app.core.guardrails.check_pr_auto_merge", return_value=MagicMock(passed=True)), \
+             patch("app.core.redis_client.get_redis", **redis_patch) if redis_patch else _nullctx():
+            return publisher.cmd_merge("o/r", 7, {"pull_request": {}}, "tok", "alice", MagicMock())
 
-    def test_audit_in_try_except(self):
-        """Audit write must be in try/except — Redis failure must not block merge."""
-        from app.handlers.comments import _cmd_merge
-        src = inspect.getsource(_cmd_merge)
-        audit_idx = src.find("audit:merge")
-        after = src[audit_idx:]
-        assert "except" in after, "audit:merge must be in try/except"
+    def test_a_merge_is_recorded_with_who_when_and_what(self, fake_redis):
+        import json
+
+        out = self._merge()
+        assert "Merged" in out
+        entries = [json.loads(x) for x in fake_redis.lrange("audit:merge", 0, -1)]
+        assert entries and entries[0]["by"] == "alice" and entries[0]["pr"] == 7
+        assert entries[0]["sha"] == "deadbeef1234" and entries[0]["at"] > 0
+
+    def test_an_unrecordable_merge_still_merges_and_says_so_in_the_log(self, caplog):
+        import logging
+
+        with caplog.at_level(logging.INFO):
+            out = self._merge(side_effect=ConnectionError("redis down"))
+        assert "Merged" in out
+        errors = [r.getMessage() for r in caplog.records if r.levelno >= logging.ERROR]
+        assert any("audit.merge_unrecorded" in m and '"by":"alice"' in m for m in errors)
 
 
 # ══════════════════════════════════════════════════════

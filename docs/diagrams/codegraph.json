@@ -474,15 +474,13 @@
       "id": "app.core.learning",
       "path": "app/core/learning.py",
       "layer": "core",
-      "loc": 191,
-      "functions": 14,
+      "loc": 54,
+      "functions": 4,
       "classes": 0,
       "is_package": false,
-      "fan_in": 4,
+      "fan_in": 2,
       "fan_out": 1,
       "external_deps": [
-        "datetime",
-        "json",
         "logging"
       ]
     },
@@ -919,7 +917,7 @@
       "id": "app.handlers.autofix",
       "path": "app/handlers/autofix.py",
       "layer": "handlers",
-      "loc": 723,
+      "loc": 724,
       "functions": 17,
       "classes": 0,
       "is_package": false,
@@ -1011,12 +1009,12 @@
       "id": "app.handlers.comments.generator",
       "path": "app/handlers/comments/generator.py",
       "layer": "handlers",
-      "loc": 532,
+      "loc": 520,
       "functions": 12,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 11,
+      "fan_out": 10,
       "external_deps": [
         "__future__",
         "logging",
@@ -1044,12 +1042,12 @@
       "id": "app.handlers.comments.publisher",
       "path": "app/handlers/comments/publisher.py",
       "layer": "handlers",
-      "loc": 598,
+      "loc": 592,
       "functions": 9,
       "classes": 0,
       "is_package": false,
       "fan_in": 3,
-      "fan_out": 13,
+      "fan_out": 12,
       "external_deps": [
         "__future__",
         "contextlib",
@@ -1349,7 +1347,7 @@
       "id": "app.intelligence",
       "path": "app/intelligence/__init__.py",
       "layer": "intelligence",
-      "loc": 9,
+      "loc": 8,
       "functions": 0,
       "classes": 0,
       "is_package": true,
@@ -2406,11 +2404,6 @@
     },
     {
       "source": "app.handlers.comments.generator",
-      "target": "app.core.learning",
-      "kind": "runtime"
-    },
-    {
-      "source": "app.handlers.comments.generator",
       "target": "app.core.sanitizer",
       "kind": "import"
     },
@@ -2467,11 +2460,6 @@
     {
       "source": "app.handlers.comments.publisher",
       "target": "app.core.guardrails",
-      "kind": "runtime"
-    },
-    {
-      "source": "app.handlers.comments.publisher",
-      "target": "app.core.learning",
       "kind": "runtime"
     },
     {
@@ -3622,8 +3610,8 @@
   ],
   "stats": {
     "modules": 100,
-    "edges": 399,
-    "total_loc": 27696,
+    "edges": 397,
+    "total_loc": 27541,
     "layers": [
       "ai",
       "core",

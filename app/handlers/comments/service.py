@@ -218,7 +218,7 @@ def _dispatch(
         match cmd:
             # ── Generator: AI content ──────────────────────────────────
             case "/fix":
-                return G.cmd_fix(ctx_title, context, repo)
+                return G.cmd_fix(ctx_title, context)
             case "/explain":
                 return G.cmd_explain(context)
             case "/improve":

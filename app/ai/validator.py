@@ -32,6 +32,26 @@ _SEVERITY_SYNONYMS = {
 }
 
 
+def self_estimate(value) -> str:
+    """
+    A model's confidence in its own answer, labelled as exactly that — or ""
+    when it gave no number.
+
+    It was printed as "Confidence: 85%", which reads as a measured
+    probability. It is the model's own guess about itself, uncalibrated, and
+    a fluent wrong answer rates itself as highly as a right one.
+    """
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if 1.0 < v <= 100.0:  # "85" meant 85%
+        v /= 100.0
+    if not 0.0 <= v <= 1.0:
+        return ""
+    return f"Model's self-estimate: {round(v * 100)}% (its own guess, not a measured probability)"
+
+
 def _get(data: dict, key: str, default: Any = None) -> Any:
     val = data.get(key, default)
     return val if val is not None else default

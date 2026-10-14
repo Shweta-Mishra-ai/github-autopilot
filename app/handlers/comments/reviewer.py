@@ -367,11 +367,10 @@ Return JSON:
         #
         # No default either: `r.get("confidence", 0.85)` printed "85%" for a
         # model that gave no confidence at all.
-        try:
-            conf = max(0.0, min(1.0, float(r["confidence"])))
-            conf_line = f"\n\n*Confidence: {int(conf * 100)}%*"
-        except (KeyError, TypeError, ValueError):
-            conf_line = ""
+        from app.ai.validator import self_estimate
+
+        estimate = self_estimate(r.get("confidence"))
+        conf_line = f"\n\n*{estimate}*" if estimate else ""
         if metadata_only:
             conf_line += (
                 "\n\n> ℹ️ Based on the run's metadata only — no log was available. "

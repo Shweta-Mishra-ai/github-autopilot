@@ -580,9 +580,13 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
                 f"code_review.low_confidence_suppressing_inline file={filename} "
                 f"score={verdict.get('confidence_score')}"
             )
+            # No percentage: the score is a weighted sum of checks (findings
+            # anchored to the diff, fields complete, no hallucination
+            # warnings), and "Confidence 62%" read as a measured probability.
             low_confidence = (
-                f"\n\n> ⚠️ Confidence {verdict.get('confidence_score', 0):.0%} — "
-                "treat this file's review as a prompt to look, not a verdict."
+                "\n\n> ⚠️ This file's review scored low on the reliability checks "
+                "(findings tied to the diff, complete answers, no warning signs) — "
+                "treat it as a prompt to look, not a verdict."
             )
             # Suppressing the inline comments must not delete the findings.
             #

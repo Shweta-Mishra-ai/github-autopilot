@@ -14,11 +14,11 @@ log = logging.getLogger(__name__)
 
 
 def _confidence_line(value) -> str:
-    """`*Confidence: N%*`, or "" when the model did not give a number."""
-    try:
-        return f"*Confidence: {int(max(0.0, min(1.0, float(value))) * 100)}%*"
-    except (TypeError, ValueError):
-        return ""
+    """The model's self-estimate, labelled as one, or "" without a number."""
+    from app.ai.validator import self_estimate
+
+    estimate = self_estimate(value)
+    return f"*{estimate}*" if estimate else ""
 
 
 def _installation_allowed(install_id) -> bool:

@@ -166,7 +166,7 @@ Return JSON:
   "time_estimate": "< 1 hour|1-4 hours|1-3 days|1-2 weeks|> 2 weeks",
   "labels": ["zero or more of: {allowed_labels}"],
   "welcome": "2-3 sentence personalized response that acknowledges their specific issue",
-  "needs_info": true,
+  "needs_info": "true or false",
   "questions": ["specific question about reproduction steps", "version/environment info"]
 }}""",
         task="issue_triage",
@@ -202,7 +202,7 @@ Return JSON:
         "medium": ("📌", "priority: medium 📌"),
         "low": ("💤", "priority: low 💤"),
     }
-    p_emoji, p_label = p_map.get(priority, ("📌", "priority: medium 📌"))
+    p_emoji, p_label = p_map.get(priority, ("", None))
 
     # Type → emoji
     t_emoji = {
@@ -213,7 +213,7 @@ Return JSON:
         "performance": "⚡",
         "security": "🔒",
         "refactor": "♻️",
-    }.get(result["type"], "📋")
+    }.get(result["type"] or "", "📋")
 
     # Complexity → emoji
     c_emoji = {
@@ -222,13 +222,14 @@ Return JSON:
         "moderate": "🟡",
         "complex": "🔴",
         "epic": "🏔️",
-    }.get(result["complexity"], "🟡")
+    }.get(result["complexity"] or "", "")
 
-    # Labels
+    # Labels: only what the model decided. A priority it did not give gets no
+    # priority label (it was labelled "medium").
     all_labels = triage_labels(result["labels"], p_label)
 
     label_guard = check_auto_label(issue, all_labels, config)
-    if label_guard.passed:
+    if all_labels and label_guard.passed:
         try:
             gh_post(
                 f"/repos/{repo}/issues/{issue_number}/labels",
@@ -261,15 +262,38 @@ Return JSON:
     time_est = result.get("time_estimate", "")
     time_row = f"\n| **Est. Effort** | {time_est} |" if time_est else ""
 
+    # A row per field the model actually assessed; the rest are named as not
+    # assessed rather than filled in.
+    rows = [
+        (name, f"{emoji} {value.capitalize()}")
+        for name, emoji, value in (
+            ("Type", t_emoji, result["type"]),
+            ("Priority", p_emoji, priority),
+            ("Complexity", c_emoji, result["complexity"]),
+        )
+        if value
+    ]
+    missing = [
+        n
+        for n, v in (
+            ("type", result["type"]),
+            ("priority", priority),
+            ("complexity", result["complexity"]),
+        )
+        if not v
+    ]
+    table = (
+        "| | |\n|---|---|\n" + "\n".join(f"| **{n}** | {v.strip()} |" for n, v in rows) + time_row
+        if rows
+        else ""
+    )
+    not_assessed = f"\n\n> Not assessed: {', '.join(missing)}." if missing else ""
+
     comment = f"""## {t_emoji} Thanks for the issue, @{author}!
 
 {result["welcome"]}
 
-| | |
-|---|---|
-| **Type** | {t_emoji} {result["type"].capitalize()} |
-| **Priority** | {p_emoji} {priority.capitalize()} |
-| **Complexity** | {c_emoji} {result["complexity"].capitalize()} |{time_row}
+{table}{not_assessed}
 {q_section}
 
 ---
@@ -282,13 +306,16 @@ Return JSON:
     lost: GitHubError | None = None
     try:
         post_comment(repo, issue_number, token, installation_id, comment, post=gh_post)
-        log.done(f"Issue #{issue_number} triaged: {result['type']}/{priority}")
+        log.done(f"Issue #{issue_number} triaged: {result['type'] or '-'}/{priority or '-'}")
     except GitHubError as e:
         log.error(f"Comment failed: {e}")
         lost = e
 
-    # Remember the shape of this issue so recurring patterns surface later.
+    # Remember the shape of this issue so recurring patterns surface later —
+    # only a classification the model made, never "triaged as None/None".
     with contextlib.suppress(Exception):
+        if not (result["type"] and priority):
+            raise LookupError("not classified")
         from app.intelligence.memory import remember
 
         remember(
@@ -334,11 +361,11 @@ def _label_key(name: str) -> str:
 _TYPE_LABELS = {_label_key(n): n for n, _ in BOT_LABELS if not n.startswith("priority:")}
 
 
-def triage_labels(model_labels: list, priority_label: str) -> list[str]:
+def triage_labels(model_labels: list, priority_label: str | None) -> list[str]:
     """The model's labels limited to the bot's own non-priority labels, plus
-    the one priority label the validated priority decided."""
+    the one priority label the validated priority decided, if it decided one."""
     out = [_TYPE_LABELS[_label_key(lab)] for lab in model_labels if _label_key(lab) in _TYPE_LABELS]
-    return list(dict.fromkeys([*out, priority_label]))
+    return list(dict.fromkeys([*out, *([priority_label] if priority_label else [])]))
 
 
 _LABELS_ENSURED_TTL = 24 * 3600

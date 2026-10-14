@@ -86,9 +86,11 @@ class TestTriageVocabulary:
         )
         assert out["time_estimate"] == ""
 
-    def test_unknown_priority_still_falls_back(self):
+    def test_an_unknown_priority_is_not_assessed_rather_than_medium(self):
+        # It "fell back" to medium, which was then posted and labelled as the
+        # model's assessment of the issue.
         out = validate_issue_triage({"type": "bug", "priority": "urgent-ish", "welcome": "hi"})
-        assert out["priority"] == "medium"
+        assert out["priority"] is None and out["type"] == "bug"
 
 
 class TestDegradedTriage:

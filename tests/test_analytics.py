@@ -10,20 +10,30 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 class TestAnalyticsRecording:
 
-    def test_record_command_used_no_crash(self):
-        from app.core.analytics import record_command_used
-        with patch("app.core.analytics._incr"):
-            record_command_used("test/repo", "/fix")
+    # These patched _incr and _lpush away and asserted nothing, so they
+    # proved only that the functions exist. They now record into the
+    # in-memory Redis and read back what was written.
 
-    def test_record_pr_merged_no_crash(self):
-        from app.core.analytics import record_pr_merged
-        with patch("app.core.analytics._incr"), patch("app.core.analytics._lpush"):
-            record_pr_merged("test/repo", 42, 24.5)
+    def test_record_command_used_counts_the_command(self, fake_redis):
+        from app.core.analytics import _today, record_command_used
 
-    def test_record_issue_closed_no_crash(self):
-        from app.core.analytics import record_issue_closed
-        with patch("app.core.analytics._incr"), patch("app.core.analytics._lpush"):
-            record_issue_closed("test/repo", 7, 48.0)
+        record_command_used("test/repo", "/fix")
+        record_command_used("test/repo", "fix")
+        assert fake_redis.get(f"analytics:test/repo:cmd:fix:{_today()}") in ("2", b"2", 2)
+
+    def test_record_pr_merged_counts_and_keeps_the_hours(self, fake_redis):
+        from app.core.analytics import _today, _week, record_pr_merged
+
+        record_pr_merged("test/repo", 42, 24.5)
+        assert fake_redis.get(f"analytics:test/repo:prs_merged:{_today()}") in ("1", b"1", 1)
+        assert fake_redis.lrange(f"analytics:test/repo:pr_merge_hours:{_week()}", 0, -1) in (["24.5"], [b"24.5"])
+
+    def test_record_issue_closed_counts_and_keeps_the_hours(self, fake_redis):
+        from app.core.analytics import _today, _week, record_issue_closed
+
+        record_issue_closed("test/repo", 7, 48.0)
+        assert fake_redis.get(f"analytics:test/repo:issues_closed:{_today()}") in ("1", b"1", 1)
+        assert fake_redis.lrange(f"analytics:test/repo:issue_hours:{_week()}", 0, -1) in (["48.0"], [b"48.0"])
 
     def test_nothing_unrecorded_is_reported(self):
         """record_bot_action and record_review_score had no callers, so the

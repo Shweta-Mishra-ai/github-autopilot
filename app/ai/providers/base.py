@@ -117,7 +117,33 @@ class LLMProvider(ABC):
         if resp.error:
             return "", resp
 
-        return resp.text.strip(), resp
+        # `or ""`: a reasoning model that spends the budget thinking returns
+        # content null, and this raised AttributeError instead of an error.
+        return (resp.text or "").strip(), resp
+
+
+# A completion the provider stopped at max_tokens. No provider read the stop
+# reason, so a cut-off answer was returned as a success: plain-text callers
+# (/changelog, /explain, the PR summary) published half an answer as the
+# whole one, and JSON callers saw a fragment and reported "the model returned
+# garbage". The provider is healthy — its circuit is not charged — but the
+# answer is not one, so it is returned as an error and another provider tried.
+TRUNCATED = "TRUNCATED"
+_CUT_REASONS = frozenset({"length", "max_tokens"})
+
+
+def was_cut_off(finish_reason) -> bool:
+    """True for every provider's spelling of "stopped at the token limit"."""
+    return str(finish_reason or "").strip().lower() in _CUT_REASONS
+
+
+def truncated_error(max_tokens: int) -> str:
+    return f"{TRUNCATED}: the answer reached its {max_tokens}-token limit and was cut off"
+
+
+class AnswerTruncated(Exception):
+    """Every provider tried stopped at the token limit. Not an outage, so not
+    retried: the same prompt with the same limit ends the same way."""
 
 
 def _extract_json(text: str) -> dict:

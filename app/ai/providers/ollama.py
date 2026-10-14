@@ -25,7 +25,7 @@ import os
 import requests as http_requests
 
 import app.ai.circuit_breaker as cb
-from app.ai.providers.base import LLMProvider, LLMResponse
+from app.ai.providers.base import LLMProvider, LLMResponse, truncated_error, was_cut_off
 
 log = logging.getLogger(__name__)
 
@@ -117,7 +117,7 @@ class OllamaProvider(LLMProvider):
             data = r.json()
 
             # Ollama /api/chat → {"message": {"content": "..."}, "prompt_eval_count", "eval_count"}
-            text = (data.get("message") or {}).get("content", "")
+            text = (data.get("message") or {}).get("content") or ""
             p_tok = int(data.get("prompt_eval_count", 0) or 0)
             c_tok = int(data.get("eval_count", 0) or 0)
 
@@ -130,6 +130,7 @@ class OllamaProvider(LLMProvider):
                 completion_tokens=c_tok,
                 total_tokens=p_tok + c_tok,
                 cost_usd=0.0,  # local — always free, always private
+                error=truncated_error(max_tokens) if was_cut_off(data.get("done_reason")) else None,
             )
 
         except http_requests.exceptions.Timeout:

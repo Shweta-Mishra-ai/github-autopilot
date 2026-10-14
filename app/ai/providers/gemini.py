@@ -21,6 +21,8 @@ from app.ai.providers.base import (
     redact_secrets,
     substituted_model,
     throttle_pause,
+    truncated_error,
+    was_cut_off,
 )
 
 log = logging.getLogger(__name__)
@@ -181,8 +183,12 @@ class GeminiProvider(LLMProvider):
             r.raise_for_status()
             data = r.json()
 
+            # Checked before the text: a candidate stopped at MAX_TOKENS can
+            # carry no parts at all, which was charged to the circuit as a
+            # malformed response.
+            cut = was_cut_off(((data.get("candidates") or [{}])[0] or {}).get("finishReason"))
             try:
-                text = data["candidates"][0]["content"]["parts"][0]["text"]
+                text = "" if cut else data["candidates"][0]["content"]["parts"][0]["text"]
             except (KeyError, IndexError) as exc:
                 breaker.record_failure("bad_response_format")
                 return LLMResponse(
@@ -207,6 +213,7 @@ class GeminiProvider(LLMProvider):
                 completion_tokens=c_tok,
                 total_tokens=t_tok,
                 cost_usd=0.0,
+                error=truncated_error(max_tokens) if cut else None,
             )
 
         except http_requests.exceptions.Timeout:

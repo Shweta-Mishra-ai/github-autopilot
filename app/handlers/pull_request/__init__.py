@@ -269,6 +269,7 @@ def handle(payload: dict):
             return default
         except Exception as e:
             from app.ai.circuit_breaker import AllProvidersDown
+            from app.ai.providers.base import AnswerTruncated
             from app.core.guardrails import AIBudgetExceeded
 
             log.error(f"pr.{section}_failed: {type(e).__name__}: {e}")
@@ -278,6 +279,8 @@ def handle(payload: dict):
                 why = str(e)
             elif isinstance(e, AllProvidersDown):
                 why = "the AI providers were unavailable"
+            elif isinstance(e, AnswerTruncated):
+                why = "the model's answer was cut off at its length limit"
             else:
                 why = f"it failed ({type(e).__name__})"
             failed.append(f"{section} — {why}")

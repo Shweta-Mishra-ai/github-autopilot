@@ -419,7 +419,7 @@ class LLMRouter:
             if fallback:
                 result, meta, served_by = fallback
             else:
-                raise AllProvidersDown()
+                _raise_unanswered(meta)
         else:
             served_by = provider.provider_key
 
@@ -448,7 +448,7 @@ class LLMRouter:
             if fallback:
                 text, meta, served_by = fallback
             else:
-                raise AllProvidersDown()
+                _raise_unanswered(meta)
 
         self._log_and_track(task, meta, served_by)
         return text, meta
@@ -820,3 +820,17 @@ def format_model_configuration(report: dict) -> str:
                 line += f" — currently answering on `{slot['substituted_to']}`"
             lines.append(line)
     return "\n".join(lines)
+
+
+def _raise_unanswered(primary) -> None:
+    """
+    No provider answered. When the first one did answer but was cut off at
+    the token limit, say that: AllProvidersDown reads as an outage, which is
+    retried and reported as "the AI providers were unavailable" — neither true
+    of an answer that was simply too long for its limit.
+    """
+    from app.ai.providers.base import TRUNCATED, AnswerTruncated
+
+    if str(getattr(primary, "error", "") or "").startswith(TRUNCATED):
+        raise AnswerTruncated(primary.error)
+    raise AllProvidersDown()

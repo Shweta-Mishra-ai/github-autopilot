@@ -64,3 +64,8 @@ Thumbs.db
 
 app/**/**pycache**/
 tests/**/**pycache**/
+
+# research/reproduce.sh downloads these pinned third-party artefacts
+research/gitleaks
+research/trufflehog
+research/gitleaks.toml

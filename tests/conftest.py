@@ -409,6 +409,17 @@ def no_real_network(request):
 
 
 @pytest.fixture(autouse=True)
+def clean_config_cache():
+    """Config caches (and the last valid config) are per process; tests reuse
+    repo names with different configs."""
+    from app.core.config import invalidate_config_cache
+
+    invalidate_config_cache()
+    yield
+    invalidate_config_cache()
+
+
+@pytest.fixture(autouse=True)
 def clean_tree_cache():
     """repo_file_context caches trees for a minute; tests reuse repo names
     with different trees."""

@@ -76,7 +76,7 @@ class SecurityReport:
     def scanned_nothing(self) -> bool:
         return len(self.unavailable) == len(SOURCES)
 
-    def to_markdown(self, include_low: bool = False) -> str:
+    def to_markdown(self, include_low: bool = False, counts_only: bool = False) -> str:
         if self.scanned_nothing:
             # Not "All Clear", and not a table of zeros either: a row of zeros
             # for a source that was never read is the same false claim in a
@@ -134,7 +134,17 @@ class SecurityReport:
             low = sum(1 for f in findings if f.severity == "low")
             lines.append(f"| {source_name} | {c} | {h} | {m} | {low} |")
 
-        if self.dependabot:
+        if counts_only:
+            # A public repository: an issue comment is world-readable, and
+            # file:line of every unfixed vulnerability, secret-alert links and
+            # CVE lists are a map for an attacker. The details stay behind
+            # GitHub's own access control.
+            lines.append(
+                f"\nDetails are not posted here because this repository is public. See "
+                f"[the Security tab](https://github.com/{self.repo}/security), which "
+                "GitHub shows only to people allowed to see them."
+            )
+        if self.dependabot and not counts_only:
             lines.append("\n### 📦 Dependabot Alerts")
             for f in self.dependabot:
                 if not include_low and f.severity == "low":
@@ -149,7 +159,7 @@ class SecurityReport:
                 cve_str = f" ([{f.cve_id}]({f.url}))" if f.cve_id else ""
                 lines.append(f"- {sev_emoji} **{f.severity.upper()}**{pkg_str}{cve_str}: {f.title}")
 
-        if self.codeql:
+        if self.codeql and not counts_only:
             lines.append("\n### 🔍 CodeQL Findings")
             for f in self.codeql:
                 if not include_low and f.severity == "low":
@@ -163,7 +173,7 @@ class SecurityReport:
                 loc = f" `{f.file_path}:{f.line_number}`" if f.file_path else ""
                 lines.append(f"- {sev_emoji} **{f.severity.upper()}**{loc}: {f.title}")
 
-        if self.secrets:
+        if self.secrets and not counts_only:
             lines.append("\n### 🗝️ Secret Scanning")
             for f in self.secrets:
                 lines.append(f"- 🚨 **{f.title}**: {f.description[:100]}")

@@ -35,6 +35,7 @@ _EXACT = (
     "secret_alert:{repo}",
     "readme_pr:{repo}",
     "labels_ensured:{repo}",
+    "config_last_good:{repo}",
 )
 _PREFIXES = (
     "learn:{repo}:*",
@@ -106,9 +107,9 @@ def purge(repo: str) -> int:
         deleted += int(r.delete(k) or 0)
     r.srem("mem:repos", repo)
     try:
-        from app.core.config import invalidate_config_cache
+        from app.core.config import forget_repo
 
-        invalidate_config_cache(repo)
+        forget_repo(repo)
     except Exception as e:  # nosec B110 - the cache expires on its own in minutes
         log.debug(f"repo_identity.config_cache_not_cleared repo={repo}: {e}")
     return deleted

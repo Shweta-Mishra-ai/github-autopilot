@@ -184,15 +184,35 @@ class TestDependencyScanUsesPrHead:
 
 class TestCmdSecfull:
     def test_returns_report_markdown(self):
-        with patch("app.security.scanner.run_security_scan") as run:
+        with patch("app.security.scanner.run_security_scan") as run, \
+             patch.object(S, "gh_get", return_value={"private": True}):
             run.return_value.to_markdown.return_value = "# Full Report"
             assert S.cmd_secfull("o/r", "tok") == "# Full Report"
 
-    def test_includes_low_severity(self):
-        with patch("app.security.scanner.run_security_scan") as run:
+    def test_includes_low_severity_on_a_private_repo(self):
+        with patch("app.security.scanner.run_security_scan") as run, \
+             patch.object(S, "gh_get", return_value={"private": True}):
             run.return_value.to_markdown.return_value = "x"
             S.cmd_secfull("o/r", "tok")
-            run.return_value.to_markdown.assert_called_once_with(include_low=True)
+            run.return_value.to_markdown.assert_called_once_with(include_low=True, counts_only=False)
+
+    @pytest.mark.parametrize("repo_info", [{"private": False}, {}, OSError("lookup failed")])
+    def test_a_public_or_unknown_repo_gets_counts_only(self, repo_info):
+        """Round-4 audit: every unfixed vulnerability's file:line, secret-alert
+        links and CVEs were posted as a world-readable comment."""
+        from app.security.scanner import SecurityFinding, SecurityReport
+
+        report = SecurityReport(repo="o/r", codeql=[SecurityFinding(
+            source="codeql", severity="high", title="SQL injection", description="d",
+            file_path="app/db.py", line_number=42)])
+        side = {"side_effect": repo_info} if isinstance(repo_info, Exception) else {"return_value": repo_info}
+        with patch("app.security.scanner.run_security_scan", return_value=report), \
+             patch.object(S, "gh_get", **side), \
+             patch.object(S, "_license_section", return_value=""):
+            out = S.cmd_secfull("o/r", "tok")
+        assert "| CodeQL | 0 | 1 | 0 | 0 |" in out
+        assert "app/db.py" not in out and "SQL injection" not in out
+        assert "https://github.com/o/r/security" in out
 
     def test_failure_is_reported_not_raised(self):
         with patch("app.security.scanner.run_security_scan", side_effect=OSError("x")):

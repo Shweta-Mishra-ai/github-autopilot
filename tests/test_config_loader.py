@@ -97,19 +97,46 @@ class TestParsing:
         assert isinstance(cfg, Config)
         assert cfg.get("pull_requests", "code_review", default=True) is True
 
-    def test_invalid_yaml_falls_back_to_defaults(self):
+    def test_invalid_yaml_with_no_earlier_config_disables_the_bot(self):
+        """Round-4 audit: a typo dropped the whole file for DEFAULTS, so the
+        bot came back on over `bot.enabled: false` and every command was
+        allowed over a `commands.enabled` allow-list."""
         ctx, _ = _serving("pull_requests:\n  - [unclosed\n")
         with ctx:
             cfg = load_config("o/r", "tok")
         assert isinstance(cfg, Config)
+        assert cfg.bot_enabled() is False
 
-    def test_yaml_that_is_not_a_mapping_falls_back_to_defaults(self):
+    def test_invalid_yaml_keeps_the_last_valid_config(self):
+        valid = "bot:\n  enabled: true\ncommands:\n  enabled: [health]\n"
+        ctx, _ = _serving(valid)
+        with ctx:
+            first = load_config("o/r", "tok")
+        assert first.get("commands", "enabled") == ["health"]
+        config_mod.invalidate_config_cache("o/r")  # the next read refetches
+        ctx, _ = _serving("bot:\n  enabled: true\n  oops: [\n")
+        with ctx:
+            cfg = load_config("o/r", "tok")
+        assert cfg.bot_enabled() is True
+        assert cfg.get("commands", "enabled") == ["health"], "the allow-list still applies"
+
+    def test_the_last_valid_config_survives_a_restart(self, fake_redis):
+        ctx, _ = _serving("bot:\n  enabled: false\n")
+        with ctx:
+            load_config("o/r", "tok")
+        config_mod.invalidate_config_cache()  # a new process: nothing held locally
+        ctx, _ = _serving("bot: [\n")
+        with ctx:
+            cfg = load_config("o/r", "tok")
+        assert cfg.bot_enabled() is False
+
+    def test_yaml_that_is_not_a_mapping_is_treated_as_invalid(self):
         """`- a\\n- b` parses cleanly and is a list. Treating it as config
         would raise on the first .get() deep inside a handler."""
         ctx, _ = _serving("- one\n- two\n")
         with ctx:
             cfg = load_config("o/r", "tok")
-        assert cfg.get("pull_requests", "code_review", default=True) is True
+        assert cfg.bot_enabled() is False
 
     def test_an_empty_file_falls_back_to_defaults(self):
         ctx, _ = _serving("")

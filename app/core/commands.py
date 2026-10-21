@@ -85,3 +85,9 @@ RESTRICTED_COMMANDS: frozenset[str] = frozenset(
         "/notify",
     }
 )
+
+
+# Commands that need ADMIN, not just write. /secfull shows secret-scanning
+# alerts, which by GitHub's defaults only admins can see; write access let
+# someone read alerts through the bot that GitHub itself would not show them.
+ADMIN_COMMANDS: frozenset[str] = frozenset({"/secfull"})

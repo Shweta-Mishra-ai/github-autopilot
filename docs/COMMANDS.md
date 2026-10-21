@@ -38,7 +38,8 @@ Two levels, and only two:
 | Level | Who | Commands |
 |---|---|---|
 | **Open** | Anyone who can comment | Everything not listed below |
-| **Maintainer** | `write`, `maintain` or `admin` on the repository | `/merge` `/autofix` `/apply` `/rollback` `/release` `/secfull` `/ignore` `/runtests` `/notify` |
+| **Maintainer** | `write`, `maintain` or `admin` on the repository | `/merge` `/autofix` `/apply` `/rollback` `/release` `/ignore` `/runtests` `/notify` |
+| **Admin** | `admin` on the repository | `/secfull` |
 
 Permission is checked against GitHub's collaborator API on every invocation —
 never cached from a previous answer, and never inferred from who opened the
@@ -53,9 +54,12 @@ do.
 
 Two entries deserve their reasoning stated:
 
-- **`/secfull`** is maintainer-only because its report names unpatched
-  vulnerabilities and their locations. That is a roadmap for anyone who should
-  not have it.
+- **`/secfull`** needs **admin**, and on a **public** repository it posts
+  counts only. Its report names unpatched vulnerabilities, their locations and
+  secret-scanning alerts — a roadmap for anyone who should not have it — and a
+  comment on a public repository is world-readable. GitHub shows secret
+  alerts only to admins by default, so the command does the same; the details
+  stay on the repository's Security tab.
 - **`/ignore`** writes to persistent repository memory, which is injected into
   every later AI prompt. Ungated on a public repository, any commenter could
   poison the context every subsequent command sees — a stored prompt injection
@@ -112,7 +116,7 @@ issue, rather than failing.
 | Command | Scope | Access | What it returns |
 |---|---|---|---|
 | `/security` | PR (best) | Open | Scans the PR's changed files for secrets and vulnerable dependencies |
-| `/secfull` | Anywhere | **Maintainer** | Full repository scan: secrets, dependencies, licence compliance, and CodeQL alerts where enabled |
+| `/secfull` | Anywhere | **Admin** | Full repository scan: secrets, dependencies, licence compliance, and CodeQL alerts where enabled. Counts only on a public repository |
 
 Both scanners are tuned so that a finding is worth reading. Placeholder
 values, lockfile integrity hashes and documented example credentials are

@@ -173,13 +173,23 @@ def _license_section(repo: str, token: str) -> str:
         return ""
 
 
+def _is_private(repo: str, token: str) -> bool:
+    """True only when GitHub says the repository is private; a lookup that
+    fails is treated as public, so details are never posted by mistake."""
+    try:
+        return (gh_get(f"/repos/{repo}", token) or {}).get("private") is True
+    except Exception as exc:
+        log.info(f"security.visibility_unknown repo={repo}: {type(exc).__name__}")
+        return False
+
+
 def cmd_secfull(repo: str, token: str) -> str:
     """Full repository security scan."""
     try:
         from app.security.scanner import run_security_scan
 
         report = run_security_scan(repo, token)
-        sections = [report.to_markdown(include_low=True)]
+        sections = [report.to_markdown(include_low=True, counts_only=not _is_private(repo, token))]
 
         licenses = _license_section(repo, token)
         if licenses:

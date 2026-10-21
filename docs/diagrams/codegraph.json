@@ -319,7 +319,7 @@
       "id": "app.core.authorization",
       "path": "app/core/authorization.py",
       "layer": "core",
-      "loc": 220,
+      "loc": 229,
       "functions": 5,
       "classes": 0,
       "is_package": false,
@@ -335,7 +335,7 @@
       "id": "app.core.commands",
       "path": "app/core/commands.py",
       "layer": "core",
-      "loc": 87,
+      "loc": 93,
       "functions": 0,
       "classes": 0,
       "is_package": false,
@@ -363,15 +363,16 @@
       "id": "app.core.config",
       "path": "app/core/config.py",
       "layer": "core",
-      "loc": 567,
-      "functions": 6,
+      "loc": 634,
+      "functions": 9,
       "classes": 2,
       "is_package": false,
       "fan_in": 9,
-      "fan_out": 1,
+      "fan_out": 2,
       "external_deps": [
         "base64",
         "copy",
+        "json",
         "logging",
         "re",
         "threading",
@@ -635,7 +636,7 @@
       "functions": 6,
       "classes": 1,
       "is_package": false,
-      "fan_in": 33,
+      "fan_in": 34,
       "fan_out": 1,
       "external_deps": [
         "__future__",
@@ -653,7 +654,7 @@
       "id": "app.core.repo_identity",
       "path": "app/core/repo_identity.py",
       "layer": "core",
-      "loc": 114,
+      "loc": 115,
       "functions": 3,
       "classes": 0,
       "is_package": false,
@@ -1190,8 +1191,8 @@
       "id": "app.handlers.comments.security",
       "path": "app/handlers/comments/security.py",
       "layer": "handlers",
-      "loc": 190,
-      "functions": 4,
+      "loc": 200,
+      "functions": 5,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
@@ -1663,7 +1664,7 @@
       "id": "app.security.scanner",
       "path": "app/security/scanner.py",
       "layer": "security",
-      "loc": 400,
+      "loc": 410,
       "functions": 7,
       "classes": 2,
       "is_package": false,
@@ -2067,6 +2068,11 @@
       "source": "app.core.confidence",
       "target": "app.core.logger",
       "kind": "import"
+    },
+    {
+      "source": "app.core.config",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
     },
     {
       "source": "app.core.config",
@@ -3906,8 +3912,8 @@
   ],
   "stats": {
     "modules": 106,
-    "edges": 433,
-    "total_loc": 29698,
+    "edges": 434,
+    "total_loc": 29801,
     "layers": [
       "ai",
       "core",
@@ -3923,7 +3929,7 @@
       {
         "id": "app.core.redis_client",
         "loc": 570,
-        "fan_in": 33,
+        "fan_in": 34,
         "fan_out": 1
       },
       {
@@ -3958,9 +3964,9 @@
       },
       {
         "id": "app.core.config",
-        "loc": 567,
+        "loc": 634,
         "fan_in": 9,
-        "fan_out": 1
+        "fan_out": 2
       },
       {
         "id": "app.core.guardrails",

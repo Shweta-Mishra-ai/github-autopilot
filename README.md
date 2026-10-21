@@ -295,10 +295,10 @@ Reported cost in local mode is always `0`.
 | | |
 |---|---|
 | Modules | 106 |
-| Lines of code | 29,698 |
+| Lines of code | 29,801 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 433 |
+| Internal imports | 434 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>
@@ -324,7 +324,7 @@ and anything irreversible asks for confirmation first.
 | `/arch` | Architecture review | Anyone |
 | `/ci` | Analyse a CI failure | Anyone |
 | `/security` | Secret and dependency scan on a PR | Anyone |
-| `/secfull` | Full repository scan plus licence compliance | Maintainers |
+| `/secfull` | Full repository scan plus licence compliance (counts only on public repos) | Admins |
 | `/health` | Repository health grade | Anyone |
 | `/version` | Tags, releases, recent commits | Anyone |
 | `/summarize` | Summarise an issue thread | Anyone |

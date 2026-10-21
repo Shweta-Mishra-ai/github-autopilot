@@ -232,3 +232,22 @@ def test_autofix_still_edits_ordinary_source():
 
     for path in ("app/orders.py", "README.md", "src/config.json", "docs/guide.md", "mkdocs.yml"):
         assert _is_allowed(path), path
+
+
+@pytest.mark.parametrize("perm,allowed", [("admin", True), ("maintain", False), ("write", False)])
+def test_secfull_needs_admin(perm, allowed):
+    """Round-4 audit: secret-scanning alerts are admin-only on GitHub by
+    default; write access read them through /secfull."""
+    from unittest.mock import MagicMock
+
+    from app.core import authorization
+
+    cfg = MagicMock()
+    cfg.is_maintainer_only.return_value = False
+    with patch.object(authorization, "get_user_permission", return_value=perm):
+        ok, why = authorization.check_command_permission("/secfull", "o/r", "u", "t", cfg)
+        merge_ok, _ = authorization.check_command_permission("/merge", "o/r", "u", "t", cfg)
+    assert ok is allowed
+    assert merge_ok, "write still runs the other maintainer commands"
+    if not allowed:
+        assert "requires **admin**" in why

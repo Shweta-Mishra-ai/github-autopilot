@@ -27,6 +27,10 @@ log = logging.getLogger(__name__)
 
 # ── Cache (5-minute TTL, thread-safe) ────────────────────────────────────────
 _config_cache: dict[str, tuple] = {}  # {repo: (Config, timestamp)}
+# The last config that parsed, per repo: this process's copy, for when Redis
+# cannot be read. Bounded.
+_good_local: dict = {}
+_GOOD_LOCAL_MAX = 500
 _config_lock = threading.RLock()  # RLock: reentrant so invalidate can be called inside load
 # repo -> Event set when its in-flight fetch finishes (thundering herd guard).
 _config_fetching: dict = {}
@@ -478,17 +482,30 @@ def load_config(repo: str, token: str) -> Config:
         import yaml
 
         # A file that was READ but is not valid config is the maintainer's to
-        # fix, and stays on defaults as documented — retrying cannot change
-        # it. Only a failed read (below) is refused.
+        # fix. It used to fall back to the DEFAULTS — so a typo anywhere in
+        # the file turned the bot back on over `bot.enabled: false` and
+        # allowed every command over a `commands.enabled` allow-list. The
+        # last config that parsed is kept instead; with none on record, the
+        # repository is treated as disabled until the file is fixed.
         try:
             raw = base64.b64decode(data["content"]).decode("utf-8")
             parsed = yaml.safe_load(raw) or {}
+            if not isinstance(parsed, dict):
+                raise ValueError("the top level is not a mapping")
         except Exception as parse_error:
-            log.warning(f"config.invalid repo={repo}: {parse_error} — using defaults")
-            parsed = {}
-        if not isinstance(parsed, dict):
-            log.warning(f"config.invalid_yaml repo={repo} — using defaults")
-            parsed = {}
+            parsed = _last_good(repo)
+            if parsed is None:
+                log.error(
+                    f"config.invalid repo={repo}: {parse_error} — no earlier valid config, "
+                    "so the bot is disabled for this repository until the file is fixed"
+                )
+                parsed = {"bot": {"enabled": False}}
+            else:
+                log.error(
+                    f"config.invalid repo={repo}: {parse_error} — keeping the last valid config"
+                )
+        else:
+            _remember_good(repo, parsed)
 
         config = Config(parsed)
         cached_at = now
@@ -564,4 +581,54 @@ def invalidate_config_cache(repo: str = None):
             for done in _config_fetching.values():
                 done.set()
             _config_fetching.clear()
+            _good_local.clear()
         log.debug("config.cache_invalidated all")
+
+
+def forget_repo(repo: str) -> None:
+    """Drop everything held for `repo`, its last valid config included — for
+    a repository name that now belongs to a different repository."""
+    invalidate_config_cache(repo)
+    with _config_lock:
+        _good_local.pop(repo, None)
+
+
+_LAST_GOOD_TTL = 90 * 86400
+
+
+def _remember_good(repo: str, parsed: dict) -> None:
+    """Keep the last config that parsed, across restarts (Render's free tier
+    restarts the process every time it sleeps)."""
+    with _config_lock:
+        if repo not in _good_local and len(_good_local) >= _GOOD_LOCAL_MAX:
+            _good_local.pop(next(iter(_good_local)))
+        _good_local[repo] = parsed
+    try:
+        import json
+
+        from app.core.redis_client import get_redis
+
+        get_redis().set(
+            f"config_last_good:{repo}", json.dumps(parsed, default=str), ex=_LAST_GOOD_TTL
+        )
+    except Exception as e:
+        log.debug(f"config.last_good_not_saved repo={repo}: {type(e).__name__}")
+
+
+def _last_good(repo: str) -> dict | None:
+    """The last config that parsed for `repo`: this process's copy, else the
+    one kept in Redis. None when there is none."""
+    with _config_lock:
+        if repo in _good_local:
+            return _good_local[repo]
+    try:
+        import json
+
+        from app.core.redis_client import get_redis
+
+        raw = get_redis().get(f"config_last_good:{repo}")
+        parsed = json.loads(raw) if raw else None
+        return parsed if isinstance(parsed, dict) else None
+    except Exception as e:
+        log.warning(f"config.last_good_unreadable repo={repo}: {type(e).__name__}")
+        return None

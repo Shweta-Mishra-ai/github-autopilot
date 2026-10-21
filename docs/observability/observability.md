@@ -226,8 +226,10 @@ ai.router: groq_70b unavailable, trying groq_8b
 # Hallucination detected — confidence below threshold
 hallucination.warning provider=groq_70b confidence=0.45 warnings=["uncertainty","short_fix"]
 
-# Config YAML invalid — using defaults
-config.invalid_yaml repo=org/repo error=...
+# Config YAML invalid — the last valid config is kept; with none on record
+# the bot is disabled for that repository until the file is fixed
+config.invalid repo=org/repo: <error> — keeping the last valid config
+config.invalid repo=org/repo: <error> — no earlier valid config, so the bot is disabled ...
 
 # Redis unavailable — using in-memory fallback
 redis.connection_failed REDIS_URL=redis://... — using in-memory fallback

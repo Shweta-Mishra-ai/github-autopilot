@@ -377,7 +377,16 @@ def analyse_tool(tool, meta, findings, types):
     for tid, rows in by_type.items():
         canon = [s for s, c, _ in rows if c == "canonical"]
         counts = Counter(r for s in canon for r in findings[s] - fb)
-        exp = counts.most_common(1)[0][0] if counts else None
+        # Ties are real -- TruffleHog fires TeamworkCRM and TeamworkSpaces on
+        # every teamworkcrm sample -- and most_common() breaks them by
+        # insertion order, which follows set iteration and so changes with
+        # the process's hash seed. Break them deterministically: a rule naming
+        # the type's own provider first, then by name.
+        exp = None
+        if counts:
+            top = max(counts.values())
+            tied = sorted(r for r, c in counts.items() if c == top)
+            exp = next((r for r in tied if label_matches(tid, tool, r)), tied[0])
         canon_rate = sum(1 for s in canon if exp in findings[s]) / len(canon) if exp else 0.0
         rec = {"expected_rule": exp, "canonical_rule_ok": round(canon_rate, 4),
                "covered": canon_rate >= 0.5}

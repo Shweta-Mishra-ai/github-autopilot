@@ -227,7 +227,7 @@
       "id": "app.ai.router",
       "path": "app/ai/router.py",
       "layer": "ai",
-      "loc": 860,
+      "loc": 865,
       "functions": 10,
       "classes": 1,
       "is_package": false,
@@ -615,11 +615,11 @@
       "id": "app.core.redaction",
       "path": "app/core/redaction.py",
       "layer": "core",
-      "loc": 169,
-      "functions": 3,
+      "loc": 203,
+      "functions": 4,
       "classes": 0,
       "is_package": false,
-      "fan_in": 9,
+      "fan_in": 10,
       "fan_out": 1,
       "external_deps": [
         "__future__",
@@ -975,7 +975,7 @@
       "id": "app.handlers.autofix",
       "path": "app/handlers/autofix.py",
       "layer": "handlers",
-      "loc": 724,
+      "loc": 728,
       "functions": 17,
       "classes": 0,
       "is_package": false,
@@ -1322,12 +1322,12 @@
       "id": "app.handlers.pull_request.grounding",
       "path": "app/handlers/pull_request/grounding.py",
       "layer": "handlers",
-      "loc": 144,
+      "loc": 149,
       "functions": 4,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 1,
+      "fan_out": 2,
       "external_deps": [
         "__future__",
         "re"
@@ -1368,7 +1368,7 @@
       "id": "app.handlers.pull_request.review",
       "path": "app/handlers/pull_request/review.py",
       "layer": "handlers",
-      "loc": 737,
+      "loc": 740,
       "functions": 11,
       "classes": 0,
       "is_package": false,
@@ -3289,6 +3289,11 @@
     },
     {
       "source": "app.handlers.pull_request.grounding",
+      "target": "app.core.redaction",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request.grounding",
       "target": "app.github.patch_parser",
       "kind": "import"
     },
@@ -3845,8 +3850,8 @@
   ],
   "stats": {
     "modules": 105,
-    "edges": 426,
-    "total_loc": 29105,
+    "edges": 427,
+    "total_loc": 29156,
     "layers": [
       "ai",
       "core",
@@ -3867,7 +3872,7 @@
       },
       {
         "id": "app.ai.router",
-        "loc": 860,
+        "loc": 865,
         "fan_in": 20,
         "fan_out": 17
       },

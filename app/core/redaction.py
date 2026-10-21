@@ -84,6 +84,40 @@ def redact(text: str | None) -> str:
     return text
 
 
+# Diff and numbered-diff prefixes ("+", "-", " ", "    42 + "), stripped only
+# to let the scanner's line-anchored patterns see the content.
+_DIFF_PREFIX = re.compile(r"^\s*(?:\d+\s+)?[+\- ]\s?")
+
+
+def mask_secret_lines(text: str | None) -> str:
+    """
+    `text` with the value-shaped parts of every line the secret scanner flags
+    masked, and nothing else changed: same lines, same order.
+
+    For text leaving the deployment — a PR's diff sent to a cloud model was
+    sent with any credential committed in it. Line-preserving, so grounding
+    can apply the same mask to the patch and compare quotes to what the
+    model was actually shown. A scanner failure is logged and the text is
+    returned as it was (the behaviour before this existed), because masking
+    every line would leave the model nothing to review.
+    """
+    if not text:
+        return text or ""
+    lines = text.split("\n")
+    try:
+        from app.security.enhanced_secrets import scan_diff
+
+        as_diff = "\n".join("+" + _DIFF_PREFIX.sub("", line, count=1) for line in lines)
+        flagged = {f.line_number for f in scan_diff(as_diff)}
+    except Exception as e:
+        log.error(f"redaction.mask_scan_failed — text sent unmasked: {type(e).__name__}: {e}")
+        return text
+    for n in flagged:
+        if 1 <= n <= len(lines):
+            lines[n - 1] = _mask_line(lines[n - 1])
+    return "\n".join(lines)
+
+
 # ── Credentials carried in a URL ─────────────────────────────────────────────
 #
 # A different job from redact() above, in the same place because it is the

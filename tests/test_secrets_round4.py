@@ -141,3 +141,72 @@ class TestScannerKnowsTheseShapes:
         digest = secrets.token_hex(32)
         assert self._hits(f"    --hash=sha256:{digest}") == []
         assert self._hits(f'digest = "{digest}"') == []
+
+
+def test_a_committed_key_is_not_sent_to_the_model_and_the_finding_still_lands():
+    """A credential committed in a PR went to the cloud provider verbatim.
+    Masked in the router; grounding applies the same mask, so the model's
+    quote of the masked line still anchors the finding."""
+    from unittest.mock import MagicMock
+
+    import app.handlers.pull_request as prh
+    from app.core.config import Config
+
+    key = "sk-or-v1-" + secrets.token_hex(32)
+    files = [{
+        "filename": "app/cfg.py", "status": "modified", "additions": 1, "deletions": 0,
+        "patch": f'@@ -1,1 +1,2 @@\n import os\n+OPENROUTER_KEY = "{key}"\n',
+    }]
+    sent = []
+
+    def provider(system, user, **kw):
+        sent.append(user)
+        return {
+            "type": "security", "risk_level": "high", "risk_reason": "key committed",
+            "summary": "Adds a key.", "review_focus": [], "confidence": 0.9, "has_gaps": False,
+            "files": [{"file": "app/cfg.py", "summary": "Hardcoded key.", "issues": [{
+                "severity": "critical", "line": "2", "code": 'OPENROUTER_KEY = "[REDACTED]"',
+                "issue": "Hardcoded API key", "fix": 'OPENROUTER_KEY = os.environ["OPENROUTER_KEY"]',
+            }]}],
+        }, MagicMock(total_tokens=0)
+
+    from app.ai.router import router as real_router
+
+    inline, bodies = [], []
+
+    def ask(system, user, **kw):
+        # Through the router's own sanitiser, as a real call would be.
+        return provider(system, real_router._sanitize(user, 100_000), **kw)
+
+    with patch.object(prh, "get_installation_token", return_value="t"), \
+         patch.object(prh, "load_config", return_value=Config({})), \
+         patch.object(prh, "gh_get", return_value={"archived": False}), \
+         patch("app.github.helpers.pr_files", return_value=files), \
+         patch("app.ai.gatekeeper.is_substantive", return_value=(True, "")), \
+         patch("app.ai.router.router.ask", side_effect=ask), \
+         patch("app.ai.router.router.ask_text", return_value=("Adds a key.", MagicMock())), \
+         patch("app.handlers.pull_request.review._posted_findings", return_value=set()), \
+         patch.object(prh, "_post_inline_review",
+               side_effect=lambda *a, **k: inline.extend(a[5]) or ""), \
+         patch("app.handlers.pull_request.gaps._in_repository_tests", return_value=False), \
+         patch.object(prh, "update_sticky_if_present",
+                      side_effect=lambda *a: bodies.append(a[4]) or {"id": 1}), \
+         patch.object(prh, "upsert_sticky", side_effect=lambda *a: bodies.append(a[4]) or {"id": 1}):
+        prh.handle({
+            "action": "synchronize", "repository": {"full_name": "o/r"}, "installation": {"id": 1},
+            "pull_request": {"number": 7, "title": "cfg", "body": "", "user": {"login": "dev"},
+                             "head": {"sha": "abc"}, "base": {"ref": "main"}},
+        })
+    assert sent, "the model was never asked"
+    assert all(key not in u for u in sent)
+    assert any("Hardcoded API key" in c["body"] and c["line"] == 2 for c in inline), bodies
+
+
+def test_autofix_never_commits_the_mask():
+    from app.handlers.autofix import _apply_edits
+
+    current = 'import os\nKEY = "real-value-123"\n'
+    assert _apply_edits(current, [{"find": "import os\n", "replace": 'import os\nKEY = "[REDACTED]"\n'}]) is None
+    assert _apply_edits(current, [{"find": "import os", "replace": "import os, sys"}]) == (
+        'import os, sys\nKEY = "real-value-123"\n'
+    )

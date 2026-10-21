@@ -103,7 +103,12 @@ def ground_finding(issue: dict, patch: str) -> tuple[str, int | None]:
     grounded only when the cited line is an ADDED line, never snapped to a
     neighbour — otherwise it is UNQUOTED.
     """
-    lines = commentable_lines(patch)
+    # The model saw this patch with secrets masked (router._sanitize); its
+    # quote of a line holding one is of the masked line. Same mask here, or a
+    # "hardcoded API key" finding would never match and be withheld.
+    from app.core.redaction import mask_secret_lines
+
+    lines = commentable_lines(mask_secret_lines(patch))
     target = parse_line_ref(issue.get("line"))
     quote = _norm(str(issue.get("code") or ""))
 

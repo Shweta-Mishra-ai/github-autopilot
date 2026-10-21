@@ -249,6 +249,11 @@ class LLMRouter:
         if not text:
             return ""
         text = _fit(text, max_chars)
+        # A credential committed in a PR, pasted in an issue or printed in a
+        # CI log was sent to the provider with everything else.
+        from app.core.redaction import mask_secret_lines
+
+        text = mask_secret_lines(text)
         from app.core.sanitizer import InjectionRejected
 
         try:

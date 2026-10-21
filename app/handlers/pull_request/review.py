@@ -575,7 +575,10 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
                 str(i.get("code") or "").split()
             ) == " ".join(str(diff_lines[anchor][0]).split())
             exact = target is not None and target == anchor and (cited == target or whole_line)
-            suggestion = make_suggestion_block(fix, anchor, diff_lines) if exact else ""
+            # Secrets are masked in the prompt; a one-click commit of a fix
+            # that carries the mask would write "[REDACTED]" into the code.
+            committable = exact and "[REDACTED]" not in fix
+            suggestion = make_suggestion_block(fix, anchor, diff_lines) if committable else ""
             fix_md = (
                 suggestion if suggestion else (f"Proposed fix:\n```\n{fix}\n```" if fix else "")
             )

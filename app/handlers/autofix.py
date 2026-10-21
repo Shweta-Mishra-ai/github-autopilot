@@ -518,6 +518,10 @@ def _apply_edits(current: str, edits) -> Optional[str]:
         find, replace = e.get("find"), e.get("replace")
         if not isinstance(find, str) or not isinstance(replace, str) or not find:
             return None
+        # Secrets are masked in every prompt (router._sanitize). A replacement
+        # carrying the mask would commit "[REDACTED]" over a real value.
+        if "[REDACTED]" in replace and "[REDACTED]" not in current:
+            return None
         if current.count(find) != 1:
             return None
         start = current.index(find)

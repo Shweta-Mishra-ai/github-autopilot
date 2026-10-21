@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import os
 
-from app.github.client import gh_get, gh_patch, gh_post
+from app.github.client import GitHubError, gh_get, gh_patch, gh_post
 
 log = logging.getLogger(__name__)
 
@@ -125,8 +125,14 @@ def upsert_sticky(repo: str, issue_number: int, token: str, marker: str, body: s
     if existing is not None:
         try:
             return gh_patch(f"/repos/{repo}/issues/comments/{existing}", token, {"body": body})
-        except Exception as e:
-            log.warning(f"sticky.patch_failed id={existing} — posting fresh: {e}")
+        except GitHubError as e:
+            # Only a deleted comment is a reason to post a new one. A timeout,
+            # 5xx or rate limit fell through to the POST too, and the PR then
+            # carried two reports — the stale one for good. Raised instead,
+            # so the event is retried against the one that exists.
+            if e.status_code != 404:
+                raise
+            log.warning(f"sticky.deleted id={existing} — posting fresh")
 
     return gh_post(f"/repos/{repo}/issues/{issue_number}/comments", token, {"body": body})
 

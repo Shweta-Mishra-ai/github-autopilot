@@ -75,6 +75,17 @@ def handle(payload: dict):
     pr_number = pull_requests[0]["number"]
 
     head_sha = check_run.get("head_sha", "") or check_run.get("check_suite", {}).get("head_sha", "")
+    # A delayed event (queue retries wait up to 30 min) for a commit the PR
+    # has moved past rebuilt the report for that old commit, and the current
+    # head's sections were gone. Checked before the dedup key is taken: a
+    # failed lookup raises, and the retry must not find the key already set.
+    current = _pr_head(repo, pr_number, token)
+    if current and head_sha and current != head_sha:
+        log_ctx.info(
+            f"ci.stale_event pr={pr_number} sha={head_sha[:7]} head={current[:7]} — not reported"
+        )
+        return
+
     if _ci_already_alerted(repo, pr_number, head_sha, check_name):
         log_ctx.info(
             f"ci.duplicate_suppressed pr={pr_number} sha={head_sha[:7]} check={check_name}"
@@ -189,18 +200,24 @@ def handle(payload: dict):
             f"{pattern_note}{written}"
         )
 
+        from app.core.transient import held
         from app.github.sticky import MARKER_CI_REPORT, upsert_sticky
 
-        body = _merge_ci_report(
-            _current_ci_report(repo, pr_number, token), head_sha, check_name, section
-        )
-        upsert_sticky(
-            repo,
-            pr_number,
-            token,
-            MARKER_CI_REPORT,
-            f"{body}\n\n---\n*🤖 GitHub Autopilot — CI Analysis*{config.footer}",
-        )
+        # Read, merge, write — one worker at a time per PR. Two checks failing
+        # on one commit ran concurrently (two queue consumers), both read the
+        # report before either wrote it, and the second write dropped the
+        # first check's section.
+        with held(f"ci_report:{repo}#{pr_number}"):
+            body = _merge_ci_report(
+                _current_ci_report(repo, pr_number, token), head_sha, check_name, section
+            )
+            upsert_sticky(
+                repo,
+                pr_number,
+                token,
+                MARKER_CI_REPORT,
+                f"{body}\n\n---\n*🤖 GitHub Autopilot — CI Analysis*{config.footer}",
+            )
         log_ctx.done(f"CI failure comment upserted PR #{pr_number}")
 
     except Exception as e:
@@ -213,6 +230,14 @@ def handle(payload: dict):
 
         if is_transient(e):
             raise
+
+
+def _pr_head(repo: str, pr_number, token: str) -> str:
+    """The PR's current head SHA. Raises when it cannot be read."""
+    from app.github.client import gh_get
+
+    pr = gh_get(f"/repos/{repo}/pulls/{int(pr_number)}", token) or {}
+    return str((pr.get("head") or {}).get("sha") or "")
 
 
 _LOG_CHARS = 4000

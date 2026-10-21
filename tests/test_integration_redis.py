@@ -464,10 +464,15 @@ class TestAParkedReplyIsDeliveredByTheQueue:
         live_redis.zadd(queue.DELAYED_KEY, {raw: time.time() - 1})  # its time has come
         assert queue.promote_due() == 1
 
+        # The first POST's answer was lost, not necessarily the comment: the
+        # delivery looks for its marker first, and finds none here.
         with patch("app.github.auth.get_installation_token", return_value="fresh"), \
+             patch("app.github.client.gh_get", return_value=[]), \
              patch("app.github.deferred_reply.gh_post") as delivered:
             assert queue._consume_once(server._run_handler)
-        delivered.assert_called_once_with("/repos/o/r/issues/4/comments", "fresh", {"body": "the answer"})
+        (path, token, body), _ = delivered.call_args
+        assert (path, token) == ("/repos/o/r/issues/4/comments", "fresh")
+        assert body["body"].startswith("the answer\n<!-- autopilot-reply:")
         assert live_redis.llen(queue.PROCESSING_KEY) == 0
 
 

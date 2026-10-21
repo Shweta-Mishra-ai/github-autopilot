@@ -393,7 +393,7 @@ Render free tier spins down after 15 minutes of inactivity. The first webhook af
 2. **New Monitor** → **HTTP(s)**
 3. Configure:
    ```
-   URL: https://your-service-name.onrender.com/health
+   URL: https://your-service-name.onrender.com/ping
    Check interval: 5 minutes
    Alert contacts: your email
    ```
@@ -401,7 +401,10 @@ Render free tier spins down after 15 minutes of inactivity. The first webhook af
 
 UptimeRobot pings `/ping` every 5 minutes, keeping the service warm indefinitely. It also emails you if the service goes down.
 
-**Alternative — GitHub Actions keep-alive:**
+**Not a substitute — GitHub Actions keep-alive.** GitHub runs scheduled
+workflows on a best-effort basis: this repository's `*/10` schedule ran every
+2–7 hours in practice (October 2026), so it does not keep the service warm.
+It is still useful as an "is production up" check:
 ```yaml
 # .github/workflows/keepalive.yml
 name: Keep Render Warm
@@ -412,7 +415,7 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - run: curl -f https://your-service-name.onrender.com/health
+      - run: curl -f https://your-service-name.onrender.com/ping
 ```
 
 ---

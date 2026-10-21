@@ -1,6 +1,7 @@
 """tests/test_sticky.py — one bot comment per thread, edited in place."""
 
 from urllib.parse import parse_qs, urlparse
+import pytest
 from unittest.mock import patch
 
 from app.github.sticky import MARKER_PR_REPORT, find_sticky, upsert_sticky
@@ -158,13 +159,29 @@ class TestUpsertSticky:
 
     def test_falls_back_to_post_when_patch_fails(self):
         """A deleted sticky must not lose the report."""
+        from app.github.client import GitHubError
+
         with (
             patch("app.github.sticky.find_sticky", return_value=42),
-            patch("app.github.sticky.gh_patch", side_effect=Exception("404")),
+            patch("app.github.sticky.gh_patch", side_effect=GitHubError("Not Found", 404)),
             patch("app.github.sticky.gh_post", return_value={"id": 9}) as post,
         ):
             upsert_sticky("o/r", 5, "t", MARKER_PR_REPORT, "body")
         post.assert_called_once()
+
+    def test_a_failed_update_is_raised_not_posted_again(self):
+        """Round-4 audit: a timeout or 5xx on the PATCH posted a second report,
+        and the stale one stayed on the PR."""
+        from app.github.client import GitHubError
+
+        with (
+            patch("app.github.sticky.find_sticky", return_value=42),
+            patch("app.github.sticky.gh_patch", side_effect=GitHubError("Bad Gateway", 502)),
+            patch("app.github.sticky.gh_post") as post,
+            pytest.raises(GitHubError),
+        ):
+            upsert_sticky("o/r", 5, "t", MARKER_PR_REPORT, "body")
+        post.assert_not_called()
 
 
 

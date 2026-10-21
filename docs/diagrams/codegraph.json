@@ -735,15 +735,18 @@
       "id": "app.core.transient",
       "path": "app/core/transient.py",
       "layer": "core",
-      "loc": 62,
-      "functions": 2,
-      "classes": 0,
+      "loc": 107,
+      "functions": 3,
+      "classes": 1,
       "is_package": false,
       "fan_in": 6,
       "fan_out": 5,
       "external_deps": [
+        "contextlib",
         "logging",
-        "requests"
+        "requests",
+        "secrets",
+        "time"
       ]
     },
     {
@@ -816,7 +819,7 @@
       "functions": 12,
       "classes": 2,
       "is_package": false,
-      "fan_in": 27,
+      "fan_in": 28,
       "fan_out": 3,
       "external_deps": [
         "logging",
@@ -829,13 +832,14 @@
       "id": "app.github.deferred_reply",
       "path": "app/github/deferred_reply.py",
       "layer": "github",
-      "loc": 68,
-      "functions": 2,
+      "loc": 99,
+      "functions": 3,
       "classes": 0,
       "is_package": false,
       "fan_in": 4,
-      "fan_out": 5,
+      "fan_out": 6,
       "external_deps": [
+        "datetime",
         "hashlib",
         "logging"
       ]
@@ -935,7 +939,7 @@
       "id": "app.github.sticky",
       "path": "app/github/sticky.py",
       "layer": "github",
-      "loc": 146,
+      "loc": 152,
       "functions": 5,
       "classes": 0,
       "is_package": false,
@@ -996,8 +1000,8 @@
       "id": "app.handlers.ci",
       "path": "app/handlers/ci.py",
       "layer": "handlers",
-      "loc": 354,
-      "functions": 7,
+      "loc": 379,
+      "functions": 8,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
@@ -1322,14 +1326,15 @@
       "id": "app.handlers.pull_request.grounding",
       "path": "app/handlers/pull_request/grounding.py",
       "layer": "handlers",
-      "loc": 149,
-      "functions": 4,
+      "loc": 162,
+      "functions": 5,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
       "fan_out": 2,
       "external_deps": [
         "__future__",
+        "functools",
         "re"
       ]
     },
@@ -2281,6 +2286,11 @@
       "source": "app.github.deferred_reply",
       "target": "app.github.client",
       "kind": "import"
+    },
+    {
+      "source": "app.github.deferred_reply",
+      "target": "app.github.client",
+      "kind": "runtime"
     },
     {
       "source": "app.github.deferred_reply",
@@ -3850,8 +3860,8 @@
   ],
   "stats": {
     "modules": 105,
-    "edges": 427,
-    "total_loc": 29156,
+    "edges": 428,
+    "total_loc": 29276,
     "layers": [
       "ai",
       "core",
@@ -3879,7 +3889,7 @@
       {
         "id": "app.github.client",
         "loc": 327,
-        "fan_in": 27,
+        "fan_in": 28,
         "fan_out": 3
       },
       {

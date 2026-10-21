@@ -239,11 +239,13 @@ cloud was not involved.
 
 </details>
 
-> **On cold starts.** The demo instance is on Render's free tier. A scheduled
-> [keep-alive workflow](.github/workflows/keepalive.yml) pings it every ten
-> minutes, and the badge above turns red if production is genuinely down. If a
-> ping window is missed, the first request can take around 50 seconds while the
-> instance wakes. Retry once.
+> **On cold starts.** The demo instance is on Render's free tier, which sleeps
+> after 15 idle minutes; the first request after that takes around 50 seconds.
+> The [health workflow](.github/workflows/keepalive.yml) is scheduled every ten
+> minutes but GitHub runs schedules on a best-effort basis — in practice every
+> 2–7 hours — so it does not keep the instance warm; an external pinger on
+> `/ping` (UptimeRobot, cron-job.org) does. Webhooks lost to a cold start are
+> redelivered automatically (`app/github/redelivery.py`).
 
 ---
 
@@ -293,10 +295,10 @@ Reported cost in local mode is always `0`.
 | | |
 |---|---|
 | Modules | 105 |
-| Lines of code | 29,156 |
+| Lines of code | 29,276 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 427 |
+| Internal imports | 428 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>

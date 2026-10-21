@@ -23,7 +23,7 @@
 
 ## 1. Health Endpoint — /health
 
-`GET /health` — no authentication required. Returns HTTP 200 when healthy, HTTP 207 when degraded.
+`GET /health` — requires `Authorization: Bearer $METRICS_AUTH_TOKEN`; in production (`ENVIRONMENT=production`) it answers 401 to every request when the token is unset. Returns HTTP 200 when healthy, HTTP 207 when degraded. For Render's health check and uptime pings use `/ping`, which needs no token.
 
 ### Full response anatomy
 
@@ -447,7 +447,7 @@ Use `/budget` proactively before a busy period to check available capacity.
 
 ### Render health check alerts (built-in)
 
-Render → your service → **Settings** → **Health Check Path** → set to `/health`
+Render → your service → **Settings** → **Health Check Path** → set to `/ping` (as `render.yaml` does). Not `/health`: Render sends no token, and `/health` answers 401 without one.
 
 Render pings this path every 30 seconds. If it returns non-2xx for 3 consecutive checks, Render sends an email alert and attempts to restart the service.
 
@@ -457,9 +457,9 @@ Render free tier spins down after 15 minutes of inactivity. The first webhook af
 
 **Solution — UptimeRobot (free):**
 1. Create a free account at [uptimerobot.com](https://uptimerobot.com)
-2. Add monitor → HTTP(s) → URL: `https://your-service.onrender.com/health`
+2. Add monitor → HTTP(s) → URL: `https://your-service.onrender.com/ping`
 3. Check interval: 5 minutes
-4. This keeps the service warm 24/7
+4. This keeps the service warm. The repository's own GitHub Actions keep-alive does not: GitHub runs scheduled workflows on a best-effort basis, and this repository's `*/10` schedule ran every 2–7 hours in practice.
 
 ### Discord notifications for critical events
 

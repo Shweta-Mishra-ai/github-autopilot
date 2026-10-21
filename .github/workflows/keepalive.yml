@@ -1,13 +1,13 @@
 # .github/workflows/keepalive.yml
 # Two jobs in one:
-#   1. Keep-alive — Render's free tier sleeps a service after 15 min idle,
-#      giving the next visitor a ~50 s cold start. Pinging /ping every
-#      10 min keeps the instance warm (a single always-on free service
-#      fits within Render's 750 instance-hours/month).
+#   1. Keep-alive, best effort — Render's free tier sleeps a service after
+#      15 min idle, giving the next visitor a ~50 s cold start. This is
+#      scheduled every 10 min, but GitHub runs schedules when it can: in
+#      practice this ran every 2-7 hours (Oct 2026), so it does NOT keep the
+#      instance warm. Use an external pinger on /ping for that.
 #   2. Health check — if production stops answering, this workflow goes
 #      red (badge in the README) and GitHub emails the repo owner.
-# Note: GitHub cron is best-effort and can lag a few minutes under load;
-# the retry loop below absorbs a cold start if one slips through.
+# The retry loop below absorbs the cold start these runs usually meet.
 
 name: Server Health
 

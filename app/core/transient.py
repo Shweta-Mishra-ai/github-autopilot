@@ -9,9 +9,53 @@ and never redelivers. A handler now raises a transient failure, and wraps
 any side effect that a second run must not repeat in once().
 """
 
+import contextlib
 import logging
+import time
 
 log = logging.getLogger(__name__)
+
+
+class Busy(Exception):
+    """Another worker holds what this one needs; the event can run later."""
+
+
+@contextlib.contextmanager
+def held(key: str, ttl_seconds: int = 60, wait_seconds: float = 20.0):
+    """
+    Hold a Redis lock for a read-modify-write that two workers must not
+    interleave. Raises Busy (transient: the queue retries the event) when it
+    cannot be had within `wait_seconds`, and when Redis cannot be reached —
+    without the lock, the write is the race it exists to prevent.
+
+    Released only by its holder: a holder that outlived the TTL must not
+    delete the next holder's lock.
+    """
+    import secrets
+
+    from app.core.redis_client import get_redis
+
+    name = f"lock:{key}"
+    token = secrets.token_hex(8)
+    deadline = time.monotonic() + wait_seconds
+    try:
+        r = get_redis()
+        while not r.set(name, token, nx=True, ex=ttl_seconds):
+            if time.monotonic() >= deadline:
+                raise Busy(f"{key} is held by another worker")
+            time.sleep(0.25)
+    except Busy:
+        raise
+    except Exception as e:
+        raise Busy(f"lock {key} unavailable: {type(e).__name__}") from e
+    try:
+        yield
+    finally:
+        try:
+            if r.get(name) in (token, token.encode()):
+                r.delete(name)
+        except Exception as e:  # nosec B110 - the TTL frees it
+            log.warning(f"transient.unlock_failed key={key}: {type(e).__name__}")
 
 
 def is_transient(e: BaseException) -> bool:
@@ -26,6 +70,7 @@ def is_transient(e: BaseException) -> bool:
     if isinstance(
         e,
         (
+            Busy,
             GitHubRateLimitExhausted,
             AllProvidersDown,
             ConfigUnavailable,

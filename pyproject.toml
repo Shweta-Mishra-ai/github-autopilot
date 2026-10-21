@@ -99,6 +99,7 @@ markers = [
     "integration: tests requiring live Redis or external services",
     "slow: tests that take more than 2 seconds",
     "socket_egress_watch: watches and blocks egress at the socket layer itself; exempt from the requests-level network guard",
+    "real_head: tests/test_ci.py — do not stub the PR head lookup",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",

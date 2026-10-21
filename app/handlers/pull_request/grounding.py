@@ -29,6 +29,7 @@ Pure: no I/O, no state.
 
 from __future__ import annotations
 
+import functools
 import re
 
 from app.github.patch_parser import commentable_lines, diff_lines, parse_line_ref
@@ -94,6 +95,23 @@ def _spans(quote: str, seq: list[tuple[str, object]]) -> list[list[object]]:
     return found
 
 
+@functools.lru_cache(maxsize=8)
+def _masked_lines(patch: str) -> dict:
+    """
+    The patch's commentable lines with secrets masked: the model saw it
+    masked (router._sanitize), so its quote of a line holding a secret is of
+    the masked line, and without the same mask a "hardcoded API key" finding
+    would never match and be withheld.
+
+    Cached: every finding of a file is grounded against the same patch, and
+    masking it once per finding cost ~130 ms each on a 100 KB patch — CPU
+    that held the GIL and slowed every webhook reply meanwhile. Read-only.
+    """
+    from app.core.redaction import mask_secret_lines
+
+    return commentable_lines(mask_secret_lines(patch))
+
+
 def ground_finding(issue: dict, patch: str) -> tuple[str, int | None]:
     """
     (GROUNDED, line) | (CONTEXT, None) | (REMOVED, None) | (UNQUOTED, None)
@@ -103,12 +121,7 @@ def ground_finding(issue: dict, patch: str) -> tuple[str, int | None]:
     grounded only when the cited line is an ADDED line, never snapped to a
     neighbour — otherwise it is UNQUOTED.
     """
-    # The model saw this patch with secrets masked (router._sanitize); its
-    # quote of a line holding one is of the masked line. Same mask here, or a
-    # "hardcoded API key" finding would never match and be withheld.
-    from app.core.redaction import mask_secret_lines
-
-    lines = commentable_lines(mask_secret_lines(patch))
+    lines = _masked_lines(patch)
     target = parse_line_ref(issue.get("line"))
     quote = _norm(str(issue.get("code") or ""))
 

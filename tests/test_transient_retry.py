@@ -156,7 +156,42 @@ class TestAParkedReply:
         (raw,) = fake_redis.zrangebyscore(eq.DELAYED_KEY, 0, now + 120)
         env = json.loads(raw)
         assert env["event"] == "autopilot.reply"
-        assert env["payload"] == {"repo": "o/r", "number": 3, "installation_id": 11, "body": "the answer"}
+        p = env["payload"]
+        assert (p["repo"], p["number"], p["installation_id"]) == ("o/r", 3, 11)
+        assert p["body"] == f"the answer\n{p['marker']}" and p["since"]
+
+    def test_a_reply_that_did_reach_github_is_not_posted_twice(self):
+        """Round-4 audit: a read timeout or 5xx on the POST means the answer
+        was lost, not that the comment was not created. The deferred delivery
+        posted it again, so "✅ Merged!" appeared twice."""
+        from app.github import deferred_reply
+
+        marker = "<!-- autopilot-reply:abc -->"
+        payload = {"repo": "o/r", "number": 3, "installation_id": 11,
+                   "body": f"the answer\n{marker}", "marker": marker, "since": "2026-01-01T00:00:00Z"}
+        with patch("app.github.auth.get_installation_token", return_value="t"), \
+             patch("app.github.client.gh_get", return_value=[{"body": f"the answer\n{marker}"}]) as get, \
+             patch("app.github.deferred_reply.gh_post") as post:
+            deferred_reply.deliver(payload)
+        post.assert_not_called()
+        assert "since=2026-01-01T00:00:00Z" in get.call_args[0][0]
+
+        with patch("app.github.auth.get_installation_token", return_value="t"), \
+             patch("app.github.client.gh_get", return_value=[{"body": "something else"}]), \
+             patch("app.github.deferred_reply.gh_post") as post:
+            deferred_reply.deliver(payload)
+        post.assert_called_once()
+
+    def test_unreadable_comments_retry_rather_than_risk_a_duplicate(self):
+        import server
+
+        payload = {"repo": "o/r", "number": 3, "installation_id": 11, "body": "x",
+                   "marker": "<!-- autopilot-reply:abc -->", "since": ""}
+        with patch("app.github.auth.get_installation_token", return_value="t"), \
+             patch("app.github.client.gh_get", side_effect=GitHubError("bad gateway", 502)), \
+             patch("app.github.deferred_reply.gh_post") as post:
+            assert server._run_handler("autopilot.reply", payload, "o/r") == "retry"
+        post.assert_not_called()
 
     def test_it_is_delivered_by_the_runner(self):
         import server

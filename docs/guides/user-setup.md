@@ -67,7 +67,7 @@ https://github.com/Shweta-Mishra-ai/github-autopilot
 6. Wait for the first deploy to complete (2–3 minutes)
 7. Copy your service URL: `https://your-service-name.onrender.com`
 
-> **Note:** On Render free tier, services spin down after 15 minutes of inactivity. The first webhook after a spin-down may take 30–60 seconds. This is normal. Consider [UptimeRobot](https://uptimerobot.com) (free) to ping `/health` every 5 minutes and keep the service warm.
+> **Note:** On Render free tier, services spin down after 15 minutes of inactivity. The first webhook after a spin-down may take 30–60 seconds. This is normal. Use [UptimeRobot](https://uptimerobot.com) (free) or cron-job.org to ping `/ping` every 5 minutes to keep the service warm. A GitHub Actions schedule is not enough: GitHub runs it on a best-effort basis, often hours apart.
 
 ---
 
@@ -211,9 +211,9 @@ The bot is now active. It will respond to all events on the selected repositorie
 
 ### Check the health endpoint
 
-Open in your browser:
+It needs your `METRICS_AUTH_TOKEN` (a browser cannot send it, so use curl):
 ```
-https://your-service-name.onrender.com/health
+curl -H "Authorization: Bearer $METRICS_AUTH_TOKEN" https://your-service-name.onrender.com/health
 ```
 
 Expected response:

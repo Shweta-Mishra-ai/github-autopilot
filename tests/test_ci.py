@@ -12,6 +12,16 @@ from app.ai.providers.base import LLMResponse
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
+@pytest.fixture(autouse=True)
+def _head_is_the_event_commit(request):
+    """handle() reads the PR's head to drop events for older commits. Here the
+    head is whatever commit the event is about, except where a test says not."""
+    if request.node.get_closest_marker("real_head"):
+        yield
+        return
+    with patch("app.handlers.ci._pr_head", return_value=""):
+        yield
+
 def _meta():
     return LLMResponse(
         text="ok", provider="groq", model="llama", total_tokens=50
@@ -431,3 +441,70 @@ def test_the_recurring_failure_count_is_per_pr(fake_redis):
     assert not _track_failure_pattern("o/r", 3, "tests", "c")
     assert not _track_failure_pattern("o/r", 3, "tests", "c")
     assert _track_failure_pattern("o/r", 3, "tests", "c")
+
+
+
+@pytest.mark.real_head
+def test_an_event_for_a_commit_the_pr_has_moved_past_is_not_reported():
+    """Round-4 audit: a delayed event for an older commit rebuilt the report
+    for that commit, wiping the current head's sections."""
+    payload = _payload()
+    payload["check_run"]["head_sha"] = "old111"
+    with patch("app.handlers.ci.get_installation_token", return_value="tok"), \
+         patch("app.handlers.ci.load_config", return_value=_mock_config()), \
+         patch("app.github.client.gh_get", return_value={"head": {"sha": "new222"}}), \
+         patch("app.handlers.ci._ci_already_alerted") as dedup, \
+         patch("app.ai.guarded.safe_router_ask") as ask, \
+         patch("app.github.sticky.upsert_sticky") as post:
+        from app.handlers.ci import handle
+        handle(payload)
+    ask.assert_not_called()
+    post.assert_not_called()
+    dedup.assert_not_called()  # the key is not taken for an event that is dropped
+
+
+def test_two_checks_failing_together_keep_both_sections(fake_redis):
+    """Round-4 audit: two consumers read the report before either wrote it,
+    and the second write dropped the first check's section."""
+    import threading
+    import time as _time
+
+    from app.handlers import ci as ci_mod
+
+    store = {"body": ""}
+
+    def read(*a):
+        body = store["body"]
+        _time.sleep(0.05)  # widen the window the race needs
+        return body
+
+    def write(repo, n, tok, marker, body):
+        store["body"] = body
+        return {"id": 1}
+
+    errors = []
+
+    def run(name):
+        p = _payload(check_name=name)
+        p["check_run"]["head_sha"] = "abc"
+        try:
+            ci_mod.handle(p)
+        except Exception as e:  # surfaced below: a thread swallows it otherwise
+            errors.append(e)
+
+    # Patched once, around both threads: patch() is not thread-safe, and a
+    # block per thread restored the real functions under the other one.
+    with patch("app.handlers.ci.get_installation_token", return_value="tok"), \
+         patch("app.handlers.ci.load_config", return_value=_mock_config()), \
+         patch("app.handlers.ci._job_log_tail", return_value="E boom"), \
+         patch("app.handlers.ci._current_ci_report", side_effect=read), \
+         patch("app.ai.guarded.safe_router_ask",
+               return_value=({"root_cause": "x", "category": "other", "fix": "- y"}, _meta())), \
+         patch("app.github.sticky.upsert_sticky", side_effect=write):
+        threads = [threading.Thread(target=run, args=(n,)) for n in ("lint", "tests")]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+    assert not errors, errors
+    assert "ci-check:lint" in store["body"] and "ci-check:tests" in store["body"], store["body"]

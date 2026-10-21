@@ -113,6 +113,8 @@ from the application's CI:
 
 - every harness compiles, and `verify_paper.py` re-derives every number in
   the manuscript from `results/`;
+- `tests/` holds a regression test for each defect found in the harness
+  helpers (listed below);
 - `bench_gitleaks_fulltable.py` is re-run from scratch against the
   checksum-verified Gitleaks binary and rule table, and the job fails if its
   output differs from the committed result in anything but wall time.

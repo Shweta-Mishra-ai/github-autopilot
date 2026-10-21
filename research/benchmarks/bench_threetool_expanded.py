@@ -620,8 +620,13 @@ def main():
                                     for k, g in neutral.items()},
         "context_summary": {tool: {g: context_summary(per[tool], ids)
                                    for g, ids in src.items()} for tool in TOOLS},
-        "encoding_family_summary": {tool: encoding_summary(per[tool], tids)
-                                    for tool in TOOLS},
+        # split by stratum: a keyword type cannot be matched where its
+        # provider keyword does not precede the value (a bare bearer header,
+        # a default buried in a template), which is a property of keyword
+        # anchoring, not of the boundary
+        "encoding_family_summary": {tool: {
+            st: encoding_summary(per[tool], [t for t in tids if info[t]["stratum"] == st])
+            for st in ("prefix", "keyword")} for tool in TOOLS},
         "encoding_families": ENCODING_FAMILY,
         "hyphen_marginal_probability": marginal,
         "per_type": {t: {"stratum": info[t]["stratum"],

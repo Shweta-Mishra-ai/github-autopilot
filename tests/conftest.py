@@ -409,6 +409,17 @@ def no_real_network(request):
 
 
 @pytest.fixture(autouse=True)
+def clean_tree_cache():
+    """repo_file_context caches trees for a minute; tests reuse repo names
+    with different trees."""
+    from app.github.helpers import clear_tree_cache
+
+    clear_tree_cache()
+    yield
+    clear_tree_cache()
+
+
+@pytest.fixture(autouse=True)
 def clean_redis_singleton():
     """Reset Redis singleton before every test for isolation."""
     import app.core.redis_client as rc

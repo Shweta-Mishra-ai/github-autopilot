@@ -278,7 +278,10 @@ def recover_stale(max_items: int = MAX_QUEUE_LEN) -> int:
                 env["attempts"] = int(env.get("attempts", 0)) + 1
             except Exception:
                 metrics.increment("queue.dead")
-                r.lpush(DEAD_KEY, raw)
+                r.lpush(
+                    DEAD_KEY,
+                    json.dumps({"why": "unreadable envelope", "bytes": len(raw or "")}),
+                )
                 r.ltrim(DEAD_KEY, 0, DEAD_MAX - 1)
                 continue
 
@@ -372,7 +375,12 @@ def _consume_once(handler: Callable[[str, dict, str], None]) -> bool:
 
 def _dead_letter(r, env: dict, why: str) -> None:
     metrics.increment("queue.dead")
-    r.lpush(DEAD_KEY, json.dumps({**env, "why": why[:200]}, separators=(",", ":")))
+    # What identifies the event and why it failed — not its payload. Nothing
+    # replays a dead letter (GitHub's "Redeliver" does, by delivery id), and
+    # 50 payloads of up to 512 KB came to 26 MB: more than the free Key Value
+    # plan holds, with no expiry.
+    record = {k: env.get(k) for k in ("id", "event", "repo", "attempts", "enqueued_at")}
+    r.lpush(DEAD_KEY, json.dumps({**record, "why": why[:200]}, separators=(",", ":")))
     r.ltrim(DEAD_KEY, 0, DEAD_MAX - 1)
     log.warning(f"queue.dead_letter id={env.get('id')} event={env.get('event')} why={why[:120]}")
     # The dedupe key stayed set for 24h, so GitHub's "Redeliver" — the only

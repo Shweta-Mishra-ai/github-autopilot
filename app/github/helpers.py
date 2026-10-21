@@ -2,7 +2,10 @@
 app/github/helpers.py — Shared GitHub API helpers.
 """
 
+import collections
 import logging
+import threading
+import time
 
 log = logging.getLogger(__name__)
 
@@ -64,23 +67,61 @@ def repo_file_context(repo: str, token: str, ref: str = "HEAD", extra=(), get=No
     if get is None:
         from app.github.client import gh_get as get
 
-    try:
-        tree = get(f"/repos/{repo}/git/trees/{ref}?recursive=1", token)
-    except Exception as e:
-        log.debug(f"repo_file_context.unavailable repo={repo} ref={ref}: {e}")
-        return {}
+    paths = _cached_tree(repo, ref)
+    if paths is None:
+        try:
+            tree = get(f"/repos/{repo}/git/trees/{ref}?recursive=1", token)
+        except Exception as e:
+            log.debug(f"repo_file_context.unavailable repo={repo} ref={ref}: {e}")
+            return {}
 
-    if not isinstance(tree, dict) or tree.get("truncated"):
-        return {}
-    entries = tree.get("tree")
-    paths = {
-        t["path"]
-        for t in (entries if isinstance(entries, list) else [])
-        if isinstance(t, dict) and t.get("type") == "blob" and t.get("path")
-    }
+        if not isinstance(tree, dict) or tree.get("truncated"):
+            return {}
+        entries = tree.get("tree")
+        paths = frozenset(
+            t["path"]
+            for t in (entries if isinstance(entries, list) else [])
+            if isinstance(t, dict) and t.get("type") == "blob" and t.get("path")
+        )
+        del tree, entries  # the parsed response is the large part; keep only paths
+        if paths:
+            _remember_tree(repo, ref, paths)
     if not paths:
         return {}
     return {"files": sorted(paths | {e for e in extra if e})}
+
+
+# Recently read trees, as path sets. One PR event read the whole recursive
+# tree up to three times (review, impact, a command), and on a large
+# repository each parse peaked at 30–90 MB of a 512 MB instance. A minute is
+# short enough that a file added since is rarely missing — and files a PR
+# adds come in through `extra` regardless.
+_TREE_TTL = 60
+_TREE_CACHE_MAX = 4
+_tree_cache: "collections.OrderedDict[tuple, tuple[float, frozenset]]" = collections.OrderedDict()
+_tree_lock = threading.Lock()
+
+
+def _cached_tree(repo: str, ref: str):
+    with _tree_lock:
+        hit = _tree_cache.get((repo, ref))
+        if hit and time.monotonic() - hit[0] < _TREE_TTL:
+            _tree_cache.move_to_end((repo, ref))
+            return hit[1]
+        return None
+
+
+def _remember_tree(repo: str, ref: str, paths: frozenset) -> None:
+    with _tree_lock:
+        _tree_cache[(repo, ref)] = (time.monotonic(), paths)
+        _tree_cache.move_to_end((repo, ref))
+        while len(_tree_cache) > _TREE_CACHE_MAX:
+            _tree_cache.popitem(last=False)
+
+
+def clear_tree_cache() -> None:
+    with _tree_lock:
+        _tree_cache.clear()
 
 
 # GitHub serves at most 3,000 files for one pull request, 100 per page.

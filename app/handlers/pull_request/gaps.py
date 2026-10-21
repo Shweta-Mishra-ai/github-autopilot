@@ -254,7 +254,9 @@ def _proof_of_gap(gap: dict, source_patch: str, tests_text: str) -> str:
 _REPO_TEST_FILES_READ = 3
 
 
-def _in_repository_tests(repo: str, token: str, symbol: str) -> bool | None:
+def _in_repository_tests(
+    repo: str, token: str, symbol: str, files: dict | None = None
+) -> bool | None:
     """
     Whether a test file already in the repository mentions `symbol` by name:
     True, False, or None when that could not be established.
@@ -282,10 +284,14 @@ def _in_repository_tests(repo: str, token: str, symbol: str) -> bool | None:
             if isinstance(i, dict) and _is_test_file(str(i.get("path") or ""))
         ]
         word = re.compile(rf"\b{re.escape(symbol)}\b")
+        files = {} if files is None else files  # path -> text, shared across one event
         for path in paths[:_REPO_TEST_FILES_READ]:
-            data = gh_get(f"/repos/{repo}/contents/{quote(path, safe='/')}", token)
-            body = base64.b64decode((data or {}).get("content") or "").decode("utf-8", "replace")
-            if word.search(body):
+            if path not in files:
+                data = gh_get(f"/repos/{repo}/contents/{quote(path, safe='/')}", token)
+                files[path] = base64.b64decode((data or {}).get("content") or "").decode(
+                    "utf-8", "replace"
+                )
+            if word.search(files[path]):
                 return True
         if found.get("incomplete_results") or len(paths) > _REPO_TEST_FILES_READ:
             return None
@@ -358,6 +364,11 @@ def _check_repository_tests(gaps, symbols, repo, token, log, functions_in=None) 
     so, rather than asserting the function is untested.
     """
     kept = []
+    # One search per symbol and one read per test file for the whole report:
+    # five gaps naming the same function searched five times and read the
+    # same test file five times, against code search's 10 requests a minute.
+    verdicts: dict = {}
+    files: dict = {}
     for g in gaps:
         if g.get("proof"):
             kept.append(g)
@@ -371,7 +382,9 @@ def _check_repository_tests(gaps, symbols, repo, token, log, functions_in=None) 
         if not name:
             log.info(f"test_gaps.not_a_changed_symbol function={g.get('function')!r} -> dropped")
             continue
-        tested = _in_repository_tests(repo, token, name)
+        if name not in verdicts:
+            verdicts[name] = _in_repository_tests(repo, token, name, files)
+        tested = verdicts[name]
         if tested:
             log.info(f"test_gaps.tested_elsewhere function={name} -> dropped")
             continue
@@ -575,6 +588,8 @@ Only report real gaps. If tests are adequate, set has_gaps to false.""",
     head_sha = ((pr or {}).get("head") or {}).get("sha", "")
     patches = {f.get("filename", ""): f.get("patch", "") for f in source_files}
 
+    sources: dict = {}
+
     def functions_in(path: str) -> list[str]:
         if not (head_sha and path.endswith(".py") and path in patches):
             return []
@@ -582,7 +597,9 @@ Only report real gaps. If tests are adequate, set has_gaps to false.""",
 
         from .context import fetch_file
 
-        source = fetch_file(repo, path, head_sha, token, gh_get)
+        if path not in sources:  # fetched once per file, not once per gap
+            sources[path] = fetch_file(repo, path, head_sha, token, gh_get)
+        source = sources[path]
         return _functions_at(source, _touched_lines(patches[path])) if source else []
 
     gaps = _check_repository_tests(gaps[:5], symbols, repo, token, log, functions_in)

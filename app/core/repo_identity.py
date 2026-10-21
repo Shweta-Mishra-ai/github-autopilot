@@ -53,6 +53,10 @@ _PREFIXES = (
     "pr_high_risk:{repo}#*",
     "autofix_outcome:{repo}:*",
     "commit_msg_suggested:{repo}:*",
+    # Today's AI budget and command rate limits: a new repository under the
+    # name started the day with the old one's usage counted against it.
+    "limit:{repo}:*",
+    "cmd_rl:{repo}:*",
 )
 
 

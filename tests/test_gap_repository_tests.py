@@ -99,3 +99,27 @@ class TestPublishedGaps:
     def test_the_models_claims_about_the_suite_are_not_published(self):
         out = self._run([self.GAP], tested=False)
         assert "never reaches" not in out
+
+
+def test_one_search_per_symbol_and_one_read_per_file():
+    """Round-4 performance audit: five gaps on one function searched five
+    times and read the same test file five times (code search: 10/min)."""
+    import base64
+    from unittest.mock import MagicMock, patch
+
+    from app.handlers.pull_request import gaps as G
+
+    calls = []
+
+    def gh(path, token):
+        calls.append(path)
+        if path.startswith("/search/code"):
+            return {"items": [{"path": "tests/test_other.py"}], "incomplete_results": False}
+        return {"content": base64.b64encode(b"def test_x(): unrelated()").decode()}
+
+    gaps = [{"file": "app/x.py", "function": "do_work", "risk": "high"} for _ in range(5)]
+    with patch("app.github.client.gh_get", side_effect=gh):
+        kept = G._check_repository_tests(gaps, ["do_work"], "o/r", "t", MagicMock(), None)
+    assert len(kept) == 5
+    assert sum(p.startswith("/search/code") for p in calls) == 1
+    assert sum("/contents/" in p for p in calls) == 1

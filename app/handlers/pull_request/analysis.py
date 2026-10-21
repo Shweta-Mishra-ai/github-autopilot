@@ -265,6 +265,18 @@ def _analyze_pr(
         f"Branch: {one_line(head_branch)} -> {one_line(base_branch)}\nAuthor: {one_line(author)}"
     )
 
+    # The drafted description is the longest part of the answer and is used
+    # only when it can be written: on open, into an empty body. It was asked
+    # for on every push and thrown away — output tokens off the daily quota.
+    want_description = apply_metadata and check_pr_description_update(pr, config).passed
+    description_field = (
+        '\n  "description": "structured PR description with ## Summary, ## Changes, '
+        "## Testing sections; say what the diff shows, and do not claim testing that is "
+        'not in it",'
+        if want_description
+        else ""
+    )
+
     r, _meta = router.ask(
         "Senior engineer. Analyze GitHub PRs. JSON only.",
         f"""Analyze this Pull Request:
@@ -285,8 +297,7 @@ Judge the risk from what the diff does, not from the file names.
 
 Return JSON:
 {{
-  "suggested_title": "conventional commit format title",
-  "description": "structured PR description with ## Summary, ## Changes, ## Testing sections; say what the diff shows, and do not claim testing that is not in it",
+  "suggested_title": "conventional commit format title",{description_field}
   "risk_level": "low|medium|high",
   "risk_reason": "why this risk level",
   "review_focus": ["area1", "area2"],
@@ -307,7 +318,9 @@ Return JSON:
     result = gate.evaluate(
         "pr_title_rewrite",
         r,
-        required_fields=("suggested_title", "description", "risk_reason"),
+        required_fields=("suggested_title", "description", "risk_reason")
+        if want_description
+        else ("suggested_title", "risk_reason"),
         hallucination=check_response(
             r,
             context={"files": [f.get("filename") for f in files if f.get("filename")]},

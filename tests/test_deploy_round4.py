@@ -132,3 +132,35 @@ def test_a_counter_that_lost_its_expiry_gets_it_back(fake_redis):
     assert fake_redis.ttl(key) == -1
     _track_failure_pattern("o/r", 1, "tests", "x")
     assert 0 < fake_redis.ttl(key) <= _CI_PATTERN_WINDOW
+
+
+def test_the_tree_is_read_once_a_minute_not_once_per_caller():
+    """Round-4 performance audit: one PR event read the full recursive tree up
+    to three times, each parse 30-90 MB on a large repository."""
+    from unittest.mock import MagicMock
+
+    from app.github.helpers import repo_file_context
+
+    get = MagicMock(return_value={"tree": [{"path": "a.py", "type": "blob"}], "truncated": False})
+    assert repo_file_context("o/r", "t", get=get) == {"files": ["a.py"]}
+    assert repo_file_context("o/r", "t", extra=["new.py"], get=get) == {"files": ["a.py", "new.py"]}
+    assert get.call_count == 1
+
+
+def test_mcp_tool_calls_are_charged_to_the_repository(monkeypatch):
+    """Round-4 bug hunt: MCP tool calls ran outside metered(), so the per-repo
+    daily AI budget did not apply to them."""
+    from app.core import guardrails
+    from app.mcp import mcp_server
+
+    seen = []
+    monkeypatch.setitem(
+        mcp_server.TOOL_HANDLERS, "get_repo_health",
+        lambda args: seen.append(guardrails._metered_repo.get()) or "ok",
+    )
+    monkeypatch.setenv("MCP_API_KEY", "k")
+    body, status = mcp_server.handle_mcp_request(
+        "tools/call", {"name": "get_repo_health", "arguments": {"repo": "o/r"}}, "k"
+    )
+    assert status == 200, body
+    assert seen == ["o/r"]

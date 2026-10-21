@@ -132,8 +132,6 @@ def update_from_headers(headers: dict, token: str | None = None) -> None:
         # budget of 30 a minute: recording its "29 remaining" here made every
         # following core call look nearly exhausted and stall or refuse.
         if resource != "core":
-            if remaining is not None:
-                _try_redis_set(f"gh_rl_{resource}_{key}_remaining", remaining)
             return
 
         with _lock:
@@ -145,11 +143,8 @@ def update_from_headers(headers: dict, token: str | None = None) -> None:
             entry["last_checked"] = time.time()
             entry["resource"] = resource
             _evict_if_needed()
-
-        if remaining is not None:
-            _try_redis_set(f"gh_rl_{resource}_{key}_remaining", remaining)
-        if reset_at is not None:
-            _try_redis_set(f"gh_rl_{resource}_{key}_reset", reset_at)
+        # No longer copied to Redis: two SETs after every GitHub response
+        # (34 of 44 SETs in one PR event), and nothing ever read them.
 
     except Exception as e:
         log.debug(f"rate_limit.update_from_headers_failed: {e}")
@@ -284,13 +279,3 @@ def reset_state() -> None:
     """Drop all tracked state. For tests and for a re-installed App."""
     with _lock:
         _state.clear()
-
-
-def _try_redis_set(key: str, value, ttl: int = 3600):
-    """Share state across processes. Best effort — never affects the request."""
-    try:
-        from app.core.redis_client import get_redis
-
-        get_redis().set(f"github:{key}", str(value), ex=ttl)
-    except Exception as e:
-        log.debug(f"rate_limit.redis_set_failed key={key}: {e}")

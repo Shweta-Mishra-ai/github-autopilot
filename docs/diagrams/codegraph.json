@@ -400,7 +400,7 @@
       "id": "app.core.event_queue",
       "path": "app/core/event_queue.py",
       "layer": "core",
-      "loc": 551,
+      "loc": 559,
       "functions": 18,
       "classes": 2,
       "is_package": false,
@@ -425,7 +425,7 @@
       "functions": 17,
       "classes": 2,
       "is_package": false,
-      "fan_in": 12,
+      "fan_in": 13,
       "fan_out": 1,
       "external_deps": [
         "contextlib",
@@ -635,7 +635,7 @@
       "functions": 6,
       "classes": 1,
       "is_package": false,
-      "fan_in": 33,
+      "fan_in": 32,
       "fan_out": 1,
       "external_deps": [
         "__future__",
@@ -653,7 +653,7 @@
       "id": "app.core.repo_identity",
       "path": "app/core/repo_identity.py",
       "layer": "core",
-      "loc": 109,
+      "loc": 113,
       "functions": 3,
       "classes": 0,
       "is_package": false,
@@ -849,14 +849,17 @@
       "id": "app.github.helpers",
       "path": "app/github/helpers.py",
       "layer": "github",
-      "loc": 127,
-      "functions": 4,
+      "loc": 168,
+      "functions": 7,
       "classes": 0,
       "is_package": false,
       "fan_in": 17,
       "fan_out": 1,
       "external_deps": [
-        "logging"
+        "collections",
+        "logging",
+        "threading",
+        "time"
       ]
     },
     {
@@ -898,12 +901,12 @@
       "id": "app.github.rate_limit",
       "path": "app/github/rate_limit.py",
       "layer": "github",
-      "loc": 296,
-      "functions": 10,
+      "loc": 281,
+      "functions": 9,
       "classes": 1,
       "is_package": false,
       "fan_in": 3,
-      "fan_out": 1,
+      "fan_out": 0,
       "external_deps": [
         "__future__",
         "hashlib",
@@ -1266,7 +1269,7 @@
       "id": "app.handlers.pull_request.analysis",
       "path": "app/handlers/pull_request/analysis.py",
       "layer": "handlers",
-      "loc": 524,
+      "loc": 537,
       "functions": 9,
       "classes": 0,
       "is_package": false,
@@ -1325,7 +1328,7 @@
       "id": "app.handlers.pull_request.gaps",
       "path": "app/handlers/pull_request/gaps.py",
       "layer": "handlers",
-      "loc": 630,
+      "loc": 647,
       "functions": 18,
       "classes": 0,
       "is_package": false,
@@ -1568,12 +1571,12 @@
       "id": "app.mcp.mcp_server",
       "path": "app/mcp/mcp_server.py",
       "layer": "mcp",
-      "loc": 174,
+      "loc": 180,
       "functions": 4,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 4,
+      "fan_out": 5,
       "external_deps": [
         "hmac",
         "logging",
@@ -2338,11 +2341,6 @@
       "source": "app.github.notifications",
       "target": "app.core.redaction",
       "kind": "import"
-    },
-    {
-      "source": "app.github.rate_limit",
-      "target": "app.core.redis_client",
-      "kind": "runtime"
     },
     {
       "source": "app.github.redelivery",
@@ -3646,6 +3644,11 @@
     },
     {
       "source": "app.mcp.mcp_server",
+      "target": "app.core.guardrails",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.mcp.mcp_server",
       "target": "app.core.metrics",
       "kind": "runtime"
     },
@@ -3898,7 +3901,7 @@
   "stats": {
     "modules": 106,
     "edges": 432,
-    "total_loc": 29543,
+    "total_loc": 29617,
     "layers": [
       "ai",
       "core",
@@ -3914,7 +3917,7 @@
       {
         "id": "app.core.redis_client",
         "loc": 570,
-        "fan_in": 33,
+        "fan_in": 32,
         "fan_out": 1
       },
       {
@@ -3954,16 +3957,16 @@
         "fan_out": 1
       },
       {
+        "id": "app.core.guardrails",
+        "loc": 396,
+        "fan_in": 13,
+        "fan_out": 1
+      },
+      {
         "id": "app.github.notifications",
         "loc": 603,
         "fan_in": 8,
         "fan_out": 4
-      },
-      {
-        "id": "app.core.guardrails",
-        "loc": 396,
-        "fan_in": 12,
-        "fan_out": 1
       },
       {
         "id": "app.ai.circuit_breaker",

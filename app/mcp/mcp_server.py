@@ -149,7 +149,13 @@ def handle_mcp_request(method: str, params: dict, auth_token: str) -> tuple[dict
             }, 400
 
         try:
-            result_text = handler(tool_args)
+            # Charged to the named repository's daily AI budget, as a comment
+            # command is: outside metered(), MCP tool calls were not counted,
+            # and REPO_DAILY_AI_LIMIT did not apply to them.
+            from app.core.guardrails import metered
+
+            with metered(str(tool_args.get("repo") or "")):
+                result_text = handler(tool_args)
             latency_ms = int((time.time() - start) * 1000)
             # Audit line: WHO did WHAT — never the arguments (may contain code).
             log.info(f"mcp.audit client={client} tool={tool_name} status=ok latency={latency_ms}ms")

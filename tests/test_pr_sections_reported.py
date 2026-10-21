@@ -221,3 +221,38 @@ def test_a_summary_that_only_echoes_the_asks_says_so():
     echoed = "1. What this PR accomplishes\n2. Key technical changes made"
     body, _ = _run(lambda *a, **k: ({"raw": "not json"}, META), lambda *a, **k: (echoed, META))
     assert "summary — the model only repeated the instructions back" in body
+
+
+@pytest.mark.parametrize("action,body,asked", [
+    ("synchronize", "", False),
+    ("opened", "", True),
+    ("opened", "A description the author already wrote, long enough to keep.", False),
+])
+def test_a_description_is_asked_for_only_when_it_can_be_written(action, body, asked):
+    """Round-4 performance audit: the analysis asked for a full PR description
+    on every push and discarded it — output tokens off the daily quota."""
+    prompts = []
+
+    def ask(system, user, **kw):
+        prompts.append(user)
+        return {"raw": "not json"}, META
+
+    payload = _payload(action)
+    payload["pull_request"]["body"] = body
+    with patch.object(prh, "get_installation_token", return_value="t"), \
+         patch.object(prh, "load_config", return_value=Config({})), \
+         patch.object(prh, "gh_get", return_value={"archived": False}), \
+         patch("app.github.helpers.pr_files", return_value=FILES), \
+         patch("app.ai.gatekeeper.is_substantive", return_value=(True, "")), \
+         patch("app.ai.router.router.ask", side_effect=ask), \
+         patch("app.ai.router.router.ask_text", return_value=("Adds a branch.", META)), \
+         patch("app.handlers.pull_request.review._posted_findings", return_value=set()), \
+         patch("app.handlers.pull_request.gaps._in_repository_tests", return_value=False), \
+         patch.object(prh, "update_sticky_if_present", return_value={"id": 1}), \
+         patch.object(prh, "upsert_sticky", return_value={"id": 1}):
+        try:
+            prh.handle(payload)
+        except Exception:
+            pass
+    analysis = next(p for p in prompts if "Analyze this Pull Request" in p)
+    assert ('"description":' in analysis) is asked

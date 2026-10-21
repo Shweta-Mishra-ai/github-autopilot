@@ -629,7 +629,9 @@ class TestReviewFalsePositiveSources:
         )
         assert inline == []
         assert "1 withheld" in md, "the heading must say a finding was withheld"
-        assert "no issues found · 1 withheld" in md
+        # Round-4 audit L1: "no issues found · 1 withheld" contradicted itself.
+        assert "no verified issues · 1 withheld" in md
+        assert "no issues found" not in md.lower()
         assert "SQL injection" in md, "withheld is listed, never silently dropped"
 
     def test_an_exact_anchor_still_gets_a_commit_button(self):

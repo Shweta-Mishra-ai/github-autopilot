@@ -102,9 +102,12 @@ def find_sticky(
 def _fit_with_marker(body: str, marker: str) -> str:
     """Fit GitHub's size limit and keep the marker: a report cut past its
     marker could not be found again, and every update would post a new one."""
+    from app.core.sanitizer import quiet_mentions
     from app.github.helpers import fit_comment
 
-    body = fit_comment(body, reserve=len(marker) + 2)
+    # Every sticky is a report of model output (PR analysis, CI analysis);
+    # none means to mention anyone.
+    body = fit_comment(quiet_mentions(body), reserve=len(marker) + 2)
     return body if marker in body else f"{body}\n\n{marker}"
 
 

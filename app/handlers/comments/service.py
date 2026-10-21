@@ -159,6 +159,11 @@ def handle_comment_event(payload: dict) -> None:
     if isinstance(response, dict) and is_providers_down(response):
         response = make_degraded_response(response)
     response = ground_answer(cmd, response, context, repo, token)
+    if isinstance(response, str):
+        # Before the footer: the one mention meant is the requester's.
+        from app.core.sanitizer import quiet_mentions
+
+        response = quiet_mentions(response)
 
     # ── Post to GitHub (with model disclosure) ─────────────────────────────
     footer = getattr(config, "footer", "")

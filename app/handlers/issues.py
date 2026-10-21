@@ -230,7 +230,7 @@ Return JSON:
 
     # Labels: only what the model decided. A priority it did not give gets no
     # priority label (it was labelled "medium").
-    all_labels = triage_labels(result["labels"], p_label)
+    all_labels = triage_labels(result["labels"], p_label, result["type"])
 
     label_guard = check_auto_label(issue, all_labels, config)
     if all_labels and label_guard.passed:
@@ -369,10 +369,34 @@ def _label_key(name: str) -> str:
 _TYPE_LABELS = {_label_key(n): n for n, _ in BOT_LABELS if not n.startswith("priority:")}
 
 
-def triage_labels(model_labels: list, priority_label: str | None) -> list[str]:
-    """The model's labels limited to the bot's own non-priority labels, plus
-    the one priority label the validated priority decided, if it decided one."""
+# The label each classified type gets. "refactor" has no label of its own.
+_LABEL_FOR_TYPE = {
+    "bug": "bug 🐛",
+    "feature": "enhancement ✨",
+    "question": "question ❓",
+    "docs": "documentation 📚",
+    "performance": "performance ⚡",
+    "security": "security 🔒",
+}
+_KIND_LABELS = set(_LABEL_FOR_TYPE.values())
+
+
+def triage_labels(
+    model_labels: list, priority_label: str | None, issue_type: str | None = None
+) -> list[str]:
+    """
+    The model's labels limited to the bot's own non-priority labels, plus the
+    one priority label the validated priority decided, if it decided one.
+
+    When the model classified the issue, a kind label that contradicts that
+    classification is not applied: an issue typed "feature" was labelled
+    "bug 🐛" from the same answer's label list. A kind label is still only
+    applied when the model chose it.
+    """
     out = [_TYPE_LABELS[_label_key(lab)] for lab in model_labels if _label_key(lab) in _TYPE_LABELS]
+    if issue_type:
+        own = _LABEL_FOR_TYPE.get(issue_type)
+        out = [lab for lab in out if lab not in _KIND_LABELS or lab == own]
     return list(dict.fromkeys([*out, *([priority_label] if priority_label else [])]))
 
 

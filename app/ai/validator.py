@@ -18,18 +18,37 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 
+# The words models actually use. Anything unknown falls to "minor", so a
+# missing word here demotes a finding: "P0", "fatal", "security" and "bug"
+# were all published as minor, under findings the model ranked below them.
 _SEVERITY_SYNONYMS = {
     "blocker": "critical",
     "severe": "critical",
+    "fatal": "critical",
+    "urgent": "critical",
+    "p0": "critical",
     "high": "major",
     "error": "major",
+    "p1": "major",
+    "bug": "major",
+    "security": "major",
+    "serious": "major",
+    "important": "major",
+    "danger": "major",
+    "dangerous": "major",
     "medium": "minor",
     "moderate": "minor",
     "warning": "minor",
+    "p2": "minor",
     "low": "nit",
     "info": "nit",
     "style": "nit",
     "suggestion": "nit",
+    "p3": "nit",
+    "nitpick": "nit",
+    "trivial": "nit",
+    "optional": "nit",
+    "cosmetic": "nit",
 }
 
 
@@ -213,6 +232,34 @@ def validate_pr_analysis(raw: dict) -> dict:
 # ── Issue Triage ──────────────────────────────────────────────────────────────
 
 
+# What a triage model cannot know: it sees one issue's title and body, not
+# the tracker, the releases or the team. "This is a duplicate of #42, which
+# was fixed in v2.3.1 — upgrading resolves it. I've assigned @bob." was
+# posted as the bot's own statement, and it was all invented.
+_STATUS_CLAIM = re.compile(
+    r"\bduplicat|\balready (?:been )?(?:fixed|resolved|reported|addressed|tracked)"
+    r"|\b(?:fixed|resolved|addressed|patched) (?:in|by)\b|\bhas been (?:fixed|resolved)"
+    r"|\bassign|\bi(?:'ve| have) (?:labell?ed|closed|linked|tagged)"
+    r"|\bwill be (?:closed|fixed|released|merged)|\bupgrad(?:e|ing)\b.*\b(?:resolv|fix)"
+    r"|\bknown (?:issue|bug)|#\d+",
+    re.I,
+)
+_WELCOME_DEFAULT = "Thanks for reporting this!"
+
+
+def _welcome(value) -> str:
+    """The model's welcome without status claims it cannot know, and with
+    its mentions made inert."""
+    from app.core.sanitizer import quiet_mentions
+
+    text = _str(value if value is not None else _WELCOME_DEFAULT, 500)
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+    kept = [x for x in sentences if x and not _STATUS_CLAIM.search(x)]
+    if len(kept) < len([x for x in sentences if x]):
+        log.info("validator.welcome_claims_dropped")
+    return quiet_mentions(" ".join(kept)) or _WELCOME_DEFAULT
+
+
 def validate_issue_triage(raw: dict) -> dict:
     """Validate and sanitize issue triage response."""
     # These MUST stay in sync with the enums the triage prompt asks for in
@@ -259,7 +306,9 @@ def validate_issue_triage(raw: dict) -> dict:
     questions = raw.get("questions", [])
     if not isinstance(questions, list):
         questions = []
-    questions = [str(q)[:200] for q in questions if q][:3]
+    from app.core.sanitizer import quiet_mentions
+
+    questions = [quiet_mentions(str(q)[:200]) for q in questions if q][:3]
 
     time_estimate = _str(raw.get("time_estimate", ""), 20)
     if time_estimate not in VALID_ESTIMATES:
@@ -269,7 +318,7 @@ def validate_issue_triage(raw: dict) -> dict:
         "type": issue_type,
         "priority": priority,
         "labels": _list_of_str(raw.get("labels"), max_items=8, max_item_len=50),
-        "welcome": _str(raw.get("welcome", "Thanks for reporting this!"), 500),
+        "welcome": _welcome(raw.get("welcome")),
         "needs_info": bool(flag(raw, "needs_info")),
         "questions": questions,
         "complexity": complexity,
@@ -321,6 +370,7 @@ def validate_code_review(raw: dict) -> dict:
         # the minor default, under findings it had ranked below it.
         sev = _SEVERITY_SYNONYMS.get(sev, sev)
         if sev not in VALID_SEVERITIES:
+            log.info(f"validator.unknown_severity value={sev[:20]!r} — treated as minor")
             sev = "minor"
         clean_issues.append(
             {

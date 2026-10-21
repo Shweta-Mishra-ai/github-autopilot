@@ -138,3 +138,72 @@ class TestImpact:
     def test_a_file_that_does_not_exist_is_flagged(self):
         out = self._impact({**self.BASE, "summary": "Touches app/billing/worker.py."})
         assert "Not in this repository: `app/billing/worker.py`" in out
+
+
+class TestNobodyIsMentionedByAModel:
+    """Round-4 audit M8: "I've assigned @bob" and "cc @security-team" in model
+    output notified those people; a planted mention in an issue was echoed."""
+
+    def test_quiet_mentions_leaves_code_alone(self):
+        from app.core.sanitizer import quiet_mentions
+
+        text = "Ping @bob and @org/team.\n```python\n@app.route('/')\n```\nUse `@cache` here."
+        assert quiet_mentions(text) == (
+            "Ping `@bob` and `@org/team`.\n```python\n@app.route('/')\n```\nUse `@cache` here."
+        )
+        assert quiet_mentions("mail me at a@b.com") == "mail me at a@b.com"
+
+    def test_a_command_reply_mentions_only_the_requester(self):
+        from app.handlers.comments import service as svc
+
+        posted = []
+        with (
+            patch.object(svc, "get_installation_token", return_value="t"),
+            patch.object(svc, "load_config", return_value=MagicMock(footer="")),
+            patch.object(svc, "check_user_rate_limit", return_value=True),
+            patch.object(svc, "check_command_permission", return_value=(True, "")),
+            patch.object(svc, "post_comment", side_effect=lambda *a, **k: posted.append(a[4])),
+            patch.object(svc, "_dispatch", return_value="Fixed — cc @bob for review."),
+        ):
+            svc.handle_comment_event({
+                "action": "created", "comment": {"body": "/explain"},
+                "issue": {"number": 3, "title": "t", "body": "", "user": {"login": "amy"}},
+                "repository": {"full_name": "o/r"}, "installation": {"id": 1},
+                "sender": {"login": "maint"},
+            })
+        assert posted, "nothing was posted"
+        assert "`@bob`" in posted[-1]
+        assert "requested by @maint" in posted[-1]
+
+    def test_the_triage_welcome_claims_nothing_it_cannot_know(self):
+        from app.ai.validator import validate_issue_triage
+
+        r = validate_issue_triage({
+            "type": "bug", "priority": "high",
+            "welcome": "Thanks! This is a duplicate of #42, which was fixed in v2.3.1. "
+                       "I've assigned @bob. Could you share the stack trace?",
+        })
+        assert r["welcome"] == "Thanks! Could you share the stack trace?"
+
+
+def test_a_kind_label_contradicting_the_type_is_not_applied():
+    """Round-4 audit L3: an issue typed "feature" was labelled "bug"."""
+    from app.handlers.issues import triage_labels
+
+    assert triage_labels(["bug", "help wanted"], None, "feature") == ["help wanted 🙏"]
+    assert triage_labels(["bug", "enhancement"], None, "bug") == ["bug 🐛"]
+    assert triage_labels([], "priority: high 🔥", "security") == ["priority: high 🔥"]
+    assert triage_labels(["bug"], None, None) == ["bug 🐛"]
+
+
+def test_severity_words_models_use_are_mapped_not_demoted():
+    """Round-4 audit L2: "P0", "fatal", "security", "bug" became minor."""
+    from app.ai.validator import validate_code_review
+
+    def sev(word):
+        r = validate_code_review({"summary": "s", "issues": [{"severity": word, "issue": "x"}]})
+        return r["issues"][0]["severity"]
+
+    assert [sev(w) for w in ("P0", "fatal", "urgent")] == ["critical"] * 3
+    assert [sev(w) for w in ("p1", "security", "bug", "serious")] == ["major"] * 4
+    assert [sev(w) for w in ("nitpick", "trivial", "optional")] == ["nit"] * 3

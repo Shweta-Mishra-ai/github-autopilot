@@ -12,7 +12,7 @@ from __future__ import annotations
 from .errors import SectionUnavailable
 from app.ai.router import MAX_USER_CHARS, prompt_budget, router
 from app.ai.validator import is_unusable, validate_code_review
-from app.core.sanitizer import one_line, wrap_user_content
+from app.core.sanitizer import one_line, quiet_mentions, wrap_user_content
 from app.github.client import gh_get, gh_post
 
 from .classify import _is_generated, _review_sort_key
@@ -595,10 +595,14 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
                     "path": filename,
                     "line": anchor,
                     "side": "RIGHT",
-                    "body": f"**{severity}** — {issue_text}{drift}\n\n{fix_md}".strip(),
+                    "body": quiet_mentions(
+                        f"**{severity}** — {issue_text}{drift}\n\n{fix_md}".strip()
+                    ),
                     # Not part of the GitHub payload — popped before posting.
                     # Lets the fallback path render this finding in the body.
-                    "_fallback_md": f"- **{severity}** `{filename}:{anchor}`: {issue_text}{_fix_tail(fix)}",
+                    "_fallback_md": quiet_mentions(
+                        f"- **{severity}** `{filename}:{anchor}`: {issue_text}{_fix_tail(fix)}"
+                    ),
                 }
             )
 
@@ -652,13 +656,15 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
 
         inline_comments.extend(file_comments)
 
-        issues_md = (
-            "\n".join(unanchored)
-            if unanchored
-            else (
-                "✅ No issues found." if not issues else "_All findings posted as inline comments._"
-            )
-        )
+        if unanchored:
+            issues_md = "\n".join(unanchored)
+        elif issues:
+            issues_md = "_All findings posted as inline comments._"
+        elif withheld:
+            # Not "✅ No issues found." above a list of withheld findings.
+            issues_md = "No verified issues."
+        else:
+            issues_md = "✅ No issues found."
 
         # The heading states what was found, not a mark out of ten. The model
         # was asked for a per-file "score" with an example value of 8 in the
@@ -683,8 +689,13 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
             if withheld
             else ""
         )
-        # The heading must never say "no issues found" over a withheld finding.
-        heading = _finding_counts(issues)
+        # The heading must never say "no issues found" over a withheld finding:
+        # "no issues found · 1 withheld" contradicted itself.
+        heading = (
+            _finding_counts(issues)
+            if issues
+            else ("no verified issues" if withheld else "no issues found")
+        )
         if withheld:
             heading = f"{heading} · {len(withheld)} withheld"
         reviews.append(

@@ -282,3 +282,33 @@ def wrap_user_content(text: str, label: str = "USER_INPUT") -> str:
     layer would destroy the very markers it is meant to protect.
     """
     return f"<{label}>\n{_defang_delimiters(text)}\n</{label}>"
+
+
+# Code (fenced blocks and inline spans) is left alone: GitHub does not treat a
+# mention inside code as one, and `@app.route` in a suggestion must survive.
+_CODE_SPANS = re.compile(r"```.*?(?:```|\Z)|`[^`\n]*`", re.S)
+_MENTION = re.compile(
+    r"(?<![\w@/.`-])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?:/[A-Za-z0-9_-]+)?)(?![\w-])"
+)
+
+
+def quiet_mentions(text: str) -> str:
+    """
+    `text` with every @mention outside code turned into inline code, so it
+    notifies nobody.
+
+    Model output was posted as it came, and a model answers "I've assigned
+    @bob" or "cc @security-team" — or repeats a mention an issue author
+    planted for it — and GitHub notified whoever that is. Apply to text a
+    model wrote, before the bot adds the mentions it means (the author it is
+    replying to).
+    """
+    if not text or "@" not in text:
+        return text or ""
+    out, last = [], 0
+    for m in _CODE_SPANS.finditer(text):
+        out.append(_MENTION.sub(r"`@\1`", text[last : m.start()]))
+        out.append(m.group(0))
+        last = m.end()
+    out.append(_MENTION.sub(r"`@\1`", text[last:]))
+    return "".join(out)

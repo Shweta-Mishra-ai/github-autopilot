@@ -18,7 +18,7 @@ from flask import Flask, jsonify, request
 from app import __version__
 from app.core.logger import setup_logging
 from app.core.metrics import metrics
-from app.core.redis_client import is_redis_available
+import app.core.redis_client as redis_client
 from app.core.thread_pool import is_saturated, pool_stats, shutdown
 from app.core.webhook_security import MAX_PAYLOAD_BYTES, startup_check
 from app.github.deferred_reply import INTERNAL_PREFIX, REPLY_EVENT
@@ -437,7 +437,7 @@ def health():
     from app.core.redis_client import redis_memory_status
     from app.github.rate_limit import get_status as gh_rl_status
 
-    redis_ok = is_redis_available()
+    redis_ok = redis_client.is_redis_available()
     redis_mem = redis_memory_status()
     # No call since start means no rate-limit headers have been seen: the
     # 5000 get_status() falls back to is a default, not a reading.

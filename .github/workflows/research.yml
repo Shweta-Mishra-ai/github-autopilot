@@ -38,6 +38,10 @@ jobs:
           python-version: "3.11"
       - name: Every harness compiles
         run: python -m py_compile benchmarks/*.py
+      - name: Harness helpers keep the fixes for the defects found in them
+        run: |
+          pip install "$(grep '^exrex==' requirements.txt)" pytest
+          python -m pytest -q tests
       - name: Every headline number in the manuscript matches the raw results
         run: python benchmarks/verify_paper.py
 

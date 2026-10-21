@@ -635,7 +635,7 @@
       "functions": 6,
       "classes": 1,
       "is_package": false,
-      "fan_in": 32,
+      "fan_in": 33,
       "fan_out": 1,
       "external_deps": [
         "__future__",
@@ -653,7 +653,7 @@
       "id": "app.core.repo_identity",
       "path": "app/core/repo_identity.py",
       "layer": "core",
-      "loc": 113,
+      "loc": 114,
       "functions": 3,
       "classes": 0,
       "is_package": false,
@@ -1254,14 +1254,15 @@
       "id": "app.handlers.pull_request",
       "path": "app/handlers/pull_request/__init__.py",
       "layer": "handlers",
-      "loc": 390,
-      "functions": 2,
+      "loc": 470,
+      "functions": 5,
       "classes": 0,
       "is_package": true,
       "fan_in": 2,
-      "fan_out": 26,
+      "fan_out": 27,
       "external_deps": [
         "__future__",
+        "json",
         "logging"
       ]
     },
@@ -3144,6 +3145,11 @@
     },
     {
       "source": "app.handlers.pull_request",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request",
       "target": "app.core.sanitizer",
       "kind": "import"
     },
@@ -3900,8 +3906,8 @@
   ],
   "stats": {
     "modules": 106,
-    "edges": 432,
-    "total_loc": 29617,
+    "edges": 433,
+    "total_loc": 29698,
     "layers": [
       "ai",
       "core",
@@ -3917,7 +3923,7 @@
       {
         "id": "app.core.redis_client",
         "loc": 570,
-        "fan_in": 32,
+        "fan_in": 33,
         "fan_out": 1
       },
       {

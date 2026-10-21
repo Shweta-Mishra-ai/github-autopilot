@@ -256,3 +256,31 @@ def test_a_description_is_asked_for_only_when_it_can_be_written(action, body, as
             pass
     analysis = next(p for p in prompts if "Analyze this Pull Request" in p)
     assert ('"description":' in analysis) is asked
+
+
+def test_a_retry_reruns_only_the_section_that_failed():
+    """Round-4 performance audit: a transient failure in one section re-ran
+    every section's model call on each of the queue's retries."""
+    answer = {
+        "type": "bugfix", "risk_level": "low", "risk_reason": "small", "summary": "s",
+        "review_focus": [], "confidence": 0.9, "has_gaps": False,
+        "files": [{"file": "app/x.py", "summary": "ok", "issues": []}],
+    }
+    asks = []
+
+    def ask(*a, **k):
+        asks.append(1)
+        return answer, META
+
+    def down(*a, **k):
+        raise AllProvidersDown()
+
+    _body, raised = _run(ask, down)
+    assert isinstance(raised, AllProvidersDown), "the event is raised for a retry"
+    first = len(asks)
+    assert first >= 2
+
+    body, raised = _run(ask, lambda *a, **k: ("Adds a branch.", META))
+    assert raised is None
+    assert len(asks) == first, "analysis, review and gaps were not asked again"
+    assert "Adds a branch." in body and "Not run on this commit" not in body

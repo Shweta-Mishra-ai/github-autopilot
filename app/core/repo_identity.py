@@ -51,6 +51,7 @@ _PREFIXES = (
     "pr_opened:{repo}#*",
     "pr_metadata:{repo}#*",
     "pr_high_risk:{repo}#*",
+    "pr_sections:{repo}#*",
     "autofix_outcome:{repo}:*",
     "commit_msg_suggested:{repo}:*",
     # Today's AI budget and command rate limits: a new repository under the

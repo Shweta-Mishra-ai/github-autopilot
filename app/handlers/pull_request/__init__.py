@@ -25,6 +25,8 @@ whether anything is posted at all.
 
 from __future__ import annotations
 
+import logging
+
 from app.github.auth import get_installation_token
 from app.github.client import gh_get, gh_post, gh_put, GitHubError
 from app.github.notifications import notify_high_risk_pr, notify_pr_opened
@@ -256,9 +258,13 @@ def handle(payload: dict):
     # replaces the "not run" notice.
     retryable: list[BaseException] = []
 
+    succeeded: set = set()
+
     def _guarded(section, fn, default):
         try:
-            return fn()
+            out = fn()
+            succeeded.add(section)
+            return out
         except InjectionRejected as e:
             log.warning(f"pr.{section}_input_rejected: {e}")
             rejected.append(section)
@@ -285,7 +291,37 @@ def handle(payload: dict):
             failed.append(f"{section} — {why}")
             return default
 
-    analysis_md = _guarded(
+    # Sections that already succeeded on this commit, kept when the event was
+    # last raised for a retry. The queue re-runs the whole handler, and every
+    # section's model call was repeated — an outage in one section spent the
+    # quota of all four up to four times.
+    head_sha = (pr.get("head") or {}).get("sha", "")
+    done = _sections_done(repo, pr_number, head_sha)
+
+    def _section(name, fn, default):
+        if name in done:
+            log.info(f"pr.section_reused section={name} sha={head_sha[:7]}")
+            return done[name]
+        return _guarded(name, fn, default)
+
+    def _retry_later():
+        results = {
+            "analysis": analysis_md,
+            "summary": summary_md,
+            "code review": (review_md, []),
+            "test gaps": gaps_md,
+        }
+        # Every section that ran to completion, empty results included: "no
+        # gaps" is an answer, not a reason to ask again.
+        _remember_sections(
+            repo,
+            pr_number,
+            head_sha,
+            {k: v for k, v in results.items() if k in succeeded or k in done},
+        )
+        raise retryable[0]
+
+    analysis_md = _section(
         "analysis",
         lambda: _analyze_pr(
             pr,
@@ -301,21 +337,21 @@ def handle(payload: dict):
         ),
         "",
     )
-    summary_md = _guarded(
+    summary_md = _section(
         "summary",
         lambda: _build_pr_summary(pr, repo, pr_number, files, token, config, log),
         "",
     )
 
     if config.get("pull_requests", "code_review", default=True):
-        review_md, inline_comments = _guarded(
+        review_md, inline_comments = _section(
             "code review",
             lambda: _review_code(pr, repo, pr_number, files, token, config, gate, context, log),
             ("", []),
         )
 
     if config.get("pull_requests", "detect_test_gaps", default=True):
-        gaps_md = _guarded(
+        gaps_md = _section(
             "test gaps",
             lambda: _detect_test_gaps(pr, repo, pr_number, files, token, config, log),
             "",
@@ -340,7 +376,7 @@ def handle(payload: dict):
     if not any([analysis_md, summary_md, review_md, gaps_md, notices_md]):
         log.info("pr.nothing_to_report — staying silent")
         if retryable:
-            raise retryable[0]
+            _retry_later()
         return
 
     # A push with nothing to flag never CREATES a comment — "still fine" is not
@@ -376,7 +412,7 @@ def handle(payload: dict):
             else:
                 log.info("pr.nothing_to_flag — no report to refresh, staying silent")
             if retryable:
-                raise retryable[0]
+                _retry_later()
             return
         upsert_sticky(repo, pr_number, token, MARKER_PR_REPORT, body + config.footer)
         log.done("pr_report_upserted")
@@ -387,4 +423,48 @@ def handle(payload: dict):
         if is_transient(e):
             raise
     if retryable:
-        raise retryable[0]
+        _retry_later()
+
+
+_SECTIONS_TTL = 2 * 3600  # covers the queue's retries (30 s, 5 min, 30 min)
+
+
+def _sections_key(repo: str, pr_number, head_sha: str) -> str:
+    return f"pr_sections:{repo}#{pr_number}:{head_sha}"
+
+
+def _sections_done(repo: str, pr_number, head_sha: str) -> dict:
+    """Sections that succeeded on this commit before a retry; {} when none
+    (or when they cannot be read — then everything simply runs again)."""
+    if not head_sha:
+        return {}
+    try:
+        import json
+
+        from app.core.redis_client import get_redis
+
+        raw = get_redis().get(_sections_key(repo, pr_number, head_sha))
+        done = json.loads(raw) if raw else {}
+        if isinstance(done.get("code review"), list):
+            done["code review"] = tuple(done["code review"])
+        return done if isinstance(done, dict) else {}
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"pr.sections_unreadable: {type(e).__name__}")
+        return {}
+
+
+def _remember_sections(repo: str, pr_number, head_sha: str, sections: dict) -> None:
+    """Keep the sections that completed, for the retry."""
+    kept = dict(sections)
+    if not head_sha or not kept:
+        return
+    try:
+        import json
+
+        from app.core.redis_client import get_redis
+
+        get_redis().set(
+            _sections_key(repo, pr_number, head_sha), json.dumps(kept), ex=_SECTIONS_TTL
+        )
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"pr.sections_not_kept: {type(e).__name__}")

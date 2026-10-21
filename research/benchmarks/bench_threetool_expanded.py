@@ -38,11 +38,24 @@ PAIRED RETENTION
   filter, Gitleaks' entropy and stopwords) then cancel out, and what remains
   is the effect of the context alone.
 
+BEYOND THE BOUNDARY BATTERY
+  ENCODING_CONTEXTS adds the families the paper names as untested -- escaped
+  strings, template interpolation, markup, other file syntaxes, and
+  transformations of the value itself (base64, url-encoding, a split
+  string). They are reported per family and kept out of BR.
+
+HOW OFTEN THE HYPHEN DEFECT REACHES A CREDENTIAL
+  For every type whose format allows a final hyphen, P(final '-') is
+  estimated from 1000 fresh draws of the type's own generator and
+  multiplied by each tool's conditional failure rate: the marginal
+  probability the paper computes for five rules, here for every type.
+
 Seeded (20260823).
 Run: python bench_threetool_expanded.py > results/threetool_expanded_bench.json
 """
 from __future__ import annotations
 
+import base64
 import glob
 import json
 import logging
@@ -57,6 +70,7 @@ import tempfile
 import time
 import tomllib
 from collections import Counter, defaultdict
+from urllib.parse import quote
 
 import exrex
 
@@ -85,6 +99,44 @@ FALLBACK = {
     "trufflehog": set(),
 }
 TOOLS = ("autopilot", "gitleaks", "trufflehog")
+
+# ── encoding, escaping and interpolation: beyond the boundary battery ──────
+# The paper's Threats section names these as the family its battery does not
+# cover. Each is a way a credential is written in real source; they are
+# reported as their own families and kept out of BR, so the paper's battery
+# stays comparable. `k` is the identifier (keyword-bearing for keyword
+# types), `v` the credential.
+def _b64(s):
+    return base64.b64encode(s.encode()).decode()
+
+
+ENCODING_CONTEXTS = {
+    # escaped strings: the credential is followed by a backslash
+    "esc_json_in_string": ("escaping", lambda k, v: f'payload = "{{\\"{k}\\": \\"{v}\\"}}"'),
+    "esc_newline_after":  ("escaping", lambda k, v: f'{k} = "{v}\\n"'),
+    "esc_quote_around":   ("escaping", lambda k, v: f'msg = "{k}=\\"{v}\\""'),
+    # template interpolation
+    "tpl_shell_default":  ("interpolation", lambda k, v: f'{k.upper()}="${{{k.upper()}:-{v}}}"'),
+    "tpl_js_template":    ("interpolation", lambda k, v: f"const u = `https://api.example.com/v1?{k}={v}`;"),
+    "tpl_bearer_header":  ("interpolation", lambda k, v: f'headers = {{"Authorization": "Bearer {v}"}}  # {k}'),
+    "tpl_jinja_default":  ("interpolation", lambda k, v: f'{k}: "{{{{ lookup(\'env\', \'X\') | default(\'{v}\') }}}}"'),
+    # markup
+    "mk_xml_attribute":   ("markup", lambda k, v: f'<add key="{k}" value="{v}" />'),
+    "mk_markdown_code":   ("markup", lambda k, v: f"Set `{k}` to `{v}` before running."),
+    "mk_html_escaped":    ("markup", lambda k, v: f"<code>{k}=&quot;{v}&quot;</code>"),
+    # other file syntaxes
+    "fs_dockerfile_env":  ("file_syntax", lambda k, v: f"ENV {k.upper()}={v}"),
+    "fs_yaml_block":      ("file_syntax", lambda k, v: f"{k}: |\n  {v}"),
+    "fs_toml_inline":     ("file_syntax", lambda k, v: f'creds = {{ {k} = "{v}" }}'),
+    # the value itself transformed
+    "tx_base64_wrapped":  ("transformed", lambda k, v: f'{k} = "{_b64(v)}"'),
+    "tx_k8s_secret":      ("transformed", lambda k, v: f"  {k}: {_b64(v)}"),
+    "tx_url_encoded":     ("transformed", lambda k, v: f'endpoint = "https://api.example.com/v1?{k}={quote(v, safe="")}"'),
+    "tx_split_concat":    ("transformed", lambda k, v: f'{k} = "{v[:len(v) // 2]}" + "{v[len(v) // 2:]}"'),
+}
+ENCODING_FAMILY = {c: fam for c, (fam, _fn) in ENCODING_CONTEXTS.items()}
+NOT_IN_BR = gl.NOT_IN_BR | set(ENCODING_CONTEXTS)
+P_HYPHEN_DRAWS = 1000
 
 # bench_mutation.py's exclusions, so AP types are the paper's 24 rules.
 AP_STRUCTURAL = {
@@ -238,12 +290,17 @@ def build(types, workdir):
             rec["excluded"] = f"only {len(samples)} valid samples in {MAX_DRAWS} draws"
             continue
         base = gl.KEYWORD_CONTEXTS if t["kw_pattern"] else gl.PREFIX_CONTEXTS
-        contexts = {**base, **gl.EXTENSION_CONTEXTS[stratum]}
+        contexts = {**base, **gl.EXTENSION_CONTEXTS[stratum],
+                    **{c: fn for c, (_fam, fn) in ENCODING_CONTEXTS.items()}}
         applicable = [m for m, ch in gl.FINAL_CHAR.items() if all(
             sre.fullmatch(v[:-1] + ch) and t["accepts"](
                 v[:-1] + ch, gl.PREFIX_CONTEXTS["canonical"](k, v[:-1] + ch))
             for k, v in samples)]
         rec["final_char_applicable"] = applicable
+        # url-encoding leaves [A-Za-z0-9_.~-] unchanged, so for many types
+        # tx_url_encoded is url_query again; record how often it is not
+        rec["url_encoding_changes_value"] = round(
+            sum(quote(v, safe="") != v for _k, v in samples) / len(samples), 4)
         for i, (k, v) in enumerate(samples):
             lines = {ctx: fn(k, v) for ctx, fn in contexts.items()}
             for m in applicable:
@@ -264,9 +321,12 @@ _SID = re.compile(r"(s\d{7})\.txt")
 def scan_autopilot(workdir, meta):
     out, t0 = {}, time.perf_counter()
     for sid in meta:
-        line = open(os.path.join(workdir, f"{sid}.txt")).read().rstrip("\n")
-        out[sid] = {f.pattern_name for f in scan_diff("+" + line + "\n",
-                                                       file_path="app/settings.py")}
+        with open(os.path.join(workdir, f"{sid}.txt")) as fh:
+            text = fh.read()
+        # every line added, as the push handler sees a new file (some
+        # encoding contexts span two lines)
+        diff = "".join("+" + ln + "\n" for ln in text.splitlines())
+        out[sid] = {f.pattern_name for f in scan_diff(diff, file_path="app/settings.py")}
     return out, time.perf_counter() - t0
 
 
@@ -341,10 +401,10 @@ def analyse_tool(tool, meta, findings, types):
                     if paired else None,
                 }
             rec["cells"] = cells
-            rec["BR"] = min(v["rule_ok"] for k, v in cells.items() if k not in gl.NOT_IN_BR)
+            rec["BR"] = min(v["rule_ok"] for k, v in cells.items() if k not in NOT_IN_BR)
             rec["fragile_contexts"] = sorted(
                 k for k, v in cells.items()
-                if k not in gl.NOT_IN_BR and v["paired_retention"] is not None
+                if k not in NOT_IN_BR and v["paired_retention"] is not None
                 and v["paired_retention"] < 0.5)
         per[tid] = rec
     return per
@@ -435,6 +495,68 @@ def context_summary(per_tool, type_ids):
             for c, a in agg.items()}
 
 
+def encoding_summary(per_tool, type_ids):
+    """Per family of ENCODING_CONTEXTS, over types the tool covers."""
+    out = {}
+    for fam in sorted(set(ENCODING_FAMILY.values())):
+        ctxs = [c for c, f in ENCODING_FAMILY.items() if f == fam]
+        rows = defaultdict(list)
+        for t in type_ids:
+            rec = per_tool[t]
+            if not rec["covered"]:
+                continue
+            for c in ctxs:
+                r = rec["cells"].get(c, {}).get("paired_retention")
+                if r is not None:
+                    rows[c].append(r)
+        out[fam] = {c: {"types": len(v), "total_failure": sum(x == 0.0 for x in v),
+                        "mean_paired_retention": round(sum(v) / len(v), 4) if v else None}
+                    for c, v in rows.items()}
+    return out
+
+
+def hyphen_marginal(types, info, per):
+    """P(credential ends in '-') under each type's own generator, from
+    P_HYPHEN_DRAWS fresh seeded draws, times each tool's conditional failure
+    rate on hyphen-terminated values: the marginal probability, the paper's
+    RQ2 quantity, for every type where the format allows a final hyphen."""
+    random.seed(SEED + 1)
+    out = {}
+    for t in types:
+        rec = info.get(t["id"], {})
+        if "trailing_hyphen" not in rec.get("final_char_applicable", []):
+            continue
+        sre = re.compile(t["secret"], re.ASCII)
+        n = h = 0
+        for _ in range(P_HYPHEN_DRAWS * 3):
+            v = exrex.getone(t["secret"], limit=40)
+            if gl._printable_ascii(v) and sre.fullmatch(v):
+                n += 1
+                h += v.endswith("-")
+                if n == P_HYPHEN_DRAWS:
+                    break
+        p = h / n if n else None
+        row = {"n_draws": n, "p_final_hyphen": round(p, 5) if p is not None else None}
+        for tool in TOOLS:
+            r = per[tool][t["id"]]
+            cell = r.get("cells", {}).get("trailing_hyphen") if r["covered"] else None
+            ret = cell["paired_retention"] if cell else None
+            row[tool] = (round(p * (1 - ret), 5)
+                         if p is not None and ret is not None else None)
+        out[t["id"]] = row
+    summary = {}
+    for tool in TOOLS:
+        vals = [r[tool] for r in out.values() if r[tool] is not None]
+        summary[tool] = {
+            "types": len(vals),
+            "types_marginal_at_least_1_in_100": sum(v >= 0.01 for v in vals),
+            "types_marginal_nonzero": sum(v > 0 for v in vals),
+            "max_marginal": max(vals) if vals else None,
+            "mean_marginal": round(sum(vals) / len(vals), 5) if vals else None,
+        }
+    return {"summary": summary, "per_type": out}
+
+
 def main():
     random.seed(SEED)
     cfg = tomllib.loads(open(gl.GITLEAKS_TOML, "rb").read().decode())
@@ -463,6 +585,7 @@ def main():
     neutral = {"autopilot_vs_gitleaks": "TH", "autopilot_vs_trufflehog": "GL",
                "gitleaks_vs_trufflehog": "AP"}
     by_src = {g: compare(per, ids, "label_matched") for g, ids in src.items()}
+    marginal = hyphen_marginal(types, info, per)
     return {
         "design": __doc__.strip().splitlines()[0],
         "seed": SEED,
@@ -488,8 +611,13 @@ def main():
                                     for k, g in neutral.items()},
         "context_summary": {tool: {g: context_summary(per[tool], ids)
                                    for g, ids in src.items()} for tool in TOOLS},
+        "encoding_family_summary": {tool: encoding_summary(per[tool], tids)
+                                    for tool in TOOLS},
+        "encoding_families": ENCODING_FAMILY,
+        "hyphen_marginal_probability": marginal,
         "per_type": {t: {"stratum": info[t]["stratum"],
                          "final_char_applicable": info[t].get("final_char_applicable", []),
+                         "url_encoding_changes_value": info[t].get("url_encoding_changes_value"),
                          **{tool: per[tool][t] for tool in TOOLS}} for t in tids},
     }
 

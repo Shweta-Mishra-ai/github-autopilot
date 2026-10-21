@@ -45,6 +45,10 @@ rather than silently measuring something else.
 | `psf/requests` | commit `8f8b212` | `git rev-parse` after a pinned fetch |
 | `pallets/flask` | commit `d318b68` | `git rev-parse` after a pinned fetch |
 | `redis/redis-py` | commit `081923b` | `git rev-parse` after a pinned fetch |
+| Gitleaks rule table | `config/gitleaks.toml` at v8.21.2 | SHA-256 of the file |
+| TruffleHog detector source | commit `1aa1871` (tag v3.82.13) | `git rev-parse` after a pinned fetch |
+| 31-repository multi-language corpus | one commit each, `metadata/corpus_commits.txt` | `git rev-parse` after a pinned fetch |
+| `exrex` (generates every credential) | 0.12.0, `requirements.txt` | exact pin |
 
 Full values: `metadata/`, `environment/checksums.txt`.
 
@@ -72,6 +76,19 @@ benchmarks/            harnesses, one per research question, plus analyses
   paired_stats.py        RQ4      exact paired sign test at the type level
   bench_cooccurrence.py  RQ4      four deployment conditions
   bench_realworld.py     RQ5      four pinned open-source projects
+  -- extended study (full rule tables, more types,
+     more languages, encodings, real-world exposure) --
+  bench_gitleaks_fulltable.py    every rule in Gitleaks' table (195), credentials
+                         generated from each rule's own secret group
+  bench_threetool_expanded.py    774 credential types generated from all three
+                         tools' rule tables, run through all three tools;
+                         label-matched coverage, neutral-generator pairwise
+                         tests, 17 encoding/escaping/interpolation contexts,
+                         hyphen marginal probability for every type
+  bench_realworld_multilang.py   31 pinned repositories, 9 languages, 9.9M lines,
+                         one identical file set for all tools: false positives
+                         (A), real credential literals by following character
+                         (B), credential-shaped tokens of any provider (C)
   bench_systems.py       SUPP     queueing, fault injection
   bench_scaling.py       SUPP     concurrency scaling, synchronised start
   gen_figs4.py           all figures, vector PDF + 600 dpi PNG
@@ -88,6 +105,35 @@ paper/                 canonical manuscript: Springer/EMSE submission
 metadata/              subject commit, corpus commits, tool versions + digests
 environment/           interpreter and service versions, checksums
 ```
+
+## Continuous verification
+
+`.github/workflows/research.yml` runs whenever this directory changes, apart
+from the application's CI:
+
+- every harness compiles, and `verify_paper.py` re-derives every number in
+  the manuscript from `results/`;
+- `bench_gitleaks_fulltable.py` is re-run from scratch against the
+  checksum-verified Gitleaks binary and rule table, and the job fails if its
+  output differs from the committed result in anything but wall time.
+
+The seeded harnesses give byte-identical output on CPython 3.11 and 3.13 with
+`exrex` 0.12.0.
+
+## Harness defects found during the extended study
+
+Each was found by checking a surprising number, fixed before any reported
+result, and is recorded in the commit that fixed it:
+
+- `exrex` draws Python's Unicode classes for `\w` and line breaks for `\s`,
+  which are outside Go's ASCII classes; samples were outside the rule's
+  language. Classes are now translated to Go's before generation.
+- Gitleaks' keyword prefilter and path-restricted rules were not modelled,
+  so filtered samples were scored as misses.
+- TruffleHog's filesystem line numbers are unreliable; joining its findings
+  to source lines by number scored it 0/14 on real literals. Findings are
+  now located by their reported secret.
+- One literal matched by several generators' types was counted once per type.
 
 ## A harness defect worth knowing about
 

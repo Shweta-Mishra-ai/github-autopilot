@@ -15,6 +15,7 @@ from app.core.sanitizer import one_line, wrap_user_content
 
 from .constants import COMMAND_CONTEXT_CHARS
 from .dispatcher import has_code
+from .evidence import code_names, drop_unmeasured, has_unmeasured, missing_from
 
 log = logging.getLogger(__name__)
 
@@ -268,14 +269,42 @@ Return JSON:
     if not r or not r.get("gaps"):
         return "## 🔍 Test Coverage Gaps\n\n_No gaps identified._"
 
-    lines = [f"## 🔍 Test Coverage Gaps\n\n**{r.get('coverage_assessment', '')}**\n"]
-    for i, gap in enumerate(r.get("gaps", [])[:5], 1):
+    # Checked against what the model was shown. A coverage percentage is
+    # never measured here, and a gap in a function the diff does not contain
+    # ("OrderExporter.to_csv has no tests") is about code that is not there.
+    shown = context[:COMMAND_CONTEXT_CHARS]
+    verifiable = has_code(context)
+    assessment, _ = drop_unmeasured(str(r.get("coverage_assessment") or ""))
+    lines = ["## 🔍 Test Coverage Gaps"]
+    if assessment:
+        lines.append(f"**{assessment}**")
+    shown_gaps, hidden = [], 0
+    for gap in r.get("gaps", []):
+        if not isinstance(gap, dict) or not str(gap.get("area") or "").strip():
+            continue
+        if verifiable and _names_only_absent_code(gap.get("area"), shown):
+            hidden += 1
+            continue
+        shown_gaps.append(gap)
+    for i, gap in enumerate(shown_gaps[:5], 1):
         lines.append(
             f"### {i}. {gap.get('area', '')} "
-            f"— Risk: `{gap.get('risk', 'medium').upper()}`\n"
+            f"— Risk: `{str(gap.get('risk') or 'not given').upper()}`\n"
             f"**Suggested test:** {gap.get('suggested_test', '')}"
         )
+    if not shown_gaps:
+        lines.append("_No gaps identified in the code shown._")
+    if hidden:
+        lines.append(
+            f"_{hidden} reported gap(s) named code that is not in the diff and were not shown._"
+        )
     return "\n\n".join(lines)
+
+
+def _names_only_absent_code(text, shown: str) -> bool:
+    """True when `text` names code and none of it is in `shown`."""
+    names = code_names(text)
+    return bool(names) and len(missing_from(text, shown)) == len(names)
 
 
 def cmd_perf(context: str) -> str:
@@ -324,21 +353,48 @@ Return JSON:
     )
     rating = rating or "not given"
 
+    # A location the diff does not contain is a finding about code that is not
+    # there; a speedup is a number nobody measured.
+    shown = context[:COMMAND_CONTEXT_CHARS]
+    verifiable = has_code(context)
+    issues, hidden = [], 0
+    for issue in r.get("complexity_issues") or []:
+        if not isinstance(issue, dict) or not str(issue.get("issue") or "").strip():
+            continue
+        if verifiable and _names_only_absent_code(issue.get("location"), shown):
+            hidden += 1
+            continue
+        issues.append(issue)
     issues_md = ""
-    for i, issue in enumerate(r.get("complexity_issues", [])[:4], 1):
+    for i, issue in enumerate(issues[:4], 1):
+        improvement = str(issue.get("improvement") or "").strip()
+        improvement_md = (
+            f"**Expected effect:** {improvement}\n"
+            if improvement and not has_unmeasured(improvement)
+            else ""
+        )
+        fix = str(issue.get("fix") or "").strip()
+        fix_md = f"**Fix:**\n```python\n{_clip(fix, 2000)}\n```\n" if fix else ""
         issues_md += (
             f"\n### {i}. `{issue.get('location', '')}` "
             f"— {issue.get('current_complexity', '')}\n"
             f"**Problem:** {issue.get('issue', '')}\n\n"
-            f"**Fix:**\n```python\n{_clip(issue.get('fix', ''), 2000)}\n```\n"
-            f"**Improvement:** {issue.get('improvement', '')}\n"
+            f"{fix_md}{improvement_md}"
+        )
+    if hidden:
+        issues_md += (
+            f"\n_{hidden} reported issue(s) named code that is not in the diff "
+            "and were not shown._\n"
         )
 
-    qw_md = "\n".join(f"- {w}" for w in r.get("quick_wins", [])[:5]) or "_No quick wins found._"
+    summary, _ = drop_unmeasured(str(r.get("summary") or ""))
+    summary_md = f"**Summary:** {summary}\n" if summary else ""
+    wins = [w for w in (r.get("quick_wins") or []) if str(w).strip() and not has_unmeasured(str(w))]
+    qw_md = "\n".join(f"- {w}" for w in wins[:5]) or "_No quick wins found._"
     return (
         f"## ⚡ Performance Analysis\n\n"
         f"**Rating:** {r_emoji} {rating.capitalize()}\n\n"
-        f"**Summary:** {r.get('summary', '')}\n"
+        f"{summary_md}"
         f"{issues_md}\n"
         f"### 🎯 Quick Wins\n{qw_md}"
     )

@@ -42,7 +42,7 @@ def _run(n):
 def test_the_highest_version_is_the_base_not_the_first_listed():
     _out, prompts, calls = _run(3)
     assert any("/compare/v1.10.0...HEAD" in c for c in calls)
-    assert "version after v1.10.0" in prompts[0]
+    assert "changes since v1.10.0" in prompts[0]
 
 
 def test_every_commit_since_the_tag_is_sent():
@@ -113,7 +113,7 @@ def test_a_tag_not_reachable_from_head_falls_back_to_the_commit_list():
     prompts = []
     with patch.object(rv, "gh_get", side_effect=gh), \
          patch.object(rv.router, "ask_text",
-                      side_effect=lambda s, u, **k: (prompts.append(u), ("## [1.2.1]", "m"))[1]):
+                      side_effect=lambda s, u, **k: (prompts.append(u), ("### Changed\n- Unreleased work", "m"))[1]):
         out = rv.cmd_changelog("o/r", "t")
     assert "CHANGELOG Entry" in out
     assert "unreleased" in prompts[0] and "shipped" not in prompts[0]

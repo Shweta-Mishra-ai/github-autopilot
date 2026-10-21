@@ -481,8 +481,12 @@ class TestNonNumericConfidenceKeepsTheAnalysis:
         assert "Failed" not in out
         assert "Confidence:" not in out, "invented a percentage the model never gave"
 
-    def test_a_real_confidence_is_still_shown(self):
-        assert "Model's self-estimate: 90%" in self._ci(0.9)
+    def test_a_given_confidence_is_not_shown_either(self):
+        """Round-4 audit M5: "self-estimate: 93%" sat under a root cause
+        naming a test the log never mentions. No self-rating is printed."""
+        out = self._ci(0.9)
+        assert "yanked release" in out
+        assert "90%" not in out and "self-estimate" not in out
 
 
 class TestReleaseStopsAtTheTag:
@@ -1171,6 +1175,7 @@ class TestRepoFileContext:
         guarded_ask never forwards, and passed vacuously."""
         from app.ai import guarded
         from app.ai import hallucination
+        from app.handlers.comments import impact as im
         from app.handlers.comments import reviewer as rv
 
         pr_files = [{"filename": "app/auth.py"}]
@@ -1188,7 +1193,7 @@ class TestRepoFileContext:
             return seen["verdict"]
 
         with (
-            patch.object(rv, "gh_get", side_effect=gh),
+            patch.object(im, "gh_get", side_effect=gh),
             patch.object(guarded, "safe_router_ask", return_value=(answer, MagicMock())),
             patch.object(guarded, "check_response", side_effect=recording_check),
         ):

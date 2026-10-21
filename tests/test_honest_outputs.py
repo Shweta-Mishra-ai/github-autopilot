@@ -37,10 +37,25 @@ class TestCiConfidenceIsNeverInvented:
         out = self._ci({"root_cause": "x", "fix": "y", "prevention": "z"})
         assert "Confidence" not in out
 
-    def test_a_given_confidence_is_printed(self):
+    def test_a_given_confidence_is_not_printed(self):
+        """Round-4 audit M5: the model's rating of itself is not evidence."""
         out = self._ci({"root_cause": "x", "fix": "y", "prevention": "z", "confidence": 0.4})
-        # Labelled as the model's guess about itself, not a measured figure.
-        assert "Model's self-estimate: 40% (its own guess, not a measured probability)" in out
+        assert "40%" not in out and "self-estimate" not in out
+
+    def test_a_cause_naming_what_the_log_lacks_is_marked(self):
+        out = self._ci(
+            {"root_cause": "tests/test_billing.py::test_refund fails", "fix": "y"},
+            context="FAILED tests/test_orders.py::test_lookup - assert 404 == 200",
+        )
+        assert "Root Cause (not supported by the log)" in out
+        assert "`tests/test_billing.py`" in out and "`test_refund`" in out
+
+    def test_a_cause_the_log_shows_is_not_marked(self):
+        out = self._ci(
+            {"root_cause": "tests/test_orders.py::test_lookup gets a 404", "fix": "y"},
+            context="FAILED tests/test_orders.py::test_lookup - assert 404 == 200",
+        )
+        assert "**Root Cause:**" in out and "Not in the log" not in out
 
     def test_metadata_only_analysis_says_so(self):
         runs = {
@@ -64,23 +79,37 @@ class TestCiConfidenceIsNeverInvented:
 
 
 class TestChangelogKnowsTheDate:
-    def test_the_prompt_carries_todays_date(self):
-        import datetime
-
-        seen = {}
-
-        def ask_text(system, user, **kw):
-            seen["user"] = user
-            return "## [1.0.1]", MagicMock()
-
-        commits = [{"sha": "a", "commit": {"message": "fix: x"}}]
+    def _changelog(self, answer, message="fix: crash in the order lookup"):
+        commits = [{"sha": "a", "commit": {"message": message}}]
         with (
             patch.object(rv, "gh_get", side_effect=[[], commits]),
-            patch.object(rv.router, "ask_text", side_effect=ask_text),
+            patch.object(rv.router, "ask_text", return_value=(answer, MagicMock())),
         ):
-            rv.cmd_changelog("o/r", "t")
+            return rv.cmd_changelog("o/r", "t")
+
+    def test_the_heading_is_written_by_the_code_with_todays_date(self):
+        """The model's "## [X.Y.Z] - YYYY-MM-DD" placeholder was published."""
+        import datetime
+
+        out = self._changelog("## [X.Y.Z] - YYYY-MM-DD\n### Fixed\n- Crash in the order lookup")
         today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
-        assert today in seen["user"]
+        assert f"## [Unreleased] - {today}" in out
+        assert "X.Y.Z" not in out and "YYYY" not in out
+
+    def test_entries_that_match_no_commit_are_removed(self):
+        """Round-4 audit M3: "OAuth2 login support" and "Order export to CSV"
+        were published for a release whose only commit fixed a README typo."""
+        out = self._changelog(
+            "### Added\n- OAuth2 login support\n- Export to CSV\n### Fixed\n- Typo in README",
+            message="fix: typo in README",
+        )
+        assert "Typo in README" in out
+        assert "OAuth2" not in out and "CSV" not in out
+        assert "2 line(s) the model wrote matched no commit" in out
+
+    def test_nothing_matching_is_not_published_as_an_entry(self):
+        out = self._changelog("### Added\n- OAuth2 login support")
+        assert "No Changelog Entry Produced" in out
 
 
 class TestRedisUrlNeverLogged:

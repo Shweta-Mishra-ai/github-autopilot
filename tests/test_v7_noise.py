@@ -281,33 +281,33 @@ class TestPatternAlert:
         fake.incr.return_value = 7  # counter jumped past 3
         fake.set.return_value = True  # alerted-flag NX succeeds
         with patch("app.core.redis_client.get_redis", return_value=fake):
-            assert ci_mod._track_failure_pattern("o/r", "build", "flaky") is True
+            assert ci_mod._track_failure_pattern("o/r", 1, "build", "flaky") is True
 
     def test_does_not_refire_inside_the_window(self):
         fake = MagicMock()
         fake.incr.return_value = 9
         fake.set.return_value = None  # alerted flag already set
         with patch("app.core.redis_client.get_redis", return_value=fake):
-            assert ci_mod._track_failure_pattern("o/r", "build", "flaky") is False
+            assert ci_mod._track_failure_pattern("o/r", 1, "build", "flaky") is False
 
     def test_below_threshold_does_not_fire(self):
         fake = MagicMock()
         fake.incr.return_value = 2
         with patch("app.core.redis_client.get_redis", return_value=fake):
-            assert ci_mod._track_failure_pattern("o/r", "build", "flaky") is False
+            assert ci_mod._track_failure_pattern("o/r", 1, "build", "flaky") is False
 
     def test_window_starts_on_first_failure_only(self):
         """expire() on every incr meant the 24h window never actually rolled."""
         fake = MagicMock()
         fake.incr.return_value = 1
         with patch("app.core.redis_client.get_redis", return_value=fake):
-            ci_mod._track_failure_pattern("o/r", "build", "x")
+            ci_mod._track_failure_pattern("o/r", 1, "build", "x")
         fake.expire.assert_called_once()
 
         fake2 = MagicMock()
         fake2.incr.return_value = 2
         with patch("app.core.redis_client.get_redis", return_value=fake2):
-            ci_mod._track_failure_pattern("o/r", "build", "x")
+            ci_mod._track_failure_pattern("o/r", 1, "build", "x")
         fake2.expire.assert_not_called()
 
 

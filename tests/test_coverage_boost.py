@@ -129,11 +129,14 @@ def test_reviewer_commands(mock_guarded_ask, mock_router, mock_gh_get):
         res = R.cmd_budget()
         assert "Budget" in res
 
-    # cmd_report
+    # cmd_report: this mock answers every read with data that is not
+    # analytics data, so this is the unreadable-store path — asserted as that,
+    # not as "Report" (which every outcome contains).
     mock_redis.lrange.return_value = ['{"repo": "r", "pr": 1, "by": "u", "at": 123, "sha": "abc"}']
     with patch("app.core.redis_client.get_redis", return_value=mock_redis):
         res = R.cmd_report("repo")
-        assert "Report" in res
+        assert res.startswith("## ⚠️ Report Unavailable"), res
+        assert "not a report of zero activity" in res
 
     # cmd_impact
     mock_gh_get.side_effect = None
@@ -144,15 +147,17 @@ def test_reviewer_commands(mock_guarded_ask, mock_router, mock_gh_get):
                                       "requires_migration": False,
                                       "review_priority": "low",
                                       "notes": ""}, None)
-    res = R.cmd_impact("repo", 1, {"pull_request": {}}, "token")
-    assert "Impact" in res
+    with patch("app.handlers.comments.impact.gh_get", mock_gh_get):
+        res = R.cmd_impact("repo", 1, {"pull_request": {}}, "token")
+    # Not just "Impact": "Impact analysis failed" contains it too.
+    assert res.startswith("## 💥 Blast Radius — PR #1"), res
 
     # cmd_changelog: "some text" is not a changelog entry, and is no longer
     # published inside a "CHANGELOG Entry" block as though it were one.
     mock_gh_get.side_effect = gh_get_side_effect
     res = R.cmd_changelog("repo", "token")
     assert "No Changelog Entry Produced" in res
-    mock_router.ask_text.return_value = ("## [1.0.1] - 2026-10-14\n### Fixed\n- x", None)
+    mock_router.ask_text.return_value = ("### Fixed\n- Commit msg", None)
     res = R.cmd_changelog("repo", "token")
     assert "CHANGELOG Entry" in res
 

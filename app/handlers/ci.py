@@ -18,6 +18,15 @@ log = logging.getLogger(__name__)
 
 SKIP_CONCLUSIONS = {"skipped", "neutral", "cancelled"}
 
+# Lines every failed job prints, whatever failed. Not evidence of a cause.
+_BOILERPLATE = re.compile(
+    r"^\W*(?:##\[error\]\s*)?(?:Error:\s*)?(?:Process completed with exit code \d+"
+    r"|The process '[^']*' failed with exit code \d+|exit (?:code|status) \d+"
+    r"|\d+ (?:tests? )?(?:failed|errors?)(?:, \d+ \w+)*(?: in [\d.]+s)?|FAILED|ERROR|Error|"
+    r"Command failed|Build failed|Tests? failed)\W*$",
+    re.I,
+)
+
 
 def handle(payload: dict):
     action = payload.get("action")
@@ -132,8 +141,19 @@ def handle(payload: dict):
         # at all: nothing in one failed run can show flakiness.
         evidence = str(r.get("evidence") or "").strip().strip("`")
         corpus = "\n".join((summary, details, log_tail))
-        grounded = len(evidence) >= 8 and evidence in corpus
         root_cause = str(r.get("root_cause") or "").strip()
+        # In the log is not enough: "Process completed with exit code 1" is in
+        # every failed job's log and confirmed whatever cause it was attached
+        # to. The evidence must be a specific line, and the files, tests and
+        # functions the cause names must be in the log too.
+        from app.handlers.comments.evidence import missing_from
+
+        grounded = (
+            len(evidence) >= 8
+            and evidence in corpus
+            and not _BOILERPLATE.search(evidence)
+            and not missing_from(root_cause, corpus)
+        )
         if grounded:
             cause_md = f"**Likely cause:** {root_cause}\n\n```\n{evidence[:300]}\n```"
         else:
@@ -154,11 +174,10 @@ def handle(payload: dict):
         # Recurring-failure detection: if this same check has now failed 3 times
         # in 24h, surface a pattern alert so maintainers know it isn't a one-off.
         pattern_note = ""
-        if _track_failure_pattern(repo, check_name, root_cause):
+        if _track_failure_pattern(repo, pr_number, check_name, root_cause):
             pattern_note = (
-                f"\n\n> 🔁 **Recurring failure** — `{check_name}` has failed "
-                "3+ times in the last 24h. This looks like a persistent issue, "
-                "not a flake."
+                f"\n\n> 🔁 **Recurring failure** — `{check_name}` has failed on "
+                f"{_CI_PATTERN_THRESHOLD} or more commits of this PR in the last 24h."
             )
 
         # Per section: each check's analysis is its own event and may be a
@@ -293,9 +312,15 @@ def _release_ci_alert(repo: str, pr_number: int, head_sha: str, check_name: str 
         log.debug(f"ci.release_failed repo={repo}: {e}")
 
 
-def _track_failure_pattern(repo: str, check_name: str, root_cause: str):
+def _track_failure_pattern(repo: str, pr_number, check_name: str, root_cause: str):
     """
-    True the first time this check crosses the failure threshold in the window.
+    True the first time this check crosses the failure threshold in the window
+    on this PR.
+
+    Counted per PR: a check name like "tests" fails on unrelated PRs for
+    unrelated reasons, and a repository-wide count told the third PR's author
+    their failure was "a persistent issue, not a flake". The caller runs
+    once per (commit, check), so the count is of failing commits.
 
     Two fixes over the Sprint 5 version:
       - `== 3` fired exactly once and never again if the counter skipped a
@@ -309,7 +334,7 @@ def _track_failure_pattern(repo: str, check_name: str, root_cause: str):
         from app.core.redis_client import get_redis
 
         r = get_redis()
-        key = f"ci_fail:{repo}:{check_name}"
+        key = f"ci_fail:{repo}:{pr_number}:{check_name}"
         count = r.incr(key)
         if int(count) == 1:
             r.expire(key, _CI_PATTERN_WINDOW)
@@ -320,23 +345,10 @@ def _track_failure_pattern(repo: str, check_name: str, root_cause: str):
             and r.set(f"{key}:alerted", "1", nx=True, ex=_CI_PATTERN_WINDOW) is not None
         ):
             log.warning(
-                f"ci.pattern_detected repo={repo} check={check_name} "
+                f"ci.pattern_detected repo={repo} pr={pr_number} check={check_name} "
                 f"count={count} root_cause={root_cause[:60]}"
             )
             return True  # Caller posts pattern alert
     except Exception as e:
-        log.debug(f"ci.track_failure_pattern_failed repo={repo} check={check_name}: {e}")
+        log.warning(f"ci.track_failure_pattern_failed repo={repo} check={check_name}: {e}")
     return False
-
-
-def _get_failure_count(repo: str, check_name: str) -> int:
-    """Returns how many times this check has failed today."""
-    try:
-        from app.core.redis_client import get_redis
-
-        r = get_redis()
-        key = f"ci_fail:{repo}:{check_name}"
-        val = r.get(key)
-        return int(val) if val else 0
-    except Exception:
-        return 0

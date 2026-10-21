@@ -67,7 +67,7 @@
       "functions": 6,
       "classes": 0,
       "is_package": false,
-      "fan_in": 5,
+      "fan_in": 6,
       "fan_out": 8,
       "external_deps": [
         "__future__",
@@ -263,7 +263,7 @@
       "functions": 16,
       "classes": 0,
       "is_package": false,
-      "fan_in": 12,
+      "fan_in": 13,
       "fan_out": 0,
       "external_deps": [
         "logging",
@@ -687,7 +687,7 @@
       "functions": 5,
       "classes": 1,
       "is_package": false,
-      "fan_in": 16,
+      "fan_in": 17,
       "fan_out": 0,
       "external_deps": [
         "contextlib",
@@ -848,7 +848,7 @@
       "functions": 4,
       "classes": 0,
       "is_package": false,
-      "fan_in": 16,
+      "fan_in": 17,
       "fan_out": 1,
       "external_deps": [
         "logging"
@@ -996,12 +996,12 @@
       "id": "app.handlers.ci",
       "path": "app/handlers/ci.py",
       "layer": "handlers",
-      "loc": 342,
-      "functions": 8,
+      "loc": 354,
+      "functions": 7,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 10,
+      "fan_out": 11,
       "external_deps": [
         "logging",
         "re"
@@ -1027,7 +1027,7 @@
       "functions": 5,
       "classes": 1,
       "is_package": false,
-      "fan_in": 6,
+      "fan_in": 7,
       "fan_out": 1,
       "external_deps": [
         "__future__"
@@ -1053,7 +1053,7 @@
       "functions": 19,
       "classes": 0,
       "is_package": false,
-      "fan_in": 3,
+      "fan_in": 4,
       "fan_out": 9,
       "external_deps": [
         "__future__",
@@ -1064,18 +1064,48 @@
       ]
     },
     {
+      "id": "app.handlers.comments.evidence",
+      "path": "app/handlers/comments/evidence.py",
+      "layer": "handlers",
+      "loc": 144,
+      "functions": 8,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 4,
+      "fan_out": 0,
+      "external_deps": [
+        "__future__",
+        "re"
+      ]
+    },
+    {
       "id": "app.handlers.comments.generator",
       "path": "app/handlers/comments/generator.py",
       "layer": "handlers",
-      "loc": 520,
-      "functions": 12,
+      "loc": 576,
+      "functions": 13,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
-      "fan_out": 10,
+      "fan_out": 11,
       "external_deps": [
         "__future__",
         "logging",
+        "re"
+      ]
+    },
+    {
+      "id": "app.handlers.comments.impact",
+      "path": "app/handlers/comments/impact.py",
+      "layer": "handlers",
+      "loc": 144,
+      "functions": 1,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 10,
+      "external_deps": [
+        "__future__",
         "re"
       ]
     },
@@ -1118,12 +1148,12 @@
       "id": "app.handlers.comments.reviewer",
       "path": "app/handlers/comments/reviewer.py",
       "layer": "handlers",
-      "loc": 575,
-      "functions": 14,
+      "loc": 494,
+      "functions": 13,
       "classes": 0,
       "is_package": false,
       "fan_in": 4,
-      "fan_out": 13,
+      "fan_out": 12,
       "external_deps": [
         "__future__",
         "datetime",
@@ -2388,6 +2418,11 @@
       "kind": "runtime"
     },
     {
+      "source": "app.handlers.ci",
+      "target": "app.handlers.comments.evidence",
+      "kind": "runtime"
+    },
+    {
       "source": "app.handlers.comments",
       "target": "app.ai.router",
       "kind": "import"
@@ -2534,12 +2569,67 @@
     },
     {
       "source": "app.handlers.comments.generator",
+      "target": "app.handlers.comments.evidence",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.generator",
       "target": "app.handlers.pull_request.analysis",
       "kind": "runtime"
     },
     {
       "source": "app.handlers.comments.generator",
       "target": "app.intelligence.memory",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.impact",
+      "target": "app.ai.guarded",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.impact",
+      "target": "app.ai.validator",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.impact",
+      "target": "app.core.sanitizer",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.impact",
+      "target": "app.github.helpers",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.impact",
+      "target": "app.github.helpers",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.impact",
+      "target": "app.handlers.comments._client",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.impact",
+      "target": "app.handlers.comments.dispatcher",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.impact",
+      "target": "app.handlers.comments.evidence",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.impact",
+      "target": "app.handlers.pull_request",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.impact",
+      "target": "app.handlers.pull_request.risk",
       "kind": "runtime"
     },
     {
@@ -2654,27 +2744,22 @@
     },
     {
       "source": "app.handlers.comments.reviewer",
-      "target": "app.github.helpers",
-      "kind": "runtime"
-    },
-    {
-      "source": "app.handlers.comments.reviewer",
       "target": "app.handlers.comments._client",
       "kind": "import"
     },
     {
       "source": "app.handlers.comments.reviewer",
+      "target": "app.handlers.comments.evidence",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.reviewer",
+      "target": "app.handlers.comments.impact",
+      "kind": "import"
+    },
+    {
+      "source": "app.handlers.comments.reviewer",
       "target": "app.handlers.comments.publisher",
-      "kind": "runtime"
-    },
-    {
-      "source": "app.handlers.comments.reviewer",
-      "target": "app.handlers.pull_request",
-      "kind": "runtime"
-    },
-    {
-      "source": "app.handlers.comments.reviewer",
-      "target": "app.handlers.pull_request.risk",
       "kind": "runtime"
     },
     {
@@ -3729,9 +3814,9 @@
     }
   ],
   "stats": {
-    "modules": 103,
-    "edges": 409,
-    "total_loc": 28575,
+    "modules": 105,
+    "edges": 420,
+    "total_loc": 28850,
     "layers": [
       "ai",
       "core",
@@ -3769,16 +3854,16 @@
         "fan_out": 0
       },
       {
+        "id": "app.ai.validator",
+        "loc": 421,
+        "fan_in": 13,
+        "fan_out": 0
+      },
+      {
         "id": "app.core.config",
         "loc": 567,
         "fan_in": 9,
         "fan_out": 1
-      },
-      {
-        "id": "app.ai.validator",
-        "loc": 421,
-        "fan_in": 12,
-        "fan_out": 0
       },
       {
         "id": "app.core.guardrails",
@@ -3787,16 +3872,16 @@
         "fan_out": 1
       },
       {
+        "id": "app.core.sanitizer",
+        "loc": 284,
+        "fan_in": 17,
+        "fan_out": 0
+      },
+      {
         "id": "app.github.notifications",
         "loc": 567,
         "fan_in": 8,
         "fan_out": 4
-      },
-      {
-        "id": "app.core.sanitizer",
-        "loc": 284,
-        "fan_in": 16,
-        "fan_out": 0
       },
       {
         "id": "app.ai.providers.base",

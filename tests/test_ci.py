@@ -260,7 +260,7 @@ class TestFailurePatternTracking:
         fake_redis.incr.return_value = 1
         with patch("app.core.redis_client.get_redis", return_value=fake_redis):
             from app.handlers.ci import _track_failure_pattern
-            _track_failure_pattern("org/repo", "pytest", "import error")
+            _track_failure_pattern("org/repo", 1, "pytest", "import error")
             fake_redis.incr.assert_called_once()
 
     def test_third_failure_returns_true(self):
@@ -268,7 +268,7 @@ class TestFailurePatternTracking:
         fake_redis.incr.return_value = 3
         with patch("app.core.redis_client.get_redis", return_value=fake_redis):
             from app.handlers.ci import _track_failure_pattern
-            result = _track_failure_pattern("org/repo", "pytest", "error")
+            result = _track_failure_pattern("org/repo", 1, "pytest", "error")
             assert result is True
 
     def test_first_failure_returns_false(self):
@@ -276,23 +276,8 @@ class TestFailurePatternTracking:
         fake_redis.incr.return_value = 1
         with patch("app.core.redis_client.get_redis", return_value=fake_redis):
             from app.handlers.ci import _track_failure_pattern
-            result = _track_failure_pattern("org/repo", "pytest", "error")
+            result = _track_failure_pattern("org/repo", 1, "pytest", "error")
             assert result is False
-
-    def test_get_failure_count_returns_zero_on_error(self):
-        with patch("app.core.redis_client.get_redis", side_effect=Exception("redis down")):
-            from app.handlers.ci import _get_failure_count
-            result = _get_failure_count("org/repo", "pytest")
-            assert result == 0
-
-    def test_get_failure_count_returns_value(self):
-        fake_redis = MagicMock()
-        fake_redis.get.return_value = "5"
-        with patch("app.core.redis_client.get_redis", return_value=fake_redis):
-            from app.handlers.ci import _get_failure_count
-            result = _get_failure_count("org/repo", "pytest")
-            assert result == 5
-
 
 
 class TestCiAudit2:
@@ -403,3 +388,46 @@ class TestAnUnreadableReportIsNotOverwritten:
         assert raised is None
         post.assert_not_called()
         release.assert_called_once()
+
+
+class TestEvidenceMustBeSpecific:
+    """Round-4 audit M4: evidence that is in every failed log confirmed any
+    cause, and a cause naming a test the log never mentions was "Likely"."""
+
+    def _body(self, analysis):
+        return TestFailureAnalysis()._run(analysis=analysis)[1].call_args[0][4]
+
+    def test_exit_code_line_does_not_confirm_a_cause(self):
+        body = self._body({
+            "root_cause": "The login test fails", "category": "test_failure", "fix": "- x",
+            "evidence": "3 tests failed",
+        })
+        assert "not confirmed by the log" in body
+        assert "**Likely cause:**" not in body
+
+    def test_a_cause_naming_a_test_absent_from_the_log_is_not_confirmed(self):
+        body = self._body({
+            "root_cause": "tests/test_billing.py::test_refund_partial fails",
+            "category": "test_failure", "fix": "- x",
+            "evidence": "FAILED tests/test_auth.py::test_login",
+        })
+        assert "not confirmed by the log" in body
+
+    def test_a_specific_line_naming_the_cause_confirms_it(self):
+        body = self._body({
+            "root_cause": "test_login in tests/test_auth.py fails", "category": "test_failure",
+            "fix": "- x", "evidence": "FAILED tests/test_auth.py::test_login",
+        })
+        assert "**Likely cause:**" in body
+
+
+def test_the_recurring_failure_count_is_per_pr(fake_redis):
+    """Round-4 audit M6: "tests" failing on three unrelated PRs told the third
+    PR's author their failure was persistent, "not a flake"."""
+    from app.handlers.ci import _track_failure_pattern
+
+    assert not _track_failure_pattern("o/r", 1, "tests", "a")
+    assert not _track_failure_pattern("o/r", 2, "tests", "b")
+    assert not _track_failure_pattern("o/r", 3, "tests", "c")
+    assert not _track_failure_pattern("o/r", 3, "tests", "c")
+    assert _track_failure_pattern("o/r", 3, "tests", "c")

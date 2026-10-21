@@ -78,7 +78,7 @@ def gh_get(path, token=None, *a, **kw):
     if "/git/ref/" in p or "/git/refs/" in p:
         return {"ref": "refs/heads/main", "object": {"sha": "a" * 40, "type": "commit"}}
     if "/commits" in p:
-        return [{"sha": "a"*40, "commit": {"message": "feat: x", "author": {"date": "2026-01-01T00:00:00Z", "name": "u"}},
+        return [{"sha": "a"*40, "commit": {"message": "feat: export orders", "author": {"date": "2026-01-01T00:00:00Z", "name": "u"}},
                  "author": {"login": "u"}}]
     if "/actions/runs" in p:
         return {"workflow_runs": [{"id": 1, "name": "CI", "status": "completed", "conclusion": "success",
@@ -120,7 +120,7 @@ JSON = {"summary": "s", "verdict": "s", "score": 8, "issues": [], "confidence": 
 META = LLMResponse(text="ok", provider="groq_70b", model="m", total_tokens=10)
 # A plain-text answer that is also a well-formed changelog entry, so /changelog
 # can reach its success path; the other text commands render it as prose.
-TEXT = "## [v7.2.0] - 2026-01-01\n\n### Added\n- x"
+TEXT = "## [v7.2.0] - 2026-01-01\n\n### Added\n- Export orders"
 
 issue = {"title": "t", "body": "b", "number": 1, "user": {"login": "u"}, "pull_request": {"url": "x"}}
 cfg = MagicMock()

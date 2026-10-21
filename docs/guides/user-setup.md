@@ -80,7 +80,7 @@ https://github.com/Shweta-Mishra-ai/github-autopilot
    |---------|-------|
    | **Name** | `github-autopilot-redis` |
    | **Plan** | Free |
-   | **Max Memory Policy** | `allkeys-lru` |
+   | **Max Memory Policy** | `noeviction` (not `allkeys-lru`, which silently evicts the dedup keys) |
 
 3. Click **Create Redis**
 4. Once created, go to the Redis service → **Info** tab

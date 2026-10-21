@@ -292,11 +292,11 @@ Reported cost in local mode is always `0`.
 <!-- autopilot:stats:start -->
 | | |
 |---|---|
-| Modules | 102 |
-| Lines of code | 27,853 |
+| Modules | 103 |
+| Lines of code | 28,258 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 403 |
+| Internal imports | 407 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>
@@ -409,7 +409,7 @@ Regenerate either form with
 graph LR
     ai["ai<br/>16 modules"]
     core["core<br/>29 modules"]
-    github["github<br/>9 modules"]
+    github["github<br/>10 modules"]
     handlers["handlers<br/>28 modules"]
     intelligence["intelligence<br/>5 modules"]
     mcp["mcp<br/>4 modules"]
@@ -458,7 +458,12 @@ graph LR
   is requeued at boot; poison events dead-letter after two attempts.
 - **Bounded** — 200 events, 512KB per envelope, 50 dead-lettered. Nothing grows
   without limit on a 512MB instance with 25MB of Redis.
-- **Backpressured** — a full queue returns `503`, and GitHub redelivers.
+- **Backpressured** — a full queue returns `503`. GitHub does **not** retry a
+  failed webhook by itself, so the app asks it to: every 10 minutes (and 45
+  seconds after boot, which is when a cold start has just lost one) it lists
+  the App's recent deliveries and redelivers those that timed out, got a 429
+  or a 5xx — at most twice each (`app/github/redelivery.py`,
+  `WEBHOOK_REDELIVERY=0` to turn off).
 - **Degradable** — if Redis dies, it falls back to the bounded thread pool with
   reduced durability, and says so in the logs.
 - **Scale-ready** — run [`worker.py`](worker.py) as a separate service and set

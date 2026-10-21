@@ -160,7 +160,7 @@
       "id": "app.ai.providers.gemini",
       "path": "app/ai/providers/gemini.py",
       "layer": "ai",
-      "loc": 238,
+      "loc": 243,
       "functions": 2,
       "classes": 1,
       "is_package": false,
@@ -278,7 +278,7 @@
       "functions": 0,
       "classes": 0,
       "is_package": true,
-      "fan_in": 2,
+      "fan_in": 3,
       "fan_out": 0,
       "external_deps": []
     },
@@ -399,7 +399,7 @@
       "id": "app.core.event_queue",
       "path": "app/core/event_queue.py",
       "layer": "core",
-      "loc": 526,
+      "loc": 530,
       "functions": 17,
       "classes": 2,
       "is_package": false,
@@ -456,7 +456,7 @@
       "id": "app.core.idempotency",
       "path": "app/core/idempotency.py",
       "layer": "core",
-      "loc": 156,
+      "loc": 158,
       "functions": 7,
       "classes": 0,
       "is_package": false,
@@ -521,12 +521,12 @@
       "id": "app.core.maintenance",
       "path": "app/core/maintenance.py",
       "layer": "core",
-      "loc": 352,
-      "functions": 13,
+      "loc": 401,
+      "functions": 15,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 6,
+      "fan_out": 7,
       "external_deps": [
         "__future__",
         "contextlib",
@@ -541,8 +541,8 @@
       "id": "app.core.memory_backup",
       "path": "app/core/memory_backup.py",
       "layer": "core",
-      "loc": 373,
-      "functions": 13,
+      "loc": 455,
+      "functions": 18,
       "classes": 0,
       "is_package": false,
       "fan_in": 2,
@@ -552,6 +552,7 @@
         "argparse",
         "base64",
         "cryptography",
+        "hashlib",
         "json",
         "logging",
         "os",
@@ -632,7 +633,7 @@
       "functions": 6,
       "classes": 1,
       "is_package": false,
-      "fan_in": 31,
+      "fan_in": 32,
       "fan_out": 1,
       "external_deps": [
         "__future__",
@@ -747,7 +748,7 @@
       "id": "app.core.webhook_security",
       "path": "app/core/webhook_security.py",
       "layer": "core",
-      "loc": 527,
+      "loc": 528,
       "functions": 16,
       "classes": 0,
       "is_package": false,
@@ -794,7 +795,7 @@
       "functions": 7,
       "classes": 0,
       "is_package": false,
-      "fan_in": 11,
+      "fan_in": 12,
       "fan_out": 0,
       "external_deps": [
         "jwt",
@@ -890,7 +891,7 @@
       "id": "app.github.rate_limit",
       "path": "app/github/rate_limit.py",
       "layer": "github",
-      "loc": 294,
+      "loc": 296,
       "functions": 10,
       "classes": 1,
       "is_package": false,
@@ -901,6 +902,28 @@
         "hashlib",
         "logging",
         "os",
+        "requests",
+        "threading",
+        "time"
+      ]
+    },
+    {
+      "id": "app.github.redelivery",
+      "path": "app/github/redelivery.py",
+      "layer": "github",
+      "loc": 236,
+      "functions": 11,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 2,
+      "external_deps": [
+        "__future__",
+        "datetime",
+        "json",
+        "logging",
+        "os",
+        "re",
         "requests",
         "threading",
         "time"
@@ -1620,12 +1643,12 @@
       "id": "server",
       "path": "server.py",
       "layer": "other",
-      "loc": 975,
-      "functions": 33,
+      "loc": 999,
+      "functions": 34,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 36,
+      "fan_out": 37,
       "external_deps": [
         "flask",
         "hmac",
@@ -2029,6 +2052,11 @@
     },
     {
       "source": "app.core.maintenance",
+      "target": "app.core",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.maintenance",
       "target": "app.core.installations",
       "kind": "runtime"
     },
@@ -2235,6 +2263,16 @@
     {
       "source": "app.github.rate_limit",
       "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.github.redelivery",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.github.redelivery",
+      "target": "app.github.auth",
       "kind": "runtime"
     },
     {
@@ -3609,6 +3647,11 @@
     },
     {
       "source": "server",
+      "target": "app.github.redelivery",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
       "target": "app.graphview",
       "kind": "runtime"
     },
@@ -3674,9 +3717,9 @@
     }
   ],
   "stats": {
-    "modules": 102,
-    "edges": 403,
-    "total_loc": 27853,
+    "modules": 103,
+    "edges": 407,
+    "total_loc": 28258,
     "layers": [
       "ai",
       "core",
@@ -3692,7 +3735,7 @@
       {
         "id": "app.core.redis_client",
         "loc": 557,
-        "fan_in": 31,
+        "fan_in": 32,
         "fan_out": 1
       },
       {

@@ -187,7 +187,7 @@ class TestGeminiProvider:
                 result = provider.call_raw("sys", "usr", 500, 0.2, 30)
         assert "RATE_LIMIT" in result.error
         assert result.text == ""
-        mock_breaker.return_value.record_failure.assert_called()
+        mock_breaker.return_value.record_rate_limit.assert_called()
 
     def test_bad_request_is_reported_without_opening_the_circuit(self):
         """

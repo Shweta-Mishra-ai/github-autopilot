@@ -417,6 +417,15 @@ def _settle(r, env: dict, outcome) -> None:
     _dead_letter(r, env, "handler failed")
 
 
+_last_consumer_error = 0.0
+
+
+def consumer_failing(within_seconds: int = 300) -> bool:
+    """True when a consumer failed within the last `within_seconds` — the
+    queue is not draining now, as opposed to a blip earlier in the process."""
+    return bool(_last_consumer_error) and time.time() - _last_consumer_error < within_seconds
+
+
 def _consume_loop(handler: Callable[[str, dict, str], None], worker_id: int) -> None:
     """
     One consumer thread. handler must never raise for expected errors
@@ -424,14 +433,26 @@ def _consume_loop(handler: Callable[[str, dict, str], None], worker_id: int) -> 
     envelope is dropped from processing by _consume_once's finally block.
     """
     log.info(f"queue.consumer_started id={worker_id}")
+    failures = 0
     while not _stop.is_set():
         try:
             _consume_once(handler)
+            failures = 0
         except Exception as e:
             if not _stop.is_set():
-                log.error(f"queue.consumer_error id={worker_id}: {e}")
+                failures += 1
+                # Backed off: a Redis that is full (noeviction refuses BLMOVE)
+                # or down fails every attempt, and a fixed 1 s retry wrote two
+                # error lines a second for as long as it lasted.
+                delay = min(60, 2 ** min(failures - 1, 6))
+                log.error(
+                    f"queue.consumer_error id={worker_id} attempt={failures} "
+                    f"next_in={delay}s: {type(e).__name__}: {e}"
+                )
                 metrics.increment("queue.consumer_error")
-                time.sleep(1)  # avoid hot-looping when Redis is down
+                global _last_consumer_error
+                _last_consumer_error = time.time()
+                _stop.wait(delay)
     log.info(f"queue.consumer_stopped id={worker_id}")
 
 

@@ -191,7 +191,23 @@ def degraded_comment(payload: dict, what: str = "analysis") -> str:
     if reason == "providers_down":
         if payload.get("_configuration_error"):
             return not_configured_comment(payload.get("message", ""), what)
-        retry = payload.get("_retry_in", 60)
+        retry = int(payload.get("_retry_in", 60) or 60)
+        if retry > 600:
+            # A provider's own Retry-After of this length is a spent quota,
+            # not an outage; "try again shortly" sent people back every minute.
+            wait = (
+                f"~{retry // 3600}h {retry % 3600 // 60}m"
+                if retry >= 3600
+                else f"~{retry // 60} min"
+            )
+            return (
+                f"## ⏳ AI Quota Reached\n\n"
+                f"Every configured model provider has hit its usage limit; the earliest "
+                f"one resets in {wait}. No {what} was produced.\n\n"
+                "> Try again after that. Adding a key for another provider (Gemini, "
+                "OpenRouter) gives the bot somewhere else to go; `/health` shows each "
+                "provider's state."
+            )
         return (
             f"## ⚠️ AI Temporarily Unavailable\n\n"
             f"All model providers are currently down (earliest retry ~{retry}s). "

@@ -287,6 +287,19 @@ class _FakeRedis:
             if key in self._store:
                 self._expiry[key] = time.time() + seconds
 
+    def ttl(self, key: str) -> int:
+        """Redis semantics: -2 no such key, -1 no expiry, else seconds left."""
+        import math
+        import time
+
+        with self._lock:
+            self._evict(key)
+            if key not in self._store:
+                return -2
+            if key not in self._expiry:
+                return -1
+            return max(0, math.ceil(self._expiry[key] - time.time()))
+
     def delete(self, *keys):
         with self._lock:
             for k in keys:

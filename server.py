@@ -107,6 +107,32 @@ _PRODUCTION = (
 )
 
 
+# Which env var makes each circuit breaker's provider usable.
+_PROVIDER_ENV = {
+    "groq_70b": "GROQ_API_KEY",
+    "groq_8b": "GROQ_API_KEY",
+    "gemini": "GEMINI_API_KEY",
+    "openrouter": "OPENROUTER_API_KEY",
+    "ollama": "OLLAMA_HOST",
+}
+
+
+def _any_configured_provider_up(breakers: dict) -> bool:
+    """
+    True when some CONFIGURED provider is not tripped. A provider without its
+    key is never called, so its breaker stays closed: with Groq's daily quota
+    spent and no Gemini or OpenRouter key, /health said "ok" while every AI
+    command failed. A configured provider not yet called has no breaker and
+    counts as up.
+    """
+    for name, env in _PROVIDER_ENV.items():
+        if not os.environ.get(env):
+            continue
+        if (breakers.get(name) or {"state": "closed"}).get("state") == "closed":
+            return True
+    return False
+
+
 def _authorized(req) -> bool:
     """
     Constant-time bearer check for /health, /metrics, /graph.json and
@@ -472,7 +498,7 @@ def health():
     gh_ok = not gh_measured or gh_rl.get("remaining", 0) > 50
     gh_check = ("ok" if gh_ok else "rate_limited") if gh_measured else "unknown (no call since start)"
     breaker_status = status_all()
-    any_llm_ok = any(s["state"] == "closed" for s in breaker_status.values())
+    any_llm_ok = _any_configured_provider_up(breaker_status)
 
     # A provider misconfiguration is worse than a degraded provider: it cannot
     # recover on its own and every AI command fails until someone changes an
@@ -508,6 +534,15 @@ def health():
     if llm_substitutions:
         # Answering, but on a model nobody configured. Not "ok", not an outage.
         overall = "degraded" if overall == "ok" else overall
+    # A full noeviction Redis still answers PING, so redis_ok stayed true while
+    # every write failed: queued events stranded (BLMOVE refused), budgets
+    # unenforced. The watermark is what shows it.
+    if redis_mem.get("level") == "warn" and overall == "ok":
+        overall = "degraded"
+    from app.core.event_queue import consumer_failing
+
+    if consumer_failing() and overall == "ok":
+        overall = "degraded"
     if llm_config_error:
         overall = "misconfigured"
 
@@ -552,6 +587,10 @@ def health():
                 # runs it. Surfaced here because the symptom (commands "not
                 # working") otherwise looks nothing like its cause.
                 "permission_check_failures": metrics.get("auth.permission_check_failed", 0),
+                # Non-zero: the queue consumers failed to take or finish work
+                # (Redis full or unreachable) at some point since start.
+                "queue_consumer_errors": metrics.get("queue.consumer_error", 0),
+                "queue_enqueue_failed": metrics.get("queue.enqueue_failed", 0),
             },
             # Notifications are delivered on daemon threads, so a rejected
             # webhook only ever produced a log line nobody reads. "Slack went

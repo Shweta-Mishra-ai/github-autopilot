@@ -28,7 +28,7 @@
       "id": "app.ai.circuit_breaker",
       "path": "app/ai/circuit_breaker.py",
       "layer": "ai",
-      "loc": 184,
+      "loc": 211,
       "functions": 6,
       "classes": 3,
       "is_package": false,
@@ -63,7 +63,7 @@
       "id": "app.ai.guarded",
       "path": "app/ai/guarded.py",
       "layer": "ai",
-      "loc": 215,
+      "loc": 231,
       "functions": 6,
       "classes": 0,
       "is_package": false,
@@ -400,8 +400,8 @@
       "id": "app.core.event_queue",
       "path": "app/core/event_queue.py",
       "layer": "core",
-      "loc": 530,
-      "functions": 17,
+      "loc": 551,
+      "functions": 18,
       "classes": 2,
       "is_package": false,
       "fan_in": 3,
@@ -631,7 +631,7 @@
       "id": "app.core.redis_client",
       "path": "app/core/redis_client.py",
       "layer": "core",
-      "loc": 557,
+      "loc": 570,
       "functions": 6,
       "classes": 1,
       "is_package": false,
@@ -641,6 +641,7 @@
         "__future__",
         "fnmatch",
         "logging",
+        "math",
         "os",
         "redis",
         "threading",
@@ -1000,7 +1001,7 @@
       "id": "app.handlers.ci",
       "path": "app/handlers/ci.py",
       "layer": "handlers",
-      "loc": 379,
+      "loc": 381,
       "functions": 8,
       "classes": 0,
       "is_package": false,
@@ -1696,8 +1697,8 @@
       "id": "server",
       "path": "server.py",
       "layer": "other",
-      "loc": 1025,
-      "functions": 35,
+      "loc": 1064,
+      "functions": 36,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
@@ -3897,7 +3898,7 @@
   "stats": {
     "modules": 106,
     "edges": 432,
-    "total_loc": 29425,
+    "total_loc": 29543,
     "layers": [
       "ai",
       "core",
@@ -3912,7 +3913,7 @@
     "hotspots": [
       {
         "id": "app.core.redis_client",
-        "loc": 557,
+        "loc": 570,
         "fan_in": 33,
         "fan_out": 1
       },
@@ -3965,10 +3966,10 @@
         "fan_out": 1
       },
       {
-        "id": "app.ai.providers.base",
-        "loc": 372,
-        "fan_in": 8,
-        "fan_out": 3
+        "id": "app.ai.circuit_breaker",
+        "loc": 211,
+        "fan_in": 15,
+        "fan_out": 2
       }
     ],
     "collisions": {},

@@ -361,7 +361,9 @@ def _track_failure_pattern(repo: str, pr_number, check_name: str, root_cause: st
         r = get_redis()
         key = f"ci_fail:{repo}:{pr_number}:{check_name}"
         count = r.incr(key)
-        if int(count) == 1:
+        # Whenever it has no expiry, not only on the first increment: had that
+        # one EXPIRE failed, the key lived for ever and the window never rolled.
+        if int(count) == 1 or r.ttl(key) == -1:
             r.expire(key, _CI_PATTERN_WINDOW)
 
         # NX flag: fires once per window, not on every failure past the threshold.

@@ -170,7 +170,7 @@ class GroqProvider(LLMProvider):
                     # Still throttled after waiting: the account really is
                     # saturated, so back off properly and let the breaker see it.
                     retry_after, _ = throttle_pause(r, default=retry_after)
-                    breaker.record_failure(f"rate_limit retry_after={retry_after}s")
+                    breaker.record_rate_limit(retry_after)
                     return LLMResponse(
                         text="",
                         provider="groq",

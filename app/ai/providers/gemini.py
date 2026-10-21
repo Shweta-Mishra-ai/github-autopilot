@@ -136,7 +136,7 @@ class GeminiProvider(LLMProvider):
 
                 if r.status_code == 429:
                     retry_after, _ = throttle_pause(r, default=retry_after)
-                    breaker.record_failure(f"rate_limit retry_after={retry_after}s")
+                    breaker.record_rate_limit(retry_after)
                     return LLMResponse(
                         text="",
                         provider="gemini",

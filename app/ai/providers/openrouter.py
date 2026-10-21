@@ -132,7 +132,7 @@ class OpenRouterProvider(LLMProvider):
                 status = getattr(resp, "status_code", 0)
             if status == 429:
                 retry_after, _ = throttle_pause(resp, default=retry_after)
-                breaker.record_failure(f"rate_limit retry_after={retry_after}s")
+                breaker.record_rate_limit(retry_after)
                 return resp, LLMResponse(
                     text="",
                     provider="openrouter",

@@ -29,6 +29,9 @@ class CircuitBreaker:
     _failures: int = field(default=0, init=False, repr=False)
     _opened_at: float = field(default=0.0, init=False, repr=False)
     _last_failure_reason: str = field(default="", init=False, repr=False)
+    # Set when the provider itself says how long to wait (a 429's
+    # Retry-After): open until then, not just for recovery_timeout.
+    _hold_until: float = field(default=0.0, init=False, repr=False)
     _lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
 
     @property
@@ -37,6 +40,7 @@ class CircuitBreaker:
             if (
                 self._state == CBState.OPEN
                 and time.time() - self._opened_at >= self.recovery_timeout
+                and time.time() >= self._hold_until
             ):
                 log.info(f"circuit_breaker.half_open provider={self.provider}")
                 self._state = CBState.HALF_OPEN
@@ -52,6 +56,7 @@ class CircuitBreaker:
             self._failures = 0
             self._state = CBState.CLOSED
             self._last_failure_reason = ""
+            self._hold_until = 0.0
 
     def record_failure(self, reason: str = ""):
         # The reason is logged and served on /health, and callers pass
@@ -83,10 +88,32 @@ class CircuitBreaker:
         except Exception:
             pass  # health tracking must never affect the breaker
 
+    def record_rate_limit(self, retry_after: int):
+        """
+        A 429 that says how long to wait. Waits longer than recovery_timeout
+        open the breaker for that long: a spent daily quota (Retry-After of
+        hours) was otherwise probed again every minute, and every user was
+        told to "try again shortly".
+        """
+        retry_after = max(0, int(retry_after or 0))
+        self.record_failure(f"rate_limit retry_after={retry_after}s")
+        if retry_after > self.recovery_timeout:
+            with self._lock:
+                self._state = CBState.OPEN
+                self._opened_at = time.time()
+                self._hold_until = time.time() + retry_after
+                log.warning(
+                    f"circuit_breaker.held provider={self.provider} for={retry_after}s "
+                    "(the provider's own wait)"
+                )
+
     def seconds_until_retry(self) -> int:
         with self._lock:
             if self._state == CBState.OPEN:
-                remaining = self.recovery_timeout - (time.time() - self._opened_at)
+                now = time.time()
+                remaining = max(
+                    self.recovery_timeout - (now - self._opened_at), self._hold_until - now
+                )
                 return max(0, int(remaining))
             return 0
 

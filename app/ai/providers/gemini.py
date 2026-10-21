@@ -35,7 +35,12 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 # The primary provider learned that lesson (LLM_PRIMARY_MODEL); the fallback
 # had not, which is the worse place for it: the fallback is what you reach for
 # when the primary is already broken.
-DEFAULT_GEMINI_MODEL = "gemini-1.5-flash"
+# Google's alias for the current Flash model. The default was
+# "gemini-1.5-flash", which Google retired in September 2025, so the fallback
+# provider was failing on a model that no longer exists and relying on
+# model_catalog's substitution. The alias moves with Google's releases; pin a
+# specific version with LLM_GEMINI_MODEL if behaviour must not change under you.
+DEFAULT_GEMINI_MODEL = "gemini-flash-latest"
 GEMINI_MODEL_ENV = "LLM_GEMINI_MODEL"
 
 

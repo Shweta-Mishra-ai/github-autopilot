@@ -128,7 +128,7 @@ Using Groq 8B for simple labelling tasks (fast tier) preserves Groq 70B quota fo
 |----------|-------|-----------|------------|----------------|------|
 | Groq 70B | `llama-3.3-70b-versatile` | standard, deep | 5,000 req / 80K tok | 32K tokens | Free |
 | Groq 8B | `llama-3.1-8b-instant` | fast | 12,000 req / 400K tok | 128K tokens | Free |
-| Gemini Flash | `gemini-1.5-flash` | long, fallback | 1,500 req / 1M tok/min | 1,000,000 tokens | Free |
+| Gemini Flash | `gemini-flash-latest` (alias; `LLM_GEMINI_MODEL` pins a version) | long, fallback | 1,500 req / 1M tok/min | 1,000,000 tokens | Free |
 | OpenRouter | `openai/gpt-3.5-turbo` | emergency | 200 req / 50K tok | 16K tokens | Free tier |
 
 **Total daily capacity without any cost:** ~18,700 requests.

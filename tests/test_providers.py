@@ -267,7 +267,7 @@ class TestGeminiProvider:
         assert result.prompt_tokens == 200
         assert result.completion_tokens == 100
         assert result.provider == "gemini"
-        assert result.model == "gemini-1.5-flash"
+        assert result.model == "gemini-flash-latest"
 
 
 class TestLLMResponse:

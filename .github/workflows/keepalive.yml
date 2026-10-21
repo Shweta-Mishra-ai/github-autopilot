@@ -7,7 +7,13 @@
 #      instance warm. Use an external pinger on /ping for that.
 #   2. Health check — if production stops answering, this workflow goes
 #      red (badge in the README) and GitHub emails the repo owner.
-# The retry loop below absorbs the cold start these runs usually meet.
+# The retry loop below absorbs the cold start these runs usually meet, and
+# the short 429/503 spells Render's edge answers with before the request
+# reaches the app (the app itself never answers /ping with either): the
+# runs on Oct 14, 18 and 20 failed on those within 60 seconds, so attempts
+# now span about three minutes. On a non-200 the status, the routing
+# headers and the start of the body are printed — the old loop discarded
+# them, which left those three failures unexplained.
 
 name: Server Health
 
@@ -22,19 +28,31 @@ jobs:
   ping:
     name: Ping production
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: GET /ping
         run: |
           URL="https://github-autopilot-1.onrender.com/ping"
-          for attempt in 1 2 3; do
-            code=$(curl -sS -o /tmp/body -w '%{http_code}' --max-time 75 "$URL" || echo "000")
+          waits=(20 30 45 60)
+          for attempt in 1 2 3 4 5; do
+            # curl prints 000 itself when nothing answered; don't append another.
+            code=$(curl -sS -D /tmp/headers -o /tmp/body -w '%{http_code}' --max-time 75 "$URL") || code="${code:-000}"
             if [ "$code" = "200" ]; then
               echo "OK (attempt ${attempt}): $(cat /tmp/body)"
               exit 0
             fi
-            echo "Attempt ${attempt}: HTTP ${code} — retrying in 20s (cold start takes ~50s)"
-            sleep 20
+            echo "Attempt ${attempt}: HTTP ${code}"
+            # Who answered and why: Render's edge, not the app, sends these.
+            grep -iE '^(server|retry-after|x-render-routing|cf-ray|content-type):' /tmp/headers 2>/dev/null | sed 's/^/  /' || true
+            head -c 300 /tmp/body 2>/dev/null | tr -s '\r\n\t ' ' ' | sed 's/^/  body: /' || true
+            echo
+            [ "$attempt" = 5 ] && break
+            wait=${waits[$((attempt - 1))]}
+            # Honour a Retry-After given in seconds, within reason.
+            ra=$(grep -i '^retry-after:' /tmp/headers 2>/dev/null | tr -dc '0-9' || true)
+            if [ -n "$ra" ] && [ "$ra" -gt "$wait" ] && [ "$ra" -le 120 ]; then wait=$ra; fi
+            echo "  retrying in ${wait}s"
+            sleep "$wait"
           done
-          echo "::error::Production /ping unhealthy after 3 attempts (last HTTP ${code})"
+          echo "::error::Production /ping unhealthy after 5 attempts over ~3 minutes (last HTTP ${code})"
           exit 1

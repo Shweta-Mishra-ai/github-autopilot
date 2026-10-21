@@ -548,6 +548,13 @@ Only report real gaps. If tests are adequate, set has_gaps to false.""",
         log.warning("test_gaps.degraded")
         raise SectionUnavailable("the model's answer could not be used")
 
+    # An answer without has_gaps is not "no gaps": a reply cut off mid-JSON
+    # can parse as one of its inner objects (a single gap dict), and that
+    # was read as a clean bill of health.
+    if "has_gaps" not in r:
+        log.warning("test_gaps.answer_without_verdict")
+        raise SectionUnavailable("the model's answer had no verdict (it may have been cut off)")
+
     if not r.get("has_gaps", False):
         log.info("test_gaps.none_found", pr=pr_number)
         return ""

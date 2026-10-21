@@ -12,6 +12,7 @@ IMPROVED: Better defaults, stricter type checking, cleaner sanitization.
 """
 
 import logging
+import re
 from typing import Any
 
 log = logging.getLogger(__name__)
@@ -354,3 +355,67 @@ def validate_code_review(raw: dict) -> dict:
         "issues": clean_issues,
         "confidence": confidence,
     }
+
+
+# ── Example values copied from the prompt ─────────────────────────────────────
+#
+# Every JSON prompt shows the model the shape it wants, with placeholder
+# values: "risk_reason": "why this risk level", "review_focus": ["area1",
+# "area2"], "description": "structured PR description with ## Summary, …".
+# Models copy them. The confidence gate scored such an answer around 0.9 —
+# the fields were long and fluent — and the placeholder description was
+# written into the author's PR. Any answer field that equals the prompt's own
+# example for that key is removed, so handlers see it as missing ("not
+# assessed") rather than publishing it.
+
+_EXAMPLE_STR = re.compile(r'"(\w+)"\s*:\s*"([^"\n]{4,300})"')
+_EXAMPLE_LIST = re.compile(r'"(\w+)"\s*:\s*\[([^\]\n]{1,300})\]')
+
+
+def _canon(value) -> str:
+    return " ".join(str(value).lower().split()).strip(" .,:;")
+
+
+def prompt_examples(prompt: str) -> dict[str, set[str]]:
+    """{key: {example values}} for the JSON shape shown in `prompt`."""
+    out: dict[str, set[str]] = {}
+    for key, value in _EXAMPLE_STR.findall(prompt or ""):
+        out.setdefault(key, set()).add(_canon(value))
+    for key, items in _EXAMPLE_LIST.findall(prompt or ""):
+        for item in re.findall(r'"([^"\n]{2,120})"', items):
+            out.setdefault(key, set()).add(_canon(item))
+    return out
+
+
+def strip_copied_examples(answer, prompt: str):
+    """
+    `answer` with every field equal to the prompt's example for that key
+    removed (recursively; list items too). Returns (answer, removed_keys).
+    """
+    examples = prompt_examples(prompt)
+    removed: list[str] = []
+    if not examples:
+        return answer, removed
+
+    def clean(node):
+        if isinstance(node, dict):
+            out = {}
+            for k, v in node.items():
+                ex = examples.get(k)
+                if ex and isinstance(v, str) and _canon(v) in ex:
+                    removed.append(k)
+                    continue
+                if ex and isinstance(v, list) and v and all(isinstance(x, str) for x in v):
+                    kept = [x for x in v if _canon(x) not in ex]
+                    if len(kept) != len(v):
+                        removed.append(k)
+                    if not kept:
+                        continue
+                    v = kept
+                out[k] = clean(v)
+            return out
+        if isinstance(node, list):
+            return [clean(x) for x in node]
+        return node
+
+    return clean(answer), removed

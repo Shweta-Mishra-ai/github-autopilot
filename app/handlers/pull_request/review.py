@@ -81,6 +81,16 @@ Return JSON with one entry per file:
 IMPORTANT: If a file has no bugs or vulnerabilities, return an empty array `[]` for issues. Do NOT generate false positives, style nitpicks, or opinions."""
 
 
+def _fix_tail(fix) -> str:
+    """The " → `fix`" tail of a one-line finding; empty when there is no fix
+    (an empty fix used to render as a dangling arrow and empty code span)."""
+    fix = " ".join(str(fix or "").split())
+    if not fix:
+        return ""
+    fix = fix[:80].replace("`", "'")
+    return f" → `{fix}`"
+
+
 def _truncation_note(was_cut: bool) -> str:
     """
     A heading-level note when a file's diff was cut, or "" when it was not.
@@ -453,8 +463,22 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
     # twice is reviewed once (it used to post every comment twice), and a
     # file sent but not answered is said to be unanswered.
     answered: set = set()
+    # Critical/major findings that quote a real line of this diff. They raise
+    # the risk recorded for auto-merge (below): the risk used to come from
+    # the analysis alone, so a PR the review flagged for SQL injection stayed
+    # "low" and /merge, restricted to low-risk PRs, would still merge it.
+    severe = 0
+    by_base: dict = {}
+    for name in by_name:
+        by_base.setdefault(name.rsplit("/", 1)[-1], []).append(name)
     for entry in batch.get("files") or []:
         f = by_name.get(entry.get("file", "")) if isinstance(entry, dict) else None
+        if not f and isinstance(entry, dict):
+            # Models often drop the directory ("orders.py" for
+            # "app/orders.py"). An unambiguous basename is that file; the
+            # entry — a critical finding included — was skipped as invented.
+            same = by_base.get(str(entry.get("file", "")).rsplit("/", 1)[-1], [])
+            f = by_name[same[0]] if len(same) == 1 else None
         if not f:
             # The model named a file that isn't in this PR. Don't render a
             # review for something it invented.
@@ -484,6 +508,11 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
         # about code that does not exist, however confident its prose.
         issues, withheld, seen = [], [], set()
         for i in r.get("issues", []):
+            # A finding that says nothing (its text was empty, or was stripped
+            # as a copy of the prompt's example) rendered as a bare
+            # "**MINOR**:" line that still counted as a finding.
+            if not str(i.get("issue") or "").strip():
+                continue
             status, line = ground_finding(i, f.get("patch") or "")
             # The same finding twice (the model repeats itself across a long
             # answer) was posted twice. One per line and wording.
@@ -492,7 +521,9 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
                 continue
             seen.add(key)
             if status == GROUNDED:
-                issues.append({**i, "line": str(line)})
+                # "_cited" keeps the model's own line: a finding grounded on a
+                # different line was moved, and must say so and get no button.
+                issues.append({**i, "line": str(line), "_cited": i.get("line")})
             elif status == MISQUOTED:
                 withheld.append(i)
             else:
@@ -500,6 +531,11 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
                 # did not change, UNQUOTED has no verified line. Reported in
                 # the body, never anchored to a line it may not be about.
                 issues.append({**i, "line": "", "_where": status})
+        severe += sum(
+            1
+            for i in issues
+            if not i.get("_where") and str(i.get("severity", "")).lower() in ("critical", "major")
+        )
         if withheld:
             log.info(f"code_review.findings_withheld file={filename} n={len(withheld)}")
         issues.sort(key=lambda i: _SEVERITY_RANK.get(str(i.get("severity", "minor")).lower(), 2))
@@ -521,7 +557,7 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
                     REMOVED: "_(on a removed line)_",
                     CONTEXT: "_(about unchanged code, not this PR's change)_",
                 }.get(i.get("_where"), "_(unverified — no line of the diff was quoted)_")
-                unanchored.append(f"- **{severity}** {where}: {issue_text} → `{fix[:80]}`")
+                unanchored.append(f"- **{severity}** {where}: {issue_text}{_fix_tail(fix)}")
                 continue
 
             # A committable suggestion REPLACES the anchored line. The anchor
@@ -531,19 +567,29 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
             # over code the finding is not about, silently, and GitHub would
             # present that as a reviewed patch. The comment is still worth
             # posting there; the button is not.
-            exact = target is not None and target == anchor
+            cited = parse_line_ref(i.get("_cited")) if "_cited" in i else target
+            # A moved finding keeps its button only when it quotes the WHOLE
+            # line it moved to: then the model merely miscounted, and the fix
+            # replaces exactly the code it quoted.
+            whole_line = anchor in diff_lines and " ".join(
+                str(i.get("code") or "").split()
+            ) == " ".join(str(diff_lines[anchor][0]).split())
+            exact = target is not None and target == anchor and (cited == target or whole_line)
             suggestion = make_suggestion_block(fix, anchor, diff_lines) if exact else ""
             fix_md = (
                 suggestion if suggestion else (f"Proposed fix:\n```\n{fix}\n```" if fix else "")
             )
             # And say that it moved, rather than letting the comment read as a
             # claim about whichever line it landed on.
-            drift = (
-                ""
-                if exact
-                else f"\n\n_Reported at line {target if target is not None else '?'}; "
-                f"anchored to line {anchor}, the nearest line GitHub accepts a comment on._"
-            )
+            if exact:
+                drift = ""
+            elif cited is not None and cited != target:
+                drift = f"\n\n_Reported at line {cited}; the code it quotes is on line {anchor}._"
+            else:
+                drift = (
+                    f"\n\n_Reported at line {target if target is not None else '?'}; "
+                    f"anchored to line {anchor}, the nearest line GitHub accepts a comment on._"
+                )
             file_comments.append(
                 {
                     "path": filename,
@@ -552,7 +598,7 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
                     "body": f"**{severity}** — {issue_text}{drift}\n\n{fix_md}".strip(),
                     # Not part of the GitHub payload — popped before posting.
                     # Lets the fallback path render this finding in the body.
-                    "_fallback_md": f"- **{severity}** `{filename}:{anchor}`: {issue_text} → `{fix[:80]}`",
+                    "_fallback_md": f"- **{severity}** `{filename}:{anchor}`: {issue_text}{_fix_tail(fix)}",
                 }
             )
 
@@ -654,7 +700,25 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
         )
 
     if not reviews:
-        return "", []
+        # Nothing usable came back for any file — an answer naming no real
+        # file, or one cut off so that only an inner object parsed. This
+        # returned "", and the section vanished with no notice, reading the
+        # same as a clean review.
+        raise SectionUnavailable(
+            "no usable answer came back for any file sent"
+            + (f" ({_names([f['filename'] for f in reviewable])})" if reviewable else "")
+        )
+
+    if severe:
+        from app.core.guardrails import raise_pr_risk
+
+        if raise_pr_risk(repo, pr_number, (pr.get("head") or {}).get("sha", ""), "high"):
+            reviews.insert(
+                0,
+                f"> 🔴 **Risk raised to HIGH** — the review found {severe} critical/major "
+                "finding(s) quoting this diff. Auto-merge restricted to lower risk will "
+                "refuse this commit.",
+            )
 
     reviews.extend(coverage_notes)
 

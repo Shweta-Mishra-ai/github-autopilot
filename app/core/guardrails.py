@@ -345,6 +345,34 @@ def record_pr_risk(repo: str, pr_number, head_sha: str, risk: str) -> None:
         log.debug(f"guardrails.record_pr_risk_failed repo={repo} pr={pr_number}: {e}")
 
 
+_RISK_RANK = {"low": 0, "medium": 1, "high": 2}
+
+
+def raise_pr_risk(repo: str, pr_number, head_sha: str, risk: str) -> bool:
+    """
+    Record `risk` for this head unless a higher one is already recorded.
+    Only ever raises the level. True when the recorded level is now `risk`
+    or higher because of this call; False when it already was, or on error
+    (logged — this one gates merges).
+    """
+    if not (repo and head_sha and risk in _RISK_RANK):
+        return False
+    try:
+        from app.core.redis_client import get_redis
+
+        r = get_redis()
+        key = _risk_key(repo, pr_number, head_sha)
+        current = r.get(key)
+        current = (current.decode() if isinstance(current, bytes) else current) or ""
+        if _RISK_RANK.get(current.lower(), -1) >= _RISK_RANK[risk]:
+            return False
+        r.set(key, risk, ex=_RISK_TTL)
+        return True
+    except Exception as e:
+        log.error(f"guardrails.raise_pr_risk_failed repo={repo} pr={pr_number}: {e}")
+        return False
+
+
 def get_pr_risk(pr_data: dict) -> "str | None":
     """
     Recorded risk level for this PR's current head, or None when unknown.

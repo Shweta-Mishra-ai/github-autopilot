@@ -8,6 +8,9 @@ none of them was caught by the 2,609 tests that were passing at the time.
 
 from unittest.mock import MagicMock, patch
 
+import contextlib
+
+from app.handlers.pull_request.errors import SectionUnavailable
 import pytest
 
 from app.core.confidence import ConfidenceGate
@@ -672,7 +675,7 @@ class TestReviewFalsePositiveSources:
             pr_mod.router,
             "ask",
             side_effect=lambda s, u, **k: (sent.append(u), ({"files": []}, MagicMock()))[1],
-        ):
+        ), contextlib.suppress(SectionUnavailable):  # only the prompt is checked
             pr_mod._review_code(
                 {"head": {"sha": "s"}},
                 "o/r",
@@ -697,7 +700,7 @@ class TestReviewFalsePositiveSources:
             pr_mod.router,
             "ask",
             side_effect=lambda s, u, **k: (sent.append(u), ({"files": []}, MagicMock()))[1],
-        ):
+        ), contextlib.suppress(SectionUnavailable):  # only the prompt is checked
             pr_mod._review_code(
                 {"head": {"sha": "s"}},
                 "o/r",
@@ -719,7 +722,7 @@ class TestReviewFalsePositiveSources:
             pr_mod.router,
             "ask",
             side_effect=lambda s, u, **k: (sent.append(u), ({"files": []}, MagicMock()))[1],
-        ):
+        ), contextlib.suppress(SectionUnavailable):  # only the prompt is checked
             pr_mod._review_code(
                 {"head": {"sha": "s"}},
                 "o/r",
@@ -1730,3 +1733,45 @@ class TestEveryFileInAPullRequest:
         ):
             P.handle(payload)
         assert seen["n"] == 35, f"the review saw {seen.get('n')} of 35 files"
+
+
+class TestAShortQuoteCannotMoveAFinding:
+    """Round-4 audit H3: an invented critical finding cited at line 40 with
+    code "return" was re-anchored to the nearest `return` and given a commit
+    button there, with no note that it had moved."""
+
+    PATCH = (
+        "@@ -10,3 +10,8 @@ def lookup(db, oid):\n"
+        " rows = db.query(oid)\n"
+        "+if not rows:\n"
+        "+    return None\n"
+        "+log.info('found')\n"
+        "+return rows.fetchall()\n"
+        " # end\n"
+    )
+
+    def _run(self, issue):
+        files = [{"filename": "app/a.py", "patch": self.PATCH, "status": "modified"}]
+        batch = {"files": [_entry(issues=[issue])]}
+        with patch.object(pr_mod.router, "ask", return_value=(batch, MagicMock())):
+            return pr_mod._review_code(
+                {"head": {"sha": "s"}}, "o/r", 1, files, "t", _cfg(),
+                ConfidenceGate(None), "", MagicMock(),
+            )
+
+    def test_a_fragment_on_the_wrong_line_is_not_anchored(self):
+        md, inline = self._run({
+            "severity": "critical", "line": "40", "code": "return",
+            "issue": "Race condition corrupts results", "fix": "with db.lock(): return rows.fetchall()",
+        })
+        assert inline == []
+        assert "Race condition" in md and "```suggestion" not in md
+
+    def test_a_distinctive_quote_on_the_wrong_line_is_moved_without_a_button_when_partial(self):
+        md, inline = self._run({
+            "severity": "major", "line": "40", "code": "rows.fetchall()",
+            "issue": "Loads every row into memory", "fix": "return rows.fetchmany(100)",
+        })
+        assert len(inline) == 1 and inline[0]["line"] == 14
+        assert "```suggestion" not in inline[0]["body"]
+        assert "Reported at line 40; the code it quotes is on line 14" in inline[0]["body"]

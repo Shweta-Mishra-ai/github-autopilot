@@ -424,6 +424,15 @@ class LLMRouter:
             served_by = provider.provider_key
 
         self._log_and_track(task, meta, served_by)
+        if isinstance(result, dict):
+            from app.ai.validator import strip_copied_examples
+
+            result, copied = strip_copied_examples(result, user)
+            if copied:
+                log.warning(
+                    f"router.example_values_copied task={task} fields={sorted(set(copied))[:8]} "
+                    "— removed; treated as not answered"
+                )
         return result, meta
 
     def ask_text(

@@ -227,12 +227,12 @@
       "id": "app.ai.router",
       "path": "app/ai/router.py",
       "layer": "ai",
-      "loc": 851,
+      "loc": 860,
       "functions": 10,
       "classes": 1,
       "is_package": false,
       "fan_in": 20,
-      "fan_out": 16,
+      "fan_out": 17,
       "external_deps": [
         "datetime",
         "logging",
@@ -259,14 +259,15 @@
       "id": "app.ai.validator",
       "path": "app/ai/validator.py",
       "layer": "ai",
-      "loc": 356,
-      "functions": 13,
+      "loc": 421,
+      "functions": 16,
       "classes": 0,
       "is_package": false,
-      "fan_in": 11,
+      "fan_in": 12,
       "fan_out": 0,
       "external_deps": [
         "logging",
+        "re",
         "typing"
       ]
     },
@@ -348,7 +349,7 @@
       "id": "app.core.confidence",
       "path": "app/core/confidence.py",
       "layer": "core",
-      "loc": 158,
+      "loc": 163,
       "functions": 2,
       "classes": 1,
       "is_package": false,
@@ -420,11 +421,11 @@
       "id": "app.core.guardrails",
       "path": "app/core/guardrails.py",
       "layer": "core",
-      "loc": 368,
-      "functions": 16,
+      "loc": 396,
+      "functions": 17,
       "classes": 2,
       "is_package": false,
-      "fan_in": 11,
+      "fan_in": 12,
       "fan_out": 1,
       "external_deps": [
         "contextlib",
@@ -1214,8 +1215,8 @@
       "id": "app.handlers.pull_request.analysis",
       "path": "app/handlers/pull_request/analysis.py",
       "layer": "handlers",
-      "loc": 405,
-      "functions": 6,
+      "loc": 520,
+      "functions": 9,
       "classes": 0,
       "is_package": false,
       "fan_in": 4,
@@ -1273,7 +1274,7 @@
       "id": "app.handlers.pull_request.gaps",
       "path": "app/handlers/pull_request/gaps.py",
       "layer": "handlers",
-      "loc": 623,
+      "loc": 630,
       "functions": 18,
       "classes": 0,
       "is_package": false,
@@ -1291,7 +1292,7 @@
       "id": "app.handlers.pull_request.grounding",
       "path": "app/handlers/pull_request/grounding.py",
       "layer": "handlers",
-      "loc": 131,
+      "loc": 144,
       "functions": 4,
       "classes": 0,
       "is_package": false,
@@ -1337,12 +1338,12 @@
       "id": "app.handlers.pull_request.review",
       "path": "app/handlers/pull_request/review.py",
       "layer": "handlers",
-      "loc": 662,
-      "functions": 10,
+      "loc": 726,
+      "functions": 11,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 13,
+      "fan_out": 14,
       "external_deps": [
         "__future__"
       ]
@@ -1920,6 +1921,11 @@
       "source": "app.ai.router",
       "target": "app.ai.routing_policy",
       "kind": "import"
+    },
+    {
+      "source": "app.ai.router",
+      "target": "app.ai.validator",
+      "kind": "runtime"
     },
     {
       "source": "app.ai.router",
@@ -3218,6 +3224,11 @@
     },
     {
       "source": "app.handlers.pull_request.review",
+      "target": "app.core.guardrails",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request.review",
       "target": "app.core.sanitizer",
       "kind": "import"
     },
@@ -3719,8 +3730,8 @@
   ],
   "stats": {
     "modules": 103,
-    "edges": 407,
-    "total_loc": 28269,
+    "edges": 409,
+    "total_loc": 28575,
     "layers": [
       "ai",
       "core",
@@ -3741,9 +3752,9 @@
       },
       {
         "id": "app.ai.router",
-        "loc": 851,
+        "loc": 860,
         "fan_in": 20,
-        "fan_out": 16
+        "fan_out": 17
       },
       {
         "id": "app.github.client",
@@ -3764,6 +3775,18 @@
         "fan_out": 1
       },
       {
+        "id": "app.ai.validator",
+        "loc": 421,
+        "fan_in": 12,
+        "fan_out": 0
+      },
+      {
+        "id": "app.core.guardrails",
+        "loc": 396,
+        "fan_in": 12,
+        "fan_out": 1
+      },
+      {
         "id": "app.github.notifications",
         "loc": 567,
         "fan_in": 8,
@@ -3773,18 +3796,6 @@
         "id": "app.core.sanitizer",
         "loc": 284,
         "fan_in": 16,
-        "fan_out": 0
-      },
-      {
-        "id": "app.core.guardrails",
-        "loc": 368,
-        "fan_in": 11,
-        "fan_out": 1
-      },
-      {
-        "id": "app.ai.validator",
-        "loc": 356,
-        "fan_in": 11,
         "fan_out": 0
       },
       {

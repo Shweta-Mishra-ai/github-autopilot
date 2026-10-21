@@ -49,6 +49,10 @@ _WINDOW = 5
 # prove anything on its own, so it only counts on the exact cited line.
 _MIN_QUOTE = 6
 
+# To MOVE a finding off the line the model cited, the quote must identify the
+# new line: at least this long, or at least half of that line.
+_DISTINCTIVE_QUOTE = 25
+
 # The review shows numbered lines ("    42 + code"); a model sometimes copies
 # the number and marker along with the code.
 _NUMBER_PREFIX = re.compile(r"^\s*\d*\s*[+\- ]\s")
@@ -124,6 +128,15 @@ def ground_finding(issue: dict, patch: str) -> tuple[str, int | None]:
             return CONTEXT, None
         if target in added:
             return GROUNDED, target
+        # Moving a finding to a different line needs a quote that identifies
+        # that line. "return" (6 characters) matched any return statement, so
+        # an invented finding cited at line 40 was re-anchored to whichever
+        # `return` was nearest — and given a commit button there.
+        firsts = sorted({span[0] for span in spans})
+        line_text = _norm(lines[firsts[0]][0]) if firsts else ""
+        distinctive = len(quote) >= _DISTINCTIVE_QUOTE or len(quote) * 2 >= len(line_text)
+        if len(firsts) > 1 or not distinctive:
+            return UNQUOTED, None
         return GROUNDED, min(added, key=lambda n: (abs(n - target) if target else 0, n))
 
     if _spans(quote, [(r, i) for i, r in enumerate(_removed_lines(patch))]):

@@ -111,7 +111,19 @@ PATTERNS: list[tuple[str, str, str, bool]] = [
         False,
     ),
     # PagerDuty / Datadog
-    ("PagerDuty Integration Key", r"\b[a-z0-9]{32}\b", "medium", True),
+    # Keyword-anchored like Datadog. The bare r"\b[a-z0-9]{32}\b" it replaced
+    # matched any 32-character lowercase word and reported it as a PagerDuty
+    # key: the boundary-mutation study in research/ found it firing, under
+    # this label, on credentials of 84 other providers, and it flagged the
+    # TruffleHog detector name "gcpapplicationdefaultcredentials" in this
+    # repository's own research results. (Hex digests were already dropped by
+    # the false-positive filter; other words were not.)
+    (
+        "PagerDuty Integration Key",
+        r"(?i)pagerduty.{0,20}['\"][a-z0-9]{32}['\"]",
+        "medium",
+        True,
+    ),
     ("Datadog API Key", r"(?i)datadog.{0,20}['\"][a-f0-9]{32}['\"]", "high", True),
     # Groq (this app's own provider key)
     ("Groq API Key", r"\bgsk_[0-9a-zA-Z]{50,}\b", "critical", False),

@@ -1,0 +1,79 @@
+# .github/workflows/research.yml
+# The replication package in research/ is checked here, apart from the app's
+# CI. It runs only when research/ (or this file) changes.
+#
+#   verify     every number in the manuscript re-derived from the raw JSON
+#   replicate  a seeded harness re-run from scratch against pinned, checksum-
+#              verified inputs, and its output diffed against the committed
+#              result: the package reproducing itself, not just compiling
+
+name: Research
+
+on:
+  push:
+    paths: ["research/**", ".github/workflows/research.yml"]
+  pull_request:
+    branches: ["main"]
+    paths: ["research/**", ".github/workflows/research.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: research-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Paper numbers match the data
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: research
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Every harness compiles
+        run: python -m py_compile benchmarks/*.py
+      - name: Every headline number in the manuscript matches the raw results
+        run: python benchmarks/verify_paper.py
+
+  replicate:
+    name: Gitleaks full-table battery reproduces exactly
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: research
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install the package's own pinned dependencies
+        run: pip install "$(grep '^exrex==' requirements.txt)"
+      - name: Fetch Gitleaks 8.21.2 and its rule table, verified by SHA-256
+        run: |
+          curl -sSL -o /tmp/gl.tgz \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz
+          tar xzf /tmp/gl.tgz gitleaks
+          curl -sSL -o gitleaks.toml \
+            https://raw.githubusercontent.com/gitleaks/gitleaks/v8.21.2/config/gitleaks.toml
+          echo "50b742abd7daad8bbddb6301f3017efb680632d9a5b3b4d8f137b3aac250e359  gitleaks" | sha256sum -c -
+          echo "2ce9d818ed5aac0d9a36638a317284bd733c26d5069c980829335183397430bb  gitleaks.toml" | sha256sum -c -
+      - name: Re-run the seeded harness
+        run: python benchmarks/bench_gitleaks_fulltable.py > /tmp/rerun.json
+      - name: Output is identical to the committed result (apart from wall time)
+        run: |
+          python - <<'EOF'
+          import json, sys
+          a = json.load(open("/tmp/rerun.json"))
+          b = json.load(open("results/gitleaks_fulltable_bench.json"))
+          a.pop("scan_wall_s"); b.pop("scan_wall_s")
+          if a != b:
+              sys.exit("re-run differs from results/gitleaks_fulltable_bench.json")
+          print("re-run identical to the committed result")
+          EOF

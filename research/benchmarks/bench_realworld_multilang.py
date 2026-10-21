@@ -35,6 +35,11 @@ PART A: FINDINGS. Every finding of every tool is recorded with a category
   assigned by stated rules (see categorise()). No finding is asserted to be
   a live credential; public released code is assumed to contain none.
 
+PART C: CREDENTIAL-SHAPED TOKENS OF ANY PROVIDER. Every token meeting a
+  stated provider-independent definition (see _credential_shaped) is
+  counted by the character that follows it, per language: how often real
+  source puts such a token where Gitleaks' terminator group rejects it.
+
 PART B: CREDENTIAL-SHAPED LITERALS IN REAL CODE. For every prefix-type
   credential pattern from bench_threetool_expanded.py whose secret starts
   with a literal of three or more characters (ghp_, AKIA, sk_live_, ...), all
@@ -51,6 +56,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import re
 import shutil
@@ -329,6 +335,30 @@ def anchor_types(expanded):
     return out
 
 
+# ── Part C: credential-shaped tokens of any provider ────────────────────────
+# Part B needs a known provider prefix and so sees few literals. Part C asks
+# the wider question the defects turn on -- in real source, what character
+# follows a credential-shaped token? -- using a provider-independent,
+# stated definition of "credential-shaped" (see _credential_shaped).
+_TOKEN = re.compile(r"(?<![A-Za-z0-9_+/-])([A-Za-z0-9_+/-]{20,100}={0,2})(?![A-Za-z0-9_+/=-])")
+# Characters in Gitleaks' explicit terminator group, plus end of line.
+GITLEAKS_ACCEPTED = {"EOL", "quote", "whitespace", ";", "|"}
+
+
+def _shannon(s):
+    n = len(s)
+    return -sum(c / n * math.log2(c / n) for c in Counter(s).values())
+
+
+def _credential_shaped(tok):
+    core = tok.rstrip("=")
+    return (any(c.isupper() for c in core) and any(c.islower() for c in core)
+            and any(c.isdigit() for c in core)
+            and core.count("/") < 2
+            and not re.fullmatch(r"[0-9a-fA-F]+", core)
+            and _shannon(core) > 4.0)
+
+
 def follow_class(ch):
     if ch == "":
         return "EOL"
@@ -354,6 +384,8 @@ def main():
     dump = open(os.environ["FINDINGS_DUMP"], "w") if os.environ.get("FINDINGS_DUMP") else None
     tmp = tempfile.mkdtemp(prefix="rw2_")
     projects, cands = {}, []
+    part_c = defaultdict(Counter)       # (stratum, language) -> follow class
+    part_c_hyphen = Counter()
     try:
         for lang, repo, sha, stratum in CORPUS:
             root = os.path.join(tmp, repo.replace("/", "_"))
@@ -423,6 +455,12 @@ def main():
                                 for tool, rule in a["expected"].items():
                                     if rule:
                                         o["expected"][tool].add(rule)
+                    for text in lines:
+                        for m in _TOKEN.finditer(text):
+                            if _credential_shaped(m.group(1)):
+                                fc = follow_class(text[m.end(1):m.end(1) + 1])
+                                part_c[(stratum, lang)][fc] += 1
+                                part_c_hyphen[m.group(1).endswith("-")] += 1
             for (rel, ln_no, _s, _e), o in sorted(occ.items()):
                 cands.append({
                     "repo": repo, "language": lang, "stratum": stratum,
@@ -481,6 +519,29 @@ def main():
              "detection_overall": {tool: rate(rows, tool) for tool in tt.TOOLS}}
         for st in ("general", "credential_dense")
         for rows in [[c for c in cands if c["stratum"] == st]]}
+    def c_summary(counter):
+        n = sum(counter.values())
+        rej = sum(v for k, v in counter.items() if k not in GITLEAKS_ACCEPTED)
+        return {"n_tokens": n,
+                "share_followed_by_char_gitleaks_terminator_rejects":
+                    round(rej / n, 4) if n else None,
+                "share_by_following_character": {
+                    k: round(v / n, 4) for k, v in counter.most_common(15)} if n else {}}
+    langs = sorted({lg for _st, lg in part_c})
+    part_c_out = {
+        "definition": ("20-100 chars of [A-Za-z0-9_+/-] (optional = padding), "
+                       "upper+lower+digit, Shannon entropy > 4.0, not hex-only, "
+                       "fewer than two '/'"),
+        "gitleaks_accepted_terminators": sorted(GITLEAKS_ACCEPTED),
+        "overall": c_summary(sum(part_c.values(), Counter())),
+        "by_stratum": {st: c_summary(sum((v for (s2, _l), v in part_c.items() if s2 == st),
+                                         Counter()))
+                       for st in ("general", "credential_dense")},
+        "by_language": {lg: c_summary(sum((v for (_s, l2), v in part_c.items() if l2 == lg),
+                                          Counter()))
+                        for lg in langs},
+        "tokens_ending_in_hyphen": part_c_hyphen[True],
+    }
     tot_lines = sum(p["n_lines"] for p in projects.values())
 
     def totals(ps):
@@ -507,6 +568,7 @@ def main():
                                for lg in sorted({p["language"] for p in projects.values()})},
         "projects": projects,
         "part_b_credential_shaped_literals": part_b,
+        "part_c_credential_shaped_tokens": part_c_out,
     }
 
 

@@ -69,3 +69,7 @@ tests/**/**pycache**/
 research/gitleaks
 research/trufflehog
 research/gitleaks.toml
+research/trufflehog-src
+research/realcorpus2
+research/realcorpus
+research/.venv

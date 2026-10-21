@@ -107,7 +107,12 @@ def startup_check():
     if not app_id:
         errors.append("GITHUB_APP_ID is not set.")
     elif not app_id.strip().isdigit():
-        errors.append(f"GITHUB_APP_ID must be numeric, got: {app_id!r}")
+        # Not echoed: a value pasted into the wrong variable (a private key,
+        # a token) would otherwise be written into the boot log.
+        errors.append(
+            f"GITHUB_APP_ID must be numeric; it is set to a {len(app_id)}-character "
+            "value that is not a number."
+        )
 
     private_key = os.environ.get("GITHUB_PRIVATE_KEY", "")
     if not private_key:
@@ -123,8 +128,9 @@ def startup_check():
     if not os.environ.get("METRICS_AUTH_TOKEN", "").strip():
         log.warning(
             "webhook_security.metrics_unauthed: METRICS_AUTH_TOKEN is NOT set — "
-            "/health and /metrics expose internal state PUBLICLY. Set a strong "
-            "random value to lock them (and the dashboard)."
+            "/health, /metrics, /graph.json and /setup/doctor refuse every request "
+            "in production (and are open in local development). Set a strong "
+            "random value to read them and to use the dashboard."
         )
     if not os.environ.get("MCP_API_KEY", "").strip():
         log.warning(

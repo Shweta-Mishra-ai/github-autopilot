@@ -117,21 +117,37 @@ _SECRET_QUERY_RE = re.compile(r"(?i)\b(" + "|".join(_SECRET_QUERY_PARAMS) + r")=
 # Credentials that ARE the URL path. The bearer of the URL can post as the
 # bot, so the whole tail is secret — but the host is kept, because knowing
 # WHICH integration failed is the entire value of the log line.
+# Any scheme, a misspelt one ("htps://") or none: a URL pasted without its
+# scheme is quoted back verbatim by requests ("Invalid URL 'hooks.slack.com/
+# services/…': No scheme supplied"), and that was logged and posted.
+_ANY_SCHEME = r"(?:[a-z][a-z0-9+.-]*://)?"
 _WEBHOOK_PATH_RES = (
-    re.compile(r"(?i)(https?://hooks\.slack\.com/services/)\S+"),
-    re.compile(r"(?i)(https?://(?:ptb\.|canary\.)?discord(?:app)?\.com/api/webhooks/)\S+"),
-    re.compile(r"(?i)(https?://[\w.-]*webhook\.office\.com/webhookb2/)\S+"),
+    # Slack incoming webhooks, Workflow Builder triggers and workflows.
+    re.compile(r"(?i)(" + _ANY_SCHEME + r"hooks\.slack\.com/)(?:services|triggers|workflows)/\S+"),
+    # Discord, with or without an API version segment (/api/v10/webhooks/).
+    re.compile(
+        r"(?i)("
+        + _ANY_SCHEME
+        + r"(?:ptb\.|canary\.)?discord(?:app)?\.com/api/(?:v\d+/)?webhooks/)\S+"
+    ),
+    re.compile(r"(?i)(" + _ANY_SCHEME + r"[\w.-]*webhook\.office\.com/webhookb2/)\S+"),
     # urllib3's "Max retries exceeded with url: …" quotes only the PATH, so
     # the host-anchored patterns above never matched the commonest failure
     # message, and the full webhook secret was logged — and, from the rich
     # senders, returned to /notify and posted into a GitHub comment.
-    re.compile(r"((?<![\w/])/services/)T[A-Z0-9]+/B[A-Z0-9]+/\S+"),
-    re.compile(r"((?<![\w/])/api/webhooks/)\d+/\S+"),
+    re.compile(r"(?i)((?<![\w/])/(?:services|triggers|workflows)/)T[A-Z0-9]+/\S+"),
+    re.compile(r"(?i)((?<![\w/])/api/(?:v\d+/)?webhooks/)\d+/\S+"),
     re.compile(r"((?<![\w/])/webhookb2/)\S+"),
 )
 
 
 _URL_USERINFO_RE = re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://)[^/@\s:]+:[^/@\s]+@")
+# The same without a scheme: "No connection adapters were found for
+# 'admin:pw@ollama.internal:11434/api/chat'" carried an OLLAMA_HOST password.
+_BARE_USERINFO_RE = re.compile(
+    r"(?<![\w/@.:-])[\w.%+-]+:[^\s/@'\"`]+@(?=[a-z0-9-]+(?:\.[a-z0-9-]+)*(?:[:/'\"\s]|$)|[a-z0-9-]+(?:\.[a-z0-9-]+)+)",
+    re.I,
+)
 
 
 def redact_secrets(text: str | None) -> str:
@@ -147,6 +163,7 @@ def redact_secrets(text: str | None) -> str:
     # Credentials in a URL's user-info (`http://user:pass@host`, as an
     # OLLAMA_HOST may be written) — quoted by every connection error.
     out = _URL_USERINFO_RE.sub(r"\1REDACTED@", out)
+    out = _BARE_USERINFO_RE.sub("REDACTED@", out)
     for pattern in _WEBHOOK_PATH_RES:
         out = pattern.sub(lambda m: f"{m.group(1)}REDACTED", out)
     return _SECRET_QUERY_RE.sub(lambda m: f"{m.group(1)}=REDACTED", out)

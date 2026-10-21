@@ -410,7 +410,9 @@ def cmd_report(repo: str) -> str:
         log.error(f"cmd_report.unavailable repo={repo}: {exc}")
         return (
             "## ⚠️ Report Unavailable\n\n"
-            f"The analytics store (Redis) could not be read: `{str(exc)[:120]}`. "
+            # The error type only: the message names Redis's internal host
+            # and port, and this reply is a public comment.
+            f"The analytics store (Redis) could not be read (`{type(exc).__name__}`). "
             "This is not a report of zero activity."
         )
     except Exception as exc:

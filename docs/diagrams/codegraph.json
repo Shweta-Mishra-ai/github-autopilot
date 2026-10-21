@@ -28,12 +28,12 @@
       "id": "app.ai.circuit_breaker",
       "path": "app/ai/circuit_breaker.py",
       "layer": "ai",
-      "loc": 178,
+      "loc": 184,
       "functions": 6,
       "classes": 3,
       "is_package": false,
       "fan_in": 15,
-      "fan_out": 1,
+      "fan_out": 2,
       "external_deps": [
         "dataclasses",
         "enum",
@@ -177,12 +177,12 @@
       "id": "app.ai.providers.groq",
       "path": "app/ai/providers/groq.py",
       "layer": "ai",
-      "loc": 290,
+      "loc": 292,
       "functions": 1,
       "classes": 1,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 4,
+      "fan_out": 5,
       "external_deps": [
         "logging",
         "os",
@@ -615,11 +615,11 @@
       "id": "app.core.redaction",
       "path": "app/core/redaction.py",
       "layer": "core",
-      "loc": 152,
+      "loc": 169,
       "functions": 3,
       "classes": 0,
       "is_package": false,
-      "fan_in": 6,
+      "fan_in": 9,
       "fan_out": 1,
       "external_deps": [
         "__future__",
@@ -750,7 +750,7 @@
       "id": "app.core.webhook_security",
       "path": "app/core/webhook_security.py",
       "layer": "core",
-      "loc": 528,
+      "loc": 534,
       "functions": 16,
       "classes": 0,
       "is_package": false,
@@ -858,8 +858,8 @@
       "id": "app.github.notifications",
       "path": "app/github/notifications.py",
       "layer": "github",
-      "loc": 567,
-      "functions": 22,
+      "loc": 603,
+      "functions": 24,
       "classes": 0,
       "is_package": false,
       "fan_in": 8,
@@ -1113,12 +1113,12 @@
       "id": "app.handlers.comments.integrations",
       "path": "app/handlers/comments/integrations.py",
       "layer": "handlers",
-      "loc": 243,
+      "loc": 246,
       "functions": 4,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 3,
+      "fan_out": 4,
       "external_deps": [
         "__future__",
         "logging",
@@ -1148,7 +1148,7 @@
       "id": "app.handlers.comments.reviewer",
       "path": "app/handlers/comments/reviewer.py",
       "layer": "handlers",
-      "loc": 494,
+      "loc": 496,
       "functions": 13,
       "classes": 0,
       "is_package": false,
@@ -1546,7 +1546,7 @@
       "id": "app.mcp.mcp_server",
       "path": "app/mcp/mcp_server.py",
       "layer": "mcp",
-      "loc": 169,
+      "loc": 174,
       "functions": 4,
       "classes": 0,
       "is_package": false,
@@ -1604,7 +1604,7 @@
       "id": "app.security.enhanced_secrets",
       "path": "app/security/enhanced_secrets.py",
       "layer": "security",
-      "loc": 1071,
+      "loc": 1100,
       "functions": 26,
       "classes": 1,
       "is_package": false,
@@ -1675,8 +1675,8 @@
       "id": "server",
       "path": "server.py",
       "layer": "other",
-      "loc": 999,
-      "functions": 34,
+      "loc": 1025,
+      "functions": 35,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
@@ -1715,6 +1715,11 @@
     {
       "source": "app.ai.circuit_breaker",
       "target": "app.core.health_check",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.circuit_breaker",
+      "target": "app.core.redaction",
       "kind": "runtime"
     },
     {
@@ -1860,6 +1865,11 @@
     {
       "source": "app.ai.providers.groq",
       "target": "app.ai.router",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.ai.providers.groq",
+      "target": "app.core.redaction",
       "kind": "runtime"
     },
     {
@@ -2640,6 +2650,11 @@
     {
       "source": "app.handlers.comments.impact",
       "target": "app.handlers.pull_request.risk",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.comments.integrations",
+      "target": "app.core.redaction",
       "kind": "runtime"
     },
     {
@@ -3830,8 +3845,8 @@
   ],
   "stats": {
     "modules": 105,
-    "edges": 423,
-    "total_loc": 28973,
+    "edges": 426,
+    "total_loc": 29105,
     "layers": [
       "ai",
       "core",
@@ -3863,6 +3878,12 @@
         "fan_out": 3
       },
       {
+        "id": "app.security.enhanced_secrets",
+        "loc": 1100,
+        "fan_in": 5,
+        "fan_out": 0
+      },
+      {
         "id": "app.ai.validator",
         "loc": 471,
         "fan_in": 13,
@@ -3875,28 +3896,22 @@
         "fan_out": 0
       },
       {
-        "id": "app.security.enhanced_secrets",
-        "loc": 1071,
-        "fan_in": 5,
-        "fan_out": 0
-      },
-      {
         "id": "app.core.config",
         "loc": 567,
         "fan_in": 9,
         "fan_out": 1
       },
       {
+        "id": "app.github.notifications",
+        "loc": 603,
+        "fan_in": 8,
+        "fan_out": 4
+      },
+      {
         "id": "app.core.guardrails",
         "loc": 396,
         "fan_in": 12,
         "fan_out": 1
-      },
-      {
-        "id": "app.github.notifications",
-        "loc": 567,
-        "fan_in": 8,
-        "fan_out": 4
       },
       {
         "id": "app.ai.providers.base",

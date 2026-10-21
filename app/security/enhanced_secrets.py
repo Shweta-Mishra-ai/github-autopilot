@@ -89,9 +89,20 @@ PATTERNS: list[tuple[str, str, str, bool]] = [
         "critical",
         False,
     ),
+    # Incoming webhooks, and Workflow Builder triggers and workflows — the
+    # last two were missed, and every one of them is a credential: whoever
+    # holds the URL can post as the integration.
     (
         "Slack Webhook",
-        r"https://hooks\.slack\.com/services/T[A-Z0-9]{8,12}/B[A-Z0-9]{8,12}/[a-zA-Z0-9]{24}",
+        r"https://hooks\.slack\.com/(?:services|triggers|workflows)/T[A-Za-z0-9]{6,12}"
+        r"(?:/[A-Za-z0-9]+){1,3}/[a-zA-Z0-9]{20,}",
+        "high",
+        False,
+    ),
+    (
+        "Discord Webhook",
+        r"https://(?:ptb\.|canary\.)?discord(?:app)?\.com/api/(?:v\d+/)?webhooks/\d{17,20}/"
+        r"[A-Za-z0-9_-]{60,}",
         "high",
         False,
     ),
@@ -116,8 +127,26 @@ PATTERNS: list[tuple[str, str, str, bool]] = [
     # PagerDuty / Datadog
     ("PagerDuty Integration Key", r"\b[a-z0-9]{32}\b", "medium", True),
     ("Datadog API Key", r"(?i)datadog.{0,20}['\"][a-f0-9]{32}['\"]", "high", True),
-    # Groq (this app's own provider key)
+    # This app's own provider keys.
     ("Groq API Key", r"\bgsk_[0-9a-zA-Z]{50,}\b", "critical", False),
+    ("OpenRouter API Key", r"\bsk-or-v1-[0-9a-f]{64}\b", "critical", False),
+    # A Fernet key (MEMORY_BACKUP_KEY is one) is 43 url-safe base64
+    # characters and "="; and many services issue 64-hex tokens. Neither
+    # shape is distinctive alone — a sha256 digest is 64 hex — so both need a
+    # key/token/secret name in front of them.
+    (
+        "Fernet Key",
+        r"(?i)\b[A-Z0-9_]*KEY['\"]?\s*[=:]\s*['\"]?[A-Za-z0-9_-]{43}=(?![A-Za-z0-9_=-])",
+        "high",
+        True,
+    ),
+    (
+        "Hex Token",
+        r"(?i)\b[A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_?KEY)[A-Z0-9_]*['\"]?\s*[=:]\s*['\"]?"
+        r"[0-9a-f]{64}\b",
+        "high",
+        True,
+    ),
     # Private Keys / Certificates
     ("RSA Private Key", r"-----BEGIN RSA PRIVATE KEY-----", "critical", False),
     ("EC Private Key", r"-----BEGIN EC PRIVATE KEY-----", "critical", False),

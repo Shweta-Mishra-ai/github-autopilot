@@ -92,7 +92,7 @@
 
 `GET /metrics`
 
-Requires `Authorization: Bearer {METRICS_AUTH_TOKEN}` header if `METRICS_AUTH_TOKEN` is set in environment. If not set, the endpoint is unprotected (acceptable for private repos, not recommended for public deployments).
+Requires `Authorization: Bearer {METRICS_AUTH_TOKEN}`. With `METRICS_AUTH_TOKEN` unset, the endpoint refuses every request when `ENVIRONMENT=production` (as `render.yaml` sets) and is open only in local development.
 
 Returns a JSON snapshot of all tracked counters:
 

@@ -54,6 +54,12 @@ class CircuitBreaker:
             self._last_failure_reason = ""
 
     def record_failure(self, reason: str = ""):
+        # The reason is logged and served on /health, and callers pass
+        # exception text, which quotes the URL that failed — an OLLAMA_HOST
+        # written as https://user:password@host put the password in both.
+        from app.core.redaction import redact_secrets
+
+        reason = redact_secrets(reason)
         with self._lock:
             self._failures += 1
             self._last_failure_reason = reason

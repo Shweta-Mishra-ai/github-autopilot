@@ -239,5 +239,8 @@ def cmd_notify(
         return "\n".join(lines)
 
     except Exception as exc:
-        log.error(f"cmd_notify error: {exc}")
-        return f"## ⚠️ Notify error: `{str(exc)[:200]}`"
+        from app.core.redaction import redact_secrets
+
+        # The reply is a public comment: the error type only.
+        log.error(f"cmd_notify error: {redact_secrets(str(exc))}")
+        return f"## ⚠️ Notify error: `{type(exc).__name__}` (details in the server log)"

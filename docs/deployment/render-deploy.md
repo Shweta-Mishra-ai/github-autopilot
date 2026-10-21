@@ -233,7 +233,7 @@ Then paste the single-line result.
 |----------|---------|---------|
 | `DISCORD_WEBHOOK_URL` | None | Discord channel for high-risk PR + secret alerts |
 | `SLACK_WEBHOOK_URL` | None | Slack channel notifications |
-| `METRICS_AUTH_TOKEN` | None | Bearer token to protect `/metrics` endpoint |
+| `METRICS_AUTH_TOKEN` | None | Bearer token for `/health`, `/metrics`, `/graph.json`, `/setup/doctor`; without it they refuse every request in production |
 | `MAX_DISPATCH_WORKERS` | `6` | Thread pool worker count (integer) |
 | `REPO_DAILY_AI_LIMIT` | `150` | Max AI calls per repo per day (integer) |
 | `LOG_LEVEL` | `INFO` | Set to `DEBUG` for verbose logging |

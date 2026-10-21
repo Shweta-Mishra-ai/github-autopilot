@@ -68,6 +68,29 @@ def discord_webhook_url() -> str:
     return os.environ.get("DISCORD_WEBHOOK_URL", "").strip()
 
 
+def webhook_url_problem(name: str, url: str) -> str:
+    """
+    Why `url` (the value of env var `name`) cannot be used, or "".
+
+    A URL pasted without its scheme, with a typo in it, or as plain http
+    was sent anyway, and requests' error quoted the whole URL — the webhook
+    secret — into the log and the /notify reply. Never echoes the URL.
+    """
+    if not url:
+        return f"{name} not set"
+    if not url.lower().startswith("https://"):
+        return f"{name} is not an https:// URL — check its value"
+    return ""
+
+
+def _failure(channel: str, e: Exception) -> str:
+    """The reply-safe description of a failed send. The detail, redacted, goes
+    to the log; the reply names the error type only, because a reply is a
+    public GitHub comment and redaction is a list of known URL shapes."""
+    log.error(f"notification.{channel}_error: {redact_secrets(str(e))}")
+    return f"{type(e).__name__} (details in the server log)"
+
+
 def slack_enabled() -> bool:
     return bool(slack_webhook_url())
 
@@ -242,6 +265,11 @@ def _send_slack(title: str, message: str, severity: str):
                 }
             ]
         }
+        problem = webhook_url_problem("SLACK_WEBHOOK_URL", slack_webhook_url())
+        if problem:
+            _count("notifications.slack.failed")
+            log.error(f"notification.slack_not_sent: {problem}")
+            return
         resp = requests.post(slack_webhook_url(), json=payload, timeout=10)
         if resp.status_code == 200:
             _count("notifications.slack.sent")
@@ -287,6 +315,11 @@ def _send_discord(
             ]
 
         payload = {"embeds": [embed], "allowed_mentions": NO_PINGS}
+        problem = webhook_url_problem("DISCORD_WEBHOOK_URL", discord_webhook_url())
+        if problem:
+            _count("notifications.discord.failed")
+            log.error(f"notification.discord_not_sent: {problem}")
+            return
         resp = requests.post(
             discord_webhook_url(),
             json=payload,
@@ -416,8 +449,9 @@ def notify_all_providers_down(config=None):
 
 
 def test_discord() -> tuple[bool, str]:
-    if not discord_enabled():
-        return False, "DISCORD_WEBHOOK_URL environment variable is not set"
+    problem = webhook_url_problem("DISCORD_WEBHOOK_URL", discord_webhook_url())
+    if problem:
+        return False, problem
 
     try:
         payload = {
@@ -446,7 +480,7 @@ def test_discord() -> tuple[bool, str]:
             return True, "Discord notification sent successfully ✅"
         return False, f"Discord returned HTTP {resp.status_code}: {resp.text[:150]}"
     except Exception as e:
-        return False, f"Exception: {redact_secrets(str(e))}"
+        return False, _failure("discord", e)
 
 
 def send_rich_discord(
@@ -461,8 +495,9 @@ def send_rich_discord(
     Colors: 0x2ECC71=green, 0xF1C40F=yellow, 0xE74C3C=red, 0x5865F2=blue
     """
     webhook_url = discord_webhook_url()
-    if not webhook_url:
-        return False, "DISCORD_WEBHOOK_URL not set"
+    problem = webhook_url_problem("DISCORD_WEBHOOK_URL", webhook_url)
+    if problem:
+        return False, problem
     try:
         embed = {
             "title": title[:256],
@@ -490,7 +525,7 @@ def send_rich_discord(
         return ok, f"HTTP {r.status_code}"
     except Exception as e:
         _count("notifications.discord.failed")
-        return False, redact_secrets(str(e))
+        return False, _failure("discord", e)
 
 
 def send_rich_slack(
@@ -508,8 +543,9 @@ def send_rich_slack(
     reporting that Slack had been notified.
     """
     webhook_url = slack_webhook_url()
-    if not webhook_url:
-        return False, "SLACK_WEBHOOK_URL not set"
+    problem = webhook_url_problem("SLACK_WEBHOOK_URL", webhook_url)
+    if problem:
+        return False, problem
     try:
         attachment: dict = {
             "color": color,
@@ -535,7 +571,7 @@ def send_rich_slack(
         return ok, f"HTTP {r.status_code}"
     except Exception as e:
         _count("notifications.slack.failed")
-        return False, redact_secrets(str(e))
+        return False, _failure("slack", e)
 
 
 def notify_autofix_created(repo: str, issue_number: int, pr_number: int, pr_url: str):

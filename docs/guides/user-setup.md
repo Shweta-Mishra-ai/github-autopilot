@@ -124,7 +124,7 @@ Copy this value. You will need it again in step 4 when creating the GitHub App.
 |----------|---------|---------|
 | `DISCORD_WEBHOOK_URL` | — | Discord notifications on high-risk events |
 | `SLACK_WEBHOOK_URL` | — | Slack notifications |
-| `METRICS_AUTH_TOKEN` | — | Protects `/metrics` endpoint (any string) |
+| `METRICS_AUTH_TOKEN` | — | Required to read `/health`, `/metrics`, `/graph.json`, `/setup/doctor` in production (any strong random string) |
 | `MAX_DISPATCH_WORKERS` | `6` | Thread pool size |
 | `REPO_DAILY_AI_LIMIT` | `150` | Max AI calls per repo per day |
 

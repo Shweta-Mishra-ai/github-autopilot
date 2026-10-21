@@ -280,7 +280,9 @@ class GroqProvider(LLMProvider):
                 error="Request timed out",
             )
         except Exception as e:
-            err = str(e)
+            from app.core.redaction import redact_secrets
+
+            err = redact_secrets(str(e))
             breaker.record_failure(err[:60])
             return LLMResponse(
                 text="",

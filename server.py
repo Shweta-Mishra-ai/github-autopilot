@@ -101,21 +101,47 @@ def _payload_too_large(_e):
     return jsonify({"error": "Payload too large"}), 413
 
 
+_PRODUCTION = (
+    os.environ.get("ENVIRONMENT", "") == "production"
+    or os.environ.get("FLASK_ENV", "") == "production"
+)
+
+
 def _authorized(req) -> bool:
     """
-    Constant-time bearer check for /health and /metrics.
+    Constant-time bearer check for /health, /metrics, /graph.json and
+    /setup/doctor.
 
     Behaviour:
-      - METRICS_TOKEN unset  → open (no secret to enforce). Logged once at boot.
       - METRICS_TOKEN set    → require exact `Authorization: Bearer <token>`,
                                compared in constant time to avoid timing leaks.
+      - METRICS_TOKEN unset  → closed in production (ENVIRONMENT=production,
+                               which render.yaml sets); open elsewhere, for
+                               local development.
+
+    Unset used to mean open everywhere, and these endpoints describe the
+    deployment: which providers and keys are configured, the memory-backup
+    repository, repositories the maintenance sweep could not read. Render's
+    health check and the keepalive use /ping, which stays open.
     """
     if not METRICS_TOKEN:
-        return True
+        return not _PRODUCTION
     auth = req.headers.get("Authorization", "")
     # Bytes: compare_digest raises TypeError on a str with any non-ASCII
     # character, so `Bearer é` was a 500 rather than a 401.
     return hmac.compare_digest(auth.encode("utf-8"), f"Bearer {METRICS_TOKEN}".encode("utf-8"))
+
+
+def _unauthorized():
+    if not METRICS_TOKEN and _PRODUCTION:
+        return jsonify(
+            {
+                "error": "Unauthorized",
+                "detail": "METRICS_AUTH_TOKEN is not set on this production deployment. "
+                "Set it, then send it as `Authorization: Bearer <token>`.",
+            }
+        ), 401
+    return jsonify({"error": "Unauthorized"}), 401
 
 
 # ── Graceful shutdown ───────────────────────────────────────────────────────
@@ -203,7 +229,7 @@ def graph_json():
     looking at.
     """
     if not _authorized(request):
-        return jsonify({"error": "Unauthorized"}), 401
+        return _unauthorized()
 
     path = os.environ.get("CODEGRAPH_PATH", "docs/diagrams/codegraph.json")
     try:
@@ -326,7 +352,7 @@ def setup_doctor():
     Probes are all GETs, so calling this can change nothing.
     """
     if not _authorized(request):
-        return jsonify({"error": "Unauthorized"}), 401
+        return _unauthorized()
     # With no METRICS_AUTH_TOKEN, _authorized() lets everyone through, which
     # is fine for the settings report but not for a repository probe: that
     # mints an installation token and reports what the App may do on any
@@ -431,7 +457,7 @@ def health():
     Use /ping for Render health checks (no auth needed).
     """
     if not _authorized(request):
-        return jsonify({"error": "Unauthorized"}), 401
+        return _unauthorized()
 
     from app.ai.circuit_breaker import status_all
     from app.core.redis_client import redis_memory_status
@@ -551,7 +577,7 @@ def health():
 @app.route("/metrics", methods=["GET"])
 def get_metrics():
     if not _authorized(request):
-        return jsonify({"error": "Unauthorized"}), 401
+        return _unauthorized()
     return jsonify(metrics.snapshot())
 
 

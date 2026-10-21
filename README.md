@@ -125,7 +125,7 @@ The credentials are shown once. Put them in your host's environment:
 | `GITHUB_WEBHOOK_SECRET` | the setup page |
 | `GROQ_API_KEY` | [console.groq.com](https://console.groq.com), free — **or skip it and use Option 4 instead** |
 | `REDIS_URL` | wired automatically by `render.yaml` |
-| `METRICS_AUTH_TOKEN` | any strong random string — recommended |
+| `METRICS_AUTH_TOKEN` | any strong random string — needed to read `/health` and `/metrics` in production |
 | `MCP_API_KEY` | `python3 -c "import secrets; print(secrets.token_hex(32))"` |
 
 <details>
@@ -293,10 +293,10 @@ Reported cost in local mode is always `0`.
 | | |
 |---|---|
 | Modules | 105 |
-| Lines of code | 28,973 |
+| Lines of code | 29,105 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 423 |
+| Internal imports | 426 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>

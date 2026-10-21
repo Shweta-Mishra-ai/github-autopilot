@@ -150,7 +150,7 @@ class OllamaProvider(LLMProvider):
                 error=redact_secrets(f"Cannot reach Ollama at {host} — is it running?"),
             )
         except Exception as e:
-            breaker.record_failure(str(e)[:60])
+            breaker.record_failure(redact_secrets(str(e))[:60])
             return LLMResponse(
                 text="",
                 provider="ollama",

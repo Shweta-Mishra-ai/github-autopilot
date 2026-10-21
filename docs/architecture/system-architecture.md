@@ -193,8 +193,9 @@ instead of silently evicting dedup keys.
 ## 6. Security boundaries
 
 - Webhooks: HMAC, size and rate limits as above. `/health`, `/metrics`,
-  `/graph.json` and `/setup/doctor` require `METRICS_AUTH_TOKEN` — and are
-  **open when it is unset**, so set it. `/dashboard` and `/graph` are static
+  `/graph.json` and `/setup/doctor` require `METRICS_AUTH_TOKEN`. When it is
+  unset they refuse every request in production (`ENVIRONMENT=production`)
+  and are open only in local development; `/ping` is always open. `/dashboard` and `/graph` are static
   pages with no data in them; they fetch the gated endpoints with a token you
   paste in. The MCP endpoint refuses everything without `MCP_API_KEY`.
 - `/setup` (one-click App creation) binds its CSRF state to the browser with

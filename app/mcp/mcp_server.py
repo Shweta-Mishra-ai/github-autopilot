@@ -77,10 +77,15 @@ def _mcp_named_keys() -> dict[str, str]:
     """
     raw = os.environ.get("MCP_API_KEYS", "")
     keys: dict[str, str] = {}
-    for entry in filter(None, (e.strip() for e in raw.split(","))):
+    for position, entry in enumerate(filter(None, (e.strip() for e in raw.split(","))), 1):
         name, sep, key = entry.partition(":")
         if not sep or not name.strip() or not key.strip():
-            log.warning(f"mcp.bad_key_entry skipped (want name:key): {entry[:20]!r}...")
+            # Position and length only: an entry missing its "name:" is a
+            # bare key, and its first 20 characters went into the log.
+            log.warning(
+                f"mcp.bad_key_entry skipped (want name:key): entry {position} "
+                f"of MCP_API_KEYS, {len(entry)} characters"
+            )
             continue
         keys[name.strip()] = key.strip()
     return keys

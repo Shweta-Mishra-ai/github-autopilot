@@ -84,6 +84,16 @@ class TestAFullRedisIsNotOk:
         monkeypatch.setattr("app.core.redis_client.redis_memory_status",
                             lambda: {"level": mem_level, "used_pct": 99.0})
         monkeypatch.setattr(server, "_any_configured_provider_up", lambda b: True)
+        # Everything else /health weighs, pinned: other tests leave GitHub
+        # rate-limit state, a provider configuration error or a model
+        # substitution in module state, and the baseline must be "ok" for the
+        # degraded cases to mean anything.
+        monkeypatch.setattr("app.github.rate_limit.get_status", lambda: {})
+        monkeypatch.setattr("app.ai.model_catalog.active_substitutions", lambda: {})
+        monkeypatch.setattr(
+            "app.ai.router.LLMRouter.status",
+            lambda self: {"configuration_error": "", "models": {}},
+        )
         monkeypatch.setattr(event_queue, "_last_consumer_error",
                             __import__("time").time() if failing else 0.0)
         monkeypatch.delenv("REDIS_URL", raising=False)

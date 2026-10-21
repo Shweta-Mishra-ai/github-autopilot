@@ -58,7 +58,7 @@ if [[ "${1:-}" != "--figures" ]]; then
   python3 -m venv "$HERE/.venv"; source "$HERE/.venv/bin/activate"
   pip install -q --upgrade pip
   pip install -q -r "$SUBJECT/requirements-dev.txt"
-  pip install -q exrex matplotlib numpy scipy pymupdf
+  pip install -q -r "$HERE/requirements.txt"
 
   log "redis (loopback, persistence disabled)"
   redis-server --daemonize yes --port 6399 --save "" --appendonly no \

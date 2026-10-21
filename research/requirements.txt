@@ -1,0 +1,11 @@
+# Python dependencies of the replication package (research/), kept apart from
+# the app's requirements.txt. exrex is pinned exactly: every generated
+# credential comes from it, so a different exrex is a different corpus.
+# Measured with exrex 0.12.0 on CPython 3.11.15 and 3.13; the seeded harnesses
+# give byte-identical output on both.
+exrex==0.12.0
+# Figures and PDF checks only; no reported number depends on these.
+matplotlib
+numpy
+scipy
+pymupdf

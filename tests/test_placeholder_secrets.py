@@ -50,6 +50,12 @@ class TestThisRepositoryScansClean:
             s = str(path)
             if ".venv" in s or ".git/" in s or "__pycache__" in s:
                 continue
+            # research/ is the paper's replication package, not this app. Its
+            # harnesses, corpora and raw results hold credential-shaped strings
+            # on purpose -- they are what the study measures -- and it is
+            # checked by its own workflow (.github/workflows/research.yml).
+            if path.parts[:1] == ("research",):
+                continue
             if path.suffix not in (
                 ".py", ".md", ".yml", ".yaml", ".json", ".txt", ".cfg", ".toml"
             ) and path.name != ".env.example":
@@ -176,6 +182,20 @@ class TestRealCredentialsStillFire:
         with_body = f"+-----BEGIN {header}-----\n+{_rand(64)}"
         assert scan_diff(with_body, file_path="app/key.py")
 
+    def test_a_pagerduty_key_next_to_its_name_is_reported_as_pagerduty(self):
+        alphabet = string.ascii_lowercase + string.digits
+        caught = sum(
+            1
+            for _ in range(40)
+            if any(
+                f.pattern_name == "PagerDuty Integration Key"
+                for f in scan_diff(
+                    f'+PAGERDUTY_ROUTING_KEY = "{_rand(32, alphabet)}"', file_path="app/c.py"
+                )
+            )
+        )
+        assert caught >= 38, f"only {caught}/40 PagerDuty keys reported as PagerDuty"
+
     def test_detection_is_statistically_reliable_not_lucky(self):
         """Generated keys are random, so detection is a distribution, not a
         yes/no. Forty samples rather than one seed that happened to work."""
@@ -183,6 +203,27 @@ class TestRealCredentialsStillFire:
             1 for _ in range(40) if scan_diff(f'+api_key = "{_rand(40)}"', file_path="app/c.py")
         )
         assert caught >= 38, f"only {caught}/40 random credentials detected"
+
+
+class TestAnyThirtyTwoCharacterWordIsNotAPagerDutyKey:
+    """The PagerDuty rule was r"\\b[a-z0-9]{32}\\b" with no keyword, so any
+    32-character lowercase word was a "PagerDuty key" -- including a TruffleHog
+    detector name in this repository's own research results. It now needs the
+    provider's name nearby, like Datadog. The hex cases already passed (the
+    false-positive filter drops digests) and stay as guards."""
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            '+digest = "{}"',
+            '+    "TH:gcpapplicationdefaultcredentials": "only 0 valid samples",',
+            "+etag: {}",
+        ],
+    )
+    def test_a_bare_32_character_value_is_not_labelled_pagerduty(self, line):
+        value = _rand(32, "0123456789abcdef")
+        labels = {f.pattern_name for f in scan_diff(line.format(value), file_path="app/c.py")}
+        assert "PagerDuty Integration Key" not in labels
 
 
 class TestPlaceholderWordsNeverSuppressARealSecret:

@@ -386,9 +386,12 @@ def make_degraded_response(result: dict) -> str:
     flag, so a missing or rejected API key was reported as "Transient issue —
     no action needed" — the one case where waiting cannot help.
     """
-    from app.ai.guarded import not_configured_comment
+    from app.ai.guarded import degraded_comment, not_configured_comment
 
     result = result if isinstance(result, dict) else {}
     if result.get("_configuration_error"):
         return not_configured_comment(result.get("message", ""), "answer")
-    return providers_down_comment(int(result.get("_retry_in") or result.get("retry_in") or 60))
+    # The same text every other path gives: this one kept its own, which said
+    # "try again in a minute" over a spent quota hours from resetting.
+    retry = int(result.get("_retry_in") or result.get("retry_in") or 60)
+    return degraded_comment({"_reason": "providers_down", "_retry_in": retry}, "answer")

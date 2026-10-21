@@ -274,6 +274,13 @@ def client_error_detail(
 # had actually said.
 MAX_THROTTLE_WAIT_SECONDS = float(os.environ.get("LLM_MAX_THROTTLE_WAIT_SECONDS", "10"))
 
+# The longest provider wait believed. A spent daily quota answers 429 with
+# hours to go; the shared one-hour clamp (sized for the GitHub client, which
+# sleeps) cut that to an hour, so the breaker re-probed and replies said
+# "resets in ~59 min" all day. Nothing sleeps for this — it only sets how long
+# the breaker stays open — and a daily quota resets within a day.
+MAX_PROVIDER_RETRY_AFTER = 24 * 3600
+
 
 def throttle_pause(response, default: int = 30) -> tuple[int, float]:
     """
@@ -286,7 +293,9 @@ def throttle_pause(response, default: int = 30) -> tuple[int, float]:
     """
     from app.core.retry_after import parse_retry_after
 
-    retry_after = parse_retry_after(_header(response, "Retry-After"), default)
+    retry_after = parse_retry_after(
+        _header(response, "Retry-After"), default, cap=MAX_PROVIDER_RETRY_AFTER
+    )
     if 0 < retry_after <= MAX_THROTTLE_WAIT_SECONDS:
         return retry_after, float(retry_after)
     return retry_after, 0.0

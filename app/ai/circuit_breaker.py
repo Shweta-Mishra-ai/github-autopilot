@@ -204,7 +204,15 @@ class AllProvidersDown(Exception):
             self.retry_in_seconds = int(retry_in_seconds)
         else:
             try:
-                values = [int(cb.seconds_until_retry()) for cb in _breakers.values()]
+                # Only open breakers say when service returns. A closed one the
+                # router still could not use is a provider with no key (or one
+                # a quality floor excluded); its 0 made every spent quota on a
+                # Groq-only deployment read as "retry in ~60s".
+                values = [
+                    int(cb.seconds_until_retry())
+                    for cb in _breakers.values()
+                    if not cb.is_available()
+                ]
                 self.retry_in_seconds = max(60, min(values)) if values else 60
             except Exception:
                 self.retry_in_seconds = 60

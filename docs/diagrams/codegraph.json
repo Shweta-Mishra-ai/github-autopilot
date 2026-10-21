@@ -28,7 +28,7 @@
       "id": "app.ai.circuit_breaker",
       "path": "app/ai/circuit_breaker.py",
       "layer": "ai",
-      "loc": 211,
+      "loc": 219,
       "functions": 6,
       "classes": 3,
       "is_package": false,
@@ -141,7 +141,7 @@
       "id": "app.ai.providers.base",
       "path": "app/ai/providers/base.py",
       "layer": "ai",
-      "loc": 372,
+      "loc": 381,
       "functions": 9,
       "classes": 3,
       "is_package": false,
@@ -669,7 +669,7 @@
       "id": "app.core.retry_after",
       "path": "app/core/retry_after.py",
       "layer": "core",
-      "loc": 72,
+      "loc": 73,
       "functions": 1,
       "classes": 0,
       "is_package": false,
@@ -1058,7 +1058,7 @@
       "id": "app.handlers.comments.dispatcher",
       "path": "app/handlers/comments/dispatcher.py",
       "layer": "handlers",
-      "loc": 394,
+      "loc": 397,
       "functions": 19,
       "classes": 0,
       "is_package": false,
@@ -3913,7 +3913,7 @@
   "stats": {
     "modules": 106,
     "edges": 434,
-    "total_loc": 29801,
+    "total_loc": 29822,
     "layers": [
       "ai",
       "core",
@@ -3982,7 +3982,7 @@
       },
       {
         "id": "app.ai.circuit_breaker",
-        "loc": 211,
+        "loc": 219,
         "fan_in": 15,
         "fan_out": 2
       }

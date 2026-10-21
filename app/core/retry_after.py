@@ -30,14 +30,15 @@ from email.utils import parsedate_to_datetime
 MAX_RETRY_AFTER = 3600
 
 
-def parse_retry_after(value, default: int = 30) -> int:
+def parse_retry_after(value, default: int = 30, cap: int = MAX_RETRY_AFTER) -> int:
     """
     Return a whole number of seconds to wait, from a Retry-After header.
 
     Accepts delay-seconds (integer or fractional) and the HTTP-date form.
     Fractional delays round up, so the wait is never shorter than asked.
     A date already in the past yields 0. Anything unparseable — including
-    None, empty strings and negatives — yields ``default``.
+    None, empty strings and negatives — yields ``default``. Delays are
+    clamped to ``cap``.
     """
     if value is None:
         return default
@@ -53,7 +54,7 @@ def parse_retry_after(value, default: int = 30) -> int:
     else:
         if not math.isfinite(seconds) or seconds < 0:
             return default
-        return min(math.ceil(seconds), MAX_RETRY_AFTER)
+        return min(math.ceil(seconds), cap)
 
     try:
         when = parsedate_to_datetime(text)
@@ -69,4 +70,4 @@ def parse_retry_after(value, default: int = 30) -> int:
 
     if delta <= 0:
         return 0
-    return min(math.ceil(delta), MAX_RETRY_AFTER)
+    return min(math.ceil(delta), cap)

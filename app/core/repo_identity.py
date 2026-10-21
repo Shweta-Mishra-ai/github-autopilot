@@ -42,6 +42,7 @@ _PREFIXES = (
     "snapshot:{repo}:*",
     "snapshot_actions:{repo}:*",
     "snapshot_activity:{repo}:*",
+    "snapshot_rolled_back:{repo}:*",
     "push_secret_seen:{repo}:*",
     "push_reported:{repo}:*",
     "ci_fail:{repo}:*",

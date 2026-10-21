@@ -210,3 +210,25 @@ def test_autofix_never_commits_the_mask():
     assert _apply_edits(current, [{"find": "import os", "replace": "import os, sys"}]) == (
         'import os, sys\nKEY = "real-value-123"\n'
     )
+
+
+@pytest.mark.parametrize("path", [
+    "conftest.py", "tests/conftest.py", "noxfile.py", "pkg/setup.py",
+    "services/api/pyproject.toml", "package.json", "web/package.json",
+    ".vscode/tasks.json", ".devcontainer/devcontainer.json", ".github/dependabot.yml",
+    ".pre-commit-config.yaml", "src/sitecustomize.py",
+])
+def test_autofix_does_not_edit_files_that_ci_runs(path):
+    """Round-4 audit: these passed, and a push-triggered workflow on the
+    autofix branch would run them with the repository's secrets."""
+    from app.handlers.autofix import _block_reason, _is_allowed
+
+    assert not _is_allowed(path)
+    assert _block_reason(path)
+
+
+def test_autofix_still_edits_ordinary_source():
+    from app.handlers.autofix import _is_allowed
+
+    for path in ("app/orders.py", "README.md", "src/config.json", "docs/guide.md", "mkdocs.yml"):
+        assert _is_allowed(path), path

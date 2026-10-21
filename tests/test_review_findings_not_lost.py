@@ -538,6 +538,8 @@ def _release_gh(tags, since_tag, commits=()):
         seen.append(path)
         if "/tags" in path:
             return tags
+        if "/releases" in path:
+            return []  # no drafts yet
         if "/compare/" in path:
             return {"commits": list(since_tag), "total_commits": len(since_tag)}
         if "/commits" in path:

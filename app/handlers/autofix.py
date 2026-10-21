@@ -49,7 +49,8 @@ ALLOWED_EXTENSIONS = {".py", ".md", ".txt", ".json", ".toml"}
 ALLOWED_YAML_PATTERNS = (
     "mkdocs.yml",
     "mkdocs.yaml",
-    ".pre-commit-config.yaml",
+    # Not .pre-commit-config.yaml: its hooks are commands, run on every
+    # commit and by pre-commit CI.
     "codecov.yml",
     "codecov.yaml",
     "readthedocs.yml",
@@ -77,10 +78,33 @@ BLOCKED_PATHS = {
     "pyproject.toml",
 }
 
+# Blocked by file name wherever they are: files that tools and CI run without
+# anyone choosing to. The exact-path list above held this app's own layout
+# and setup.py/pyproject.toml at the root only, so `tests/conftest.py`,
+# `package.json`'s scripts, `noxfile.py` and a nested `pkg/setup.py` could be
+# rewritten by a model steered from an issue — and a push-triggered workflow
+# runs them, with the repository's secrets, before anyone reviews the branch.
+BLOCKED_FILENAMES = {
+    "conftest.py",
+    "noxfile.py",
+    "setup.py",
+    "setup.cfg",
+    "pyproject.toml",
+    "sitecustomize.py",
+    "usercustomize.py",
+    "package.json",
+    "package-lock.json",
+    "composer.json",
+    "deno.json",
+    "deno.jsonc",
+    "devcontainer.json",
+}
+
 # Prefix blocklist — any filepath starting with these is blocked
 BLOCKED_PREFIXES = (
-    ".github/workflows/",  # CI pipeline injection vector
-    ".github/actions/",
+    ".github/",  # workflows, actions, dependabot and everything GitHub runs
+    ".vscode/",  # tasks.json runs commands in an editor that opens the repo
+    ".devcontainer/",
     "app/core/webhook",  # All webhook security modules
     ".env",  # .env, .env.local, .env.production, etc.
     "secrets/",
@@ -678,6 +702,8 @@ def _is_allowed(filepath: str) -> bool:
     # Exact blocked paths
     if filepath in BLOCKED_PATHS:
         return False
+    if filepath.rsplit("/", 1)[-1] in BLOCKED_FILENAMES:
+        return False
     # Prefix blocked paths
     for prefix in BLOCKED_PREFIXES:
         if filepath.startswith(prefix):
@@ -716,6 +742,8 @@ def _block_reason(filepath: str) -> Optional[str]:
         return "the path is not repository-relative"
     if filepath in BLOCKED_PATHS:
         return "this is a security-sensitive file"
+    if filepath.rsplit("/", 1)[-1] in BLOCKED_FILENAMES:
+        return "tools and CI run this file automatically, so it is not auto-edited"
     for prefix in BLOCKED_PREFIXES:
         if filepath.startswith(prefix):
             return f"files under `{prefix}` are protected"

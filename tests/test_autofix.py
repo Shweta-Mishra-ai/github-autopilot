@@ -79,9 +79,9 @@ class TestIsAllowed:
     def test_mkdocs_yaml_allowed(self):
         assert _is_allowed("mkdocs.yaml") is True
 
-    def test_pre_commit_config_allowed(self):
-        """Known safe: .pre-commit-config.yaml is dev tooling, not CI."""
-        assert _is_allowed(".pre-commit-config.yaml") is True
+    def test_pre_commit_config_blocked(self):
+        """Its hooks are commands, run on every commit and by pre-commit CI."""
+        assert _is_allowed(".pre-commit-config.yaml") is False
 
     def test_codecov_yml_allowed(self):
         assert _is_allowed("codecov.yml") is True
@@ -104,7 +104,11 @@ class TestIsAllowed:
         assert _is_allowed("README.md") is True
 
     def test_json_config_allowed(self):
-        assert _is_allowed("package.json") is True
+        assert _is_allowed("config/settings.json") is True
+
+    def test_package_manifests_blocked(self):
+        """package.json's scripts run in CI."""
+        assert _is_allowed("package.json") is False
 
     def test_toml_allowed(self):
         assert _is_allowed("config.toml") is True
@@ -188,8 +192,8 @@ class TestAllowedYamlPatterns:
     def test_mkdocs_in_patterns(self):
         assert any("mkdocs" in p for p in ALLOWED_YAML_PATTERNS)
 
-    def test_pre_commit_in_patterns(self):
-        assert any("pre-commit" in p for p in ALLOWED_YAML_PATTERNS)
+    def test_pre_commit_not_in_patterns(self):
+        assert not any("pre-commit" in p for p in ALLOWED_YAML_PATTERNS)
 
     def test_no_workflow_patterns(self):
         """Workflow files must never be in the allowlist."""

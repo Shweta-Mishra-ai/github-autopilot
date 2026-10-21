@@ -361,6 +361,8 @@ def _release_gh(tags, since_tag, commits=()):
         seen.append(path)
         if "/tags" in path:
             return tags
+        if "/releases" in path:
+            return []  # no drafts yet
         if "/compare/" in path:
             return {"commits": list(since_tag), "total_commits": len(since_tag)}
         if "/commits" in path:
@@ -416,16 +418,39 @@ class TestCmdRelease:
         }
         with patch("app.handlers.comments.router.ask",
                    return_value=self._mock_router_text(plan)), \
-             patch("app.handlers.comments.gh_get", side_effect=[
+             patch("app.handlers.comments.gh_get", side_effect=_release_gh(
                  [],  # no tags
-                 [{"commit": {"message": "init"}}],
-             ]), \
+                 [],
+                 commits=[{"commit": {"message": "init"}}],
+             )), \
              patch("app.handlers.comments.gh_post", return_value={
                  "html_url": "https://github.com/test/repo/releases/1",
              }):
                 result = _cmd_release("test/repo", "token", "author")
 
-        assert "v0.0" in result or "Release" in result
+        # Not `"Release" in result`: "Release failed" contains it too.
+        assert result.startswith("## 🚀 Draft Release Created"), result
+        assert "`v0.0.1`" in result
+
+    def test_a_second_release_does_not_draft_the_same_version_again(self):
+        """Round-4 audit: a draft creates no tag, so /release twice drafted
+        the same version twice."""
+        from app.handlers.comments import _cmd_release
+
+        def gh(path, token):
+            if "/tags" in path:
+                return [{"name": "v1.2.3"}]
+            if "/compare/" in path:
+                return {"commits": [{"commit": {"message": "fix: x"}}], "total_commits": 1}
+            if "/releases" in path:
+                return [{"tag_name": "v1.2.4", "draft": True, "html_url": "https://r/1"}]
+            raise AssertionError(path)
+
+        with patch("app.handlers.comments.gh_get", side_effect=gh), \
+             patch("app.handlers.comments.gh_post") as post:
+            result = _cmd_release("test/repo", "token", "author")
+        post.assert_not_called()
+        assert "Draft Already Exists" in result and "https://r/1" in result
 
     def test_release_github_api_failure(self):
         from app.handlers.comments import _cmd_release
@@ -668,3 +693,41 @@ class TestGeneralCommandSafety:
 if __name__ == "__main__":
     print("Run with: python -m pytest tests/test_commands_fixed.py -v")
 
+
+
+def test_breaking_change_counts_only_as_a_footer_token():
+    """Round-4 audit: "This is not a BREAKING CHANGE." in a body bumped the
+    major version."""
+    from app.handlers.comments.publisher import next_version
+
+    assert next_version("v1.4.2", ["fix: typo\n\nThis is not a BREAKING CHANGE."]) == "v1.4.3"
+    assert next_version("v1.4.2", ["fix: api\n\nBREAKING CHANGE: drops /v1"]) == "v2.0.0"
+    assert next_version("v1.4.2", ["feat!: new auth"]) == "v2.0.0"
+
+
+def test_a_merge_commit_is_not_a_feature():
+    """Round-4 audit: /merge titled its commit "feat: merge …", so the next
+    /release bumped the minor version for a typo fix."""
+    from app.handlers.comments.publisher import next_version
+
+    title = "Merge pull request #7 from fix-typo (/merge by maint)"
+    assert next_version("v1.4.2", [title, "fix: typo"]) == "v1.4.3"
+
+
+def test_version_shows_the_highest_tag_and_a_published_release():
+    """Round-4 audit: tags[0] is name-ordered (v1.9.0 before v1.10.0) and the
+    latest "release" could be a draft or have no name."""
+    from app.handlers.comments.reviewer import cmd_version
+
+    def gh(path, token):
+        if "/tags" in path:
+            return [{"name": "v1.9.0"}, {"name": "v1.10.0"}, {"name": "nightly"}]
+        if "/releases" in path:
+            return [{"name": "Next", "draft": True, "tag_name": "v1.11.0"},
+                    {"name": None, "draft": False, "tag_name": "v1.10.0"}]
+        return [{"sha": "a" * 40, "commit": {"message": "fix: x"}}]
+
+    with patch("app.handlers.comments.gh_get", side_effect=gh):
+        out = cmd_version("o/r", "t")
+    assert "| **Latest Tag** | `v1.10.0` |" in out
+    assert "| **Latest Release** | `v1.10.0` |" in out

@@ -85,6 +85,8 @@ def test_release_notes_are_told_when_they_see_part_of_the_release():
             return [{"name": "v1.0.0", "commit": {"sha": "t"}}]
         if "/compare/" in path:
             return {"commits": since, "total_commits": 55}
+        if "/releases" in path:
+            return []
         raise AssertionError(path)
 
     prompts = []
@@ -92,9 +94,11 @@ def test_release_notes_are_told_when_they_see_part_of_the_release():
     with patch("app.handlers.comments.gh_get", side_effect=gh), \
          patch("app.handlers.comments.router.ask",
                side_effect=lambda s, u, **k: (prompts.append(u), ({"error": "stop"}, None))[1]), \
-         patch.object(P, "gh_post", return_value={"html_url": "u"}):
-        P.cmd_release("o/r", "t", "maint")
+         patch("app.handlers.comments.gh_post", return_value={"html_url": "u"}) as post:
+        out = P.cmd_release("o/r", "t", "maint")
     assert "latest 40 of 55 commits" in prompts[0]
+    post.assert_called_once()
+    assert out.startswith("## 🚀 Draft Release Created"), out
 
 
 def test_a_tag_not_reachable_from_head_falls_back_to_the_commit_list():

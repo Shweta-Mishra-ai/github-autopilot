@@ -403,11 +403,15 @@ Return JSON:
                 gh_patch(f"/repos/{repo}/pulls/{pr_number}", token, payload)
                 log.done("pr_metadata_updated", fields=",".join(sorted(payload)))
                 # What it was, so /rollback can put it back.
+                # And what it wrote: /rollback restores only what is still
+                # the bot's text, never a title someone changed since.
                 undo: dict = {"type": "edit_pr_title", "number": pr_number}
                 if "title" in payload:
                     undo["old_title"] = pr.get("title") or ""
+                    undo["new_title"] = payload["title"]
                 if "body" in payload:
                     undo["old_body"] = pr.get("body") or ""
+                    undo["new_body"] = payload["body"]
                 from app.core.snapshot import record_action
 
                 record_action(repo, undo)

@@ -556,7 +556,7 @@ class TestAutofixFlow(unittest.TestCase):
         self.assertFalse(_is_allowed("deploy/api.yml"))
         self.assertFalse(_is_allowed("config/database.yaml"))
         self.assertTrue(_is_allowed("mkdocs.yml"))
-        self.assertTrue(_is_allowed(".pre-commit-config.yaml"))
+        self.assertFalse(_is_allowed(".pre-commit-config.yaml"))  # hooks run as commands
 
     def test_diff_preview_generated(self):
         from app.handlers.autofix import _make_diff_preview

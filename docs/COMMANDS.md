@@ -146,10 +146,12 @@ did rather than assuming it worked.
 the diff; nothing reaches a pull request until a maintainer runs `/apply`.
 That separation is deliberate — the model proposes, a human disposes.
 
-**`/rollback` undoes newest-first.** Reverting the oldest action before the
-newest is not an undo. It also takes a safety snapshot before executing, and
-aborts if that snapshot cannot be written — a rollback with no way back is not
-one worth performing.
+**`/rollback` undoes newest-first, once, and only what is still the bot's.**
+Reverting the oldest action before the newest is not an undo. A snapshot is
+rolled back at most once (claimed before any write, so two confirms cannot
+both run). A PR title or description someone edited after the bot is left as
+it is, and an issue already closed is not closed again. A rollback is not
+itself undoable.
 
 **`/notify` reports per channel.** It tells you what was delivered against
 what is configured, including "configured but unreachable". It does not report
@@ -165,7 +167,7 @@ Six commands accept an argument. The rest ignore anything after them.
 |---|---|
 | `/rollback` | List available snapshots (max 10, expiring after 7 days) |
 | `/rollback 3` | Preview snapshot 3 — what would be undone |
-| `/rollback 3 confirm` | Execute the rollback |
+| `/rollback 3 confirm <id>` | Execute the rollback; `<id>` (shown in the preview) makes sure #3 is still the snapshot you previewed |
 | `/apply` | List autofix branches available to open a PR from |
 | `/apply <branch>` | Open a PR from that branch |
 | `/autofix` | Let the model choose the file to fix |

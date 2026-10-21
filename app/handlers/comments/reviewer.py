@@ -177,13 +177,26 @@ def cmd_health(repo: str, token: str) -> str:
 def cmd_version(repo: str, token: str) -> str:
     """Show latest tag, release, and recent commits."""
     try:
-        tags = gh_get(f"/repos/{repo}/tags?per_page=10", token)
-        releases = gh_get(f"/repos/{repo}/releases?per_page=3", token)
+        from .publisher import _semver
+
+        tags = gh_get(f"/repos/{repo}/tags?per_page=100", token) or []
+        releases = gh_get(f"/repos/{repo}/releases?per_page=10", token) or []
         commits = gh_get(f"/repos/{repo}/commits?per_page=8", token)
 
-        latest_tag = tags[0]["name"] if tags else "No tags yet"
-        latest_release = releases[0]["name"] if releases else "No releases"
-        tags_list = "\n".join(f"- `{t['name']}`" for t in tags[:5]) or "- No tags yet"
+        # Highest version first: GitHub lists tags by NAME, so tags[0] showed
+        # v1.9.0 as the latest while v1.10.0 existed.
+        names = [t["name"] for t in tags if isinstance(t, dict) and t.get("name")]
+        ordered = sorted((n for n in names if _semver(n)), key=_semver, reverse=True)
+        ordered += [n for n in names if not _semver(n)]
+        latest_tag = ordered[0] if ordered else "No tags yet"
+        # A draft is not a release; a release with no name is shown by its tag.
+        published = [r for r in releases if isinstance(r, dict) and not r.get("draft")]
+        latest_release = (
+            (published[0].get("name") or published[0].get("tag_name") or "unnamed")
+            if published
+            else "No releases"
+        )
+        tags_list = "\n".join(f"- `{n}`" for n in ordered[:5]) or "- No tags yet"
         commits_md = "\n".join(
             f"| `{c['sha'][:7]}` | {c['commit']['message'].split(chr(10))[0][:55]} |"
             for c in commits[:6]

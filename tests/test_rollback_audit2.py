@@ -21,13 +21,19 @@ def test_rollback_undoes_recorded_actions_newest_first(fake_redis):
 
     snapshot.record_action("o/r", {"type": "create_issue", "number": 5, "title": "alert"})
     snapshot.record_action(
-        "o/r", {"type": "edit_pr_title", "number": 9, "old_title": "orig", "old_body": "b"}
+        "o/r",
+        {"type": "edit_pr_title", "number": 9, "old_title": "orig", "old_body": "b",
+         "new_title": "bot title", "new_body": "bot body"},
     )
     snapshot.record_action("o/r", {"type": "add_labels", "number": 6, "labels": ["priority: high 🔥"]})
 
+    def current(path, token):
+        # Still what the bot wrote; the issue is still open.
+        return {"title": "bot title", "body": "bot body"} if "/pulls/" in path else {"state": "open"}
+
     calls = []
     with (
-        patch("app.core.snapshot.take_snapshot", return_value="safety"),
+        patch.object(P, "gh_get", side_effect=current),
         patch.object(P, "gh_patch", side_effect=lambda p, t, d: calls.append(("patch", p, d))),
         patch.object(P, "gh_delete", side_effect=lambda p, t: calls.append(("delete", p))),
     ):

@@ -357,6 +357,8 @@ def format_rollback_result(repo: str, snap: dict, restored: list[str], failed: l
     if fail_lines:
         result += f"\n### Failed\n{fail_lines}\n"
 
-    result += "\n---\n*State before rollback is saved as a new snapshot automatically.*"
+    result += (
+        "\n---\n*A rollback cannot itself be rolled back, and a snapshot is rolled back " "once.*"
+    )
 
     return result

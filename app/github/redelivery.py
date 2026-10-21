@@ -112,6 +112,13 @@ def recent_deliveries(now: float, get=requests.get) -> list[dict]:
         cursor = _next_cursor(r.headers.get("Link", ""))
         if not page or not cursor:
             break
+    else:
+        # Every page read and the window not reached: older failures in it
+        # are not retried this sweep. Said, not left to look like the end.
+        log.warning(
+            f"redelivery.page_limit read={len(out)} deliveries in {MAX_PAGES} pages without "
+            f"reaching the {WINDOW_SECONDS // 3600}h window — older failures not checked"
+        )
     return out
 
 

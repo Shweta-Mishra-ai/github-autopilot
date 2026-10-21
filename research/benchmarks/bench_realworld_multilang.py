@@ -173,7 +173,7 @@ def scan_gitleaks(root, rep):
                     "--report-path", rep, "--no-banner", "--log-level", "error"],
                    capture_output=True, timeout=3600)
     return [{"file": os.path.relpath(f["File"], root) if os.path.isabs(f["File"]) else f["File"],
-             "line": f["StartLine"], "rule": f["RuleID"]}
+             "line": f["StartLine"], "rule": f["RuleID"], "raw": f.get("Secret") or ""}
             for f in (json.load(open(rep)) or [])]
 
 
@@ -191,8 +191,48 @@ def scan_trufflehog(root):
             continue
         fs = rec.get("SourceMetadata", {}).get("Data", {}).get("Filesystem", {})
         out.append({"file": os.path.relpath(fs.get("file", ""), root),
-                    "line": fs.get("line"), "rule": rec["DetectorName"]})
+                    "line": fs.get("line"), "rule": rec["DetectorName"],
+                    "raw": rec.get("Raw") or ""})
     return out
+
+
+def relocate(root, findings):
+    """TruffleHog's filesystem line numbers are not reliable: on
+    python-gitlab it reported a token on line 34 of a file as line 33, and
+    other findings on blank lines. A finding's line is therefore taken from
+    its file, as the line holding the reported secret, when the tool reports
+    one. The same secret can occur on several lines (one token, four lines of
+    a docs page, all reported on one line), so each finding takes the nearest
+    line holding its secret that no earlier finding with the same rule and
+    secret has taken. Returns the number of findings moved and the number not
+    located."""
+    moved = missing = 0
+    cache, taken = {}, defaultdict(set)
+    for f in findings:
+        raw = f.get("raw", "")
+        if not raw:
+            continue
+        if f["file"] not in cache:
+            try:
+                with open(os.path.join(root, f["file"]), encoding="utf-8",
+                          errors="ignore") as fh:
+                    cache[f["file"]] = fh.read().splitlines()
+            except OSError:
+                cache[f["file"]] = []
+        lines = cache[f["file"]]
+        first = raw.splitlines()[0] if raw.splitlines() else raw
+        key = (f["file"], f["rule"], first)
+        here = f["line"] or 0
+        spots = [i for i, ln in enumerate(lines, 1) if first in ln and i not in taken[key]]
+        if not spots:
+            missing += 1
+            continue
+        best = min(spots, key=lambda i: (abs(i - here), i))
+        taken[key].add(best)
+        if best != f["line"]:
+            f["line"] = best
+            moved += 1
+    return moved, missing
 
 
 # ── Part A: categorising findings ───────────────────────────────────────────
@@ -273,6 +313,8 @@ def anchor_types(expanded):
     for t in tt.types_gitleaks(cfg) + th + tt.types_autopilot():
         if t["kw_pattern"] or t["id"] not in expanded["per_type"]:
             continue
+        if re.search(r"(?i)private[ -]?key", t["id"]):
+            continue                    # multi-line PEM blocks: no terminator
         pres = literal_prefixes(t["secret"])
         if not pres:
             continue
@@ -322,6 +364,9 @@ def main():
                    "gitleaks": scan_gitleaks(root, os.path.join(tmp, "_gl.json")),
                    "trufflehog": scan_trufflehog(root)}
             el = time.perf_counter() - t0
+            for fs in fnd.values():     # tool output order is not stable
+                fs.sort(key=lambda f: (f["file"], f["rule"], f.get("raw", ""), f["line"] or 0))
+            relocated = {tool: relocate(root, fs) for tool, fs in fnd.items()}
             hit = defaultdict(set)          # (tool, file, line) -> rules
             per_tool = {}
             for tool, fs in fnd.items():
@@ -332,10 +377,13 @@ def main():
                     cat = categorise(f, text)
                     cats[cat] += 1
                     if dump:
-                        dump.write(json.dumps({"repo": repo, "tool": tool, **f,
+                        dump.write(json.dumps({"repo": repo, "tool": tool,
+                                               **{k: v for k, v in f.items() if k != "raw"},
                                                "category": cat, "text": text[:300]}) + "\n")
                 per_tool[tool] = {
                     "n_findings": len(fs),
+                    "lines_relocated_by_secret": relocated[tool][0],
+                    "secret_not_found_in_file": relocated[tool][1],
                     "findings_per_kloc": round(len(fs) / (n_lines / 1000), 4) if n_lines else None,
                     "by_rule": dict(Counter(f["rule"] for f in fs).most_common()),
                     "by_category": dict(cats.most_common()),
@@ -345,8 +393,11 @@ def main():
                               "n_lines": n_lines, "scan_wall_s": round(el, 2),
                               "tools": per_tool}
 
-            # Part B
-            seen = set()
+            # Part B: the unit is one literal occurrence (file, line, start,
+            # end). Types from several generators can match the same literal;
+            # they are merged, and a tool counts as covering the occurrence if
+            # any of its label-matched expected rules applies to any of them.
+            occ = {}
             for dirpath, _d, files in os.walk(root):
                 for fn in files:
                     path = os.path.join(dirpath, fn)
@@ -363,22 +414,27 @@ def main():
                         todo = {a["id"]: a for p in present for a in by_prefix.get(p, [])}
                         for a in todo.values():
                             for m in a["search"].finditer(text):
-                                key = (rel, ln_no, m.start(1), a["id"])
-                                if key in seen:
-                                    continue
-                                seen.add(key)
-                                nxt = text[m.end(1):m.end(1) + 1]
-                                cands.append({
-                                    "repo": repo, "language": lang, "stratum": stratum,
-                                    "type": a["id"],
-                                    "follow": follow_class(nxt),
-                                    "last_char_hyphen": m.group(1).endswith("-"),
-                                    "test_or_doc_path": bool(_TEST_PATH.search(rel)),
-                                    "detected": {
-                                        tool: (a["expected"][tool] in hit[(tool, rel, ln_no)])
-                                        if a["expected"][tool] else None
-                                        for tool in tt.TOOLS},
-                                })
+                                key = (rel, ln_no, m.start(1), m.end(1))
+                                o = occ.setdefault(key, {
+                                    "types": set(), "expected": defaultdict(set),
+                                    "follow": follow_class(text[m.end(1):m.end(1) + 1]),
+                                    "last_char_hyphen": m.group(1).endswith("-")})
+                                o["types"].add(a["id"])
+                                for tool, rule in a["expected"].items():
+                                    if rule:
+                                        o["expected"][tool].add(rule)
+            for (rel, ln_no, _s, _e), o in sorted(occ.items()):
+                cands.append({
+                    "repo": repo, "language": lang, "stratum": stratum,
+                    "types": sorted(o["types"]),
+                    "follow": o["follow"],
+                    "last_char_hyphen": o["last_char_hyphen"],
+                    "test_or_doc_path": bool(_TEST_PATH.search(rel)),
+                    "detected": {
+                        tool: bool(o["expected"][tool] & hit[(tool, rel, ln_no)])
+                        if o["expected"][tool] else None
+                        for tool in tt.TOOLS},
+                })
             shutil.rmtree(root, ignore_errors=True)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -395,12 +451,18 @@ def main():
         by_follow[c["follow"]].append(c)
     part_b = {
         "n_occurrences": len(cands),
-        "n_types_occurring": len({c["type"] for c in cands}),
+        "n_types_occurring": len({t for c in cands for t in c["types"]}),
         "by_language": dict(Counter(c["language"] for c in cands)),
         "by_repo": dict(Counter(c["repo"] for c in cands)),
         "in_test_or_doc_path": sum(c["test_or_doc_path"] for c in cands),
         "following_character": dict(Counter(c["follow"] for c in cands).most_common()),
         "detection_overall": {tool: rate(cands, tool) for tool in tt.TOOLS},
+        # the subject suppresses findings under test and fixture paths by
+        # design, so its rate is reported split by path
+        "detection_by_path": {
+            label: {tool: rate([c for c in cands if c["test_or_doc_path"] == flag], tool)
+                    for tool in tt.TOOLS}
+            for label, flag in (("test_doc_or_example_path", True), ("other_path", False))},
         "detection_by_following_character": {
             f: {tool: rate(rows, tool) for tool in tt.TOOLS}
             for f, rows in sorted(by_follow.items(), key=lambda kv: -len(kv[1]))},

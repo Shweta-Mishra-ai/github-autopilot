@@ -290,10 +290,59 @@ def _store_result(result: dict) -> None:
 # ── Scheduler ─────────────────────────────────────────────────────────────────
 
 
+BACKUP_HOURS_ENV = "MEMORY_BACKUP_INTERVAL_HOURS"
+DEFAULT_BACKUP_HOURS = 24.0
+_BACKUP_DUE_KEY = "maintenance:backup_due"
+
+
+def backup_interval_seconds() -> float:
+    try:
+        hours = float(os.environ.get(BACKUP_HOURS_ENV, "") or DEFAULT_BACKUP_HOURS)
+    except ValueError:
+        hours = DEFAULT_BACKUP_HOURS
+    return max(1.0, hours) * 3600
+
+
+def memory_care(now: float | None = None) -> dict:
+    """
+    Every tick: merge the backup back in if Redis was wiped since the last
+    tick, then back up if a backup is due (daily by default).
+
+    The backup used to run only inside the 15-day security pass, and the
+    restore only at boot. Render's free Redis can be restarted — emptied — at
+    any time while this app keeps running, so up to fifteen days of memory
+    could be lost, and a wipe mid-life was never restored at all.
+    """
+    from app.core import memory_backup as MB
+
+    now = time.time() if now is None else now
+    result = {"merged": 0, "backed_up": False}
+    try:
+        result["merged"] = MB.reconcile()
+    except Exception as e:  # reconcile does not raise; belt and braces
+        log.error(f"maintenance.reconcile_failed: {e}")
+    try:
+        r = _redis()
+        due = r.get(_BACKUP_DUE_KEY)
+        due = int(due.decode() if isinstance(due, bytes) else due) if due is not None else 0
+        if now >= due and r.set("maintenance:backup_claim", "1", ex=600, nx=True):
+            try:
+                result["backed_up"] = MB.run_backup_once()
+                # A refused or failed backup is retried next tick, not a day later.
+                if result["backed_up"] or MB.backup_destination() is None:
+                    r.set(_BACKUP_DUE_KEY, str(int(now + backup_interval_seconds())))
+            finally:
+                r.delete("maintenance:backup_claim")
+    except Exception as e:
+        log.error(f"maintenance.backup_failed: {e}")
+    return result
+
+
 def tick() -> dict | None:
-    """One check. Runs the pass if it is due and this process wins the claim."""
+    """One check: memory care every time; the full pass when it is due."""
     if not enabled():
         return None
+    memory_care()
     if not claim_due_run():
         return None
     return run_pass()

@@ -113,7 +113,12 @@ def import_encrypted(token: bytes, overwrite: bool = True) -> int:
     Decrypt a backup token and restore memory into Redis. Returns the number of
     repos restored. Raises cryptography.fernet.InvalidToken on a wrong key /
     tampered ciphertext (authenticated encryption — corruption is detected).
+
+    overwrite=False MERGES: what is already in Redis is kept, newest first,
+    and the backup's items follow it, minus any already present.
     """
+    if not overwrite:
+        return _merge_encrypted(token)
     from app.core.redis_client import get_redis
     from app.intelligence.memory import _key, _index_repo
 
@@ -134,6 +139,35 @@ def import_encrypted(token: bytes, overwrite: bool = True) -> int:
         restored += 1
     log.info(f"memory_backup.imported repos={restored}")
     return restored
+
+
+def _merge_encrypted(token: bytes) -> int:
+    """import_encrypted(overwrite=False). Never deletes an item already held."""
+    import hashlib
+
+    from app.core.redis_client import get_redis
+    from app.intelligence.memory import MEMORY_MAX_ITEMS, MemoryItem, _hash_key, _index_repo, _key
+
+    envelope = json.loads(_fernet().decrypt(token))
+    r = get_redis()
+    merged_repos = 0
+    for repo, items in (envelope.get("repos") or {}).items():
+        key = _key(repo)
+        current = [x.decode() if isinstance(x, bytes) else x for x in (r.lrange(key, 0, -1) or [])]
+        held = set(current)
+        combined = (current + [x for x in items if x not in held])[:MEMORY_MAX_ITEMS]
+        r.delete(key)
+        for raw in reversed(combined):  # newest-first, as remember() keeps it
+            r.lpush(key, raw)
+        # The write-dedup index, so a restored memory is not stored twice.
+        for raw in combined:
+            item = MemoryItem.from_json(raw)
+            if item and item.text:
+                r.sadd(_hash_key(repo), hashlib.sha256(item.text.encode()).hexdigest()[:16])
+        _index_repo(r, repo)
+        merged_repos += 1
+    log.info(f"memory_backup.merged repos={merged_repos}")
+    return merged_repos
 
 
 # ── Optional GitHub transport (ciphertext only) ───────────────────────────────
@@ -174,26 +208,17 @@ def backup_to_github(
 
 
 def restore_from_github(target_repo: str, path: str, token: str) -> int:
-    """Fetch the ciphertext blob from GitHub and restore. Returns repos restored, 0 on failure."""
+    """
+    Fetch the ciphertext from GitHub and restore it, REPLACING what is held
+    for each repository in it. A manual operation; the automatic path is
+    reconcile(), which merges. Returns repos restored, 0 on failure.
+    """
     try:
-        from app.github.client import gh_get
-
-        data = gh_get(f"/repos/{target_repo}/contents/{path}", token)
-        if not isinstance(data, dict):
-            log.error("memory_backup.github_restore_failed: contents response was not a file")
+        blob = _fetch_backup(target_repo, path, token)
+        if blob is None:
+            log.error(f"memory_backup.github_restore_failed: no backup at {target_repo}/{path}")
             return 0
-        b64 = (data.get("content") or "").replace("\n", "")
-        if not b64 and data.get("size") and data.get("sha"):
-            # The contents API returns an EMPTY `content` for a file over
-            # 1 MB, so a large backup restored nothing, silently. The git
-            # blob API serves the same bytes up to 100 MB.
-            blob = gh_get(f"/repos/{target_repo}/git/blobs/{data['sha']}", token)
-            b64 = (blob.get("content") or "").replace("\n", "") if isinstance(blob, dict) else ""
-        if not b64:
-            log.error(f"memory_backup.github_restore_failed: {path} has no content")
-            return 0
-        token_bytes = base64.b64decode(b64)
-        return import_encrypted(token_bytes)
+        return import_encrypted(blob)
     except Exception as e:
         log.error(f"memory_backup.github_restore_failed: {e}")
         return 0
@@ -201,11 +226,18 @@ def restore_from_github(target_repo: str, path: str, token: str) -> int:
 
 # ── Scheduled backup (primitives; the cadence lives in app/core/maintenance) ──
 #
-# Export is safe to automate; restore is not. Exporting reads memory and writes
-# ciphertext elsewhere — worst case it wastes a request. Restoring *overwrites*
-# live memory, so it runs on boot only when there is nothing to overwrite (see
-# maybe_restore_on_boot), which makes it non-destructive by construction rather
-# than by carefulness.
+# Render's free Redis keeps nothing on disk: Render can restart it at any time
+# and everything in it is gone — while this app keeps running. Restoring only
+# at app boot, and only when memory was empty, missed exactly that case: the
+# first memory written after the wipe made memory "not empty", the restore
+# never ran, and the next backup replaced the good one with that single item.
+#
+# So a wipe is detected directly. WIPE_MARKER is set once this Redis's memory
+# is accounted for (merged from the backup, or there is no backup yet). A
+# wipe removes it with everything else. While it is missing:
+#   - reconcile() merges the backup in (never deleting what is there) and sets it;
+#   - run_backup_once() refuses, so a half-empty Redis is never uploaded.
+# reconcile() runs at boot and on the hourly maintenance tick.
 
 BACKUP_REPO_ENV = "MEMORY_BACKUP_REPO"
 BACKUP_PATH_ENV = "MEMORY_BACKUP_PATH"
@@ -231,52 +263,87 @@ def backup_destination() -> tuple[str, str, str] | None:
     return repo, path, token
 
 
+WIPE_MARKER = "memory_backup:accounted"
+
+
+def _marker_present() -> bool | None:
+    """True/False, or None when Redis cannot be read."""
+    try:
+        from app.core.redis_client import get_redis
+
+        return bool(get_redis().exists(WIPE_MARKER))
+    except Exception as e:
+        log.debug(f"memory_backup.marker_unreadable: {e}")
+        return None
+
+
+def _set_marker() -> None:
+    from app.core.redis_client import get_redis
+
+    get_redis().set(WIPE_MARKER, str(int(time.time())))
+
+
 def run_backup_once() -> bool:
     """
-    One export+push. Returns False when unconfigured or the push failed.
+    One export+push. Returns False when unconfigured, when this Redis has
+    not been reconciled with the backup since it was last wiped, or when the
+    push failed.
 
-    Scheduling and cross-process locking are the caller's job — this function
-    does exactly what it is asked, every time it is asked.
+    Scheduling and cross-process locking are the caller's job.
     """
     dest = backup_destination()
     if dest is None:
+        return False
+    if not _marker_present():
+        log.warning(
+            "memory_backup.backup_refused — Redis has not been reconciled with the "
+            "existing backup since it was (re)started; uploading now could replace "
+            "the good backup with partial memory"
+        )
         return False
     repo, path, token = dest
     return backup_to_github(repo, path, token)
 
 
-def maybe_restore_on_boot() -> int:
+def _fetch_backup(target_repo: str, path: str, token: str) -> bytes | None:
+    """The ciphertext, or None when no backup exists yet. Raises on any other failure."""
+    from app.github.client import GitHubError, gh_get
+
+    try:
+        data = gh_get(f"/repos/{target_repo}/contents/{path}", token)
+    except GitHubError as e:
+        if e.status_code == 404:
+            return None
+        raise
+    if not isinstance(data, dict):
+        raise ValueError("contents response was not a file")
+    b64 = (data.get("content") or "").replace("\n", "")
+    if not b64 and data.get("size") and data.get("sha"):
+        # The contents API returns an EMPTY `content` over 1 MB; the git blob
+        # API serves the same bytes up to 100 MB.
+        blob = gh_get(f"/repos/{target_repo}/git/blobs/{data['sha']}", token)
+        b64 = (blob.get("content") or "").replace("\n", "") if isinstance(blob, dict) else ""
+    if not b64:
+        raise ValueError(f"{path} has no content")
+    return base64.b64decode(b64)
+
+
+def reconcile() -> int:
     """
-    Restore memory at startup, but only when there is none.
-
-    This is the whole safety argument: `known_repos()` is empty exactly when
-    Redis has been wiped, which is the only situation a restore is for. If any
-    memory exists the process leaves it alone, so a restart during normal
-    operation, a second worker booting, or a partially-warm instance can never
-    lose data to this path.
-
-    Returns repos restored — 0 for "nothing to do" and for every failure, since
-    a boot must not depend on a backup being reachable.
+    Merge the backup into Redis if this Redis has lost its memory since it
+    was last reconciled. Returns repos merged; 0 for "nothing to do" and for
+    every failure (logged). Never raises; never deletes a memory.
     """
     dest = backup_destination()
     if dest is None:
         return 0
-    try:
-        from app.intelligence.memory import known_repos
-
-        if known_repos():
-            log.debug("memory_backup.restore_skipped — memory is not empty")
-            return 0
-    except Exception as e:
-        # Cannot prove memory is empty → do not overwrite it.
-        log.warning(f"memory_backup.restore_skipped — could not read memory: {e}")
+    present = _marker_present()
+    if present is None or present:
         return 0
-
-    # Fails closed: a Redis problem means another worker may already be
-    # restoring, and two concurrent restores can interleave writes.
     try:
         from app.core.redis_client import get_redis
 
+        # One process at a time: two merges could interleave.
         if not get_redis().set(_RESTORE_LOCK_KEY, str(int(time.time())), ex=300, nx=True):
             return 0
     except Exception as e:
@@ -284,10 +351,25 @@ def maybe_restore_on_boot() -> int:
         return 0
 
     repo, path, token = dest
-    restored = restore_from_github(repo, path, token)
-    if restored:
-        log.warning(f"memory_backup.restored_on_boot repos={restored} from={repo}/{path}")
-    return restored
+    try:
+        blob = _fetch_backup(repo, path, token)
+        merged = 0 if blob is None else import_encrypted(blob, overwrite=False)
+        _set_marker()
+    except Exception as e:
+        log.error(f"memory_backup.reconcile_failed — backups paused until it succeeds: {e}")
+        return 0
+    if blob is None:
+        log.info(f"memory_backup.no_backup_yet at {repo}/{path} — backups start now")
+    else:
+        log.warning(
+            f"memory_backup.restored repos={merged} from={repo}/{path} (merged; nothing deleted)"
+        )
+    return merged
+
+
+def maybe_restore_on_boot() -> int:
+    """Boot-time reconcile(); kept under its old name for the boot path."""
+    return reconcile()
 
 
 def backup_status() -> dict:

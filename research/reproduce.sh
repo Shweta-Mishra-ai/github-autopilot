@@ -15,6 +15,7 @@ RESULTS="$HERE/results"; mkdir -p "$RESULTS"
 SUBJECT_COMMIT=38b201375926b11ff94703f6257a01aa8723c23d
 GITLEAKS_SHA256=50b742abd7daad8bbddb6301f3017efb680632d9a5b3b4d8f137b3aac250e359
 TRUFFLEHOG_SHA256=6f3e79d4fdfc0c0707a28c76ca0d1990c80e3090ff750f5bd58d6794202875e9
+GITLEAKS_TOML_SHA256=2ce9d818ed5aac0d9a36638a317284bd733c26d5069c980829335183397430bb
 
 log(){ printf '\n\033[1m== %s ==\033[0m\n' "$*"; }
 die(){ printf '\n\033[31mFATAL: %s\033[0m\n' "$*" >&2; exit 1; }
@@ -75,6 +76,9 @@ if [[ "${1:-}" != "--figures" ]]; then
       https://github.com/trufflesecurity/trufflehog/releases/download/v3.82.13/trufflehog_3.82.13_linux_amd64.tar.gz
     tar xzf /tmp/th.tgz -C "$HERE" trufflehog; }
   verify_sha256 "$HERE/trufflehog" "$TRUFFLEHOG_SHA256" "trufflehog 3.82.13"
+  [[ -f "$HERE/gitleaks.toml" ]] || curl -sSL -o "$HERE/gitleaks.toml" \
+    https://raw.githubusercontent.com/gitleaks/gitleaks/v8.21.2/config/gitleaks.toml
+  verify_sha256 "$HERE/gitleaks.toml" "$GITLEAKS_TOML_SHA256" "gitleaks.toml v8.21.2"
 
   log "real-code corpora (commit-pinned)"
   mkdir -p "$HERE/realcorpus"
@@ -95,6 +99,7 @@ if [[ "${1:-}" != "--figures" ]]; then
   log "REPAIR   fix validation";        python bench_fixvalidation.py  > "$RESULTS/fixvalidation_bench.json"
   log "RQ3      cross-tool mutation";   python bench_crosstool.py      > "$RESULTS/crosstool_bench.json"
   log "RQ3      delimiter probe";       python bench_delimiter.py      > "$RESULTS/delimiter_bench.json"
+  log "RQ3      Gitleaks full table";   python bench_gitleaks_fulltable.py > "$RESULTS/gitleaks_fulltable_bench.json"
   log "RQ4      corpus A/B comparison"; python bench_comparative2.py   > "$RESULTS/comparative_bench.json"
   log "RQ4      paired sign test";      python paired_stats.py         > "$RESULTS/paired_stats.txt"
   log "RQ4      co-occurrence";         python bench_cooccurrence.py   > "$RESULTS/cooccurrence_bench.json"

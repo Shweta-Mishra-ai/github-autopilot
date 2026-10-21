@@ -469,3 +469,24 @@ class TestAParkedReplyIsDeliveredByTheQueue:
             assert queue._consume_once(server._run_handler)
         delivered.assert_called_once_with("/repos/o/r/issues/4/comments", "fresh", {"body": "the answer"})
         assert live_redis.llen(queue.PROCESSING_KEY) == 0
+
+
+def test_a_reused_repository_name_is_cleared_on_a_real_server(live_redis):
+    """app/core/repo_identity.py against a real server: SCAN patterns and
+    bytes/str handling differ from the in-process fake."""
+    from app.core import repo_identity
+    from app.intelligence import memory
+
+    repo_identity.ensure("o/r", 111)
+    memory.remember("o/r", "old owner's decision", kind="decision")
+    live_redis.set("snapshot:o/r:3", "{}")
+    live_redis.set("analytics:o/r:cmd:fix:2026-10-15", "4")
+    live_redis.set("analytics:o/r2:cmd:fix:2026-10-15", "1")
+
+    assert repo_identity.ensure("o/r", 111) is False
+    assert repo_identity.ensure("o/r", 222) is True
+    assert live_redis.get("snapshot:o/r:3") is None
+    assert live_redis.get("analytics:o/r:cmd:fix:2026-10-15") is None
+    assert live_redis.lrange("mem:o/r", 0, -1) == []
+    assert live_redis.get("analytics:o/r2:cmd:fix:2026-10-15") == "1"
+    assert live_redis.get("repo_id:o/r") == "222"

@@ -267,9 +267,12 @@ Three guarantees worth being precise about:
 - **`LLM_LOCAL_ONLY=1` fails closed.** If Ollama is unreachable, the call
   errors. It does not silently reach for a cloud provider, on the first attempt
   or on any fallback path, and there is no configuration that relaxes this.
-- **Learned repository memory is local by default.** Recalled context is only
-  injected into a prompt when a local model is active, unless you explicitly set
-  `MEMORY_ALLOW_CLOUD=1` and accept the egress.
+- **Learned repository memory goes to the cloud provider by default, redacted.**
+  The standard deployment is cloud-first, so recalled memory is part of cloud
+  prompts unless you set `MEMORY_ALLOW_CLOUD=0`. Every entry is redacted before
+  it is stored (code blocks removed, secret-shaped strings replaced), so what
+  can leave is prose, file paths and symbol names. With `LLM_LOCAL_ONLY=1`
+  nothing leaves your infrastructure at all.
 - **The promise is tested, not asserted.**
   [`tests/test_privacy_no_egress.py`](tests/test_privacy_no_egress.py) sets
   every cloud credential, enables `LLM_LOCAL_ONLY`, points Ollama at a dead
@@ -289,11 +292,11 @@ Reported cost in local mode is always `0`.
 <!-- autopilot:stats:start -->
 | | |
 |---|---|
-| Modules | 101 |
-| Lines of code | 27,730 |
+| Modules | 102 |
+| Lines of code | 27,853 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 400 |
+| Internal imports | 403 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>
@@ -405,7 +408,7 @@ Regenerate either form with
 ```mermaid
 graph LR
     ai["ai<br/>16 modules"]
-    core["core<br/>28 modules"]
+    core["core<br/>29 modules"]
     github["github<br/>9 modules"]
     handlers["handlers<br/>28 modules"]
     intelligence["intelligence<br/>5 modules"]

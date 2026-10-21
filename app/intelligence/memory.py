@@ -8,12 +8,13 @@ WHAT IT IS
   so answers get sharper the more the repo is used.
 
 PRIVACY (the load-bearing rule)
-  Memory text can contain source code and internal decisions. It is therefore
-  treated as SENSITIVE and, by default, is ONLY injected into prompts that run
-  on a LOCAL model (LLM_LOCAL_ONLY / LLM_PREFER_LOCAL). It is never sent to a
-  cloud provider unless the operator explicitly opts in with MEMORY_ALLOW_CLOUD=1.
-  See injection_allowed(). This implements "smart brain, but sensitive code
-  never leaves your infra."
+  Memory text can contain source code and internal decisions, so it is
+  redacted at WRITE time (app/core/redaction.py: code blocks removed,
+  secret-shaped strings replaced). What is left is recalled into prompts by
+  default — including cloud prompts, because the standard deployment is
+  cloud-first. MEMORY_ALLOW_CLOUD=0 keeps it out of every prompt; with
+  LLM_LOCAL_ONLY=1 nothing leaves the infrastructure at all. See
+  injection_allowed().
 
 STORAGE (free-tier safe)
   One Redis list per repo: mem:{repo}. Capped at MEMORY_MAX_ITEMS (LTRIM), so it
@@ -257,9 +258,12 @@ def remember_decision(repo: str, decision: str, why: str = "", meta: dict | None
     instead of asserting it blindly. The rationale is kept in meta["why"] and
     surfaced by recall_context().
     """
+    from app.core.redaction import redact
+
     m = dict(meta or {})
     if why:
-        m["why"] = why.strip()[:MAX_TEXT_CHARS]
+        # Redacted like the entry: it is recalled into prompts beside it.
+        m["why"] = redact(why.strip())[:MAX_TEXT_CHARS]
     return remember(repo, decision, kind="decision", meta=m)
 
 

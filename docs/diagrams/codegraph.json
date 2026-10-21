@@ -366,7 +366,7 @@
       "functions": 6,
       "classes": 2,
       "is_package": false,
-      "fan_in": 8,
+      "fan_in": 9,
       "fan_out": 1,
       "external_deps": [
         "base64",
@@ -632,7 +632,7 @@
       "functions": 6,
       "classes": 1,
       "is_package": false,
-      "fan_in": 30,
+      "fan_in": 31,
       "fan_out": 1,
       "external_deps": [
         "__future__",
@@ -643,6 +643,21 @@
         "threading",
         "time",
         "urllib"
+      ]
+    },
+    {
+      "id": "app.core.repo_identity",
+      "path": "app/core/repo_identity.py",
+      "layer": "core",
+      "loc": 108,
+      "functions": 3,
+      "classes": 0,
+      "is_package": false,
+      "fan_in": 1,
+      "fan_out": 2,
+      "external_deps": [
+        "__future__",
+        "logging"
       ]
     },
     {
@@ -1413,7 +1428,7 @@
       "id": "app.intelligence.memory",
       "path": "app/intelligence/memory.py",
       "layer": "intelligence",
-      "loc": 391,
+      "loc": 395,
       "functions": 17,
       "classes": 1,
       "is_package": false,
@@ -1605,12 +1620,12 @@
       "id": "server",
       "path": "server.py",
       "layer": "other",
-      "loc": 964,
+      "loc": 975,
       "functions": 33,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 35,
+      "fan_out": 36,
       "external_deps": [
         "flask",
         "hmac",
@@ -2091,6 +2106,16 @@
       "source": "app.core.redis_client",
       "target": "app.core.env",
       "kind": "import"
+    },
+    {
+      "source": "app.core.repo_identity",
+      "target": "app.core.config",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.core.repo_identity",
+      "target": "app.core.redis_client",
+      "kind": "runtime"
     },
     {
       "source": "app.core.snapshot",
@@ -3534,6 +3559,11 @@
     },
     {
       "source": "server",
+      "target": "app.core.repo_identity",
+      "kind": "runtime"
+    },
+    {
+      "source": "server",
       "target": "app.core.thread_pool",
       "kind": "import"
     },
@@ -3644,9 +3674,9 @@
     }
   ],
   "stats": {
-    "modules": 101,
-    "edges": 400,
-    "total_loc": 27730,
+    "modules": 102,
+    "edges": 403,
+    "total_loc": 27853,
     "layers": [
       "ai",
       "core",
@@ -3660,16 +3690,16 @@
     "cycles": [],
     "hotspots": [
       {
+        "id": "app.core.redis_client",
+        "loc": 557,
+        "fan_in": 31,
+        "fan_out": 1
+      },
+      {
         "id": "app.ai.router",
         "loc": 848,
         "fan_in": 20,
         "fan_out": 16
-      },
-      {
-        "id": "app.core.redis_client",
-        "loc": 557,
-        "fan_in": 30,
-        "fan_out": 1
       },
       {
         "id": "app.github.client",
@@ -3686,7 +3716,7 @@
       {
         "id": "app.core.config",
         "loc": 567,
-        "fan_in": 8,
+        "fan_in": 9,
         "fan_out": 1
       },
       {

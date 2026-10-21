@@ -244,10 +244,10 @@ def augment_with_memory(context: str, repo: str, query: str) -> str:
     """
     Append recalled repository memory to the prompt context.
 
-    Privacy guard lives in memory.recall_context(): it returns "" unless a local
-    model is active (or MEMORY_ALLOW_CLOUD=1), so sensitive learned context never
-    leaks to a cloud LLM in the default configuration. Never raises — memory is
-    an enhancement, not a hard dependency.
+    Privacy switch lives in memory.recall_context(): it returns "" when
+    MEMORY_ALLOW_CLOUD=0. Otherwise recalled memory (redacted when stored) is
+    part of the prompt, cloud or local. Never raises — memory is an
+    enhancement, not a hard dependency.
     """
     try:
         from app.intelligence.memory import recall_context

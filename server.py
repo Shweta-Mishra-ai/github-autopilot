@@ -706,6 +706,17 @@ def _run_handler(webhook_event: str, payload: dict, repo: str) -> str:
         except Exception as e:
             log.debug(f"installations.record_skipped repo={repo}: {e}")
 
+        # State is stored by repository NAME; make sure the name still means
+        # the repository it meant when that state was written (see
+        # app/core/repo_identity.py). Not blocking: an unreadable Redis is
+        # logged and the event goes on, as every other Redis read here does.
+        try:
+            from app.core.repo_identity import ensure
+
+            ensure(repo, ((payload or {}).get("repository") or {}).get("id"))
+        except Exception as e:
+            log.warning(f"repo_identity.unchecked repo={repo}: {e}")
+
         # Every AI call a handler makes is charged to this repository's
         # daily budget as it happens (see guardrails.metered).
         from app.core.guardrails import metered

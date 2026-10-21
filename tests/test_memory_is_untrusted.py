@@ -74,3 +74,15 @@ def test_triage_stores_the_title_as_one_quoted_line(fake_redis):
     entry = next(t for t in stored if t.startswith("Issue #7"))
     assert "\n" not in entry
     assert "title by its author:" in entry
+
+
+def test_a_decisions_rationale_is_redacted_like_the_decision(fake_redis):
+    """meta["why"] is recalled into prompts beside the entry, and was stored
+    as written: a secret in a rationale went to the provider verbatim."""
+    from app.intelligence import memory
+
+    token = "ghp_" + "a" * 36
+    memory.remember_decision("o/r", "rotate the deploy key", why=f"because {token} leaked")
+    ctx = memory.recall_context("o/r", "rotate deploy key")
+    assert "rotate the deploy key" in ctx
+    assert token not in ctx

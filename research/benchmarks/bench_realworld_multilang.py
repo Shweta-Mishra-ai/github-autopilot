@@ -183,11 +183,14 @@ def scan_gitleaks(root, rep):
             for f in (json.load(open(rep)) or [])]
 
 
-def scan_trufflehog(root):
+TRUFFLEHOG_RUNS = 3
+
+
+def _trufflehog_once(root):
     p = subprocess.run([tt.TRUFFLEHOG, "filesystem", root, "--json",
                         "--no-verification", "--no-update"],
                        capture_output=True, timeout=7200, text=True)
-    out = []
+    out = Counter()
     for line in p.stdout.splitlines():
         try:
             rec = json.loads(line)
@@ -196,10 +199,28 @@ def scan_trufflehog(root):
         if "DetectorName" not in rec:
             continue
         fs = rec.get("SourceMetadata", {}).get("Data", {}).get("Filesystem", {})
-        out.append({"file": os.path.relpath(fs.get("file", ""), root),
-                    "line": fs.get("line"), "rule": rec["DetectorName"],
-                    "raw": rec.get("Raw") or ""})
+        out[(os.path.relpath(fs.get("file", ""), root), fs.get("line"),
+             rec["DetectorName"], rec.get("Raw") or "")] += 1
     return out
+
+
+def scan_trufflehog(root):
+    """TruffleHog 3.82.13 does not return the same findings for the same
+    input every time: on cli/cli it reported two findings in one file in one
+    run of six, with or without --concurrency=1. It is therefore run
+    TRUFFLEHOG_RUNS times, the findings present in every run are the ones
+    reported, and the rest are counted as unstable rather than dropped
+    silently."""
+    runs = [_trufflehog_once(root) for _ in range(TRUFFLEHOG_RUNS)]
+    stable = runs[0]
+    union = Counter(runs[0])
+    for r in runs[1:]:
+        stable = stable & r
+        union = union | r
+    out = [{"file": f, "line": ln, "rule": rule, "raw": raw}
+           for (f, ln, rule, raw), n in sorted(stable.items(), key=lambda kv: str(kv[0]))
+           for _ in range(n)]
+    return out, sum((union - stable).values())
 
 
 def relocate(root, findings):
@@ -359,6 +380,24 @@ def _credential_shaped(tok):
             and _shannon(core) > 4.0)
 
 
+def _repo_weighted(by_repo, min_tokens=20):
+    """Unweighted mean and median over repositories of the share of tokens
+    followed by a character Gitleaks' terminator group rejects; repositories
+    with fewer than min_tokens tokens are left out as too small to rate."""
+    shares = sorted(
+        sum(v for k, v in c.items() if k not in GITLEAKS_ACCEPTED) / sum(c.values())
+        for c in by_repo.values() if sum(c.values()) >= min_tokens)
+    if not shares:
+        return None
+    n = len(shares)
+    med = shares[n // 2] if n % 2 else (shares[n // 2 - 1] + shares[n // 2]) / 2
+    return {"n_repositories": n, "min_tokens": min_tokens,
+            "mean_share_rejected": round(sum(shares) / n, 4),
+            "median_share_rejected": round(med, 4),
+            "min_share_rejected": round(shares[0], 4),
+            "max_share_rejected": round(shares[-1], 4)}
+
+
 def follow_class(ch):
     if ch == "":
         return "EOL"
@@ -385,6 +424,8 @@ def main():
     tmp = tempfile.mkdtemp(prefix="rw2_")
     projects, cands = {}, []
     part_c = defaultdict(Counter)       # (stratum, language) -> follow class
+    part_c_repo = defaultdict(Counter)  # repo -> follow class
+    part_c_path = defaultdict(Counter)  # under a test/doc/fixture path?
     part_c_hyphen = Counter()
     try:
         for lang, repo, sha, stratum in CORPUS:
@@ -394,7 +435,8 @@ def main():
             t0 = time.perf_counter()
             fnd = {"autopilot": scan_autopilot(root),
                    "gitleaks": scan_gitleaks(root, os.path.join(tmp, "_gl.json")),
-                   "trufflehog": scan_trufflehog(root)}
+                   "trufflehog": None}
+            fnd["trufflehog"], th_unstable = scan_trufflehog(root)
             el = time.perf_counter() - t0
             for fs in fnd.values():     # tool output order is not stable
                 fs.sort(key=lambda f: (f["file"], f["rule"], f.get("raw", ""), f["line"] or 0))
@@ -414,6 +456,7 @@ def main():
                                                "category": cat, "text": text[:300]}) + "\n")
                 per_tool[tool] = {
                     "n_findings": len(fs),
+                    **({"unstable_across_runs": th_unstable} if tool == "trufflehog" else {}),
                     "lines_relocated_by_secret": relocated[tool][0],
                     "secret_not_found_in_file": relocated[tool][1],
                     "findings_per_kloc": round(len(fs) / (n_lines / 1000), 4) if n_lines else None,
@@ -460,6 +503,8 @@ def main():
                             if _credential_shaped(m.group(1)):
                                 fc = follow_class(text[m.end(1):m.end(1) + 1])
                                 part_c[(stratum, lang)][fc] += 1
+                                part_c_repo[repo][fc] += 1
+                                part_c_path[bool(_TEST_PATH.search(rel))][fc] += 1
                                 part_c_hyphen[m.group(1).endswith("-")] += 1
             for (rel, ln_no, _s, _e), o in sorted(occ.items()):
                 cands.append({
@@ -541,6 +586,14 @@ def main():
                                           Counter()))
                         for lg in langs},
         "tokens_ending_in_hyphen": part_c_hyphen[True],
+        # one repository can dominate the pooled count (npm/cli's registry
+        # mock fixtures hold ~237k of the tokens), so the share is also given
+        # per repository, as an unweighted mean and median over
+        # repositories, and split by test/doc/fixture path
+        "by_repository": {r: c_summary(c) for r, c in sorted(part_c_repo.items())},
+        "repository_weighted": _repo_weighted(part_c_repo),
+        "by_path": {"test_doc_or_fixture_path": c_summary(part_c_path[True]),
+                    "other_path": c_summary(part_c_path[False])},
     }
     tot_lines = sum(p["n_lines"] for p in projects.values())
 

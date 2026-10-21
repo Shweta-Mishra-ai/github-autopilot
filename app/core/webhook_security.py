@@ -58,9 +58,10 @@ def _ip_rate_limit() -> int:
     to this application: GitHub delivers every webhook for every installation
     from its own small IP range. Each source address is therefore shared by all
     of an organisation's repositories, so a busy org consumes one bucket
-    between them. Nothing is lost when it trips — a 429 makes GitHub redeliver,
-    and it keeps retrying for about 24 hours — but work is delayed, and the
-    operator watching it had no knob.
+    between them. GitHub does NOT retry a 429 by itself; the event is recovered
+    only because app/github/redelivery.py asks GitHub to redeliver failed
+    deliveries (every 10 minutes, up to twice per event). Work is delayed, and
+    the operator watching it had no knob.
 
     Read at call time so it can be changed without a redeploy on hosts that
     allow it.

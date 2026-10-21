@@ -18,6 +18,12 @@ import time
 import pytest
 from unittest.mock import patch
 
+# Importing server boots the app, which starts the webhook redelivery thread
+# (app/github/redelivery.py). Left on, it would wake mid-suite and call the
+# GitHub API from inside whichever test happened to be running. Its tests
+# call sweep() directly.
+os.environ["WEBHOOK_REDELIVERY"] = "0"
+
 # ── Ensure project root is on sys.path ────────────────────────────────────────
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:

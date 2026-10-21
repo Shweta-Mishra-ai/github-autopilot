@@ -23,7 +23,8 @@ ARCHITECTURE (free tier today, scales tomorrow)
 
 MEMORY SAFETY (free tier: 512MB app / 25MB Redis)
   - Queue length capped (MAX_QUEUE_LEN): beyond it enqueue() reports FULL and
-    server.py returns 503 so GitHub retries later. Nothing grows unbounded.
+    server.py returns 503. GitHub does not retry that by itself;
+    app/github/redelivery.py asks it to. Nothing grows unbounded.
   - Envelope size capped (MAX_ENVELOPE_BYTES): giant payloads skip Redis and
     fall back to direct thread-pool dispatch instead of filling Redis.
   - Dead-letter list trimmed to DEAD_MAX entries.
@@ -34,7 +35,8 @@ FAILURE MODES (all explicit, all observable via metrics)
                      direct thread-pool dispatch (degraded, not broken).
   Queue full       → FULL → 503. GitHub does NOT redeliver on its own; the
                      dedup key is released so a manual redelivery runs.
-  Transient error  → handler returns RETRY → requeued once, then dead-lettered.
+  Transient error  → handler returns RETRY → retried after 30s, 5min and 30min
+                     (MAX_ATTEMPTS=4 in all), then dead-lettered.
   Handler failure  → handler returns FAILED → dead-lettered at once.
   Process killed   → events in evq:processing requeued on next boot.
 
@@ -106,7 +108,7 @@ class HandlerOutcome:
     """What a handler reports back to the consumer. None counts as OK."""
 
     OK = "ok"
-    RETRY = "retry"  # transient: requeue once, then dead-letter
+    RETRY = "retry"  # transient: retried with growing delays, then dead-lettered
     FAILED = "failed"  # not transient: dead-letter now, where it can be seen
 
 
@@ -157,7 +159,9 @@ def enqueue(
         r = get_redis()
         if int(r.llen(PENDING_KEY) or 0) >= MAX_QUEUE_LEN:
             metrics.increment("queue.full")
-            log.error(f"queue.full len>={MAX_QUEUE_LEN} — 503 so GitHub retries")
+            log.error(
+                f"queue.full len>={MAX_QUEUE_LEN} — 503; the redelivery sweep will ask GitHub to resend it"
+            )
             return EnqueueResult.FULL
         r.lpush(PENDING_KEY, envelope)
         metrics.increment("queue.enqueued")

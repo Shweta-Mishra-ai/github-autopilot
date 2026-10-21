@@ -43,8 +43,9 @@ log = logging.getLogger(__name__)
 SAFETY_BUFFER = 50
 
 # The longest this will ever block a worker thread. A primary rate limit
-# resets on the hour, so the honest answer to a long wait is to refuse and let
-# GitHub redeliver the webhook — the queue is built for exactly that. Waiting
+# resets on the hour, so the honest answer to a long wait is to refuse: the
+# handler raises a transient error and the event queue retries the event later
+# (app/core/transient.py). GitHub itself never redelivers. Waiting
 # is only ever worth it for the last few seconds of a window.
 DEFAULT_MAX_WAIT_SECONDS = 10
 
@@ -159,9 +160,10 @@ def check_and_wait(token: str | None = None) -> None:
     Hold briefly, or refuse, when this installation's budget is nearly spent.
 
     Never blocks longer than `GITHUB_MAX_RATE_LIMIT_WAIT_SECONDS` (default 10).
-    Beyond that it raises, because the caller is a pooled worker thread and the
-    webhook that triggered it will be redelivered by GitHub — losing one
-    request is strictly better than freezing every other one behind it.
+    Beyond that it raises, because the caller is a pooled worker thread. The
+    raise is transient (app/core/transient.py), so the event queue retries the
+    event later — GitHub does not redeliver it — and failing one request is
+    strictly better than freezing every other one behind it.
 
     Raises RuntimeError, matching the previous contract so existing error
     handling is unaffected.

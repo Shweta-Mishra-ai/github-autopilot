@@ -541,6 +541,9 @@ def health():
             # a bare on/off — an operator can see it is due, overdue, or never
             # configured.
             "maintenance": _maintenance_status(),
+            # GitHub never retries a failed webhook; this is the sweep that asks
+            # it to (app/github/redelivery.py). null until the first sweep.
+            "webhook_redelivery": _redelivery_status(),
         }
     ), 200 if overall == "ok" else 207
 
@@ -663,13 +666,14 @@ def webhook():
     # Redis down or envelope too large → degrade to direct thread-pool dispatch.
     result = _dispatch(webhook_event, payload, repo)
 
-    # Saturated pool → 503 so GitHub retries automatically
+    # Saturated pool → 503. GitHub does not retry by itself; the redelivery
+    # sweep (app/github/redelivery.py) asks it to resend.
     if is_saturated(result):
         forget(fingerprint)  # see the FULL branch above
         metrics.increment("events.dropped")
         log.error(
             f"dispatch.saturated event={webhook_event} repo={repo} "
-            "— returning 503 for GitHub retry"
+            "— returning 503; the redelivery sweep will ask GitHub to resend it"
         )
         return jsonify(
             {
@@ -860,6 +864,16 @@ def _provider_health() -> dict:
         return {}
 
 
+def _redelivery_status() -> dict:
+    """Never raises: /health must answer whatever state the sweep is in."""
+    try:
+        from app.github.redelivery import enabled, last_result
+
+        return {"enabled": enabled(), "last_sweep": last_result()}
+    except Exception as e:
+        return {"enabled": None, "last_sweep": None, "error": str(e)[:120]}
+
+
 def _maintenance_status() -> dict:
     """
     Scheduled-sweep and backup state. Never raises — /health must answer even
@@ -962,6 +976,16 @@ def _boot_maintenance():
         start_scheduler()
     except Exception as e:
         log.warning(f"boot.maintenance_not_started: {e}")
+
+    # GitHub does not redeliver a failed webhook by itself; on a free tier the
+    # one that woke a sleeping instance has always failed. See
+    # app/github/redelivery.py.
+    try:
+        from app.github.redelivery import start_scheduler as start_redelivery
+
+        start_redelivery()
+    except Exception as e:
+        log.warning(f"boot.redelivery_not_started: {e}")
 
 
 # ── Boot ───────────────────────────────────────────────────────────────────

@@ -79,8 +79,8 @@ def dispatch(fn: Callable, *args, **kwargs) -> "Future | _SaturatedError":
 
     Returns:
       - Future   on success (event is being processed)
-      - _SATURATED if pool queue is full — caller MUST return 503 to GitHub
-                  so GitHub retries automatically.
+      - _SATURATED if pool queue is full — caller returns 503. GitHub does
+                  not retry that by itself; app/github/redelivery.py asks it to.
 
     Never raises. Caller must use is_saturated() to check return value.
     """

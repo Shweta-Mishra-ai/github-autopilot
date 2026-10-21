@@ -24,7 +24,9 @@ from app.core.redis_client import get_redis, is_redis_available
 
 log = logging.getLogger(__name__)
 
-_TTL_SECONDS = 86400  # 24h — GitHub retries for up to 24h
+# 24h. GitHub does not retry by itself; this covers manual redeliveries and
+# those app/github/redelivery.py requests (it looks back 6 hours).
+_TTL_SECONDS = 86400
 _MAX_LOCAL = 2000  # In-memory fallback max size
 
 _seen_local: OrderedDict = OrderedDict()

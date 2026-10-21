@@ -570,8 +570,11 @@ class LLMRouter:
             r.expire(tok_key, 86400)
 
             self._check_budget_alert(r, key, today)
-        except Exception:
-            pass  # tracking must never affect request
+        except Exception as e:
+            # Never affects the request, but is not silent: these counters are
+            # what the daily budgets and /budget read, and a write that fails
+            # unnoticed makes both undercount.
+            log.warning(f"router.usage_not_recorded provider={key}: {type(e).__name__}: {e}")
 
         # Feed the degraded-mode tracker. app/core/health_check.py implements
         # per-provider latency stats and a "provider is slow" message, but

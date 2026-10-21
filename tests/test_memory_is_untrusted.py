@@ -86,3 +86,17 @@ def test_a_decisions_rationale_is_redacted_like_the_decision(fake_redis):
     ctx = memory.recall_context("o/r", "rotate deploy key")
     assert "rotate the deploy key" in ctx
     assert token not in ctx
+
+
+def test_redaction_fails_closed_when_the_scanner_breaks():
+    """A scanner error used to leave every secret in place while the text was
+    stored — and recalled into cloud prompts — as redacted."""
+    from unittest.mock import patch
+
+    from app.core.redaction import redact
+
+    token = "ghp_" + "b" * 36
+    with patch("app.security.enhanced_secrets.scan_diff", side_effect=RuntimeError("boom")):
+        out = redact(f"the deploy uses token {token} for pushes")
+    assert token not in out
+    assert "deploy" in out, "prose survives"

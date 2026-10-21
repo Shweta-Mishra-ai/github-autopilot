@@ -12,7 +12,10 @@ while code bodies and anything secret-shaped are dropped before storage.
 
 from __future__ import annotations
 
+import logging
 import re
+
+log = logging.getLogger(__name__)
 
 _FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
 _INDENTED_BLOCK_RE = re.compile(r"(?m)^(?: {4}|\t).*$")
@@ -70,8 +73,13 @@ def redact(text: str | None) -> str:
             if 1 <= n <= len(lines):
                 lines[n - 1] = _mask_line(lines[n - 1])
         text = "\n".join(lines)
-    except Exception:
-        pass  # structural strip above already ran
+    except Exception as e:
+        # Fail closed. This was `pass`: a scanner error left every secret in
+        # place while the caller stored the text as redacted — and memory is
+        # recalled into cloud prompts. Unable to tell which lines hold a
+        # secret, mask the value-shaped parts of all of them.
+        log.error(f"redaction.scan_failed — masking every line: {type(e).__name__}: {e}")
+        text = "\n".join(_mask_line(line) for line in text.split("\n"))
 
     return text
 

@@ -227,7 +227,7 @@
       "id": "app.ai.router",
       "path": "app/ai/router.py",
       "layer": "ai",
-      "loc": 848,
+      "loc": 851,
       "functions": 10,
       "classes": 1,
       "is_package": false,
@@ -614,7 +614,7 @@
       "id": "app.core.redaction",
       "path": "app/core/redaction.py",
       "layer": "core",
-      "loc": 144,
+      "loc": 152,
       "functions": 3,
       "classes": 0,
       "is_package": false,
@@ -622,6 +622,7 @@
       "fan_out": 1,
       "external_deps": [
         "__future__",
+        "logging",
         "re"
       ]
     },
@@ -3719,7 +3720,7 @@
   "stats": {
     "modules": 103,
     "edges": 407,
-    "total_loc": 28258,
+    "total_loc": 28269,
     "layers": [
       "ai",
       "core",
@@ -3740,7 +3741,7 @@
       },
       {
         "id": "app.ai.router",
-        "loc": 848,
+        "loc": 851,
         "fan_in": 20,
         "fan_out": 16
       },

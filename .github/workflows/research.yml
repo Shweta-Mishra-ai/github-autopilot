@@ -44,6 +44,8 @@ jobs:
           python -m pytest -q tests
       - name: Every headline number in the manuscript matches the raw results
         run: python benchmarks/verify_paper.py
+      - name: Every number in the TSE manuscript matches the raw results
+        run: python benchmarks/verify_tse.py
 
   replicate:
     name: Gitleaks full-table battery reproduces exactly

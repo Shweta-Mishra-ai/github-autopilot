@@ -312,6 +312,20 @@ def main(allow_pending):
         c.has(f"fp {tool}", f"{thousands(tt[tool]['n_findings'])} "
                             + ("findings " if tool == "autopilot" else "")
                             + f"({tt[tool]['findings_per_kloc']:.3f}")
+    nw = load("realworld_newtools_bench.json")
+    assert (nw["n_files"], nw["n_lines"]) == (rw["n_files"], rw["n_lines"])
+    for tool, label in (("noseyparker", "Nosey Parker"), ("kingfisher", "Kingfisher"),
+                        ("detectsecrets", "detect-secrets")):
+        v = nw["totals"][tool]
+        c.has(f"fp {tool}", f"{label} {thousands(v['n_findings'])} ({v['findings_per_kloc']:.3f})")
+    ds = nw["totals"]["detectsecrets"]
+    c.has("ds generic", f"{thousands(ds['n_findings_generic_rules'])} of its findings come from its high-entropy and keyword plugins")
+    c.has("ds npm", f"{thousands(nw['projects']['npm/cli']['tools']['detectsecrets']['n_findings'])} from one repository")
+    c.has("ds general", f"in the general stratum its rate is {nw['totals_by_stratum']['general']['detectsecrets']['findings_per_kloc']:.3f} per kLOC")
+    assert nw["totals"]["kingfisher"]["n_findings_generic_rules"] == 0
+    rates = {**{t: rw["totals"][t]["findings_per_kloc"] for t in ("autopilot", "gitleaks", "trufflehog")},
+             **{t: nw["totals"][t]["findings_per_kloc"] for t in ("noseyparker", "kingfisher")}}
+    assert min(rates, key=rates.get) == "kingfisher"
     pc = rw["part_c_credential_shaped_tokens"]
     op = pc["by_path"]["other_path"]
     c.has("exposure n", f"there are {thousands(op['n_tokens'])} such tokens")

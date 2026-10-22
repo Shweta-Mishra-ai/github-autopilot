@@ -6,6 +6,8 @@
 exrex==0.12.0
 # Reads the Nosey Parker and Kingfisher rule tables (bench_multitool.py).
 PyYAML==6.0.3
+# One of the six scanners of bench_multitool.py, run with --no-verify.
+detect-secrets==1.5.0
 # Figures and PDF checks only; no reported number depends on these.
 matplotlib
 numpy

@@ -16,6 +16,11 @@ SUBJECT_COMMIT=38b201375926b11ff94703f6257a01aa8723c23d
 GITLEAKS_SHA256=50b742abd7daad8bbddb6301f3017efb680632d9a5b3b4d8f137b3aac250e359
 TRUFFLEHOG_SHA256=6f3e79d4fdfc0c0707a28c76ca0d1990c80e3090ff750f5bd58d6794202875e9
 GITLEAKS_TOML_SHA256=2ce9d818ed5aac0d9a36638a317284bd733c26d5069c980829335183397430bb
+# six-scanner study (bench_multitool.py and the repairs)
+NOSEYPARKER_SHA256=42d6e88bf77904866a9dda49d7cf333501e76b62e9054b112e67f81dc88e2b71   # v0.24.0, x86_64-unknown-linux-gnu
+NOSEYPARKER_COMMIT=61fa4ca67e4ded1b47b3b9ecce618ae91f1ff2fe   # v0.24.0, read for its rule table
+KINGFISHER_SHA256=0f1bba872ccfd2ae451e1a7d1c41bf4a38d1e241087fd6c0fcbfc25df0bd1213    # v2.11.1, linux-x64
+KINGFISHER_COMMIT=573550c07ee7cf8f54a3bc7fd61cb55b78343e39    # v2.11.1, read for its rule table
 
 log(){ printf '\n\033[1m== %s ==\033[0m\n' "$*"; }
 die(){ printf '\n\033[31mFATAL: %s\033[0m\n' "$*" >&2; exit 1; }
@@ -79,6 +84,25 @@ if [[ "${1:-}" != "--figures" ]]; then
   [[ -f "$HERE/gitleaks.toml" ]] || curl -sSL -o "$HERE/gitleaks.toml" \
     https://raw.githubusercontent.com/gitleaks/gitleaks/v8.21.2/config/gitleaks.toml
   verify_sha256 "$HERE/gitleaks.toml" "$GITLEAKS_TOML_SHA256" "gitleaks.toml v8.21.2"
+
+  log "six-scanner study: Nosey Parker, Kingfisher (checksum-pinned), detect-secrets (requirements.txt)"
+  [[ -x "$HERE/noseyparker" ]] || {
+    curl -sSL -o /tmp/np.tgz \
+      https://github.com/praetorian-inc/noseyparker/releases/download/v0.24.0/noseyparker-v0.24.0-x86_64-unknown-linux-gnu.tar.gz
+    mkdir -p /tmp/np && tar xzf /tmp/np.tgz -C /tmp/np && cp /tmp/np/bin/noseyparker "$HERE/noseyparker"; }
+  verify_sha256 "$HERE/noseyparker" "$NOSEYPARKER_SHA256" "noseyparker 0.24.0"
+  [[ -x "$HERE/kingfisher" ]] || {
+    curl -sSL -o /tmp/kf.tgz \
+      https://github.com/mongodb/kingfisher/releases/download/v2.11.1/kingfisher-linux-x64.tgz
+    mkdir -p /tmp/kf && tar xzf /tmp/kf.tgz -C /tmp/kf && cp /tmp/kf/kingfisher "$HERE/kingfisher"; }
+  verify_sha256 "$HERE/kingfisher" "$KINGFISHER_SHA256" "kingfisher 2.11.1"
+  pin_repo "$HERE/noseyparker-src" https://github.com/praetorian-inc/noseyparker.git \
+           "$NOSEYPARKER_COMMIT" "praetorian-inc/noseyparker v0.24.0"
+  pin_repo "$HERE/kingfisher-src" https://github.com/mongodb/kingfisher.git \
+           "$KINGFISHER_COMMIT" "mongodb/kingfisher v2.11.1"
+  export NOSEYPARKER="$HERE/noseyparker" KINGFISHER="$HERE/kingfisher" DETECT_SECRETS=detect-secrets
+  export NOSEYPARKER_RULES="$HERE/noseyparker-src/crates/noseyparker/data/default/builtin/rules"
+  export KINGFISHER_RULES="$HERE/kingfisher-src/crates/kingfisher-rules/generated/rules"
 
   log "real-code corpora (commit-pinned)"
   mkdir -p "$HERE/realcorpus"
@@ -172,6 +196,28 @@ if [[ "${1:-}" != "--figures" ]]; then
   log "RQ3/RQ4  three tools, 774 types"; python bench_threetool_expanded.py > "$RESULTS/threetool_expanded_bench.json"
   log "RQ5      multi-language corpus"; python bench_realworld_multilang.py > "$RESULTS/realworld_multilang_bench.json"
   log "EXT      derived figures";       python analysis_expanded.py    > "$RESULTS/expanded_summary.json"
+  log "SIX      six scanners, 1,238 types"; python bench_multitool.py   > "$RESULTS/multitool_bench.json"
+  log "SIX      cluster statistics";    python analysis_multitool.py   > "$RESULTS/multitool_summary.json"
+  log "SIX      real code, new tools";  python bench_realworld_newtools.py > "$RESULTS/realworld_newtools_bench.json"
+  log "REPAIR   Gitleaks R1/R1P/R2";    python ../repair/repair_gitleaks.py "$HERE/gitleaks.toml" "$HERE/repaired" \
+    && for v in R1 R1P R2; do GITLEAKS_TOML="$HERE/repaired/gitleaks.$v.toml" python bench_gitleaks_fulltable.py \
+         > "$RESULTS/repair/gitleaks_fulltable_$v.json"; done \
+    && python ../repair/validate_gitleaks_repair.py R1="$HERE/repaired/gitleaks.R1.toml" \
+         R1P="$HERE/repaired/gitleaks.R1P.toml" R2="$HERE/repaired/gitleaks.R2.toml" \
+         > "$RESULTS/gitleaks_repair_validation.json"
+  # The TruffleHog repair is rebuilt from source: it needs go1.23.2 (a go1.24
+  # build of v3.82.13 panics at start-up inside wazero 1.8.0), so it runs only
+  # when Go is available; see repair/validate_trufflehog_repair.py.
+  if command -v go >/dev/null; then
+    log "REPAIR   TruffleHog (rebuilt with go1.23.2)"
+    rm -rf "$HERE/trufflehog-repaired-src" && cp -r "$HERE/trufflehog-src" "$HERE/trufflehog-repaired-src"
+    python ../repair/repair_trufflehog.py "$HERE/trufflehog-repaired-src" "$RESULTS/repair/repair_trufflehog_3.82.13.json"
+    LDF="-X 'github.com/trufflesecurity/trufflehog/v3/pkg/version.BuildVersion=3.82.13'"
+    (cd "$HERE/trufflehog-src" && GOTOOLCHAIN=go1.23.2 CGO_ENABLED=0 go build -ldflags="$LDF" -o "$HERE/trufflehog-srcbuild" .)
+    (cd "$HERE/trufflehog-repaired-src" && GOTOOLCHAIN=go1.23.2 CGO_ENABLED=0 go build -ldflags="$LDF" -o "$HERE/trufflehog-repaired" .)
+    TRUFFLEHOG_SOURCE="$HERE/trufflehog-srcbuild" TRUFFLEHOG_REPAIRED="$HERE/trufflehog-repaired" \
+      python ../repair/validate_trufflehog_repair.py > "$RESULTS/trufflehog_repair_validation.json"
+  fi
   log "RQ4      corpus A/B comparison"; python bench_comparative2.py   > "$RESULTS/comparative_bench.json"
   log "RQ4      paired sign test";      python paired_stats.py         > "$RESULTS/paired_stats.txt"
   log "RQ4      co-occurrence";         python bench_cooccurrence.py   > "$RESULTS/cooccurrence_bench.json"
@@ -199,6 +245,13 @@ cd "$HERE/paper" \
   && pdflatex -interaction=nonstopmode main.tex >/dev/null \
   && pdflatex -interaction=nonstopmode main.tex >/dev/null
 
+log "paper (IEEE TSE manuscript)"
+cd "$HERE/paper/tse" \
+  && pdflatex -interaction=nonstopmode main.tex >/dev/null \
+  && bibtex main >/dev/null \
+  && pdflatex -interaction=nonstopmode main.tex >/dev/null \
+  && pdflatex -interaction=nonstopmode main.tex >/dev/null
+
 log "online resource 1 (operational characterisation)"
 cd "$HERE/paper" \
   && pdflatex -interaction=nonstopmode online_resource_1.tex >/dev/null \
@@ -210,5 +263,6 @@ log "verification"
 # canonical Springer/EMSE submission. Non-zero exit means the paper and the
 # data disagree, which is a defect in the paper.
 python "$HERE/benchmarks/verify_paper.py" || die "manuscript/data mismatch"
+python "$HERE/benchmarks/verify_tse.py" || die "TSE manuscript/data mismatch"
 
-log "done — results/ figures_pdf_vector/ paper/main.pdf paper/online_resource_1.pdf"
+log "done — results/ figures_pdf_vector/ paper/main.pdf paper/tse/main.pdf paper/online_resource_1.pdf"

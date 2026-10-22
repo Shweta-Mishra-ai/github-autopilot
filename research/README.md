@@ -9,9 +9,12 @@ Archived on Zenodo: [10.5281/zenodo.22114221](https://doi.org/10.5281/zenodo.221
 This package lives in the `research/` directory of the subject repository:
 <https://github.com/Shweta-Mishra-ai/github-autopilot/tree/main/research>
 
-The manuscript is prepared for *Empirical Software Engineering* (Springer)
-using the `sn-jnl` document class. `paper/` is the single, canonical
-manuscript; no other journal format is maintained in this package.
+Two manuscripts are maintained. `paper/main.tex` is the *Empirical Software
+Engineering* (Springer, `sn-jnl`) version of the three-scanner study.
+`paper/tse/main.tex` is the *IEEE Transactions on Software Engineering*
+(IEEEtran) version, built on the six-scanner study below; it is the one being
+prepared for submission. Each has its own verifier (`verify_paper.py`,
+`verify_tse.py`) that re-derives its numbers from `results/`.
 
 ## Quick start
 
@@ -89,6 +92,29 @@ benchmarks/            harnesses, one per research question, plus analyses
                          one identical file set for all tools: false positives
                          (A), real credential literals by following character
                          (B), credential-shaped tokens of any provider (C)
+  -- six-scanner study (TSE manuscript) --
+  bench_multitool.py     1,238 credential types from five rule tables (AP, GL,
+                         TH, Nosey Parker, Kingfisher) through six scanners
+                         (+ detect-secrets); lineage-neutral comparisons
+                         (Kingfisher's rules are Betterleaks', i.e. Gitleaks'
+                         lineage); scanner defaults that would bias the oracle
+                         switched off and documented in its docstring
+  analysis_multitool.py  provider-cluster sign tests and bootstrap intervals,
+                         Holm-adjusted; sensitivity analyses; coverage,
+                         mislabelling, encoding families
+  bench_realworld_newtools.py  Nosey Parker, Kingfisher, detect-secrets on the
+                         same staged 31-repository tree as above
+  verify_tse.py          re-checks every number in paper/tse/main.tex; fails
+                         while a \PENDING figure remains
+repair/                repairs of the defects in the external scanners
+  repair_gitleaks.py     R1, R1P (recommended), R2 for Gitleaks 8.21.2; the
+                         same addition for 8.30.1 and Betterleaks 1.9.0
+  repair_trufflehog.py   trailing \b -> (?:\b|\W|$) across pkg/detectors
+  validate_*_repair.py   each repair on the battery and on 9.87M real lines,
+                         findings added AND removed
+upstream/              issue drafts for Gitleaks, Betterleaks, Kingfisher and
+                       TruffleHog -- NOT posted -- and reproduce_matrix.py, the
+                       seeded minimal reproducers behind them
   bench_systems.py       SUPP     queueing, fault injection
   bench_scaling.py       SUPP     concurrency scaling, synchronised start
   gen_figs4.py           all figures, vector PDF + 600 dpi PNG
@@ -136,6 +162,33 @@ result, and is recorded in the commit that fixed it:
   to source lines by number scored it 0/14 on real literals. Findings are
   now located by their reported secret.
 - One literal matched by several generators' types was counted once per type.
+
+Further defects found in the six-scanner study, each fixed before any
+reported result:
+
+- detect-secrets verifies candidate secrets over the network by default;
+  the first run attempted Slack, Stripe and Telegram (refused by the
+  sandbox's network policy). It now runs with `--no-verify`.
+- Nosey Parker's `report` prints at most 3 matches per finding (300 of 2,000
+  probe files); Kingfisher deduplicates identical secrets across files. Both
+  defaults are switched off.
+- Nosey Parker types were first generated from rules outside its default
+  ruleset; it rightly covered none of them. Generation now uses the default
+  ruleset only.
+- Keyword heads for Rust-syntax rules depended on a lucky draw of `.?`; each
+  candidate head is now tried in order.
+- In the repair scripts: a quantifier was stripped from an escaped literal
+  (`\+`); mid-pattern `(?i)` and scoped `(?i:...)` flags were ignored when
+  computing a secret's alphabet; and a complement-of-alphabet terminator
+  rejected a quote the original accepted, so both repairs are now required
+  to only widen what a rule accepts.
+- The reproducer script drew the same character 34 times (`hf_uuuu...`),
+  which the scanners' entropy filters discard.
+
+The last three groups (keyword heads, the repair helpers, the reproducer
+values) have regression tests in `tests/test_multitool_and_repair.py`; the
+scanner settings are fixed in the harness code and stated in its docstring,
+and the ruleset change is checked by Nosey Parker's self-coverage (109/109).
 
 ## A harness defect worth knowing about
 

@@ -374,3 +374,12 @@ class TestFinalHyphenIsDetected:
         for rule in ("SendGrid API Key", "GCP API Key"):
             line = f'cfg_value = "{_HYPHEN_RULES[rule]("x")}y"'
             assert rule not in _rules_fired(line), rule
+
+    def test_hyphen_key_before_other_delimiters(self):
+        # a space, comma, parenthesis, bracket or ampersand after the final
+        # '-' is not a word character either, so \b failed there too
+        for rule, make in _HYPHEN_RULES.items():
+            key = make("-")
+            for line in (f"cfg_value = {key} # set", f"client = Client({key})",
+                         f"keys = [{key}, other]", f"url = '/v1?k={key}&page=2'"):
+                assert rule in _rules_fired(line), (rule, line)

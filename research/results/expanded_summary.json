@@ -1,0 +1,1144 @@
+{
+  "design": "analysis_expanded.py \u2014 Derive the extended study's reported figures from the",
+  "gitleaks_fulltable": {
+    "n_rules": 195,
+    "strata": {
+      "prefix": {
+        "n_rules": 99,
+        "n_excluded": 11,
+        "n_analysed": 88,
+        "terminator_x_paren_failure": {
+          "term_and_fails": 38,
+          "term_and_passes": 0,
+          "noterm_and_fails": 1,
+          "noterm_and_passes": 49
+        },
+        "paren_failures_rescued_by_one_space": "38/39"
+      },
+      "keyword": {
+        "n_rules": 96,
+        "n_excluded": 1,
+        "n_analysed": 95,
+        "terminator_x_paren_failure": {
+          "term_and_fails": 95,
+          "term_and_passes": 0,
+          "noterm_and_fails": 0,
+          "noterm_and_passes": 0
+        },
+        "paren_failures_rescued_by_one_space": "95/95"
+      }
+    },
+    "huggingface_unquoted_newline": {
+      "huggingface-access-token": {
+        "unquoted": 0.0,
+        "yaml_value": 0.0,
+        "env_file": 0.0,
+        "in_parens": 0.0
+      },
+      "huggingface-organization-api-token": {
+        "unquoted": 0.0,
+        "yaml_value": 0.0,
+        "env_file": 0.0
+      }
+    }
+  },
+  "three_tool": {
+    "n_files": 467960,
+    "types_generated": {
+      "GL": 184,
+      "TH": 566,
+      "AP": 24
+    },
+    "n_types": 774,
+    "n_types_excluded": 48,
+    "trufflehog_detectors_not_single_pattern": {
+      "needs_multiple_patterns": 213,
+      "no_pattern": 7,
+      "pattern_built_by_helper": 9,
+      "keyword_not_identifier": 1
+    },
+    "coverage_any_rule": {
+      "autopilot": {
+        "GL": 24,
+        "TH": 84,
+        "AP": 24
+      },
+      "gitleaks": {
+        "GL": 183,
+        "TH": 24,
+        "AP": 13
+      },
+      "trufflehog": {
+        "GL": 37,
+        "TH": 532,
+        "AP": 11
+      }
+    },
+    "coverage_label_matched": {
+      "autopilot": {
+        "GL": 9,
+        "TH": 6,
+        "AP": 24
+      },
+      "gitleaks": {
+        "GL": 183,
+        "TH": 22,
+        "AP": 13
+      },
+      "trufflehog": {
+        "GL": 37,
+        "TH": 532,
+        "AP": 11
+      }
+    },
+    "label_matched_total": {
+      "autopilot": 39,
+      "gitleaks": 218,
+      "trufflehog": 580
+    },
+    "label_matched_by_stratum": {
+      "autopilot": {
+        "prefix": 34,
+        "keyword": 5
+      },
+      "gitleaks": {
+        "prefix": 110,
+        "keyword": 108
+      },
+      "trufflehog": {
+        "prefix": 78,
+        "keyword": 502
+      }
+    },
+    "mislabelled_coverage_by_rule": {
+      "autopilot": {
+        "PagerDuty Integration Key": 84,
+        "JWT Token": 8,
+        "Generic Token": 1
+      },
+      "gitleaks": {
+        "jwt": 2
+      },
+      "trufflehog": {}
+    },
+    "paired_pooled": {
+      "autopilot_vs_gitleaks": {
+        "n_types": 774,
+        "both": 26,
+        "only_autopilot": 13,
+        "only_gitleaks": 192,
+        "p": 5.126187601609736e-42
+      },
+      "autopilot_vs_trufflehog": {
+        "n_types": 774,
+        "both": 24,
+        "only_autopilot": 15,
+        "only_trufflehog": 556,
+        "p": 3.7777354022050844e-143
+      },
+      "gitleaks_vs_trufflehog": {
+        "n_types": 774,
+        "both": 69,
+        "only_gitleaks": 149,
+        "only_trufflehog": 511,
+        "p": 2.696212544734236e-47
+      }
+    },
+    "paired_neutral": {
+      "autopilot_vs_gitleaks": {
+        "n_types": 566,
+        "both": 4,
+        "only_autopilot": 2,
+        "only_gitleaks": 18,
+        "p": 0.0004024505615234375,
+        "generator": "TH"
+      },
+      "autopilot_vs_trufflehog": {
+        "n_types": 184,
+        "both": 7,
+        "only_autopilot": 2,
+        "only_trufflehog": 30,
+        "p": 2.4633482098579407e-07,
+        "generator": "GL"
+      },
+      "gitleaks_vs_trufflehog": {
+        "n_types": 24,
+        "both": 10,
+        "only_gitleaks": 3,
+        "only_trufflehog": 1,
+        "p": 0.625,
+        "generator": "AP"
+      }
+    },
+    "battery_label_matched": {
+      "autopilot": {
+        "single_quoted": {
+          "types": 39,
+          "total_failure": 0
+        },
+        "unquoted": {
+          "types": 39,
+          "total_failure": 4
+        },
+        "yaml_value": {
+          "types": 39,
+          "total_failure": 4
+        },
+        "json_value": {
+          "types": 39,
+          "total_failure": 0
+        },
+        "env_file": {
+          "types": 39,
+          "total_failure": 4
+        },
+        "url_query": {
+          "types": 39,
+          "total_failure": 4
+        },
+        "trailing_comma": {
+          "types": 39,
+          "total_failure": 4
+        },
+        "in_parens": {
+          "types": 39,
+          "total_failure": 4
+        },
+        "leading_space": {
+          "types": 39,
+          "total_failure": 0
+        },
+        "trailing_hyphen": {
+          "types": 8,
+          "total_failure": 3
+        },
+        "trailing_under": {
+          "types": 10,
+          "total_failure": 0
+        },
+        "url_query_amp": {
+          "types": 39,
+          "total_failure": 4
+        },
+        "in_parens_spaced": {
+          "types": 39,
+          "total_failure": 4
+        },
+        "trailing_comma_spaced": {
+          "types": 5,
+          "total_failure": 4
+        }
+      },
+      "gitleaks": {
+        "single_quoted": {
+          "types": 218,
+          "total_failure": 0
+        },
+        "unquoted": {
+          "types": 218,
+          "total_failure": 2
+        },
+        "yaml_value": {
+          "types": 218,
+          "total_failure": 2
+        },
+        "json_value": {
+          "types": 218,
+          "total_failure": 0
+        },
+        "env_file": {
+          "types": 218,
+          "total_failure": 2
+        },
+        "url_query": {
+          "types": 218,
+          "total_failure": 0
+        },
+        "trailing_comma": {
+          "types": 218,
+          "total_failure": 108
+        },
+        "in_parens": {
+          "types": 218,
+          "total_failure": 159
+        },
+        "leading_space": {
+          "types": 218,
+          "total_failure": 0
+        },
+        "trailing_hyphen": {
+          "types": 65,
+          "total_failure": 1
+        },
+        "trailing_under": {
+          "types": 61,
+          "total_failure": 1
+        },
+        "url_query_amp": {
+          "types": 218,
+          "total_failure": 161
+        },
+        "in_parens_spaced": {
+          "types": 218,
+          "total_failure": 1
+        },
+        "trailing_comma_spaced": {
+          "types": 108,
+          "total_failure": 0
+        }
+      },
+      "trufflehog": {
+        "single_quoted": {
+          "types": 580,
+          "total_failure": 0
+        },
+        "unquoted": {
+          "types": 580,
+          "total_failure": 0
+        },
+        "yaml_value": {
+          "types": 580,
+          "total_failure": 0
+        },
+        "json_value": {
+          "types": 580,
+          "total_failure": 0
+        },
+        "env_file": {
+          "types": 580,
+          "total_failure": 1
+        },
+        "url_query": {
+          "types": 580,
+          "total_failure": 1
+        },
+        "trailing_comma": {
+          "types": 580,
+          "total_failure": 1
+        },
+        "in_parens": {
+          "types": 580,
+          "total_failure": 1
+        },
+        "leading_space": {
+          "types": 580,
+          "total_failure": 0
+        },
+        "trailing_hyphen": {
+          "types": 117,
+          "total_failure": 91
+        },
+        "trailing_under": {
+          "types": 99,
+          "total_failure": 0
+        },
+        "url_query_amp": {
+          "types": 580,
+          "total_failure": 1
+        },
+        "in_parens_spaced": {
+          "types": 580,
+          "total_failure": 1
+        },
+        "trailing_comma_spaced": {
+          "types": 502,
+          "total_failure": 1
+        }
+      }
+    },
+    "encoding_label_matched": {
+      "autopilot": {
+        "prefix": {
+          "esc_json_in_string": {
+            "types": 34,
+            "total_failure": 0
+          },
+          "esc_newline_after": {
+            "types": 34,
+            "total_failure": 0
+          },
+          "esc_quote_around": {
+            "types": 34,
+            "total_failure": 0
+          },
+          "fs_dockerfile_env": {
+            "types": 34,
+            "total_failure": 0
+          },
+          "fs_toml_inline": {
+            "types": 34,
+            "total_failure": 0
+          },
+          "fs_yaml_block": {
+            "types": 34,
+            "total_failure": 0
+          },
+          "mk_html_escaped": {
+            "types": 34,
+            "total_failure": 0
+          },
+          "mk_markdown_code": {
+            "types": 34,
+            "total_failure": 0
+          },
+          "mk_xml_attribute": {
+            "types": 34,
+            "total_failure": 0
+          },
+          "tpl_bearer_header": {
+            "types": 34,
+            "total_failure": 0
+          },
+          "tpl_jinja_default": {
+            "types": 34,
+            "total_failure": 0
+          },
+          "tpl_js_template": {
+            "types": 34,
+            "total_failure": 0
+          },
+          "tpl_shell_default": {
+            "types": 34,
+            "total_failure": 0
+          },
+          "tx_base64_wrapped": {
+            "types": 34,
+            "total_failure": 34
+          },
+          "tx_k8s_secret": {
+            "types": 34,
+            "total_failure": 34
+          },
+          "tx_split_concat": {
+            "types": 34,
+            "total_failure": 30
+          },
+          "tx_url_encoded": {
+            "types": 34,
+            "total_failure": 0
+          }
+        },
+        "keyword": {
+          "esc_json_in_string": {
+            "types": 5,
+            "total_failure": 4
+          },
+          "esc_newline_after": {
+            "types": 5,
+            "total_failure": 4
+          },
+          "esc_quote_around": {
+            "types": 5,
+            "total_failure": 4
+          },
+          "fs_dockerfile_env": {
+            "types": 5,
+            "total_failure": 4
+          },
+          "fs_toml_inline": {
+            "types": 5,
+            "total_failure": 0
+          },
+          "fs_yaml_block": {
+            "types": 5,
+            "total_failure": 4
+          },
+          "mk_html_escaped": {
+            "types": 5,
+            "total_failure": 4
+          },
+          "mk_markdown_code": {
+            "types": 5,
+            "total_failure": 4
+          },
+          "mk_xml_attribute": {
+            "types": 5,
+            "total_failure": 0
+          },
+          "tpl_bearer_header": {
+            "types": 5,
+            "total_failure": 4
+          },
+          "tpl_jinja_default": {
+            "types": 5,
+            "total_failure": 4
+          },
+          "tpl_js_template": {
+            "types": 5,
+            "total_failure": 4
+          },
+          "tpl_shell_default": {
+            "types": 5,
+            "total_failure": 4
+          },
+          "tx_base64_wrapped": {
+            "types": 5,
+            "total_failure": 5
+          },
+          "tx_k8s_secret": {
+            "types": 5,
+            "total_failure": 5
+          },
+          "tx_split_concat": {
+            "types": 5,
+            "total_failure": 5
+          },
+          "tx_url_encoded": {
+            "types": 5,
+            "total_failure": 4
+          }
+        }
+      },
+      "gitleaks": {
+        "prefix": {
+          "esc_json_in_string": {
+            "types": 110,
+            "total_failure": 49
+          },
+          "esc_newline_after": {
+            "types": 110,
+            "total_failure": 49
+          },
+          "esc_quote_around": {
+            "types": 110,
+            "total_failure": 49
+          },
+          "fs_dockerfile_env": {
+            "types": 110,
+            "total_failure": 2
+          },
+          "fs_toml_inline": {
+            "types": 110,
+            "total_failure": 0
+          },
+          "fs_yaml_block": {
+            "types": 110,
+            "total_failure": 2
+          },
+          "mk_html_escaped": {
+            "types": 110,
+            "total_failure": 53
+          },
+          "mk_markdown_code": {
+            "types": 110,
+            "total_failure": 0
+          },
+          "mk_xml_attribute": {
+            "types": 110,
+            "total_failure": 0
+          },
+          "tpl_bearer_header": {
+            "types": 110,
+            "total_failure": 0
+          },
+          "tpl_jinja_default": {
+            "types": 110,
+            "total_failure": 0
+          },
+          "tpl_js_template": {
+            "types": 110,
+            "total_failure": 0
+          },
+          "tpl_shell_default": {
+            "types": 110,
+            "total_failure": 53
+          },
+          "tx_base64_wrapped": {
+            "types": 110,
+            "total_failure": 110
+          },
+          "tx_k8s_secret": {
+            "types": 110,
+            "total_failure": 110
+          },
+          "tx_split_concat": {
+            "types": 110,
+            "total_failure": 97
+          },
+          "tx_url_encoded": {
+            "types": 110,
+            "total_failure": 4
+          }
+        },
+        "keyword": {
+          "esc_json_in_string": {
+            "types": 108,
+            "total_failure": 108
+          },
+          "esc_newline_after": {
+            "types": 108,
+            "total_failure": 108
+          },
+          "esc_quote_around": {
+            "types": 108,
+            "total_failure": 108
+          },
+          "fs_dockerfile_env": {
+            "types": 108,
+            "total_failure": 0
+          },
+          "fs_toml_inline": {
+            "types": 108,
+            "total_failure": 0
+          },
+          "fs_yaml_block": {
+            "types": 108,
+            "total_failure": 108
+          },
+          "mk_html_escaped": {
+            "types": 108,
+            "total_failure": 108
+          },
+          "mk_markdown_code": {
+            "types": 108,
+            "total_failure": 108
+          },
+          "mk_xml_attribute": {
+            "types": 108,
+            "total_failure": 108
+          },
+          "tpl_bearer_header": {
+            "types": 108,
+            "total_failure": 108
+          },
+          "tpl_jinja_default": {
+            "types": 108,
+            "total_failure": 108
+          },
+          "tpl_js_template": {
+            "types": 108,
+            "total_failure": 0
+          },
+          "tpl_shell_default": {
+            "types": 108,
+            "total_failure": 108
+          },
+          "tx_base64_wrapped": {
+            "types": 108,
+            "total_failure": 108
+          },
+          "tx_k8s_secret": {
+            "types": 108,
+            "total_failure": 108
+          },
+          "tx_split_concat": {
+            "types": 108,
+            "total_failure": 108
+          },
+          "tx_url_encoded": {
+            "types": 108,
+            "total_failure": 2
+          }
+        }
+      },
+      "trufflehog": {
+        "prefix": {
+          "esc_json_in_string": {
+            "types": 78,
+            "total_failure": 0
+          },
+          "esc_newline_after": {
+            "types": 78,
+            "total_failure": 0
+          },
+          "esc_quote_around": {
+            "types": 78,
+            "total_failure": 0
+          },
+          "fs_dockerfile_env": {
+            "types": 78,
+            "total_failure": 0
+          },
+          "fs_toml_inline": {
+            "types": 78,
+            "total_failure": 0
+          },
+          "fs_yaml_block": {
+            "types": 78,
+            "total_failure": 0
+          },
+          "mk_html_escaped": {
+            "types": 78,
+            "total_failure": 0
+          },
+          "mk_markdown_code": {
+            "types": 78,
+            "total_failure": 0
+          },
+          "mk_xml_attribute": {
+            "types": 78,
+            "total_failure": 0
+          },
+          "tpl_bearer_header": {
+            "types": 78,
+            "total_failure": 0
+          },
+          "tpl_jinja_default": {
+            "types": 78,
+            "total_failure": 0
+          },
+          "tpl_js_template": {
+            "types": 78,
+            "total_failure": 0
+          },
+          "tpl_shell_default": {
+            "types": 78,
+            "total_failure": 0
+          },
+          "tx_base64_wrapped": {
+            "types": 78,
+            "total_failure": 0
+          },
+          "tx_k8s_secret": {
+            "types": 78,
+            "total_failure": 0
+          },
+          "tx_split_concat": {
+            "types": 78,
+            "total_failure": 67
+          },
+          "tx_url_encoded": {
+            "types": 78,
+            "total_failure": 2
+          }
+        },
+        "keyword": {
+          "esc_json_in_string": {
+            "types": 502,
+            "total_failure": 0
+          },
+          "esc_newline_after": {
+            "types": 502,
+            "total_failure": 0
+          },
+          "esc_quote_around": {
+            "types": 502,
+            "total_failure": 0
+          },
+          "fs_dockerfile_env": {
+            "types": 502,
+            "total_failure": 1
+          },
+          "fs_toml_inline": {
+            "types": 502,
+            "total_failure": 0
+          },
+          "fs_yaml_block": {
+            "types": 502,
+            "total_failure": 0
+          },
+          "mk_html_escaped": {
+            "types": 502,
+            "total_failure": 1
+          },
+          "mk_markdown_code": {
+            "types": 502,
+            "total_failure": 0
+          },
+          "mk_xml_attribute": {
+            "types": 502,
+            "total_failure": 1
+          },
+          "tpl_bearer_header": {
+            "types": 502,
+            "total_failure": 500
+          },
+          "tpl_jinja_default": {
+            "types": 502,
+            "total_failure": 499
+          },
+          "tpl_js_template": {
+            "types": 502,
+            "total_failure": 1
+          },
+          "tpl_shell_default": {
+            "types": 502,
+            "total_failure": 0
+          },
+          "tx_base64_wrapped": {
+            "types": 502,
+            "total_failure": 4
+          },
+          "tx_k8s_secret": {
+            "types": 502,
+            "total_failure": 4
+          },
+          "tx_split_concat": {
+            "types": 502,
+            "total_failure": 500
+          },
+          "tx_url_encoded": {
+            "types": 502,
+            "total_failure": 22
+          }
+        }
+      }
+    },
+    "hyphen_marginal": {
+      "autopilot": {
+        "types": 8,
+        "types_marginal_at_least_1_in_100": 3,
+        "types_marginal_nonzero": 5,
+        "max_marginal": 0.014,
+        "mean_marginal": 0.00525
+      },
+      "gitleaks": {
+        "types": 65,
+        "types_marginal_at_least_1_in_100": 1,
+        "types_marginal_nonzero": 1,
+        "max_marginal": 0.026,
+        "mean_marginal": 0.0004
+      },
+      "trufflehog": {
+        "types": 117,
+        "types_marginal_at_least_1_in_100": 86,
+        "types_marginal_nonzero": 98,
+        "max_marginal": 0.061,
+        "mean_marginal": 0.01554
+      }
+    }
+  },
+  "realworld": {
+    "n_projects": 31,
+    "n_languages": 9,
+    "n_files": 38309,
+    "n_lines": 9870820,
+    "totals": {
+      "autopilot": {
+        "n_findings": 2108,
+        "findings_per_kloc": 0.2136
+      },
+      "gitleaks": {
+        "n_findings": 1143,
+        "findings_per_kloc": 0.1158
+      },
+      "trufflehog": {
+        "n_findings": 389,
+        "findings_per_kloc": 0.0394
+      }
+    },
+    "totals_by_stratum": {
+      "general": {
+        "n_projects": 20,
+        "n_lines": 2888498,
+        "autopilot": {
+          "n_findings": 312,
+          "findings_per_kloc": 0.108
+        },
+        "gitleaks": {
+          "n_findings": 105,
+          "findings_per_kloc": 0.0364
+        },
+        "trufflehog": {
+          "n_findings": 109,
+          "findings_per_kloc": 0.0377
+        }
+      },
+      "credential_dense": {
+        "n_projects": 11,
+        "n_lines": 6982322,
+        "autopilot": {
+          "n_findings": 1796,
+          "findings_per_kloc": 0.2572
+        },
+        "gitleaks": {
+          "n_findings": 1038,
+          "findings_per_kloc": 0.1487
+        },
+        "trufflehog": {
+          "n_findings": 280,
+          "findings_per_kloc": 0.0401
+        }
+      }
+    },
+    "totals_by_language": {
+      "csharp": {
+        "n_projects": 2,
+        "n_lines": 387027,
+        "autopilot": {
+          "n_findings": 11,
+          "findings_per_kloc": 0.0284
+        },
+        "gitleaks": {
+          "n_findings": 1,
+          "findings_per_kloc": 0.0026
+        },
+        "trufflehog": {
+          "n_findings": 0,
+          "findings_per_kloc": 0.0
+        }
+      },
+      "go": {
+        "n_projects": 4,
+        "n_lines": 517910,
+        "autopilot": {
+          "n_findings": 30,
+          "findings_per_kloc": 0.0579
+        },
+        "gitleaks": {
+          "n_findings": 65,
+          "findings_per_kloc": 0.1255
+        },
+        "trufflehog": {
+          "n_findings": 139,
+          "findings_per_kloc": 0.2684
+        }
+      },
+      "java": {
+        "n_projects": 3,
+        "n_lines": 997045,
+        "autopilot": {
+          "n_findings": 24,
+          "findings_per_kloc": 0.0241
+        },
+        "gitleaks": {
+          "n_findings": 3,
+          "findings_per_kloc": 0.003
+        },
+        "trufflehog": {
+          "n_findings": 0,
+          "findings_per_kloc": 0.0
+        }
+      },
+      "javascript": {
+        "n_projects": 3,
+        "n_lines": 3916497,
+        "autopilot": {
+          "n_findings": 45,
+          "findings_per_kloc": 0.0115
+        },
+        "gitleaks": {
+          "n_findings": 31,
+          "findings_per_kloc": 0.0079
+        },
+        "trufflehog": {
+          "n_findings": 51,
+          "findings_per_kloc": 0.013
+        }
+      },
+      "php": {
+        "n_projects": 2,
+        "n_lines": 589032,
+        "autopilot": {
+          "n_findings": 51,
+          "findings_per_kloc": 0.0866
+        },
+        "gitleaks": {
+          "n_findings": 31,
+          "findings_per_kloc": 0.0526
+        },
+        "trufflehog": {
+          "n_findings": 65,
+          "findings_per_kloc": 0.1104
+        }
+      },
+      "python": {
+        "n_projects": 8,
+        "n_lines": 1444399,
+        "autopilot": {
+          "n_findings": 273,
+          "findings_per_kloc": 0.189
+        },
+        "gitleaks": {
+          "n_findings": 98,
+          "findings_per_kloc": 0.0678
+        },
+        "trufflehog": {
+          "n_findings": 102,
+          "findings_per_kloc": 0.0706
+        }
+      },
+      "ruby": {
+        "n_projects": 3,
+        "n_lines": 648888,
+        "autopilot": {
+          "n_findings": 9,
+          "findings_per_kloc": 0.0139
+        },
+        "gitleaks": {
+          "n_findings": 4,
+          "findings_per_kloc": 0.0062
+        },
+        "trufflehog": {
+          "n_findings": 4,
+          "findings_per_kloc": 0.0062
+        }
+      },
+      "rust": {
+        "n_projects": 2,
+        "n_lines": 143118,
+        "autopilot": {
+          "n_findings": 12,
+          "findings_per_kloc": 0.0838
+        },
+        "gitleaks": {
+          "n_findings": 8,
+          "findings_per_kloc": 0.0559
+        },
+        "trufflehog": {
+          "n_findings": 8,
+          "findings_per_kloc": 0.0559
+        }
+      },
+      "typescript": {
+        "n_projects": 4,
+        "n_lines": 1226904,
+        "autopilot": {
+          "n_findings": 1653,
+          "findings_per_kloc": 1.3473
+        },
+        "gitleaks": {
+          "n_findings": 902,
+          "findings_per_kloc": 0.7352
+        },
+        "trufflehog": {
+          "n_findings": 20,
+          "findings_per_kloc": 0.0163
+        }
+      }
+    },
+    "trufflehog_unstable_findings": 2,
+    "part_b": {
+      "n_occurrences": 80,
+      "n_types_occurring": 10,
+      "in_test_or_doc_path": 77,
+      "following_character": {
+        "quote": 70,
+        "\\": 6,
+        ":": 3,
+        "whitespace": 1
+      },
+      "detection_overall": {
+        "autopilot": {
+          "n": 69,
+          "detected": 15,
+          "rate": 0.2174
+        },
+        "gitleaks": {
+          "n": 24,
+          "detected": 11,
+          "rate": 0.4583
+        },
+        "trufflehog": {
+          "n": 7,
+          "detected": 5,
+          "rate": 0.7143
+        }
+      },
+      "detection_by_path": {
+        "test_doc_or_example_path": {
+          "autopilot": {
+            "n": 66,
+            "detected": 15,
+            "rate": 0.2273
+          },
+          "gitleaks": {
+            "n": 21,
+            "detected": 11,
+            "rate": 0.5238
+          },
+          "trufflehog": {
+            "n": 7,
+            "detected": 5,
+            "rate": 0.7143
+          }
+        },
+        "other_path": {
+          "autopilot": {
+            "n": 3,
+            "detected": 0,
+            "rate": 0.0
+          },
+          "gitleaks": {
+            "n": 3,
+            "detected": 0,
+            "rate": 0.0
+          },
+          "trufflehog": {
+            "n": 0,
+            "detected": 0,
+            "rate": null
+          }
+        }
+      }
+    },
+    "part_c": {
+      "definition": "20-100 chars of [A-Za-z0-9_+/-] (optional = padding), upper+lower+digit, Shannon entropy > 4.0, not hex-only, fewer than two '/'",
+      "pooled": {
+        "n_tokens": 273659,
+        "share_followed_by_char_gitleaks_terminator_rejects": 0.8447
+      },
+      "other_path": {
+        "n_tokens": 15049,
+        "share_followed_by_char_gitleaks_terminator_rejects": 0.2887,
+        "share_by_following_character": {
+          "quote": 0.3493,
+          "EOL": 0.2651,
+          ",": 0.1374,
+          "whitespace": 0.0843,
+          ".": 0.0395,
+          "}": 0.031,
+          "(": 0.0242,
+          ">": 0.0187,
+          ")": 0.0166,
+          "&": 0.0138,
+          ";": 0.0127,
+          "\\": 0.0016,
+          ":": 0.0013,
+          "]": 0.0011,
+          "{": 0.001
+        }
+      },
+      "test_doc_or_fixture_path": {
+        "n_tokens": 258610,
+        "share_followed_by_char_gitleaks_terminator_rejects": 0.877
+      },
+      "repository_weighted": {
+        "n_repositories": 26,
+        "min_tokens": 20,
+        "mean_share_rejected": 0.3488,
+        "median_share_rejected": 0.2415,
+        "min_share_rejected": 0.0042,
+        "max_share_rejected": 0.9932
+      },
+      "by_language": {
+        "csharp": {
+          "n_tokens": 336,
+          "share_followed_by_char_gitleaks_terminator_rejects": 0.8839
+        },
+        "go": {
+          "n_tokens": 1361,
+          "share_followed_by_char_gitleaks_terminator_rejects": 0.1587
+        },
+        "java": {
+          "n_tokens": 1825,
+          "share_followed_by_char_gitleaks_terminator_rejects": 0.4126
+        },
+        "javascript": {
+          "n_tokens": 238107,
+          "share_followed_by_char_gitleaks_terminator_rejects": 0.8767
+        },
+        "php": {
+          "n_tokens": 1103,
+          "share_followed_by_char_gitleaks_terminator_rejects": 0.3445
+        },
+        "python": {
+          "n_tokens": 3981,
+          "share_followed_by_char_gitleaks_terminator_rejects": 0.1665
+        },
+        "ruby": {
+          "n_tokens": 3463,
+          "share_followed_by_char_gitleaks_terminator_rejects": 0.2755
+        },
+        "rust": {
+          "n_tokens": 188,
+          "share_followed_by_char_gitleaks_terminator_rejects": 0.0213
+        },
+        "typescript": {
+          "n_tokens": 23295,
+          "share_followed_by_char_gitleaks_terminator_rejects": 0.8218
+        }
+      }
+    }
+  }
+}

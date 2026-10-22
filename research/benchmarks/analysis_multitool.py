@@ -178,6 +178,36 @@ def prevalence(pt, tool, ctx, rng):
                                        round(boots[int(0.975 * B) - 1], 4)]}
 
 
+ENCODING_FAMILIES = ("escaping", "interpolation", "markup", "file_syntax", "transformed")
+
+
+def encoding_table(d, pt, tool, stratum):
+    """Per encoding context: label-matched types of the stratum, and how many
+    the context defeats entirely (paired retention 0)."""
+    fam = d["encoding_families"]
+    out = {}
+    for ctx in sorted(fam):
+        rows = [pt[t][tool]["cells"][ctx]["paired_retention"] for t in pt
+                if pt[t]["stratum"] == stratum and pt[t][tool]["label_matched"]
+                and ctx in pt[t][tool]["cells"]
+                and pt[t][tool]["cells"][ctx]["paired_retention"] is not None]
+        out[ctx] = {"family": fam[ctx], "types": len(rows),
+                    "total_failure": sum(r == 0.0 for r in rows)}
+    return out
+
+
+def hyphen_marginal(d, pt):
+    per = d["hyphen_marginal_probability"]["per_type"]
+    out = {}
+    for tool in TOOLS:
+        vals = [r[tool] for t, r in per.items()
+                if r.get(tool) is not None and pt[t][tool]["label_matched"]]
+        out[tool] = {"types": len(vals),
+                     "types_marginal_at_least_1_in_100": sum(v >= 0.01 for v in vals),
+                     "max_marginal": max(vals) if vals else None}
+    return out
+
+
 def main():
     with open(os.path.join(RES, "multitool_bench.json")) as fh:
         d = json.load(fh)
@@ -189,7 +219,22 @@ def main():
     def neutral_one(x, y):
         return one_per_provider(pt, neutral_ids(x, y, pt))
     rng = random.Random(SEED + 7)
+    gens = {g: [t for t in pt if t.startswith(g + ":")] for g in GENERATORS}
     return {
+        "types_generated": {g: len(v) for g, v in gens.items()},
+        "coverage_label_matched": {tool: {g: sum(pt[t][tool]["label_matched"] for t in ids)
+                                          for g, ids in gens.items()} for tool in TOOLS},
+        "label_matched_total": {tool: sum(v[tool]["label_matched"] for v in pt.values())
+                                for tool in TOOLS},
+        "label_matched_by_stratum": {tool: {st: sum(v[tool]["label_matched"] for v in pt.values()
+                                                    if v["stratum"] == st)
+                                            for st in ("prefix", "keyword")} for tool in TOOLS},
+        "mislabelled_types": {tool: sum(v[tool]["covered"] and not v[tool]["label_matched"]
+                                        for v in pt.values()) for tool in TOOLS},
+        "mislabelled_by_rule": d["mislabelled_coverage_by_rule"],
+        "encoding_label_matched": {tool: {st: encoding_table(d, pt, tool, st)
+                                          for st in ("prefix", "keyword")} for tool in TOOLS},
+        "hyphen_marginal_label_matched": hyphen_marginal(d, pt),
         "design": __doc__.strip().splitlines()[0],
         "n_types": len(pt),
         "n_providers": len({v["provider"] for v in pt.values()}),

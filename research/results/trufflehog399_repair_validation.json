@@ -1,0 +1,37 @@
+{
+  "design": "validate_trufflehog_repair.py \u2014 What repair_trufflehog.py fixes and what it",
+  "binaries": [
+    "release",
+    "source",
+    "repaired"
+  ],
+  "realworld": {
+    "n_projects": 31,
+    "n_files": 38309,
+    "n_lines": 9870820,
+    "totals_stable": {
+      "release": 239,
+      "source": 239,
+      "repaired": 239
+    },
+    "unstable": {
+      "release": 0,
+      "source": 0,
+      "repaired": 0
+    },
+    "added": {
+      "n": 0,
+      "by_category": {},
+      "by_char_after_secret": {},
+      "by_detector": {}
+    },
+    "removed": {
+      "n": 0,
+      "by_category": {},
+      "by_char_after_secret": {},
+      "by_detector": {}
+    },
+    "added_findings": [],
+    "removed_findings": []
+  }
+}

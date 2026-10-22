@@ -11,8 +11,10 @@ WHY THIS EXPERIMENT
     NP  Nosey Parker v0.24.0   (Rust; 183 rules, 162 in its default
                                 ruleset; independent rule table)
     KF  Kingfisher v2.11.1     (Rust; 488 rules: 461 imported from
-                                Betterleaks, a fork of Gitleaks, 26 from
-                                Google's Veles, 1 of its own)
+                                Betterleaks -- maintained by Gitleaks'
+                                original author, with Gitleaks' rule ids
+                                and regex forms -- 26 from Google's
+                                Veles (osv-scalibr), 1 of its own)
     DS  detect-secrets 1.5.0   (Python; 27 plugins, no rule table)
 
 FIVE GENERATORS

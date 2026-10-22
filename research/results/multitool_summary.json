@@ -1,4 +1,1224 @@
 {
+  "types_generated": {
+    "AP": 24,
+    "GL": 183,
+    "TH": 566,
+    "NP": 109,
+    "KF": 356
+  },
+  "coverage_label_matched": {
+    "autopilot": {
+      "AP": 24,
+      "GL": 10,
+      "TH": 6,
+      "NP": 13,
+      "KF": 14
+    },
+    "gitleaks": {
+      "AP": 13,
+      "GL": 183,
+      "TH": 23,
+      "NP": 34,
+      "KF": 174
+    },
+    "trufflehog": {
+      "AP": 11,
+      "GL": 36,
+      "TH": 533,
+      "NP": 33,
+      "KF": 75
+    },
+    "noseyparker": {
+      "AP": 11,
+      "GL": 33,
+      "TH": 7,
+      "NP": 109,
+      "KF": 43
+    },
+    "kingfisher": {
+      "AP": 12,
+      "GL": 167,
+      "TH": 47,
+      "NP": 36,
+      "KF": 354
+    },
+    "detectsecrets": {
+      "AP": 12,
+      "GL": 22,
+      "TH": 5,
+      "NP": 15,
+      "KF": 28
+    }
+  },
+  "label_matched_total": {
+    "autopilot": 67,
+    "gitleaks": 427,
+    "trufflehog": 688,
+    "noseyparker": 203,
+    "kingfisher": 616,
+    "detectsecrets": 82
+  },
+  "label_matched_by_stratum": {
+    "autopilot": {
+      "prefix": 57,
+      "keyword": 10
+    },
+    "gitleaks": {
+      "prefix": 229,
+      "keyword": 198
+    },
+    "trufflehog": {
+      "prefix": 141,
+      "keyword": 547
+    },
+    "noseyparker": {
+      "prefix": 161,
+      "keyword": 42
+    },
+    "kingfisher": {
+      "prefix": 343,
+      "keyword": 273
+    },
+    "detectsecrets": {
+      "prefix": 77,
+      "keyword": 5
+    }
+  },
+  "mislabelled_types": {
+    "autopilot": 122,
+    "gitleaks": 4,
+    "trufflehog": 4,
+    "noseyparker": 8,
+    "kingfisher": 8,
+    "detectsecrets": 4
+  },
+  "mislabelled_by_rule": {
+    "autopilot": {
+      "PagerDuty Integration Key": 98,
+      "JWT Token": 12,
+      "Generic Token": 9,
+      "Stripe Secret Key": 2,
+      "Connection String": 1
+    },
+    "gitleaks": {
+      "jwt": 2,
+      "stripe-access-token": 1,
+      "jfrog-api-key": 1
+    },
+    "trufflehog": {
+      "Stripe": 2,
+      "Meraki": 1,
+      "NpmToken": 1
+    },
+    "noseyparker": {
+      "np.jwt.1": 5,
+      "np.hashicorp.5": 2,
+      "np.openai.1": 1
+    },
+    "kingfisher": {
+      "betterleaks.jwt": 2,
+      "betterleaks.box-api-access-token": 2,
+      "betterleaks.kimi-api-key": 1,
+      "betterleaks.cisco-meraki-api-key": 1,
+      "veles.secrets/npmjsaccesstoken": 1,
+      "betterleaks.nvidia-api-key": 1
+    },
+    "detectsecrets": {
+      "Stripe Access Key": 2,
+      "Twilio API Key": 1,
+      "Telegram Bot Token": 1
+    }
+  },
+  "encoding_label_matched": {
+    "autopilot": {
+      "prefix": {
+        "esc_json_in_string": {
+          "family": "escaping",
+          "types": 57,
+          "total_failure": 0
+        },
+        "esc_newline_after": {
+          "family": "escaping",
+          "types": 57,
+          "total_failure": 0
+        },
+        "esc_quote_around": {
+          "family": "escaping",
+          "types": 57,
+          "total_failure": 0
+        },
+        "fs_dockerfile_env": {
+          "family": "file_syntax",
+          "types": 57,
+          "total_failure": 0
+        },
+        "fs_toml_inline": {
+          "family": "file_syntax",
+          "types": 57,
+          "total_failure": 0
+        },
+        "fs_yaml_block": {
+          "family": "file_syntax",
+          "types": 57,
+          "total_failure": 0
+        },
+        "mk_html_escaped": {
+          "family": "markup",
+          "types": 57,
+          "total_failure": 0
+        },
+        "mk_markdown_code": {
+          "family": "markup",
+          "types": 57,
+          "total_failure": 0
+        },
+        "mk_xml_attribute": {
+          "family": "markup",
+          "types": 57,
+          "total_failure": 0
+        },
+        "tpl_bearer_header": {
+          "family": "interpolation",
+          "types": 57,
+          "total_failure": 0
+        },
+        "tpl_jinja_default": {
+          "family": "interpolation",
+          "types": 57,
+          "total_failure": 0
+        },
+        "tpl_js_template": {
+          "family": "interpolation",
+          "types": 57,
+          "total_failure": 0
+        },
+        "tpl_shell_default": {
+          "family": "interpolation",
+          "types": 57,
+          "total_failure": 0
+        },
+        "tx_base64_wrapped": {
+          "family": "transformed",
+          "types": 57,
+          "total_failure": 57
+        },
+        "tx_k8s_secret": {
+          "family": "transformed",
+          "types": 57,
+          "total_failure": 57
+        },
+        "tx_split_concat": {
+          "family": "transformed",
+          "types": 57,
+          "total_failure": 53
+        },
+        "tx_url_encoded": {
+          "family": "transformed",
+          "types": 57,
+          "total_failure": 0
+        }
+      },
+      "keyword": {
+        "esc_json_in_string": {
+          "family": "escaping",
+          "types": 10,
+          "total_failure": 8
+        },
+        "esc_newline_after": {
+          "family": "escaping",
+          "types": 10,
+          "total_failure": 8
+        },
+        "esc_quote_around": {
+          "family": "escaping",
+          "types": 10,
+          "total_failure": 8
+        },
+        "fs_dockerfile_env": {
+          "family": "file_syntax",
+          "types": 10,
+          "total_failure": 8
+        },
+        "fs_toml_inline": {
+          "family": "file_syntax",
+          "types": 10,
+          "total_failure": 0
+        },
+        "fs_yaml_block": {
+          "family": "file_syntax",
+          "types": 10,
+          "total_failure": 8
+        },
+        "mk_html_escaped": {
+          "family": "markup",
+          "types": 10,
+          "total_failure": 8
+        },
+        "mk_markdown_code": {
+          "family": "markup",
+          "types": 10,
+          "total_failure": 8
+        },
+        "mk_xml_attribute": {
+          "family": "markup",
+          "types": 10,
+          "total_failure": 0
+        },
+        "tpl_bearer_header": {
+          "family": "interpolation",
+          "types": 10,
+          "total_failure": 8
+        },
+        "tpl_jinja_default": {
+          "family": "interpolation",
+          "types": 10,
+          "total_failure": 8
+        },
+        "tpl_js_template": {
+          "family": "interpolation",
+          "types": 10,
+          "total_failure": 8
+        },
+        "tpl_shell_default": {
+          "family": "interpolation",
+          "types": 10,
+          "total_failure": 8
+        },
+        "tx_base64_wrapped": {
+          "family": "transformed",
+          "types": 10,
+          "total_failure": 10
+        },
+        "tx_k8s_secret": {
+          "family": "transformed",
+          "types": 10,
+          "total_failure": 10
+        },
+        "tx_split_concat": {
+          "family": "transformed",
+          "types": 10,
+          "total_failure": 10
+        },
+        "tx_url_encoded": {
+          "family": "transformed",
+          "types": 10,
+          "total_failure": 8
+        }
+      }
+    },
+    "gitleaks": {
+      "prefix": {
+        "esc_json_in_string": {
+          "family": "escaping",
+          "types": 229,
+          "total_failure": 99
+        },
+        "esc_newline_after": {
+          "family": "escaping",
+          "types": 229,
+          "total_failure": 99
+        },
+        "esc_quote_around": {
+          "family": "escaping",
+          "types": 229,
+          "total_failure": 99
+        },
+        "fs_dockerfile_env": {
+          "family": "file_syntax",
+          "types": 229,
+          "total_failure": 5
+        },
+        "fs_toml_inline": {
+          "family": "file_syntax",
+          "types": 229,
+          "total_failure": 0
+        },
+        "fs_yaml_block": {
+          "family": "file_syntax",
+          "types": 229,
+          "total_failure": 5
+        },
+        "mk_html_escaped": {
+          "family": "markup",
+          "types": 229,
+          "total_failure": 107
+        },
+        "mk_markdown_code": {
+          "family": "markup",
+          "types": 229,
+          "total_failure": 0
+        },
+        "mk_xml_attribute": {
+          "family": "markup",
+          "types": 229,
+          "total_failure": 0
+        },
+        "tpl_bearer_header": {
+          "family": "interpolation",
+          "types": 229,
+          "total_failure": 0
+        },
+        "tpl_jinja_default": {
+          "family": "interpolation",
+          "types": 229,
+          "total_failure": 0
+        },
+        "tpl_js_template": {
+          "family": "interpolation",
+          "types": 229,
+          "total_failure": 0
+        },
+        "tpl_shell_default": {
+          "family": "interpolation",
+          "types": 229,
+          "total_failure": 107
+        },
+        "tx_base64_wrapped": {
+          "family": "transformed",
+          "types": 229,
+          "total_failure": 229
+        },
+        "tx_k8s_secret": {
+          "family": "transformed",
+          "types": 229,
+          "total_failure": 229
+        },
+        "tx_split_concat": {
+          "family": "transformed",
+          "types": 229,
+          "total_failure": 203
+        },
+        "tx_url_encoded": {
+          "family": "transformed",
+          "types": 229,
+          "total_failure": 10
+        }
+      },
+      "keyword": {
+        "esc_json_in_string": {
+          "family": "escaping",
+          "types": 198,
+          "total_failure": 198
+        },
+        "esc_newline_after": {
+          "family": "escaping",
+          "types": 198,
+          "total_failure": 197
+        },
+        "esc_quote_around": {
+          "family": "escaping",
+          "types": 198,
+          "total_failure": 198
+        },
+        "fs_dockerfile_env": {
+          "family": "file_syntax",
+          "types": 198,
+          "total_failure": 0
+        },
+        "fs_toml_inline": {
+          "family": "file_syntax",
+          "types": 198,
+          "total_failure": 0
+        },
+        "fs_yaml_block": {
+          "family": "file_syntax",
+          "types": 198,
+          "total_failure": 198
+        },
+        "mk_html_escaped": {
+          "family": "markup",
+          "types": 198,
+          "total_failure": 198
+        },
+        "mk_markdown_code": {
+          "family": "markup",
+          "types": 198,
+          "total_failure": 198
+        },
+        "mk_xml_attribute": {
+          "family": "markup",
+          "types": 198,
+          "total_failure": 198
+        },
+        "tpl_bearer_header": {
+          "family": "interpolation",
+          "types": 198,
+          "total_failure": 198
+        },
+        "tpl_jinja_default": {
+          "family": "interpolation",
+          "types": 198,
+          "total_failure": 198
+        },
+        "tpl_js_template": {
+          "family": "interpolation",
+          "types": 198,
+          "total_failure": 0
+        },
+        "tpl_shell_default": {
+          "family": "interpolation",
+          "types": 198,
+          "total_failure": 198
+        },
+        "tx_base64_wrapped": {
+          "family": "transformed",
+          "types": 198,
+          "total_failure": 198
+        },
+        "tx_k8s_secret": {
+          "family": "transformed",
+          "types": 198,
+          "total_failure": 198
+        },
+        "tx_split_concat": {
+          "family": "transformed",
+          "types": 198,
+          "total_failure": 198
+        },
+        "tx_url_encoded": {
+          "family": "transformed",
+          "types": 198,
+          "total_failure": 6
+        }
+      }
+    },
+    "trufflehog": {
+      "prefix": {
+        "esc_json_in_string": {
+          "family": "escaping",
+          "types": 141,
+          "total_failure": 0
+        },
+        "esc_newline_after": {
+          "family": "escaping",
+          "types": 141,
+          "total_failure": 0
+        },
+        "esc_quote_around": {
+          "family": "escaping",
+          "types": 141,
+          "total_failure": 0
+        },
+        "fs_dockerfile_env": {
+          "family": "file_syntax",
+          "types": 141,
+          "total_failure": 0
+        },
+        "fs_toml_inline": {
+          "family": "file_syntax",
+          "types": 141,
+          "total_failure": 0
+        },
+        "fs_yaml_block": {
+          "family": "file_syntax",
+          "types": 141,
+          "total_failure": 0
+        },
+        "mk_html_escaped": {
+          "family": "markup",
+          "types": 141,
+          "total_failure": 0
+        },
+        "mk_markdown_code": {
+          "family": "markup",
+          "types": 141,
+          "total_failure": 0
+        },
+        "mk_xml_attribute": {
+          "family": "markup",
+          "types": 141,
+          "total_failure": 0
+        },
+        "tpl_bearer_header": {
+          "family": "interpolation",
+          "types": 141,
+          "total_failure": 0
+        },
+        "tpl_jinja_default": {
+          "family": "interpolation",
+          "types": 141,
+          "total_failure": 0
+        },
+        "tpl_js_template": {
+          "family": "interpolation",
+          "types": 141,
+          "total_failure": 0
+        },
+        "tpl_shell_default": {
+          "family": "interpolation",
+          "types": 141,
+          "total_failure": 0
+        },
+        "tx_base64_wrapped": {
+          "family": "transformed",
+          "types": 141,
+          "total_failure": 0
+        },
+        "tx_k8s_secret": {
+          "family": "transformed",
+          "types": 141,
+          "total_failure": 0
+        },
+        "tx_split_concat": {
+          "family": "transformed",
+          "types": 141,
+          "total_failure": 122
+        },
+        "tx_url_encoded": {
+          "family": "transformed",
+          "types": 141,
+          "total_failure": 3
+        }
+      },
+      "keyword": {
+        "esc_json_in_string": {
+          "family": "escaping",
+          "types": 547,
+          "total_failure": 1
+        },
+        "esc_newline_after": {
+          "family": "escaping",
+          "types": 547,
+          "total_failure": 1
+        },
+        "esc_quote_around": {
+          "family": "escaping",
+          "types": 547,
+          "total_failure": 1
+        },
+        "fs_dockerfile_env": {
+          "family": "file_syntax",
+          "types": 547,
+          "total_failure": 2
+        },
+        "fs_toml_inline": {
+          "family": "file_syntax",
+          "types": 547,
+          "total_failure": 0
+        },
+        "fs_yaml_block": {
+          "family": "file_syntax",
+          "types": 547,
+          "total_failure": 0
+        },
+        "mk_html_escaped": {
+          "family": "markup",
+          "types": 547,
+          "total_failure": 1
+        },
+        "mk_markdown_code": {
+          "family": "markup",
+          "types": 547,
+          "total_failure": 1
+        },
+        "mk_xml_attribute": {
+          "family": "markup",
+          "types": 547,
+          "total_failure": 0
+        },
+        "tpl_bearer_header": {
+          "family": "interpolation",
+          "types": 547,
+          "total_failure": 539
+        },
+        "tpl_jinja_default": {
+          "family": "interpolation",
+          "types": 547,
+          "total_failure": 538
+        },
+        "tpl_js_template": {
+          "family": "interpolation",
+          "types": 547,
+          "total_failure": 3
+        },
+        "tpl_shell_default": {
+          "family": "interpolation",
+          "types": 547,
+          "total_failure": 1
+        },
+        "tx_base64_wrapped": {
+          "family": "transformed",
+          "types": 547,
+          "total_failure": 4
+        },
+        "tx_k8s_secret": {
+          "family": "transformed",
+          "types": 547,
+          "total_failure": 4
+        },
+        "tx_split_concat": {
+          "family": "transformed",
+          "types": 547,
+          "total_failure": 545
+        },
+        "tx_url_encoded": {
+          "family": "transformed",
+          "types": 547,
+          "total_failure": 25
+        }
+      }
+    },
+    "noseyparker": {
+      "prefix": {
+        "esc_json_in_string": {
+          "family": "escaping",
+          "types": 161,
+          "total_failure": 0
+        },
+        "esc_newline_after": {
+          "family": "escaping",
+          "types": 161,
+          "total_failure": 0
+        },
+        "esc_quote_around": {
+          "family": "escaping",
+          "types": 161,
+          "total_failure": 0
+        },
+        "fs_dockerfile_env": {
+          "family": "file_syntax",
+          "types": 161,
+          "total_failure": 0
+        },
+        "fs_toml_inline": {
+          "family": "file_syntax",
+          "types": 161,
+          "total_failure": 0
+        },
+        "fs_yaml_block": {
+          "family": "file_syntax",
+          "types": 161,
+          "total_failure": 0
+        },
+        "mk_html_escaped": {
+          "family": "markup",
+          "types": 161,
+          "total_failure": 0
+        },
+        "mk_markdown_code": {
+          "family": "markup",
+          "types": 161,
+          "total_failure": 0
+        },
+        "mk_xml_attribute": {
+          "family": "markup",
+          "types": 161,
+          "total_failure": 0
+        },
+        "tpl_bearer_header": {
+          "family": "interpolation",
+          "types": 161,
+          "total_failure": 0
+        },
+        "tpl_jinja_default": {
+          "family": "interpolation",
+          "types": 161,
+          "total_failure": 0
+        },
+        "tpl_js_template": {
+          "family": "interpolation",
+          "types": 161,
+          "total_failure": 0
+        },
+        "tpl_shell_default": {
+          "family": "interpolation",
+          "types": 161,
+          "total_failure": 0
+        },
+        "tx_base64_wrapped": {
+          "family": "transformed",
+          "types": 161,
+          "total_failure": 161
+        },
+        "tx_k8s_secret": {
+          "family": "transformed",
+          "types": 161,
+          "total_failure": 161
+        },
+        "tx_split_concat": {
+          "family": "transformed",
+          "types": 161,
+          "total_failure": 151
+        },
+        "tx_url_encoded": {
+          "family": "transformed",
+          "types": 161,
+          "total_failure": 5
+        }
+      },
+      "keyword": {
+        "esc_json_in_string": {
+          "family": "escaping",
+          "types": 42,
+          "total_failure": 10
+        },
+        "esc_newline_after": {
+          "family": "escaping",
+          "types": 42,
+          "total_failure": 1
+        },
+        "esc_quote_around": {
+          "family": "escaping",
+          "types": 42,
+          "total_failure": 8
+        },
+        "fs_dockerfile_env": {
+          "family": "file_syntax",
+          "types": 42,
+          "total_failure": 1
+        },
+        "fs_toml_inline": {
+          "family": "file_syntax",
+          "types": 42,
+          "total_failure": 0
+        },
+        "fs_yaml_block": {
+          "family": "file_syntax",
+          "types": 42,
+          "total_failure": 26
+        },
+        "mk_html_escaped": {
+          "family": "markup",
+          "types": 42,
+          "total_failure": 9
+        },
+        "mk_markdown_code": {
+          "family": "markup",
+          "types": 42,
+          "total_failure": 10
+        },
+        "mk_xml_attribute": {
+          "family": "markup",
+          "types": 42,
+          "total_failure": 16
+        },
+        "tpl_bearer_header": {
+          "family": "interpolation",
+          "types": 42,
+          "total_failure": 37
+        },
+        "tpl_jinja_default": {
+          "family": "interpolation",
+          "types": 42,
+          "total_failure": 33
+        },
+        "tpl_js_template": {
+          "family": "interpolation",
+          "types": 42,
+          "total_failure": 1
+        },
+        "tpl_shell_default": {
+          "family": "interpolation",
+          "types": 42,
+          "total_failure": 8
+        },
+        "tx_base64_wrapped": {
+          "family": "transformed",
+          "types": 42,
+          "total_failure": 39
+        },
+        "tx_k8s_secret": {
+          "family": "transformed",
+          "types": 42,
+          "total_failure": 41
+        },
+        "tx_split_concat": {
+          "family": "transformed",
+          "types": 42,
+          "total_failure": 36
+        },
+        "tx_url_encoded": {
+          "family": "transformed",
+          "types": 42,
+          "total_failure": 3
+        }
+      }
+    },
+    "kingfisher": {
+      "prefix": {
+        "esc_json_in_string": {
+          "family": "escaping",
+          "types": 343,
+          "total_failure": 0
+        },
+        "esc_newline_after": {
+          "family": "escaping",
+          "types": 343,
+          "total_failure": 0
+        },
+        "esc_quote_around": {
+          "family": "escaping",
+          "types": 343,
+          "total_failure": 0
+        },
+        "fs_dockerfile_env": {
+          "family": "file_syntax",
+          "types": 343,
+          "total_failure": 0
+        },
+        "fs_toml_inline": {
+          "family": "file_syntax",
+          "types": 343,
+          "total_failure": 0
+        },
+        "fs_yaml_block": {
+          "family": "file_syntax",
+          "types": 343,
+          "total_failure": 0
+        },
+        "mk_html_escaped": {
+          "family": "markup",
+          "types": 343,
+          "total_failure": 168
+        },
+        "mk_markdown_code": {
+          "family": "markup",
+          "types": 343,
+          "total_failure": 0
+        },
+        "mk_xml_attribute": {
+          "family": "markup",
+          "types": 343,
+          "total_failure": 0
+        },
+        "tpl_bearer_header": {
+          "family": "interpolation",
+          "types": 343,
+          "total_failure": 0
+        },
+        "tpl_jinja_default": {
+          "family": "interpolation",
+          "types": 343,
+          "total_failure": 0
+        },
+        "tpl_js_template": {
+          "family": "interpolation",
+          "types": 343,
+          "total_failure": 0
+        },
+        "tpl_shell_default": {
+          "family": "interpolation",
+          "types": 343,
+          "total_failure": 168
+        },
+        "tx_base64_wrapped": {
+          "family": "transformed",
+          "types": 343,
+          "total_failure": 0
+        },
+        "tx_k8s_secret": {
+          "family": "transformed",
+          "types": 343,
+          "total_failure": 0
+        },
+        "tx_split_concat": {
+          "family": "transformed",
+          "types": 343,
+          "total_failure": 302
+        },
+        "tx_url_encoded": {
+          "family": "transformed",
+          "types": 343,
+          "total_failure": 16
+        }
+      },
+      "keyword": {
+        "esc_json_in_string": {
+          "family": "escaping",
+          "types": 273,
+          "total_failure": 269
+        },
+        "esc_newline_after": {
+          "family": "escaping",
+          "types": 273,
+          "total_failure": 0
+        },
+        "esc_quote_around": {
+          "family": "escaping",
+          "types": 273,
+          "total_failure": 268
+        },
+        "fs_dockerfile_env": {
+          "family": "file_syntax",
+          "types": 273,
+          "total_failure": 0
+        },
+        "fs_toml_inline": {
+          "family": "file_syntax",
+          "types": 273,
+          "total_failure": 0
+        },
+        "fs_yaml_block": {
+          "family": "file_syntax",
+          "types": 273,
+          "total_failure": 268
+        },
+        "mk_html_escaped": {
+          "family": "markup",
+          "types": 273,
+          "total_failure": 268
+        },
+        "mk_markdown_code": {
+          "family": "markup",
+          "types": 273,
+          "total_failure": 269
+        },
+        "mk_xml_attribute": {
+          "family": "markup",
+          "types": 273,
+          "total_failure": 269
+        },
+        "tpl_bearer_header": {
+          "family": "interpolation",
+          "types": 273,
+          "total_failure": 273
+        },
+        "tpl_jinja_default": {
+          "family": "interpolation",
+          "types": 273,
+          "total_failure": 273
+        },
+        "tpl_js_template": {
+          "family": "interpolation",
+          "types": 273,
+          "total_failure": 0
+        },
+        "tpl_shell_default": {
+          "family": "interpolation",
+          "types": 273,
+          "total_failure": 268
+        },
+        "tx_base64_wrapped": {
+          "family": "transformed",
+          "types": 273,
+          "total_failure": 271
+        },
+        "tx_k8s_secret": {
+          "family": "transformed",
+          "types": 273,
+          "total_failure": 271
+        },
+        "tx_split_concat": {
+          "family": "transformed",
+          "types": 273,
+          "total_failure": 270
+        },
+        "tx_url_encoded": {
+          "family": "transformed",
+          "types": 273,
+          "total_failure": 15
+        }
+      }
+    },
+    "detectsecrets": {
+      "prefix": {
+        "esc_json_in_string": {
+          "family": "escaping",
+          "types": 77,
+          "total_failure": 0
+        },
+        "esc_newline_after": {
+          "family": "escaping",
+          "types": 77,
+          "total_failure": 0
+        },
+        "esc_quote_around": {
+          "family": "escaping",
+          "types": 77,
+          "total_failure": 0
+        },
+        "fs_dockerfile_env": {
+          "family": "file_syntax",
+          "types": 77,
+          "total_failure": 0
+        },
+        "fs_toml_inline": {
+          "family": "file_syntax",
+          "types": 77,
+          "total_failure": 0
+        },
+        "fs_yaml_block": {
+          "family": "file_syntax",
+          "types": 77,
+          "total_failure": 0
+        },
+        "mk_html_escaped": {
+          "family": "markup",
+          "types": 77,
+          "total_failure": 0
+        },
+        "mk_markdown_code": {
+          "family": "markup",
+          "types": 77,
+          "total_failure": 0
+        },
+        "mk_xml_attribute": {
+          "family": "markup",
+          "types": 77,
+          "total_failure": 0
+        },
+        "tpl_bearer_header": {
+          "family": "interpolation",
+          "types": 77,
+          "total_failure": 0
+        },
+        "tpl_jinja_default": {
+          "family": "interpolation",
+          "types": 77,
+          "total_failure": 0
+        },
+        "tpl_js_template": {
+          "family": "interpolation",
+          "types": 77,
+          "total_failure": 0
+        },
+        "tpl_shell_default": {
+          "family": "interpolation",
+          "types": 77,
+          "total_failure": 0
+        },
+        "tx_base64_wrapped": {
+          "family": "transformed",
+          "types": 77,
+          "total_failure": 77
+        },
+        "tx_k8s_secret": {
+          "family": "transformed",
+          "types": 77,
+          "total_failure": 77
+        },
+        "tx_split_concat": {
+          "family": "transformed",
+          "types": 77,
+          "total_failure": 54
+        },
+        "tx_url_encoded": {
+          "family": "transformed",
+          "types": 77,
+          "total_failure": 0
+        }
+      },
+      "keyword": {
+        "esc_json_in_string": {
+          "family": "escaping",
+          "types": 5,
+          "total_failure": 0
+        },
+        "esc_newline_after": {
+          "family": "escaping",
+          "types": 5,
+          "total_failure": 0
+        },
+        "esc_quote_around": {
+          "family": "escaping",
+          "types": 5,
+          "total_failure": 0
+        },
+        "fs_dockerfile_env": {
+          "family": "file_syntax",
+          "types": 5,
+          "total_failure": 0
+        },
+        "fs_toml_inline": {
+          "family": "file_syntax",
+          "types": 5,
+          "total_failure": 0
+        },
+        "fs_yaml_block": {
+          "family": "file_syntax",
+          "types": 5,
+          "total_failure": 0
+        },
+        "mk_html_escaped": {
+          "family": "markup",
+          "types": 5,
+          "total_failure": 0
+        },
+        "mk_markdown_code": {
+          "family": "markup",
+          "types": 5,
+          "total_failure": 0
+        },
+        "mk_xml_attribute": {
+          "family": "markup",
+          "types": 5,
+          "total_failure": 0
+        },
+        "tpl_bearer_header": {
+          "family": "interpolation",
+          "types": 5,
+          "total_failure": 0
+        },
+        "tpl_jinja_default": {
+          "family": "interpolation",
+          "types": 5,
+          "total_failure": 0
+        },
+        "tpl_js_template": {
+          "family": "interpolation",
+          "types": 5,
+          "total_failure": 0
+        },
+        "tpl_shell_default": {
+          "family": "interpolation",
+          "types": 5,
+          "total_failure": 0
+        },
+        "tx_base64_wrapped": {
+          "family": "transformed",
+          "types": 5,
+          "total_failure": 5
+        },
+        "tx_k8s_secret": {
+          "family": "transformed",
+          "types": 5,
+          "total_failure": 5
+        },
+        "tx_split_concat": {
+          "family": "transformed",
+          "types": 5,
+          "total_failure": 5
+        },
+        "tx_url_encoded": {
+          "family": "transformed",
+          "types": 5,
+          "total_failure": 2
+        }
+      }
+    }
+  },
+  "hyphen_marginal_label_matched": {
+    "autopilot": {
+      "types": 12,
+      "types_marginal_at_least_1_in_100": 5,
+      "max_marginal": 0.018
+    },
+    "gitleaks": {
+      "types": 119,
+      "types_marginal_at_least_1_in_100": 2,
+      "max_marginal": 0.019
+    },
+    "trufflehog": {
+      "types": 132,
+      "types_marginal_at_least_1_in_100": 91,
+      "max_marginal": 0.061
+    },
+    "noseyparker": {
+      "types": 43,
+      "types_marginal_at_least_1_in_100": 5,
+      "max_marginal": 0.019
+    },
+    "kingfisher": {
+      "types": 173,
+      "types_marginal_at_least_1_in_100": 2,
+      "max_marginal": 0.019
+    },
+    "detectsecrets": {
+      "types": 30,
+      "types_marginal_at_least_1_in_100": 0,
+      "max_marginal": 0.0
+    }
+  },
   "design": "analysis_multitool.py \u2014 Cluster-robust statistics for the six-scanner",
   "n_types": 1238,
   "n_providers": 760,

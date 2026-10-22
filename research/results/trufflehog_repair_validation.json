@@ -1,0 +1,576 @@
+{
+  "design": "validate_trufflehog_repair.py \u2014 What repair_trufflehog.py fixes and what it",
+  "binaries": [
+    "release",
+    "source",
+    "repaired"
+  ],
+  "battery": {
+    "n_files": 745840,
+    "unstable_detections": {
+      "release": 0,
+      "source": 0,
+      "repaired": 0
+    },
+    "identical_detections": {
+      "source_vs_release": 745840,
+      "of": 745840
+    },
+    "release": {
+      "label_matched": {
+        "AP": 11,
+        "GL": 36,
+        "TH": 533,
+        "NP": 33,
+        "KF": 75
+      },
+      "label_matched_total": 688,
+      "total_failure_by_context": {
+        "canonical": {
+          "types": 688,
+          "total_failure": 0
+        },
+        "env_file": {
+          "types": 688,
+          "total_failure": 2
+        },
+        "esc_json_in_string": {
+          "types": 688,
+          "total_failure": 1
+        },
+        "esc_newline_after": {
+          "types": 688,
+          "total_failure": 1
+        },
+        "esc_quote_around": {
+          "types": 688,
+          "total_failure": 1
+        },
+        "fs_dockerfile_env": {
+          "types": 688,
+          "total_failure": 2
+        },
+        "fs_toml_inline": {
+          "types": 688,
+          "total_failure": 0
+        },
+        "fs_yaml_block": {
+          "types": 688,
+          "total_failure": 0
+        },
+        "in_parens": {
+          "types": 688,
+          "total_failure": 3
+        },
+        "in_parens_spaced": {
+          "types": 688,
+          "total_failure": 2
+        },
+        "json_value": {
+          "types": 688,
+          "total_failure": 0
+        },
+        "leading_space": {
+          "types": 688,
+          "total_failure": 0
+        },
+        "mk_html_escaped": {
+          "types": 688,
+          "total_failure": 1
+        },
+        "mk_markdown_code": {
+          "types": 688,
+          "total_failure": 1
+        },
+        "mk_xml_attribute": {
+          "types": 688,
+          "total_failure": 0
+        },
+        "single_quoted": {
+          "types": 688,
+          "total_failure": 0
+        },
+        "tpl_bearer_header": {
+          "types": 688,
+          "total_failure": 539
+        },
+        "tpl_jinja_default": {
+          "types": 688,
+          "total_failure": 538
+        },
+        "tpl_js_template": {
+          "types": 688,
+          "total_failure": 3
+        },
+        "tpl_shell_default": {
+          "types": 688,
+          "total_failure": 1
+        },
+        "trailing_comma": {
+          "types": 688,
+          "total_failure": 3
+        },
+        "trailing_comma_spaced": {
+          "types": 547,
+          "total_failure": 2
+        },
+        "trailing_hyphen": {
+          "types": 132,
+          "total_failure": 97
+        },
+        "trailing_under": {
+          "types": 116,
+          "total_failure": 0
+        },
+        "tx_base64_wrapped": {
+          "types": 688,
+          "total_failure": 4
+        },
+        "tx_k8s_secret": {
+          "types": 688,
+          "total_failure": 4
+        },
+        "tx_split_concat": {
+          "types": 688,
+          "total_failure": 667
+        },
+        "tx_url_encoded": {
+          "types": 688,
+          "total_failure": 28
+        },
+        "unquoted": {
+          "types": 688,
+          "total_failure": 0
+        },
+        "url_query": {
+          "types": 688,
+          "total_failure": 2
+        },
+        "url_query_amp": {
+          "types": 688,
+          "total_failure": 3
+        },
+        "yaml_value": {
+          "types": 688,
+          "total_failure": 0
+        }
+      },
+      "fragile_types": 100
+    },
+    "source": {
+      "label_matched": {
+        "AP": 11,
+        "GL": 36,
+        "TH": 533,
+        "NP": 33,
+        "KF": 75
+      },
+      "label_matched_total": 688,
+      "total_failure_by_context": {
+        "canonical": {
+          "types": 688,
+          "total_failure": 0
+        },
+        "env_file": {
+          "types": 688,
+          "total_failure": 2
+        },
+        "esc_json_in_string": {
+          "types": 688,
+          "total_failure": 1
+        },
+        "esc_newline_after": {
+          "types": 688,
+          "total_failure": 1
+        },
+        "esc_quote_around": {
+          "types": 688,
+          "total_failure": 1
+        },
+        "fs_dockerfile_env": {
+          "types": 688,
+          "total_failure": 2
+        },
+        "fs_toml_inline": {
+          "types": 688,
+          "total_failure": 0
+        },
+        "fs_yaml_block": {
+          "types": 688,
+          "total_failure": 0
+        },
+        "in_parens": {
+          "types": 688,
+          "total_failure": 3
+        },
+        "in_parens_spaced": {
+          "types": 688,
+          "total_failure": 2
+        },
+        "json_value": {
+          "types": 688,
+          "total_failure": 0
+        },
+        "leading_space": {
+          "types": 688,
+          "total_failure": 0
+        },
+        "mk_html_escaped": {
+          "types": 688,
+          "total_failure": 1
+        },
+        "mk_markdown_code": {
+          "types": 688,
+          "total_failure": 1
+        },
+        "mk_xml_attribute": {
+          "types": 688,
+          "total_failure": 0
+        },
+        "single_quoted": {
+          "types": 688,
+          "total_failure": 0
+        },
+        "tpl_bearer_header": {
+          "types": 688,
+          "total_failure": 539
+        },
+        "tpl_jinja_default": {
+          "types": 688,
+          "total_failure": 538
+        },
+        "tpl_js_template": {
+          "types": 688,
+          "total_failure": 3
+        },
+        "tpl_shell_default": {
+          "types": 688,
+          "total_failure": 1
+        },
+        "trailing_comma": {
+          "types": 688,
+          "total_failure": 3
+        },
+        "trailing_comma_spaced": {
+          "types": 547,
+          "total_failure": 2
+        },
+        "trailing_hyphen": {
+          "types": 132,
+          "total_failure": 97
+        },
+        "trailing_under": {
+          "types": 116,
+          "total_failure": 0
+        },
+        "tx_base64_wrapped": {
+          "types": 688,
+          "total_failure": 4
+        },
+        "tx_k8s_secret": {
+          "types": 688,
+          "total_failure": 4
+        },
+        "tx_split_concat": {
+          "types": 688,
+          "total_failure": 667
+        },
+        "tx_url_encoded": {
+          "types": 688,
+          "total_failure": 28
+        },
+        "unquoted": {
+          "types": 688,
+          "total_failure": 0
+        },
+        "url_query": {
+          "types": 688,
+          "total_failure": 2
+        },
+        "url_query_amp": {
+          "types": 688,
+          "total_failure": 3
+        },
+        "yaml_value": {
+          "types": 688,
+          "total_failure": 0
+        }
+      },
+      "fragile_types": 100
+    },
+    "repaired": {
+      "label_matched": {
+        "AP": 11,
+        "GL": 36,
+        "TH": 533,
+        "NP": 33,
+        "KF": 75
+      },
+      "label_matched_total": 688,
+      "total_failure_by_context": {
+        "canonical": {
+          "types": 688,
+          "total_failure": 0
+        },
+        "env_file": {
+          "types": 688,
+          "total_failure": 2
+        },
+        "esc_json_in_string": {
+          "types": 688,
+          "total_failure": 1
+        },
+        "esc_newline_after": {
+          "types": 688,
+          "total_failure": 1
+        },
+        "esc_quote_around": {
+          "types": 688,
+          "total_failure": 1
+        },
+        "fs_dockerfile_env": {
+          "types": 688,
+          "total_failure": 2
+        },
+        "fs_toml_inline": {
+          "types": 688,
+          "total_failure": 0
+        },
+        "fs_yaml_block": {
+          "types": 688,
+          "total_failure": 0
+        },
+        "in_parens": {
+          "types": 688,
+          "total_failure": 3
+        },
+        "in_parens_spaced": {
+          "types": 688,
+          "total_failure": 2
+        },
+        "json_value": {
+          "types": 688,
+          "total_failure": 0
+        },
+        "leading_space": {
+          "types": 688,
+          "total_failure": 0
+        },
+        "mk_html_escaped": {
+          "types": 688,
+          "total_failure": 1
+        },
+        "mk_markdown_code": {
+          "types": 688,
+          "total_failure": 1
+        },
+        "mk_xml_attribute": {
+          "types": 688,
+          "total_failure": 0
+        },
+        "single_quoted": {
+          "types": 688,
+          "total_failure": 0
+        },
+        "tpl_bearer_header": {
+          "types": 688,
+          "total_failure": 539
+        },
+        "tpl_jinja_default": {
+          "types": 688,
+          "total_failure": 538
+        },
+        "tpl_js_template": {
+          "types": 688,
+          "total_failure": 3
+        },
+        "tpl_shell_default": {
+          "types": 688,
+          "total_failure": 1
+        },
+        "trailing_comma": {
+          "types": 688,
+          "total_failure": 3
+        },
+        "trailing_comma_spaced": {
+          "types": 547,
+          "total_failure": 2
+        },
+        "trailing_hyphen": {
+          "types": 132,
+          "total_failure": 0
+        },
+        "trailing_under": {
+          "types": 116,
+          "total_failure": 0
+        },
+        "tx_base64_wrapped": {
+          "types": 688,
+          "total_failure": 4
+        },
+        "tx_k8s_secret": {
+          "types": 688,
+          "total_failure": 4
+        },
+        "tx_split_concat": {
+          "types": 688,
+          "total_failure": 667
+        },
+        "tx_url_encoded": {
+          "types": 688,
+          "total_failure": 28
+        },
+        "unquoted": {
+          "types": 688,
+          "total_failure": 0
+        },
+        "url_query": {
+          "types": 688,
+          "total_failure": 2
+        },
+        "url_query_amp": {
+          "types": 688,
+          "total_failure": 3
+        },
+        "yaml_value": {
+          "types": 688,
+          "total_failure": 0
+        }
+      },
+      "fragile_types": 3
+    },
+    "repair_changes_fragility": {
+      "types_fixed": [
+        "GL:cloudflare-api-key",
+        "GL:gitlab-pat",
+        "GL:rapidapi-access-token",
+        "KF:betterleaks.cloudflare-api-key.1",
+        "KF:betterleaks.coveralls-personal-api-token",
+        "KF:betterleaks.fastly-api-token",
+        "KF:betterleaks.gitlab-pat",
+        "KF:betterleaks.pagerduty-authorization-token.1",
+        "KF:betterleaks.rapidapi-access-token",
+        "TH:airbrakeuserkey",
+        "TH:airvisual",
+        "TH:apacta",
+        "TH:apify",
+        "TH:apimetrics",
+        "TH:appfollow",
+        "TH:appoptics",
+        "TH:atlassian/v1",
+        "TH:audd",
+        "TH:autoklose",
+        "TH:bitlyaccesstoken",
+        "TH:blitapp",
+        "TH:blogger",
+        "TH:browshot",
+        "TH:capsulecrm",
+        "TH:cloudflareapitoken",
+        "TH:cloudmersive",
+        "TH:cloudplan",
+        "TH:codequiry",
+        "TH:coinapi",
+        "TH:coinbase",
+        "TH:contentfulpersonalaccesstoken",
+        "TH:coveralls",
+        "TH:cryptocompare",
+        "TH:currentsapi",
+        "TH:deepai",
+        "TH:dynalist",
+        "TH:ethplorer",
+        "TH:extractorapi",
+        "TH:fastforex",
+        "TH:fastlypersonaltoken",
+        "TH:figmapersonalaccesstoken/v2",
+        "TH:fileio",
+        "TH:frameio",
+        "TH:fullstory/v1",
+        "TH:fxmarket",
+        "TH:gitter",
+        "TH:graphhopper",
+        "TH:gumroad",
+        "TH:gyazo",
+        "TH:hellosign",
+        "TH:hereapi",
+        "TH:hiveage",
+        "TH:holidayapi",
+        "TH:hunter",
+        "TH:insightly",
+        "TH:kontent",
+        "TH:kylas",
+        "TH:leadfeeder",
+        "TH:loyverse",
+        "TH:mandrill",
+        "TH:messagebird",
+        "TH:mixmax",
+        "TH:nvapi",
+        "TH:omnisend",
+        "TH:optimizely",
+        "TH:overloop",
+        "TH:pagerdutyapikey",
+        "TH:pepipost",
+        "TH:pixabay",
+        "TH:postman",
+        "TH:rapidapi",
+        "TH:reachmail",
+        "TH:replicate",
+        "TH:rocketreach",
+        "TH:segmentapikey",
+        "TH:selectpdf",
+        "TH:statuspage",
+        "TH:storecove",
+        "TH:stormglass",
+        "TH:stripo",
+        "TH:surveybot",
+        "TH:surveysparrow",
+        "TH:swiftype",
+        "TH:tallyfy",
+        "TH:tatumio",
+        "TH:telegrambottoken",
+        "TH:teletype",
+        "TH:telnyx",
+        "TH:transferwise",
+        "TH:twitter/v1",
+        "TH:uplead",
+        "TH:urlscan",
+        "TH:versioneye",
+        "TH:voicegain",
+        "TH:wrike",
+        "TH:yelp",
+        "TH:zenserp"
+      ],
+      "types_newly_fragile": [],
+      "types_lost_coverage": [],
+      "types_gained_coverage": []
+    }
+  },
+  "realworld": {
+    "n_projects": 31,
+    "n_files": 38309,
+    "n_lines": 9870820,
+    "totals_stable": {
+      "release": 389,
+      "source": 389,
+      "repaired": 389
+    },
+    "unstable": {
+      "release": 2,
+      "source": 2,
+      "repaired": 2
+    },
+    "added": {
+      "n": 0,
+      "by_category": {},
+      "by_char_after_secret": {},
+      "by_detector": {}
+    },
+    "removed": {
+      "n": 0,
+      "by_category": {},
+      "by_char_after_secret": {},
+      "by_detector": {}
+    },
+    "added_findings": [],
+    "removed_findings": []
+  }
+}

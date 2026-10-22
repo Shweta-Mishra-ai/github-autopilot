@@ -37,8 +37,15 @@ $ trufflehog filesystem . --json --no-verification --no-update
 
 ## Scale
 
-<!-- FILL from results/trufflehog_repair_validation.json and the paper:
-     battery types defeated by a final hyphen, before/after -->
+We generated 20 values for each of 1,238 credential types drawn from five
+scanners' rule tables and embedded each in a battery of source contexts.
+On 3.82.13 (rebuilt from the tag with go1.23.2; its detections are
+identical to the release binary's on all 745,840 test files), a value
+ending in `-` defeats 97 of the 132 types whose format allows a final
+hyphen and that TruffleHog detects under the right detector. With the
+change below: 0 of 132, no type newly failing in any other context, and
+the same 688 types detected. Method and data:
+<!-- link to the paper / replication package -->.
 
 ## Suggested change
 
@@ -62,8 +69,14 @@ For exactly those patterns, replace the final `\b` with `(?:\b|\W|$)`:
 
 ## False-positive check
 
-<!-- FILL from results/trufflehog_repair_validation.json realworld section
-     for 3.99.3 (source build vs repaired build) -->
+Over 38,309 files (9,870,820 lines) of 31 open-source projects in ten
+languages, each binary run three times and only findings present in every
+run counted:
+
+| | unmodified | with the change | added | removed |
+|---|---|---|---|---|
+| 3.99.3 (source build) | 239 | 239 | 0 | 0 |
+| 3.82.13 (source build) | 389 | 389 | 0 | 0 |
 
 ## Build note
 

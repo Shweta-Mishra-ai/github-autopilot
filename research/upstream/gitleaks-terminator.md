@@ -86,7 +86,7 @@ replication package (`repair/repair_gitleaks.py --release 8.30`).
 ## False-positive check
 
 Gitleaks 8.30.1 with the original and the changed table over the same
-38,309 files (9,870,820 lines) of 31 open-source projects in ten languages:
+38,309 files (9,870,820 lines) of 31 open-source projects in nine languages:
 1,057 findings each, **0 added, 0 removed**.
 
 ## Notes

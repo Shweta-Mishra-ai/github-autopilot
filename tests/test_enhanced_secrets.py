@@ -323,3 +323,63 @@ class TestFormatFindings:
             assert "|" in formatted     # Has markdown table
             assert "#" in formatted     # Has markdown header
 
+
+
+# ── A final hyphen must not hide a credential ────────────────────────────────
+# These five rules ended in \b right after a class that includes '-'. A key
+# ending in '-' and followed by a quote has no word boundary after it, so it
+# was never reported under its own rule (SendGrid: silently missed; GCP:
+# downgraded to the entropy fallback). Values are assembled at runtime and
+# varied per character so no entropy or placeholder filter is involved.
+
+def _alnum(n: int, seed: int) -> str:
+    alphabet = "aB3dE5fG7hJ9kL1mN3pQ5rS7tU9vW1xY3zA2cD4eF6gH8"
+    return "".join(alphabet[(i * 7 + seed) % len(alphabet)] for i in range(n))
+
+
+_HYPHEN_RULES = {
+    # rule -> function(final_char) building a value of exactly that rule's form
+    "SendGrid API Key": lambda end: "SG." + _alnum(22, 1) + "." + _alnum(42, 2) + end,
+    "GCP API Key": lambda end: "AI" + "za" + _alnum(34, 3) + end,
+    "OpenAI API Key (new)": lambda end: "sk-" + "proj-" + _alnum(59, 4) + end,
+    "Google OAuth Token": lambda end: "ya" + "29." + _alnum(71, 5) + end,
+    "JWT Token": lambda end: "ey" + "J" + _alnum(20, 6) + "." + _alnum(30, 7) + "." + _alnum(39, 8) + end,
+}
+
+
+def _rules_fired(line: str) -> set[str]:
+    from app.security.enhanced_secrets import scan_diff
+    return {f.pattern_name for f in scan_diff(_diff(line), file_path="app/settings.py")}
+
+
+class TestFinalHyphenIsDetected:
+    def test_each_rule_reports_a_key_ending_in_a_hyphen(self):
+        for rule, make in _HYPHEN_RULES.items():
+            line = f'cfg_value = "{make("-")}"'
+            assert rule in _rules_fired(line), rule
+
+    def test_each_rule_reports_a_hyphen_key_at_end_of_line(self):
+        for rule, make in _HYPHEN_RULES.items():
+            assert rule in _rules_fired(f"CFG_VALUE={make('-')}"), rule
+
+    def test_a_key_followed_by_a_hyphen_is_still_reported(self):
+        # the first candidate repair, (?=[^\w-]|$), regressed exactly this
+        # case to a total miss on SendGrid and GCP; \b had accepted it
+        for rule, make in _HYPHEN_RULES.items():
+            assert rule in _rules_fired(f'cfg_value = "{make("x")}-suffix"'), rule
+
+    def test_a_fixed_length_key_running_on_is_not_reported(self):
+        # as with \b, a SendGrid or GCP value followed by another word
+        # character is longer than the format allows
+        for rule in ("SendGrid API Key", "GCP API Key"):
+            line = f'cfg_value = "{_HYPHEN_RULES[rule]("x")}y"'
+            assert rule not in _rules_fired(line), rule
+
+    def test_hyphen_key_before_other_delimiters(self):
+        # a space, comma, parenthesis, bracket or ampersand after the final
+        # '-' is not a word character either, so \b failed there too
+        for rule, make in _HYPHEN_RULES.items():
+            key = make("-")
+            for line in (f"cfg_value = {key} # set", f"client = Client({key})",
+                         f"keys = [{key}, other]", f"url = '/v1?k={key}&page=2'"):
+                assert rule in _rules_fired(line), (rule, line)

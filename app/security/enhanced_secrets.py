@@ -27,6 +27,16 @@ log = logging.getLogger(__name__)
 # entropy_required=True means pattern match alone is insufficient;
 # must also pass entropy check (reduces false positives).
 
+# End of a credential whose alphabet includes '-'. A trailing \b needs a
+# word character on one side, so a key ending in '-' and followed by a quote
+# was never reported (one SendGrid key in 64 missed outright; GCP keys
+# downgraded to the entropy fallback). The lookahead accepts everything \b
+# accepted after a word character, and a final '-' as well. The stricter
+# (?=[^\w-]|$) was tried first and rejected: it refuses a key followed by
+# '-', which \b accepted. See the boundary-mutation study on the
+# `research` branch.
+_END = r"(?![A-Za-z0-9_])"
+
 PATTERNS: list[tuple[str, str, str, bool]] = [
     # AWS
     ("AWS Access Key ID", r"\bAKIA[0-9A-Z]{16}\b", "critical", False),
@@ -50,11 +60,11 @@ PATTERNS: list[tuple[str, str, str, bool]] = [
     ("GitHub Fine-Grained PAT", r"\bgithub_pat_[0-9a-zA-Z_]{82}\b", "critical", False),
     # OpenAI / Anthropic
     ("OpenAI API Key", r"\bsk-[a-zA-Z0-9]{20}T3BlbkFJ[a-zA-Z0-9]{20}\b", "critical", False),
-    ("OpenAI API Key (new)", r"\bsk-proj-[a-zA-Z0-9_-]{50,}\b", "critical", False),
+    ("OpenAI API Key (new)", r"\bsk-proj-[a-zA-Z0-9_-]{50,}" + _END, "critical", False),
     ("Anthropic API Key", r"\bsk-ant-api\d{2}-[a-zA-Z0-9_-]{93}AA\b", "critical", False),
     # Google / GCP
-    ("GCP API Key", r"\bAIza[0-9A-Za-z_\-]{35}\b", "high", False),
-    ("Google OAuth Token", r"\bya29\.[0-9A-Za-z_\-]{68,}\b", "high", False),
+    ("GCP API Key", r"\bAIza[0-9A-Za-z_\-]{35}" + _END, "high", False),
+    ("Google OAuth Token", r"\bya29\.[0-9A-Za-z_\-]{68,}" + _END, "high", False),
     ("Firebase API Key", r"(?i)firebase.{0,20}['\"][A-Za-z0-9_-]{37}['\"]", "high", True),
     # Azure
     ("Azure Client Secret", r"(?i)azure.{0,20}['\"][a-zA-Z0-9~._-]{34}['\"]", "high", True),
@@ -96,7 +106,7 @@ PATTERNS: list[tuple[str, str, str, bool]] = [
     ("Twilio Account SID", r"\bAC[a-z0-9]{32}\b", "high", False),
     ("Twilio Auth Token", r"(?i)twilio.{0,20}['\"][a-z0-9]{32}['\"]", "high", True),
     # SendGrid
-    ("SendGrid API Key", r"\bSG\.[a-zA-Z0-9_-]{22}\.[a-zA-Z0-9_-]{43}\b", "critical", False),
+    ("SendGrid API Key", r"\bSG\.[a-zA-Z0-9_-]{22}\.[a-zA-Z0-9_-]{43}" + _END, "critical", False),
     # Cloudflare
     ("Cloudflare API Key", r"\b[0-9a-f]{37}\b", "medium", True),
     ("Cloudflare API Token", r"(?i)cloudflare.{0,20}['\"][a-zA-Z0-9_-]{40}['\"]", "high", True),
@@ -111,7 +121,19 @@ PATTERNS: list[tuple[str, str, str, bool]] = [
         False,
     ),
     # PagerDuty / Datadog
-    ("PagerDuty Integration Key", r"\b[a-z0-9]{32}\b", "medium", True),
+    # Keyword-anchored like Datadog. The bare r"\b[a-z0-9]{32}\b" it replaced
+    # matched any 32-character lowercase word and reported it as a PagerDuty
+    # key: the boundary-mutation study (`research` branch) found it firing, under
+    # this label, on credentials of 84 other providers, and it flagged the
+    # TruffleHog detector name "gcpapplicationdefaultcredentials" in this
+    # repository's own research results. (Hex digests were already dropped by
+    # the false-positive filter; other words were not.)
+    (
+        "PagerDuty Integration Key",
+        r"(?i)pagerduty.{0,20}['\"][a-z0-9]{32}['\"]",
+        "medium",
+        True,
+    ),
     ("Datadog API Key", r"(?i)datadog.{0,20}['\"][a-f0-9]{32}['\"]", "high", True),
     # Groq (this app's own provider key)
     ("Groq API Key", r"\bgsk_[0-9a-zA-Z]{50,}\b", "critical", False),
@@ -141,7 +163,7 @@ PATTERNS: list[tuple[str, str, str, bool]] = [
     ),
     (
         "JWT Token",
-        r"\beyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\b",
+        r"\beyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}" + _END,
         "high",
         False,
     ),

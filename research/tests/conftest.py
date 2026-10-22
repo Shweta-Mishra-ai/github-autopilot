@@ -8,7 +8,9 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 BENCH = os.path.join(os.path.dirname(HERE), "benchmarks")
+REPAIR = os.path.join(os.path.dirname(HERE), "repair")
 REPO = os.path.dirname(os.path.dirname(HERE))
 
 os.environ.setdefault("SUBJECT_REPO", REPO)
 sys.path.insert(0, BENCH)
+sys.path.insert(0, REPAIR)

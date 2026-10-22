@@ -36,11 +36,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Every harness compiles
-        run: python -m py_compile benchmarks/*.py
-      - name: Harness helpers keep the fixes for the defects found in them
+      - name: Every harness, repair and reproducer compiles
+        run: python -m py_compile benchmarks/*.py repair/*.py upstream/*.py
+      - name: Harness and repair helpers keep the fixes for the defects found in them
         run: |
-          pip install "$(grep '^exrex==' requirements.txt)" pytest
+          pip install "$(grep '^exrex==' requirements.txt)" "$(grep '^PyYAML==' requirements.txt)" pytest
           python -m pytest -q tests
       - name: Every headline number in the manuscript matches the raw results
         run: python benchmarks/verify_paper.py

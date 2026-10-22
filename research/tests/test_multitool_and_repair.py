@@ -127,3 +127,53 @@ def test_exrex_is_seeded_by_random():
     a = exrex.getone("[a-z]{12}")
     random.seed(3)
     assert exrex.getone("[a-z]{12}") == a
+
+
+class TestClusterStatistics:
+    """analysis_multitool.py: the comparisons the TSE manuscript reports
+    rest on these, so each is checked on a case worked by hand."""
+
+    def test_sign_test_is_exact_and_two_sided(self):
+        import analysis_multitool as am
+        assert am.sign_test(4, 0) == 0.125          # 2 * 2^-4
+        assert am.sign_test(0, 0) == 1.0
+        assert am.sign_test(3, 3) == 1.0
+
+    def test_holm_is_step_down_and_monotone(self):
+        import analysis_multitool as am
+        adj = am.holm({"a": 0.01, "b": 0.04, "c": 0.03})
+        assert adj == {"a": 0.03, "c": 0.06, "b": 0.06}
+
+    @staticmethod
+    def _pt():
+        # provider p1 has three types (x covers all, y none); p2 one type
+        # (y covers it, x not): 3 discordant types for x, 1 for y, but one
+        # provider each way
+        def rec(lm):
+            return {"label_matched": lm, "canonical_rule_ok": 1.0 if lm else 0.0}
+        pt = {}
+        for i in range(3):
+            pt[f"NP:p1.{i}"] = {"provider": "p1", "x": rec(True), "y": rec(False)}
+        pt["NP:p2.0"] = {"provider": "p2", "x": rec(False), "y": rec(True)}
+        return pt
+
+    def test_clustering_counts_providers_not_types(self):
+        import analysis_multitool as am
+        r = am.pair_stats(self._pt(), "x", "y", sorted(self._pt()))
+        assert (r["only_x"], r["only_y"]) == (3, 1)
+        assert (r["providers_favouring_x"], r["providers_favouring_y"]) == (1, 1)
+        assert r["p_cluster"] == 1.0
+
+    def test_bootstrap_interval_contains_the_estimate(self):
+        import random
+
+        import analysis_multitool as am
+        r = am.pair_stats(self._pt(), "x", "y", sorted(self._pt()), rng=random.Random(1))
+        lo, hi = r["coverage_difference_ci95_cluster_bootstrap"]
+        assert r["coverage_difference"] == 0.5     # (3 - 1) / 4 types
+        assert lo <= r["coverage_difference"] <= hi
+
+    def test_one_type_per_provider(self):
+        import analysis_multitool as am
+        pt = self._pt()
+        assert am.one_per_provider(pt, sorted(pt)) == ["NP:p1.0", "NP:p2.0"]

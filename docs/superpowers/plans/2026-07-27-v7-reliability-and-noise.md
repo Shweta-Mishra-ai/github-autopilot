@@ -163,9 +163,7 @@ git commit -m "fix(ai): fail closed when the model returns unparseable output
 _extract_json returns {\"raw\": text} on a non-JSON response. That dict has
 no \"error\" key, so validators fell through to their defaults and published
 a fabricated result — code review rendered \"Score: 7/10, no issues found\"
-for a review that never ran.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+for a review that never ran."
 ```
 
 ---
@@ -293,9 +291,7 @@ git commit -m "fix(review): restore the summary field and skip degraded files
 validate_code_review returned the model's assessment as 'verdict' while
 pull_request.py rendered r.get('summary', '') — every code review shipped
 with a blank summary. Second occurrence of this bug class after
-improved_title/suggested_title.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+improved_title/suggested_title."
 ```
 
 ---
@@ -413,9 +409,7 @@ The prompt requested critical|high|medium|low but VALID_PRIORITIES omitted
 is why security issue #76 carries 'priority: medium'. Same for type
 'refactor' and complexity 'epic'. time_estimate was requested and dropped,
 so the Est. Effort row could never render; three further requested fields
-had no consumer and are removed from the prompt.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+had no consumer and are removed from the prompt."
 ```
 
 ---
@@ -594,9 +588,7 @@ git commit -m "feat(ai): route every LLM command through one guarded seam
 check_response guarded /fix and nothing else. guarded_ask() makes the
 hallucination check structural rather than something each new command has
 to remember, and degraded_comment() gives an honest failure message in
-place of a fabricated answer.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+place of a fabricated answer."
 ```
 
 ---
@@ -751,9 +743,7 @@ Expected: 938 passed
 
 ```bash
 git add app/github/sticky.py tests/test_sticky.py
-git commit -m "feat(github): marker-based sticky comments
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+git commit -m "feat(github): marker-based sticky comments"
 ```
 
 ---
@@ -934,9 +924,7 @@ Expected: 941 passed
 
 ```bash
 git add app/handlers/pull_request.py tests/test_v7_noise.py
-git commit -m "fix(pr): one sticky comment per PR instead of four plus two per push
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+git commit -m "fix(pr): one sticky comment per PR instead of four plus two per push"
 ```
 
 ---
@@ -1047,9 +1035,7 @@ git commit -m "fix(push): scan with enhanced_secrets and only alert on critical/
 enhanced_secrets.py documents itself as a drop-in replacement with false
 positive reduction, but push.py — the only path that files GitHub issues —
 still imported the legacy scanner. It was reachable only via /security and
-MCP. Passing file_path enables its per-path suppression.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+MCP. Passing file_path enables its per-path suppression."
 ```
 
 ---
@@ -1209,9 +1195,7 @@ git commit -m "fix(push): fail-closed dedup and one reusable secret alert per re
 Two defects: _already_reported returned False on Redis errors (fail open),
 and the dedup key hashed the set of pattern names so pushes with different
 finding mixes bypassed each other. Evidence in this repo: issues #47, #50,
-#52, #54, #55, #59, #60 opened within 73 seconds.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+#52, #54, #55, #59, #60 opened within 73 seconds."
 ```
 
 ---
@@ -1353,9 +1337,7 @@ Expected: 954 passed
 
 ```bash
 git add app/handlers/ci.py tests/test_v7_noise.py
-git commit -m "fix(ci): one comment per failing commit, not one per check run
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+git commit -m "fix(ci): one comment per failing commit, not one per check run"
 ```
 
 ---
@@ -1466,9 +1448,7 @@ Expected: 955 passed
 
 ```bash
 git add app/handlers/pull_request.py tests/test_v7_noise.py
-git commit -m "perf(review): one batched LLM call instead of one per file
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+git commit -m "perf(review): one batched LLM call instead of one per file"
 ```
 
 ---
@@ -1576,9 +1556,7 @@ Expected: 960 passed
 
 ```bash
 git add app/core/redaction.py tests/test_redaction.py
-git commit -m "feat(core): redaction pipeline for memory writes
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+git commit -m "feat(core): redaction pipeline for memory writes"
 ```
 
 ---
@@ -1750,9 +1728,7 @@ Nothing in the application ever called remember() — only the backup module
 touched the store — and recall_context() returned \"\" unless a local-model
 env var was set. The brain could neither learn nor recall in any standard
 deployment. Writes are redacted, dedup is O(1) via a hash set, and recall
-scans a bounded window.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+scans a bounded window."
 ```
 
 ---
@@ -1939,9 +1915,7 @@ git commit -m "fix(confidence): score evidence instead of the model's own claim
 
 ConfidenceGate compared thresholds against ai_response['confidence'] — a
 number the model invents and which a hallucinating model reports as high.
-_review_code also accepted the gate and never called it.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+_review_code also accepted the gate and never called it."
 ```
 
 ---
@@ -2110,9 +2084,7 @@ NFKC normalisation and the pattern set were already present; splitting a
 phrase across newlines or zero-width characters still bypassed them, and
 every hit was masked and passed through rather than rejected.
 
-Refs #76
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+Refs #76"
 ```
 
 ---
@@ -2245,9 +2217,7 @@ wrap_user_content was defined, documented and unit-tested with zero
 production callers — every handler interpolated raw user text straight into
 a prompt f-string. This is the structural separation defence from #76.
 
-Closes #76
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+Closes #76"
 ```
 
 ---
@@ -2287,9 +2257,7 @@ is the change most likely to move the score, so compare against a pre-change run
 
 ```bash
 git add app/__init__.py README.md docs/
-git commit -m "release: v7.0.0 — reliability, noise reduction, working brain
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+git commit -m "release: v7.0.0 — reliability, noise reduction, working brain"
 git push -u origin fix/v7-reliability-and-noise
 gh pr create --title "v7.0.0 — fail-closed AI output, sticky comments, working brain" --body "<summary of the four phases>"
 ```

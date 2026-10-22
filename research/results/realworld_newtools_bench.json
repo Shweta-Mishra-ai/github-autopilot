@@ -1,0 +1,1996 @@
+{
+  "design": "bench_realworld_newtools.py \u2014 Nosey Parker, Kingfisher and detect-secrets",
+  "n_projects": 31,
+  "n_files": 38309,
+  "n_lines": 9870820,
+  "totals": {
+    "n_projects": 31,
+    "n_lines": 9870820,
+    "noseyparker": {
+      "n_findings": 785,
+      "n_findings_generic_rules": 489,
+      "findings_per_kloc": 0.0795,
+      "by_category": {
+        "in_test_doc_or_example_path": 433,
+        "placeholder_or_test_value": 264,
+        "other": 88
+      }
+    },
+    "kingfisher": {
+      "n_findings": 124,
+      "n_findings_generic_rules": 0,
+      "findings_per_kloc": 0.0126,
+      "by_category": {
+        "placeholder_or_test_value": 72,
+        "in_test_doc_or_example_path": 43,
+        "other": 9
+      }
+    },
+    "detectsecrets": {
+      "n_findings": 116860,
+      "n_findings_generic_rules": 116713,
+      "findings_per_kloc": 11.8389,
+      "by_category": {
+        "in_test_doc_or_example_path": 111064,
+        "hash_or_identifier_context": 4572,
+        "placeholder_or_test_value": 1074,
+        "other": 150
+      }
+    }
+  },
+  "totals_by_stratum": {
+    "general": {
+      "n_projects": 20,
+      "n_lines": 2888498,
+      "noseyparker": {
+        "n_findings": 325,
+        "n_findings_generic_rules": 232,
+        "findings_per_kloc": 0.1125,
+        "by_category": {
+          "in_test_doc_or_example_path": 201,
+          "placeholder_or_test_value": 73,
+          "other": 51
+        }
+      },
+      "kingfisher": {
+        "n_findings": 51,
+        "n_findings_generic_rules": 0,
+        "findings_per_kloc": 0.0177,
+        "by_category": {
+          "in_test_doc_or_example_path": 31,
+          "placeholder_or_test_value": 11,
+          "other": 9
+        }
+      },
+      "detectsecrets": {
+        "n_findings": 2502,
+        "n_findings_generic_rules": 2442,
+        "findings_per_kloc": 0.8662,
+        "by_category": {
+          "hash_or_identifier_context": 1912,
+          "in_test_doc_or_example_path": 339,
+          "placeholder_or_test_value": 211,
+          "other": 40
+        }
+      }
+    },
+    "credential_dense": {
+      "n_projects": 11,
+      "n_lines": 6982322,
+      "noseyparker": {
+        "n_findings": 460,
+        "n_findings_generic_rules": 257,
+        "findings_per_kloc": 0.0659,
+        "by_category": {
+          "in_test_doc_or_example_path": 232,
+          "placeholder_or_test_value": 191,
+          "other": 37
+        }
+      },
+      "kingfisher": {
+        "n_findings": 73,
+        "n_findings_generic_rules": 0,
+        "findings_per_kloc": 0.0105,
+        "by_category": {
+          "placeholder_or_test_value": 61,
+          "in_test_doc_or_example_path": 12
+        }
+      },
+      "detectsecrets": {
+        "n_findings": 114358,
+        "n_findings_generic_rules": 114271,
+        "findings_per_kloc": 16.3782,
+        "by_category": {
+          "in_test_doc_or_example_path": 110725,
+          "hash_or_identifier_context": 2660,
+          "placeholder_or_test_value": 863,
+          "other": 110
+        }
+      }
+    }
+  },
+  "totals_by_language": {
+    "csharp": {
+      "n_projects": 2,
+      "n_lines": 387027,
+      "noseyparker": {
+        "n_findings": 7,
+        "n_findings_generic_rules": 2,
+        "findings_per_kloc": 0.0181,
+        "by_category": {
+          "other": 6,
+          "in_test_doc_or_example_path": 1
+        }
+      },
+      "kingfisher": {
+        "n_findings": 0,
+        "n_findings_generic_rules": 0,
+        "findings_per_kloc": 0.0,
+        "by_category": {}
+      },
+      "detectsecrets": {
+        "n_findings": 13,
+        "n_findings_generic_rules": 13,
+        "findings_per_kloc": 0.0336,
+        "by_category": {
+          "other": 7,
+          "placeholder_or_test_value": 4,
+          "in_test_doc_or_example_path": 2
+        }
+      }
+    },
+    "go": {
+      "n_projects": 4,
+      "n_lines": 517910,
+      "noseyparker": {
+        "n_findings": 191,
+        "n_findings_generic_rules": 99,
+        "findings_per_kloc": 0.3688,
+        "by_category": {
+          "in_test_doc_or_example_path": 133,
+          "placeholder_or_test_value": 46,
+          "other": 12
+        }
+      },
+      "kingfisher": {
+        "n_findings": 3,
+        "n_findings_generic_rules": 0,
+        "findings_per_kloc": 0.0058,
+        "by_category": {
+          "placeholder_or_test_value": 2,
+          "in_test_doc_or_example_path": 1
+        }
+      },
+      "detectsecrets": {
+        "n_findings": 334,
+        "n_findings_generic_rules": 324,
+        "findings_per_kloc": 0.6449,
+        "by_category": {
+          "in_test_doc_or_example_path": 229,
+          "placeholder_or_test_value": 53,
+          "other": 44,
+          "hash_or_identifier_context": 8
+        }
+      }
+    },
+    "java": {
+      "n_projects": 3,
+      "n_lines": 997045,
+      "noseyparker": {
+        "n_findings": 5,
+        "n_findings_generic_rules": 4,
+        "findings_per_kloc": 0.005,
+        "by_category": {
+          "in_test_doc_or_example_path": 3,
+          "other": 1,
+          "placeholder_or_test_value": 1
+        }
+      },
+      "kingfisher": {
+        "n_findings": 0,
+        "n_findings_generic_rules": 0,
+        "findings_per_kloc": 0.0,
+        "by_category": {}
+      },
+      "detectsecrets": {
+        "n_findings": 20,
+        "n_findings_generic_rules": 20,
+        "findings_per_kloc": 0.0201,
+        "by_category": {
+          "placeholder_or_test_value": 13,
+          "in_test_doc_or_example_path": 7
+        }
+      }
+    },
+    "javascript": {
+      "n_projects": 3,
+      "n_lines": 3916497,
+      "noseyparker": {
+        "n_findings": 97,
+        "n_findings_generic_rules": 91,
+        "findings_per_kloc": 0.0248,
+        "by_category": {
+          "in_test_doc_or_example_path": 51,
+          "placeholder_or_test_value": 45,
+          "other": 1
+        }
+      },
+      "kingfisher": {
+        "n_findings": 4,
+        "n_findings_generic_rules": 0,
+        "findings_per_kloc": 0.001,
+        "by_category": {
+          "placeholder_or_test_value": 4
+        }
+      },
+      "detectsecrets": {
+        "n_findings": 109786,
+        "n_findings_generic_rules": 109767,
+        "findings_per_kloc": 28.0317,
+        "by_category": {
+          "in_test_doc_or_example_path": 109586,
+          "placeholder_or_test_value": 196,
+          "other": 4
+        }
+      }
+    },
+    "php": {
+      "n_projects": 2,
+      "n_lines": 589032,
+      "noseyparker": {
+        "n_findings": 29,
+        "n_findings_generic_rules": 4,
+        "findings_per_kloc": 0.0492,
+        "by_category": {
+          "in_test_doc_or_example_path": 26,
+          "placeholder_or_test_value": 3
+        }
+      },
+      "kingfisher": {
+        "n_findings": 16,
+        "n_findings_generic_rules": 0,
+        "findings_per_kloc": 0.0272,
+        "by_category": {
+          "placeholder_or_test_value": 8,
+          "other": 8
+        }
+      },
+      "detectsecrets": {
+        "n_findings": 63,
+        "n_findings_generic_rules": 37,
+        "findings_per_kloc": 0.107,
+        "by_category": {
+          "in_test_doc_or_example_path": 32,
+          "placeholder_or_test_value": 30,
+          "other": 1
+        }
+      }
+    },
+    "python": {
+      "n_projects": 8,
+      "n_lines": 1444399,
+      "noseyparker": {
+        "n_findings": 234,
+        "n_findings_generic_rules": 167,
+        "findings_per_kloc": 0.162,
+        "by_category": {
+          "in_test_doc_or_example_path": 128,
+          "placeholder_or_test_value": 55,
+          "other": 51
+        }
+      },
+      "kingfisher": {
+        "n_findings": 26,
+        "n_findings_generic_rules": 0,
+        "findings_per_kloc": 0.018,
+        "by_category": {
+          "in_test_doc_or_example_path": 20,
+          "placeholder_or_test_value": 6
+        }
+      },
+      "detectsecrets": {
+        "n_findings": 3006,
+        "n_findings_generic_rules": 2959,
+        "findings_per_kloc": 2.0811,
+        "by_category": {
+          "hash_or_identifier_context": 1916,
+          "in_test_doc_or_example_path": 521,
+          "placeholder_or_test_value": 521,
+          "other": 48
+        }
+      }
+    },
+    "ruby": {
+      "n_projects": 3,
+      "n_lines": 648888,
+      "noseyparker": {
+        "n_findings": 6,
+        "n_findings_generic_rules": 6,
+        "findings_per_kloc": 0.0092,
+        "by_category": {
+          "other": 4,
+          "placeholder_or_test_value": 1,
+          "in_test_doc_or_example_path": 1
+        }
+      },
+      "kingfisher": {
+        "n_findings": 0,
+        "n_findings_generic_rules": 0,
+        "findings_per_kloc": 0.0,
+        "by_category": {}
+      },
+      "detectsecrets": {
+        "n_findings": 45,
+        "n_findings_generic_rules": 42,
+        "findings_per_kloc": 0.0693,
+        "by_category": {
+          "placeholder_or_test_value": 24,
+          "in_test_doc_or_example_path": 19,
+          "other": 2
+        }
+      }
+    },
+    "rust": {
+      "n_projects": 2,
+      "n_lines": 143118,
+      "noseyparker": {
+        "n_findings": 11,
+        "n_findings_generic_rules": 0,
+        "findings_per_kloc": 0.0769,
+        "by_category": {
+          "in_test_doc_or_example_path": 11
+        }
+      },
+      "kingfisher": {
+        "n_findings": 9,
+        "n_findings_generic_rules": 0,
+        "findings_per_kloc": 0.0629,
+        "by_category": {
+          "in_test_doc_or_example_path": 9
+        }
+      },
+      "detectsecrets": {
+        "n_findings": 15,
+        "n_findings_generic_rules": 5,
+        "findings_per_kloc": 0.1048,
+        "by_category": {
+          "in_test_doc_or_example_path": 11,
+          "hash_or_identifier_context": 2,
+          "placeholder_or_test_value": 2
+        }
+      }
+    },
+    "typescript": {
+      "n_projects": 4,
+      "n_lines": 1226904,
+      "noseyparker": {
+        "n_findings": 205,
+        "n_findings_generic_rules": 116,
+        "findings_per_kloc": 0.1671,
+        "by_category": {
+          "placeholder_or_test_value": 113,
+          "in_test_doc_or_example_path": 79,
+          "other": 13
+        }
+      },
+      "kingfisher": {
+        "n_findings": 66,
+        "n_findings_generic_rules": 0,
+        "findings_per_kloc": 0.0538,
+        "by_category": {
+          "placeholder_or_test_value": 52,
+          "in_test_doc_or_example_path": 13,
+          "other": 1
+        }
+      },
+      "detectsecrets": {
+        "n_findings": 3578,
+        "n_findings_generic_rules": 3546,
+        "findings_per_kloc": 2.9163,
+        "by_category": {
+          "hash_or_identifier_context": 2646,
+          "in_test_doc_or_example_path": 657,
+          "placeholder_or_test_value": 231,
+          "other": 44
+        }
+      }
+    }
+  },
+  "projects": {
+    "gin-gonic/gin": {
+      "language": "go",
+      "stratum": "general",
+      "commit": "0f09c3a9b4626d9fe9979cf4d0521d6ae32ab646",
+      "n_files": 130,
+      "n_lines": 29504,
+      "scan_wall_s": {
+        "noseyparker": 6.34,
+        "kingfisher": 4.24,
+        "detectsecrets": 1.94
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 2,
+          "n_findings_generic_rules": 1,
+          "findings_per_kloc": 0.0678,
+          "by_rule": {
+            "np.generic.5": 1,
+            "np.pem.1": 1
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 2
+          }
+        },
+        "kingfisher": {
+          "n_findings": 1,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0339,
+          "by_rule": {
+            "betterleaks.private-key": 1
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 1
+          }
+        },
+        "detectsecrets": {
+          "n_findings": 4,
+          "n_findings_generic_rules": 3,
+          "findings_per_kloc": 0.1356,
+          "by_rule": {
+            "Secret Keyword": 3,
+            "Private Key": 1
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 3,
+            "other": 1
+          }
+        }
+      }
+    },
+    "sendgrid/sendgrid-go": {
+      "language": "go",
+      "stratum": "general",
+      "commit": "0f2bb79e71b9d73e40cb19a827089ed1252ab1d1",
+      "n_files": 107,
+      "n_lines": 23431,
+      "scan_wall_s": {
+        "noseyparker": 3.84,
+        "kingfisher": 0.42,
+        "detectsecrets": 1.75
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 27,
+          "n_findings_generic_rules": 27,
+          "findings_per_kloc": 1.1523,
+          "by_rule": {
+            "np.generic.2": 17,
+            "np.generic.5": 10
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 27
+          }
+        },
+        "kingfisher": {
+          "n_findings": 0,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0,
+          "by_rule": {},
+          "by_category": {}
+        },
+        "detectsecrets": {
+          "n_findings": 12,
+          "n_findings_generic_rules": 12,
+          "findings_per_kloc": 0.5121,
+          "by_rule": {
+            "Secret Keyword": 9,
+            "Base64 High Entropy String": 3
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 8,
+            "placeholder_or_test_value": 4
+          }
+        }
+      }
+    },
+    "expressjs/express": {
+      "language": "javascript",
+      "stratum": "general",
+      "commit": "0dee2c52c7c873498f8ed7d8ee4ddd0a04d3ada8",
+      "n_files": 214,
+      "n_lines": 26804,
+      "scan_wall_s": {
+        "noseyparker": 1.83,
+        "kingfisher": 0.6,
+        "detectsecrets": 1.35
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 2,
+          "n_findings_generic_rules": 2,
+          "findings_per_kloc": 0.0746,
+          "by_rule": {
+            "np.generic.6": 1,
+            "np.generic.5": 1
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 1,
+            "other": 1
+          }
+        },
+        "kingfisher": {
+          "n_findings": 0,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0,
+          "by_rule": {},
+          "by_category": {}
+        },
+        "detectsecrets": {
+          "n_findings": 35,
+          "n_findings_generic_rules": 35,
+          "findings_per_kloc": 1.3058,
+          "by_rule": {
+            "Hex High Entropy String": 24,
+            "Secret Keyword": 6,
+            "Base64 High Entropy String": 5
+          },
+          "by_category": {
+            "placeholder_or_test_value": 23,
+            "in_test_doc_or_example_path": 12
+          }
+        }
+      }
+    },
+    "stripe/stripe-node": {
+      "language": "javascript",
+      "stratum": "general",
+      "commit": "62458fe75f83b800707f06f077abe107213b0db0",
+      "n_files": 1406,
+      "n_lines": 257630,
+      "scan_wall_s": {
+        "noseyparker": 2.1,
+        "kingfisher": 0.69,
+        "detectsecrets": 14.2
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 8,
+          "n_findings_generic_rules": 5,
+          "findings_per_kloc": 0.0311,
+          "by_rule": {
+            "np.generic.1": 4,
+            "np.stripe.2": 3,
+            "np.generic.2": 1
+          },
+          "by_category": {
+            "placeholder_or_test_value": 7,
+            "in_test_doc_or_example_path": 1
+          }
+        },
+        "kingfisher": {
+          "n_findings": 0,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0,
+          "by_rule": {},
+          "by_category": {}
+        },
+        "detectsecrets": {
+          "n_findings": 34,
+          "n_findings_generic_rules": 34,
+          "findings_per_kloc": 0.132,
+          "by_rule": {
+            "Secret Keyword": 19,
+            "Hex High Entropy String": 8,
+            "Base64 High Entropy String": 7
+          },
+          "by_category": {
+            "placeholder_or_test_value": 25,
+            "in_test_doc_or_example_path": 9
+          }
+        }
+      }
+    },
+    "nestjs/nest": {
+      "language": "typescript",
+      "stratum": "general",
+      "commit": "62647d3ec95e816a4556b3e04106eb4af002b4b8",
+      "n_files": 2587,
+      "n_lines": 235750,
+      "scan_wall_s": {
+        "noseyparker": 3.52,
+        "kingfisher": 0.73,
+        "detectsecrets": 10.07
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 77,
+          "n_findings_generic_rules": 52,
+          "findings_per_kloc": 0.3266,
+          "by_rule": {
+            "np.generic.6": 52,
+            "np.http.2": 16,
+            "np.postgres.1": 8,
+            "np.pem.1": 1
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 41,
+            "placeholder_or_test_value": 35,
+            "other": 1
+          }
+        },
+        "kingfisher": {
+          "n_findings": 17,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0721,
+          "by_rule": {
+            "betterleaks.curl-auth-header": 16,
+            "betterleaks.private-key": 1
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 13,
+            "placeholder_or_test_value": 3,
+            "other": 1
+          }
+        },
+        "detectsecrets": {
+          "n_findings": 48,
+          "n_findings_generic_rules": 43,
+          "findings_per_kloc": 0.2036,
+          "by_rule": {
+            "Secret Keyword": 31,
+            "Hex High Entropy String": 11,
+            "Basic Auth Credentials": 4,
+            "Private Key": 1,
+            "Base64 High Entropy String": 1
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 27,
+            "other": 17,
+            "placeholder_or_test_value": 4
+          }
+        }
+      }
+    },
+    "slackapi/node-slack-sdk": {
+      "language": "typescript",
+      "stratum": "general",
+      "commit": "8730b5e3a7cee08a0ccfa44b7f792814f939a9cf",
+      "n_files": 2091,
+      "n_lines": 205839,
+      "scan_wall_s": {
+        "noseyparker": 2.57,
+        "kingfisher": 0.64,
+        "detectsecrets": 9.31
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 2,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0097,
+          "by_rule": {
+            "np.github.6": 1,
+            "np.google.3": 1
+          },
+          "by_category": {
+            "other": 1,
+            "placeholder_or_test_value": 1
+          }
+        },
+        "kingfisher": {
+          "n_findings": 0,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0,
+          "by_rule": {},
+          "by_category": {}
+        },
+        "detectsecrets": {
+          "n_findings": 34,
+          "n_findings_generic_rules": 33,
+          "findings_per_kloc": 0.1652,
+          "by_rule": {
+            "Hex High Entropy String": 19,
+            "Secret Keyword": 12,
+            "Base64 High Entropy String": 2,
+            "Slack Token": 1
+          },
+          "by_category": {
+            "placeholder_or_test_value": 20,
+            "in_test_doc_or_example_path": 14
+          }
+        }
+      }
+    },
+    "google/gson": {
+      "language": "java",
+      "stratum": "general",
+      "commit": "e2292f9c9f2e07a4791827e8eea34aa7d80545d6",
+      "n_files": 312,
+      "n_lines": 62779,
+      "scan_wall_s": {
+        "noseyparker": 1.79,
+        "kingfisher": 0.62,
+        "detectsecrets": 3.22
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 0,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0,
+          "by_rule": {},
+          "by_category": {}
+        },
+        "kingfisher": {
+          "n_findings": 0,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0,
+          "by_rule": {},
+          "by_category": {}
+        },
+        "detectsecrets": {
+          "n_findings": 2,
+          "n_findings_generic_rules": 2,
+          "findings_per_kloc": 0.0319,
+          "by_rule": {
+            "Secret Keyword": 1,
+            "Hex High Entropy String": 1
+          },
+          "by_category": {
+            "placeholder_or_test_value": 1,
+            "in_test_doc_or_example_path": 1
+          }
+        }
+      }
+    },
+    "square/retrofit": {
+      "language": "java",
+      "stratum": "general",
+      "commit": "f51e456b06fa99d78f896257a0d6ca78ab8e1e58",
+      "n_files": 1108,
+      "n_lines": 160294,
+      "scan_wall_s": {
+        "noseyparker": 1.55,
+        "kingfisher": 0.63,
+        "detectsecrets": 6.88
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 0,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0,
+          "by_rule": {},
+          "by_category": {}
+        },
+        "kingfisher": {
+          "n_findings": 0,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0,
+          "by_rule": {},
+          "by_category": {}
+        },
+        "detectsecrets": {
+          "n_findings": 2,
+          "n_findings_generic_rules": 2,
+          "findings_per_kloc": 0.0125,
+          "by_rule": {
+            "Hex High Entropy String": 1,
+            "Secret Keyword": 1
+          },
+          "by_category": {
+            "placeholder_or_test_value": 2
+          }
+        }
+      }
+    },
+    "sinatra/sinatra": {
+      "language": "ruby",
+      "stratum": "general",
+      "commit": "cb22afd7902b566b6eaba6c4ea89739494a65d12",
+      "n_files": 290,
+      "n_lines": 31145,
+      "scan_wall_s": {
+        "noseyparker": 2.28,
+        "kingfisher": 0.6,
+        "detectsecrets": 1.78
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 1,
+          "n_findings_generic_rules": 1,
+          "findings_per_kloc": 0.0321,
+          "by_rule": {
+            "np.generic.1": 1
+          },
+          "by_category": {
+            "placeholder_or_test_value": 1
+          }
+        },
+        "kingfisher": {
+          "n_findings": 0,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0,
+          "by_rule": {},
+          "by_category": {}
+        },
+        "detectsecrets": {
+          "n_findings": 5,
+          "n_findings_generic_rules": 5,
+          "findings_per_kloc": 0.1605,
+          "by_rule": {
+            "Secret Keyword": 5
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 4,
+            "placeholder_or_test_value": 1
+          }
+        }
+      }
+    },
+    "jekyll/jekyll": {
+      "language": "ruby",
+      "stratum": "general",
+      "commit": "97c3bdc822df9d5bea4c269b29a28de5a5e29d70",
+      "n_files": 771,
+      "n_lines": 65324,
+      "scan_wall_s": {
+        "noseyparker": 3.67,
+        "kingfisher": 0.7,
+        "detectsecrets": 4.17
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 1,
+          "n_findings_generic_rules": 1,
+          "findings_per_kloc": 0.0153,
+          "by_rule": {
+            "np.generic.2": 1
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 1
+          }
+        },
+        "kingfisher": {
+          "n_findings": 0,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0,
+          "by_rule": {},
+          "by_category": {}
+        },
+        "detectsecrets": {
+          "n_findings": 4,
+          "n_findings_generic_rules": 4,
+          "findings_per_kloc": 0.0612,
+          "by_rule": {
+            "Secret Keyword": 2,
+            "Base64 High Entropy String": 1,
+            "Hex High Entropy String": 1
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 3,
+            "other": 1
+          }
+        }
+      }
+    },
+    "tokio-rs/axum": {
+      "language": "rust",
+      "stratum": "general",
+      "commit": "86aa6153e47b7862737acdcfe3a0eb3a162b939a",
+      "n_files": 499,
+      "n_lines": 65969,
+      "scan_wall_s": {
+        "noseyparker": 2.65,
+        "kingfisher": 0.58,
+        "detectsecrets": 2.91
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 11,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.1667,
+          "by_rule": {
+            "np.pem.1": 6,
+            "np.http.2": 2,
+            "np.jwt.1": 1,
+            "np.mongodb.1": 1,
+            "np.postgres.1": 1
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 11
+          }
+        },
+        "kingfisher": {
+          "n_findings": 9,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.1364,
+          "by_rule": {
+            "betterleaks.private-key": 6,
+            "betterleaks.curl-auth-header": 1,
+            "betterleaks.jwt": 1,
+            "betterleaks.mongodb-connection-string": 1
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 9
+          }
+        },
+        "detectsecrets": {
+          "n_findings": 10,
+          "n_findings_generic_rules": 1,
+          "findings_per_kloc": 0.1516,
+          "by_rule": {
+            "Private Key": 6,
+            "Basic Auth Credentials": 2,
+            "JSON Web Token": 1,
+            "Secret Keyword": 1
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 10
+          }
+        }
+      }
+    },
+    "BurntSushi/ripgrep": {
+      "language": "rust",
+      "stratum": "general",
+      "commit": "3fce3b5bb0236da2df6d99672afb8a719642eca7",
+      "n_files": 229,
+      "n_lines": 77149,
+      "scan_wall_s": {
+        "noseyparker": 2.85,
+        "kingfisher": 0.58,
+        "detectsecrets": 4.65
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 0,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0,
+          "by_rule": {},
+          "by_category": {}
+        },
+        "kingfisher": {
+          "n_findings": 0,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0,
+          "by_rule": {},
+          "by_category": {}
+        },
+        "detectsecrets": {
+          "n_findings": 5,
+          "n_findings_generic_rules": 4,
+          "findings_per_kloc": 0.0648,
+          "by_rule": {
+            "Hex High Entropy String": 2,
+            "Base64 High Entropy String": 2,
+            "Telegram Bot Token": 1
+          },
+          "by_category": {
+            "hash_or_identifier_context": 2,
+            "placeholder_or_test_value": 2,
+            "in_test_doc_or_example_path": 1
+          }
+        }
+      }
+    },
+    "guzzle/guzzle": {
+      "language": "php",
+      "stratum": "general",
+      "commit": "b920e5fcaf81d761b8fabe600ca90999beaefdb7",
+      "n_files": 183,
+      "n_lines": 77238,
+      "scan_wall_s": {
+        "noseyparker": 3.07,
+        "kingfisher": 0.66,
+        "detectsecrets": 3.74
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 24,
+          "n_findings_generic_rules": 2,
+          "findings_per_kloc": 0.3107,
+          "by_rule": {
+            "np.http.1": 22,
+            "np.generic.6": 2
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 24
+          }
+        },
+        "kingfisher": {
+          "n_findings": 0,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0,
+          "by_rule": {},
+          "by_category": {}
+        },
+        "detectsecrets": {
+          "n_findings": 39,
+          "n_findings_generic_rules": 22,
+          "findings_per_kloc": 0.5049,
+          "by_rule": {
+            "Basic Auth Credentials": 17,
+            "Hex High Entropy String": 11,
+            "Secret Keyword": 8,
+            "Base64 High Entropy String": 3
+          },
+          "by_category": {
+            "placeholder_or_test_value": 24,
+            "in_test_doc_or_example_path": 15
+          }
+        }
+      }
+    },
+    "twilio/twilio-php": {
+      "language": "php",
+      "stratum": "general",
+      "commit": "0cb66196f3c017dae395661e0cf1fc8197cb6d34",
+      "n_files": 3010,
+      "n_lines": 511794,
+      "scan_wall_s": {
+        "noseyparker": 1.89,
+        "kingfisher": 0.66,
+        "detectsecrets": 24.23
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 5,
+          "n_findings_generic_rules": 2,
+          "findings_per_kloc": 0.0098,
+          "by_rule": {
+            "np.aws.6": 3,
+            "np.generic.6": 1,
+            "np.generic.5": 1
+          },
+          "by_category": {
+            "placeholder_or_test_value": 3,
+            "in_test_doc_or_example_path": 2
+          }
+        },
+        "kingfisher": {
+          "n_findings": 16,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0313,
+          "by_rule": {
+            "betterleaks.private-key": 16
+          },
+          "by_category": {
+            "placeholder_or_test_value": 8,
+            "other": 8
+          }
+        },
+        "detectsecrets": {
+          "n_findings": 24,
+          "n_findings_generic_rules": 15,
+          "findings_per_kloc": 0.0469,
+          "by_rule": {
+            "Base64 High Entropy String": 7,
+            "Secret Keyword": 5,
+            "Private Key": 4,
+            "Hex High Entropy String": 3,
+            "Twilio API Key": 3,
+            "AWS Access Key": 1,
+            "Basic Auth Credentials": 1
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 17,
+            "placeholder_or_test_value": 6,
+            "other": 1
+          }
+        }
+      }
+    },
+    "JamesNK/Newtonsoft.Json": {
+      "language": "csharp",
+      "stratum": "general",
+      "commit": "52fa3aef1f2cadcd3a3f874251eddc98d3efbbaa",
+      "n_files": 1166,
+      "n_lines": 240745,
+      "scan_wall_s": {
+        "noseyparker": 2.12,
+        "kingfisher": 0.58,
+        "detectsecrets": 10.72
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 2,
+          "n_findings_generic_rules": 2,
+          "findings_per_kloc": 0.0083,
+          "by_rule": {
+            "np.generic.6": 2
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 1,
+            "other": 1
+          }
+        },
+        "kingfisher": {
+          "n_findings": 0,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0,
+          "by_rule": {},
+          "by_category": {}
+        },
+        "detectsecrets": {
+          "n_findings": 11,
+          "n_findings_generic_rules": 11,
+          "findings_per_kloc": 0.0457,
+          "by_rule": {
+            "Hex High Entropy String": 7,
+            "Base64 High Entropy String": 3,
+            "Secret Keyword": 1
+          },
+          "by_category": {
+            "other": 7,
+            "in_test_doc_or_example_path": 2,
+            "placeholder_or_test_value": 2
+          }
+        }
+      }
+    },
+    "App-vNext/Polly": {
+      "language": "csharp",
+      "stratum": "general",
+      "commit": "3f3adad9d5af85658fc3585018f02a2d8c2173e8",
+      "n_files": 992,
+      "n_lines": 146282,
+      "scan_wall_s": {
+        "noseyparker": 1.94,
+        "kingfisher": 0.51,
+        "detectsecrets": 7.57
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 5,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0342,
+          "by_rule": {
+            "np.github.6": 5
+          },
+          "by_category": {
+            "other": 5
+          }
+        },
+        "kingfisher": {
+          "n_findings": 0,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0,
+          "by_rule": {},
+          "by_category": {}
+        },
+        "detectsecrets": {
+          "n_findings": 2,
+          "n_findings_generic_rules": 2,
+          "findings_per_kloc": 0.0137,
+          "by_rule": {
+            "Hex High Entropy String": 2
+          },
+          "by_category": {
+            "placeholder_or_test_value": 2
+          }
+        }
+      }
+    },
+    "openai/openai-python": {
+      "language": "python",
+      "stratum": "general",
+      "commit": "26e5d926966fc5c7e688790b21d66dc08d35eceb",
+      "n_files": 2570,
+      "n_lines": 393890,
+      "scan_wall_s": {
+        "noseyparker": 2.04,
+        "kingfisher": 0.7,
+        "detectsecrets": 19.47
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 83,
+          "n_findings_generic_rules": 69,
+          "findings_per_kloc": 0.2107,
+          "by_rule": {
+            "np.generic.2": 41,
+            "np.generic.1": 28,
+            "np.http.2": 11,
+            "np.pem.1": 2,
+            "np.github.6": 1
+          },
+          "by_category": {
+            "other": 40,
+            "in_test_doc_or_example_path": 27,
+            "placeholder_or_test_value": 16
+          }
+        },
+        "kingfisher": {
+          "n_findings": 4,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0102,
+          "by_rule": {
+            "betterleaks.gcp-application-default-credentials": 2,
+            "betterleaks.private-key": 2
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 4
+          }
+        },
+        "detectsecrets": {
+          "n_findings": 2150,
+          "n_findings_generic_rules": 2144,
+          "findings_per_kloc": 5.4584,
+          "by_rule": {
+            "Hex High Entropy String": 1958,
+            "Secret Keyword": 159,
+            "Base64 High Entropy String": 27,
+            "Basic Auth Credentials": 4,
+            "Private Key": 2
+          },
+          "by_category": {
+            "hash_or_identifier_context": 1910,
+            "in_test_doc_or_example_path": 149,
+            "placeholder_or_test_value": 83,
+            "other": 8
+          }
+        }
+      }
+    },
+    "psf/requests": {
+      "language": "python",
+      "stratum": "general",
+      "commit": "8f8b212de8c2129d7954c6cd373762880375620a",
+      "n_files": 122,
+      "n_lines": 19462,
+      "scan_wall_s": {
+        "noseyparker": 2.37,
+        "kingfisher": 0.56,
+        "detectsecrets": 1.2
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 7,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.3597,
+          "by_rule": {
+            "np.pem.1": 4,
+            "np.netrc.1": 3
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 4,
+            "placeholder_or_test_value": 3
+          }
+        },
+        "kingfisher": {
+          "n_findings": 4,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.2055,
+          "by_rule": {
+            "betterleaks.private-key": 4
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 4
+          }
+        },
+        "detectsecrets": {
+          "n_findings": 15,
+          "n_findings_generic_rules": 4,
+          "findings_per_kloc": 0.7707,
+          "by_rule": {
+            "Basic Auth Credentials": 7,
+            "Hex High Entropy String": 4,
+            "Private Key": 4
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 13,
+            "placeholder_or_test_value": 2
+          }
+        }
+      }
+    },
+    "pallets/flask": {
+      "language": "python",
+      "stratum": "general",
+      "commit": "d318b683471101618febed18996405ad26462110",
+      "n_files": 231,
+      "n_lines": 36647,
+      "scan_wall_s": {
+        "noseyparker": 2.06,
+        "kingfisher": 0.61,
+        "detectsecrets": 1.9
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 8,
+          "n_findings_generic_rules": 8,
+          "findings_per_kloc": 0.2183,
+          "by_rule": {
+            "np.generic.1": 8
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 8
+          }
+        },
+        "kingfisher": {
+          "n_findings": 0,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0,
+          "by_rule": {},
+          "by_category": {}
+        },
+        "detectsecrets": {
+          "n_findings": 23,
+          "n_findings_generic_rules": 23,
+          "findings_per_kloc": 0.6276,
+          "by_rule": {
+            "Secret Keyword": 15,
+            "Hex High Entropy String": 8
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 15,
+            "other": 5,
+            "placeholder_or_test_value": 3
+          }
+        }
+      }
+    },
+    "redis/redis-py": {
+      "language": "python",
+      "stratum": "general",
+      "commit": "081923b8a202f9481e8f46357c8bbf99cc322cae",
+      "n_files": 426,
+      "n_lines": 220822,
+      "scan_wall_s": {
+        "noseyparker": 1.67,
+        "kingfisher": 0.56,
+        "detectsecrets": 10.38
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 60,
+          "n_findings_generic_rules": 60,
+          "findings_per_kloc": 0.2717,
+          "by_rule": {
+            "np.generic.5": 41,
+            "np.generic.3": 16,
+            "np.generic.1": 2,
+            "np.generic.6": 1
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 51,
+            "placeholder_or_test_value": 7,
+            "other": 2
+          }
+        },
+        "kingfisher": {
+          "n_findings": 0,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0,
+          "by_rule": {},
+          "by_category": {}
+        },
+        "detectsecrets": {
+          "n_findings": 43,
+          "n_findings_generic_rules": 43,
+          "findings_per_kloc": 0.1947,
+          "by_rule": {
+            "Secret Keyword": 23,
+            "Hex High Entropy String": 20
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 36,
+            "placeholder_or_test_value": 7
+          }
+        }
+      }
+    },
+    "cli/cli": {
+      "language": "go",
+      "stratum": "credential_dense",
+      "commit": "7948e8056e45ac3c729b829e0eafe2d0797a95c6",
+      "n_files": 1478,
+      "n_lines": 363795,
+      "scan_wall_s": {
+        "noseyparker": 1.97,
+        "kingfisher": 0.57,
+        "detectsecrets": 13.35
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 23,
+          "n_findings_generic_rules": 12,
+          "findings_per_kloc": 0.0632,
+          "by_rule": {
+            "np.github.6": 11,
+            "np.generic.4": 10,
+            "np.generic.1": 1,
+            "np.generic.5": 1
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 11,
+            "other": 10,
+            "placeholder_or_test_value": 2
+          }
+        },
+        "kingfisher": {
+          "n_findings": 0,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0,
+          "by_rule": {},
+          "by_category": {}
+        },
+        "detectsecrets": {
+          "n_findings": 291,
+          "n_findings_generic_rules": 289,
+          "findings_per_kloc": 0.7999,
+          "by_rule": {
+            "Base64 High Entropy String": 198,
+            "Hex High Entropy String": 53,
+            "Secret Keyword": 38,
+            "AWS Access Key": 2
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 201,
+            "placeholder_or_test_value": 43,
+            "other": 41,
+            "hash_or_identifier_context": 6
+          }
+        }
+      }
+    },
+    "digitalocean/godo": {
+      "language": "go",
+      "stratum": "credential_dense",
+      "commit": "8a0153dc2f8986ec197fed5c06dc5c642ed6fffb",
+      "n_files": 232,
+      "n_lines": 101180,
+      "scan_wall_s": {
+        "noseyparker": 1.85,
+        "kingfisher": 0.48,
+        "detectsecrets": 4.01
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 139,
+          "n_findings_generic_rules": 59,
+          "findings_per_kloc": 1.3738,
+          "by_rule": {
+            "np.postgres.1": 78,
+            "np.generic.5": 53,
+            "np.generic.2": 4,
+            "np.slack.3": 2,
+            "np.generic.1": 2
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 93,
+            "placeholder_or_test_value": 44,
+            "other": 2
+          }
+        },
+        "kingfisher": {
+          "n_findings": 2,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0198,
+          "by_rule": {
+            "betterleaks.slack-webhook-url": 2
+          },
+          "by_category": {
+            "placeholder_or_test_value": 2
+          }
+        },
+        "detectsecrets": {
+          "n_findings": 27,
+          "n_findings_generic_rules": 20,
+          "findings_per_kloc": 0.2669,
+          "by_rule": {
+            "Hex High Entropy String": 10,
+            "Secret Keyword": 7,
+            "Basic Auth Credentials": 4,
+            "Base64 High Entropy String": 3,
+            "Slack Token": 2,
+            "Private Key": 1
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 17,
+            "placeholder_or_test_value": 6,
+            "hash_or_identifier_context": 2,
+            "other": 2
+          }
+        }
+      }
+    },
+    "npm/cli": {
+      "language": "javascript",
+      "stratum": "credential_dense",
+      "commit": "ae98c62586b6fea44114f72e249e246a2981de70",
+      "n_files": 4033,
+      "n_lines": 3632063,
+      "scan_wall_s": {
+        "noseyparker": 3.59,
+        "kingfisher": 1.0,
+        "detectsecrets": 221.23
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 87,
+          "n_findings_generic_rules": 84,
+          "findings_per_kloc": 0.024,
+          "by_rule": {
+            "np.generic.6": 42,
+            "np.generic.5": 42,
+            "np.npm.1": 1,
+            "np.mongodb.1": 1,
+            "np.postgres.1": 1
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 49,
+            "placeholder_or_test_value": 38
+          }
+        },
+        "kingfisher": {
+          "n_findings": 4,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0011,
+          "by_rule": {
+            "betterleaks.private-key": 3,
+            "veles.secrets/npmjsaccesstoken": 1
+          },
+          "by_category": {
+            "placeholder_or_test_value": 4
+          }
+        },
+        "detectsecrets": {
+          "n_findings": 109717,
+          "n_findings_generic_rules": 109698,
+          "findings_per_kloc": 30.2079,
+          "by_rule": {
+            "Hex High Entropy String": 77622,
+            "Base64 High Entropy String": 32059,
+            "Secret Keyword": 17,
+            "Basic Auth Credentials": 16,
+            "Private Key": 3
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 109565,
+            "placeholder_or_test_value": 148,
+            "other": 4
+          }
+        }
+      }
+    },
+    "openai/openai-node": {
+      "language": "typescript",
+      "stratum": "credential_dense",
+      "commit": "e35205033764ec2a2adc7fc71f3d2df9b0ea8679",
+      "n_files": 1291,
+      "n_lines": 436933,
+      "scan_wall_s": {
+        "noseyparker": 1.96,
+        "kingfisher": 0.58,
+        "detectsecrets": 17.73
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 40,
+          "n_findings_generic_rules": 37,
+          "findings_per_kloc": 0.0915,
+          "by_rule": {
+            "np.generic.2": 21,
+            "np.generic.1": 11,
+            "np.generic.6": 5,
+            "np.google.3": 2,
+            "np.github.6": 1
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 18,
+            "other": 11,
+            "placeholder_or_test_value": 11
+          }
+        },
+        "kingfisher": {
+          "n_findings": 0,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0,
+          "by_rule": {},
+          "by_category": {}
+        },
+        "detectsecrets": {
+          "n_findings": 1741,
+          "n_findings_generic_rules": 1731,
+          "findings_per_kloc": 3.9846,
+          "by_rule": {
+            "Base64 High Entropy String": 768,
+            "Secret Keyword": 560,
+            "Hex High Entropy String": 403,
+            "Basic Auth Credentials": 10
+          },
+          "by_category": {
+            "hash_or_identifier_context": 1112,
+            "in_test_doc_or_example_path": 476,
+            "placeholder_or_test_value": 131,
+            "other": 22
+          }
+        }
+      }
+    },
+    "Shopify/shopify-app-js": {
+      "language": "typescript",
+      "stratum": "credential_dense",
+      "commit": "2a9a3a3b5a390a589618a6a5f753982c3b569215",
+      "n_files": 2302,
+      "n_lines": 348382,
+      "scan_wall_s": {
+        "noseyparker": 2.69,
+        "kingfisher": 0.7,
+        "detectsecrets": 23.33
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 86,
+          "n_findings_generic_rules": 27,
+          "findings_per_kloc": 0.2469,
+          "by_rule": {
+            "np.jwt.1": 49,
+            "np.generic.5": 16,
+            "np.generic.6": 9,
+            "np.postgres.1": 6,
+            "np.mongodb.1": 2,
+            "np.google.3": 2,
+            "np.generic.1": 2
+          },
+          "by_category": {
+            "placeholder_or_test_value": 66,
+            "in_test_doc_or_example_path": 20
+          }
+        },
+        "kingfisher": {
+          "n_findings": 49,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.1407,
+          "by_rule": {
+            "betterleaks.jwt": 49
+          },
+          "by_category": {
+            "placeholder_or_test_value": 49
+          }
+        },
+        "detectsecrets": {
+          "n_findings": 1755,
+          "n_findings_generic_rules": 1739,
+          "findings_per_kloc": 5.0376,
+          "by_rule": {
+            "Base64 High Entropy String": 1606,
+            "Hex High Entropy String": 73,
+            "Secret Keyword": 60,
+            "Basic Auth Credentials": 9,
+            "JSON Web Token": 7
+          },
+          "by_category": {
+            "hash_or_identifier_context": 1534,
+            "in_test_doc_or_example_path": 140,
+            "placeholder_or_test_value": 76,
+            "other": 5
+          }
+        }
+      }
+    },
+    "huggingface/huggingface_hub": {
+      "language": "python",
+      "stratum": "credential_dense",
+      "commit": "e1f595dd7db4c993837e320a6d62ccdd1717dc2d",
+      "n_files": 504,
+      "n_lines": 168181,
+      "scan_wall_s": {
+        "noseyparker": 1.77,
+        "kingfisher": 0.52,
+        "detectsecrets": 8.32
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 21,
+          "n_findings_generic_rules": 7,
+          "findings_per_kloc": 0.1249,
+          "by_rule": {
+            "np.github.6": 7,
+            "np.generic.5": 6,
+            "np.jwt.1": 6,
+            "np.generic.2": 1,
+            "np.huggingface.1": 1
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 13,
+            "other": 8
+          }
+        },
+        "kingfisher": {
+          "n_findings": 7,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0416,
+          "by_rule": {
+            "betterleaks.jwt": 6,
+            "betterleaks.huggingface-access-token": 1
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 7
+          }
+        },
+        "detectsecrets": {
+          "n_findings": 171,
+          "n_findings_generic_rules": 168,
+          "findings_per_kloc": 1.0168,
+          "by_rule": {
+            "Hex High Entropy String": 121,
+            "Secret Keyword": 34,
+            "Base64 High Entropy String": 13,
+            "JSON Web Token": 3
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 113,
+            "placeholder_or_test_value": 26,
+            "other": 26,
+            "hash_or_identifier_context": 6
+          }
+        }
+      }
+    },
+    "python-gitlab/python-gitlab": {
+      "language": "python",
+      "stratum": "credential_dense",
+      "commit": "51eb17e6e67a25157e04b0abc649221bd8ecc7fe",
+      "n_files": 389,
+      "n_lines": 60001,
+      "scan_wall_s": {
+        "noseyparker": 1.62,
+        "kingfisher": 0.75,
+        "detectsecrets": 2.63
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 15,
+          "n_findings_generic_rules": 9,
+          "findings_per_kloc": 0.25,
+          "by_rule": {
+            "np.generic.5": 8,
+            "np.gitlab.2": 5,
+            "np.generic.6": 1,
+            "np.netrc.1": 1
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 12,
+            "placeholder_or_test_value": 3
+          }
+        },
+        "kingfisher": {
+          "n_findings": 5,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0833,
+          "by_rule": {
+            "betterleaks.gitlab-pat": 5
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 3,
+            "placeholder_or_test_value": 2
+          }
+        },
+        "detectsecrets": {
+          "n_findings": 57,
+          "n_findings_generic_rules": 56,
+          "findings_per_kloc": 0.95,
+          "by_rule": {
+            "Hex High Entropy String": 31,
+            "Secret Keyword": 16,
+            "Base64 High Entropy String": 9,
+            "GitLab Token": 1
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 57
+          }
+        }
+      }
+    },
+    "slackapi/python-slack-sdk": {
+      "language": "python",
+      "stratum": "credential_dense",
+      "commit": "ab4e4983ba02789f5854e711450f9340d4cd53f2",
+      "n_files": 729,
+      "n_lines": 257075,
+      "scan_wall_s": {
+        "noseyparker": 1.78,
+        "kingfisher": 0.64,
+        "detectsecrets": 12.46
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 6,
+          "n_findings_generic_rules": 2,
+          "findings_per_kloc": 0.0233,
+          "by_rule": {
+            "np.slack.3": 4,
+            "np.generic.1": 2
+          },
+          "by_category": {
+            "placeholder_or_test_value": 6
+          }
+        },
+        "kingfisher": {
+          "n_findings": 4,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0156,
+          "by_rule": {
+            "betterleaks.slack-webhook-url": 4
+          },
+          "by_category": {
+            "placeholder_or_test_value": 4
+          }
+        },
+        "detectsecrets": {
+          "n_findings": 439,
+          "n_findings_generic_rules": 416,
+          "findings_per_kloc": 1.7077,
+          "by_rule": {
+            "Base64 High Entropy String": 389,
+            "Slack Token": 19,
+            "Hex High Entropy String": 14,
+            "Secret Keyword": 13,
+            "Basic Auth Credentials": 4
+          },
+          "by_category": {
+            "placeholder_or_test_value": 384,
+            "in_test_doc_or_example_path": 53,
+            "other": 2
+          }
+        }
+      }
+    },
+    "anthropics/anthropic-sdk-python": {
+      "language": "python",
+      "stratum": "credential_dense",
+      "commit": "ecfee6cd504cfbf634919bdbd058fb74afdbd533",
+      "n_files": 2752,
+      "n_lines": 288321,
+      "scan_wall_s": {
+        "noseyparker": 1.69,
+        "kingfisher": 0.72,
+        "detectsecrets": 14.24
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 34,
+          "n_findings_generic_rules": 12,
+          "findings_per_kloc": 0.1179,
+          "by_rule": {
+            "np.generic.2": 10,
+            "np.aws.6": 9,
+            "np.aws.2": 9,
+            "np.http.2": 3,
+            "np.generic.1": 2,
+            "np.aws.4": 1
+          },
+          "by_category": {
+            "placeholder_or_test_value": 20,
+            "in_test_doc_or_example_path": 13,
+            "other": 1
+          }
+        },
+        "kingfisher": {
+          "n_findings": 2,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0069,
+          "by_rule": {
+            "betterleaks.gcp-application-default-credentials": 2
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 2
+          }
+        },
+        "detectsecrets": {
+          "n_findings": 108,
+          "n_findings_generic_rules": 105,
+          "findings_per_kloc": 0.3746,
+          "by_rule": {
+            "Base64 High Entropy String": 55,
+            "Secret Keyword": 50,
+            "AWS Access Key": 2,
+            "Basic Auth Credentials": 1
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 85,
+            "placeholder_or_test_value": 16,
+            "other": 7
+          }
+        }
+      }
+    },
+    "stripe/stripe-java": {
+      "language": "java",
+      "stratum": "credential_dense",
+      "commit": "f2c7e627e9d3ee3b09097c053f56fcc697f6eb64",
+      "n_files": 3030,
+      "n_lines": 773972,
+      "scan_wall_s": {
+        "noseyparker": 1.86,
+        "kingfisher": 0.72,
+        "detectsecrets": 36.55
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 5,
+          "n_findings_generic_rules": 4,
+          "findings_per_kloc": 0.0065,
+          "by_rule": {
+            "np.generic.2": 2,
+            "np.generic.1": 2,
+            "np.stripe.2": 1
+          },
+          "by_category": {
+            "in_test_doc_or_example_path": 3,
+            "other": 1,
+            "placeholder_or_test_value": 1
+          }
+        },
+        "kingfisher": {
+          "n_findings": 0,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0,
+          "by_rule": {},
+          "by_category": {}
+        },
+        "detectsecrets": {
+          "n_findings": 16,
+          "n_findings_generic_rules": 16,
+          "findings_per_kloc": 0.0207,
+          "by_rule": {
+            "Secret Keyword": 10,
+            "Base64 High Entropy String": 4,
+            "Hex High Entropy String": 2
+          },
+          "by_category": {
+            "placeholder_or_test_value": 10,
+            "in_test_doc_or_example_path": 6
+          }
+        }
+      }
+    },
+    "stripe/stripe-ruby": {
+      "language": "ruby",
+      "stratum": "credential_dense",
+      "commit": "082af3fc6505e3a2dbee4b3a52814e0a1b2483f8",
+      "n_files": 3125,
+      "n_lines": 552419,
+      "scan_wall_s": {
+        "noseyparker": 1.85,
+        "kingfisher": 0.66,
+        "detectsecrets": 28.43
+      },
+      "tools": {
+        "noseyparker": {
+          "n_findings": 4,
+          "n_findings_generic_rules": 4,
+          "findings_per_kloc": 0.0072,
+          "by_rule": {
+            "np.generic.5": 4
+          },
+          "by_category": {
+            "other": 4
+          }
+        },
+        "kingfisher": {
+          "n_findings": 0,
+          "n_findings_generic_rules": 0,
+          "findings_per_kloc": 0.0,
+          "by_rule": {},
+          "by_category": {}
+        },
+        "detectsecrets": {
+          "n_findings": 36,
+          "n_findings_generic_rules": 33,
+          "findings_per_kloc": 0.0652,
+          "by_rule": {
+            "Secret Keyword": 30,
+            "Basic Auth Credentials": 3,
+            "Hex High Entropy String": 3
+          },
+          "by_category": {
+            "placeholder_or_test_value": 23,
+            "in_test_doc_or_example_path": 12,
+            "other": 1
+          }
+        }
+      }
+    }
+  }
+}

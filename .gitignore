@@ -73,3 +73,8 @@ research/trufflehog-src
 research/realcorpus2
 research/realcorpus
 research/.venv
+
+# LaTeX intermediates (the .bbl and .pdf are kept, as for the first manuscript)
+research/paper/**/*.aux
+research/paper/**/*.blg
+research/paper/**/*.out

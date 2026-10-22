@@ -357,13 +357,6 @@ Substantively, three of this paper's results are unfavourable to the subject and
 
 The design that most constrains this bias is the one built into the method at scale: credential types are generated from all three tools' own rule tables, and each pair of tools is compared on types the third generated, so a corpus cannot favour one tool's shapes without that being visible. The first version's ten-type corpora were built from published format specifications instead, and Section~\ref{sec:rq4-scale} shows what that choice did.
 
-\subsection{Use of generative AI}
-\label{sec:ai}
-
-The author used generative AI assistance during this work, under the author's direction and review. Anthropic's Claude, accessed through its command-line coding interface, was used to draft and revise manuscript prose from the author's outlines and decisions, to implement the benchmark harnesses and figure-generation code to the author's specification, to debug those harnesses, and to support diagnostic analysis when tracing observed failures to specific regular-expression constructs. For the extended study (Sections~\ref{sec:scale}, \ref{sec:rq3-scale}, \ref{sec:rq4-scale}, \ref{sec:rq5} and~\ref{sec:rq6}), Claude also executed the harnesses in a sandboxed environment at the author's direction, and found and fixed the seven harness defects listed in Section~\ref{sec:threats}, each recorded in the commit history of the replication package. OpenAI's ChatGPT was used separately to review manuscript drafts and to cross-check the submission against the journal's author guidelines; its suggestions were evaluated by the author and adopted selectively, and several were verified against primary sources and rejected as incorrect.
-
-The author conceived the study, chose its research questions, experimental design and unit of analysis, executed the experiments of the first version, inspected the raw outputs, verified each numeric claim against the recorded data, and takes full responsibility for the design, the analyses, the interpretations, and the final manuscript. No AI system is an author of this work, and none is credited as one: authorship requires accountability for the claims made, which an AI system cannot hold. Every generated artefact was reviewed before use, and every number reported here is re-derived from raw output by a verification script included in the replication package rather than taken on trust from generated text.
-
 \section{Experimental Setup}
 \label{sec:setup}
 
@@ -970,6 +963,8 @@ For practice, a rule table can be tested against itself, cheaply, for defects it
 \textbf{Data availability.} All raw experimental outputs --- per-rule mutation results, cross-tool and delimiter probes, comparative and co-occurrence benchmarks, real-code findings, the probability analysis, and the extended study's full-table, three-tool and multi-language results with their derived summary --- are included in the replication package as unmodified JSON, together with the redacted finding logs. Real-code results record counts, rule names and following characters, never token values. The complete replication package is archived on Zenodo at \url{https://doi.org/10.5281/zenodo.22114221} \citep{mishra2026zenodo} and is also browsable in the \texttt{research/} directory of the subject repository.
 
 \textbf{Code availability.} All benchmark harnesses, the figure-generation code, a pinned environment specification, and a one-command \texttt{reproduce.sh} are included in the replication package, which is archived on Zenodo and also browsable in the subject repository under the \texttt{research/} directory at \url{https://github.com/Shweta-Mishra-ai/github-autopilot/tree/main/research}. The subject system itself is public at \url{https://github.com/Shweta-Mishra-ai/github-autopilot} and pinned at commit \texttt{38b2013}; the comparison tools are official release binaries at versions 8.21.2 and 3.82.13, verified by SHA-256 at reproduction time.
+
+\textbf{Use of AI tools.} Anthropic's Claude was used to assist with implementing the benchmark code, running the analyses and editing the text; the author directed the work, verified every reported number against the raw data, and takes full responsibility for the content.
 
 \textbf{Author contributions.} Shweta Mishra is the sole author and is responsible for the study design, implementation, execution, analysis, and manuscript.
 

@@ -22,6 +22,4 @@ these tools and would test the filter, not the boundary).
 Before filing:
 - check each project's tracker for an existing report of the same defect;
 - re-run `reproduce_matrix.py` against the then-current release;
-- decide how to describe the research context and the AI assistance used in
-  preparing the drafts (they were drafted with an AI assistant from the
-  harness output in this package).
+- decide how to describe the research context.

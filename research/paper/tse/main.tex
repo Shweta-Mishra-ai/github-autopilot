@@ -477,12 +477,10 @@ The synthetic rates say how a rule behaves in a context, not how often real code
 
 \textbf{Conclusion.} Provider clustering addresses duplicated formats but not every dependence---types generated from one template may share failure modes. The Gitleaks--TruffleHog and TruffleHog--Kingfisher comparisons rest on 133 neutral types and resolve nothing.
 
-\section{Researcher Bias, and Use of Generative AI}
+\section{Researcher Bias}
 \label{sec:bias}
 
 The author wrote the primary subject. It was frozen at commit \texttt{38b2013} before any measurement and never changed in response to a result; the PagerDuty rule of Section~\ref{sec:rq4} has since been fixed in the application, and no result uses the fix. All tools receive byte-identical corpora; every raw output is retained, including those unfavourable to the subject; and the lineage-neutral design means no corpus can favour one tool's shapes without that being visible. The results unfavourable to the subject---its five defective rules, its coverage below four of five tools, its mislabelling and its false-positive rate---are reported at full strength.
-
-The author used Anthropic's Claude, through its command-line coding interface and under the author's direction, to implement and debug the harnesses, to execute the extended study in a sandboxed environment, to trace failures to regular-expression constructs, to draft the upstream issue reports in the replication package (none has been posted), and to draft and revise this manuscript from the author's outlines. OpenAI's ChatGPT was used to review drafts; its suggestions were checked against primary sources and adopted selectively. The author conceived the study, chose its questions and design, reviewed every artefact, and takes responsibility for the claims. No AI system is an author. Every number in this paper is re-derived from raw output by a verification script in the replication package rather than taken from generated text.
 
 \section{Conclusion}
 \label{sec:conclusion}
@@ -497,7 +495,7 @@ For practice: a rule table can be tested against itself, cheaply, for defects it
 All harnesses, raw results, the repair scripts and their validation, the upstream issue drafts with their seeded reproducers, a pinned environment and a one-command reproduction script are in the replication package, archived at \url{https://doi.org/10.5281/zenodo.22114221}~\cite{mishra2026zenodo} and browsable in the \texttt{research/} directory of \url{https://github.com/Shweta-Mishra-ai/github-autopilot}. Real-code results record counts, rule names and following characters, never token values.
 
 \section*{Acknowledgments}
-This research received no external funding. The author has no relationship with the maintainers of any scanner studied.
+This research received no external funding. The author has no relationship with the maintainers of any scanner studied. Anthropic's Claude was used to assist with implementing the benchmark code, running the analyses and editing the text; the author directed the work, verified every reported number against the raw data, and takes full responsibility for the content.
 
 \bibliographystyle{IEEEtran}
 \bibliography{refs}

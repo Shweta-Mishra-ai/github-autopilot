@@ -7,8 +7,10 @@ FIXED (BUG 1): check_title_update → check_pr_title_update
 FIXED (ruff E741 lines 103,104): Renamed ambiguous `l` → `lbl`.
 """
 
-import re
+import contextlib
+import contextvars
 import logging
+import re
 from dataclasses import dataclass
 
 log = logging.getLogger(__name__)
@@ -26,7 +28,26 @@ class GuardrailResult:
     action_taken: str = ""
 
 
-def check_pr_auto_merge(pr_data: dict, checks: list, reviews: list, config) -> GuardrailResult:
+def _latest_review_states(reviews: list) -> dict:
+    """
+    Each reviewer's CURRENT verdict: their latest APPROVED, CHANGES_REQUESTED
+    or DISMISSED review. Comments do not change a verdict. Scanning every
+    review ever left meant a reviewer who requested changes and later approved
+    blocked the merge forever.
+    """
+    latest: dict = {}
+    for r in reviews or []:
+        state = r.get("state")
+        if state not in ("APPROVED", "CHANGES_REQUESTED", "DISMISSED"):
+            continue
+        who = (r.get("user") or {}).get("login") or f"deleted-{id(r)}"
+        latest[who] = r
+    return latest
+
+
+def check_pr_auto_merge(
+    pr_data: dict, checks: list, reviews: list, config, statuses: list | None = None
+) -> GuardrailResult:
     if not config.auto_merge_enabled():
         return GuardrailResult(False, "Auto-merge disabled in .ai-repo-manager.yml")
 
@@ -37,7 +58,11 @@ def check_pr_auto_merge(pr_data: dict, checks: list, reviews: list, config) -> G
         return GuardrailResult(False, "GitHub hasn't computed mergeability yet — retry in a moment")
 
     if config.get("auto_merge", "require_no_blocking_reviews", default=True):
-        blocking = [r for r in reviews if r.get("state") == "CHANGES_REQUESTED"]
+        blocking = [
+            r
+            for r in _latest_review_states(reviews).values()
+            if r.get("state") == "CHANGES_REQUESTED"
+        ]
         if blocking:
             # A change request from a since-deleted account has `user: null`.
             # Raising here turns "blocked by a review" into a generic failure,
@@ -57,6 +82,34 @@ def check_pr_auto_merge(pr_data: dict, checks: list, reviews: list, config) -> G
         if failed:
             names = ", ".join(c.get("name", "unnamed check") for c in failed[:3])
             return GuardrailResult(False, f"Failing checks: {names}")
+
+        # GitHub sets `conclusion` only when a run completes, so a run still
+        # queued or in progress has none — and the filter above passed it:
+        # /merge merged while CI was still deciding.
+        running = [c for c in checks if c.get("conclusion") is None]
+        if running:
+            names = ", ".join(c.get("name", "unnamed check") for c in running[:3])
+            return GuardrailResult(False, f"Checks still running: {names}")
+
+        # No check run and no status at all is not "passing": it is also what
+        # a commit looks like in the seconds before CI starts, so /merge right
+        # after a push merged before any check had run. A repository with no
+        # CI says so by setting require_passing_checks: false.
+        if not checks and not statuses:
+            return GuardrailResult(
+                False,
+                "No checks or statuses have reported on this commit yet. If this "
+                "repository has no CI, set auto_merge.require_passing_checks: false.",
+            )
+
+        # Commit statuses — the older API many CI systems still report
+        # through — were never consulted at all.
+        bad = [st for st in statuses or [] if st.get("state") in ("failure", "error", "pending")]
+        if bad:
+            names = ", ".join(
+                f"{st.get('context', 'unnamed status')} ({st.get('state')})" for st in bad[:3]
+            )
+            return GuardrailResult(False, f"Commit statuses not passing: {names}")
 
     base = pr_data.get("base", {}).get("ref", "")
     protected = {"main", "master", "production", "release"}
@@ -82,8 +135,8 @@ def check_pr_auto_merge(pr_data: dict, checks: list, reviews: list, config) -> G
                 False,
                 "No risk analysis on record for this PR, and "
                 f"auto_merge.allowed_risk_levels restricts merging to "
-                f"{', '.join(sorted(allowed))}. Re-open the PR to trigger "
-                "analysis, or widen the setting.",
+                f"{', '.join(sorted(allowed))}. Push a commit or re-open the PR "
+                "to run the analysis, or widen the setting.",
             )
         if risk not in allowed:
             return GuardrailResult(
@@ -117,7 +170,7 @@ def check_auto_label(issue_or_pr: dict, labels: list, config) -> GuardrailResult
 
 
 def check_pr_title_update(pr: dict, config) -> GuardrailResult:
-    if not config.get("pull_requests", "auto_polish_title", default=True):
+    if not config.get("pull_requests", "auto_polish_title", default=False):
         return GuardrailResult(False, "Title auto-polish disabled")
     current_title = pr.get("title", "")
     if not current_title:
@@ -149,7 +202,9 @@ def check_repo_rate_limit(repo: str) -> GuardrailResult:
         import os
 
         limit = int(os.environ.get("REPO_DAILY_AI_LIMIT", "150"))
-        today = datetime.date.today().isoformat()
+        today = (
+            datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+        )  # UTC, as the reset message says
         key = f"limit:{repo}:ai_calls:{today}"
         r = get_redis()
         count = int(r.get(key) or 0)
@@ -163,13 +218,100 @@ def check_repo_rate_limit(repo: str) -> GuardrailResult:
     return GuardrailResult(True, "OK")
 
 
+# The repository whose event is being handled on this thread, so the router
+# can charge each AI call to it. Set by server._run_handler around a handler.
+# The budget used to be charged once per EVENT, while a pull request event
+# makes three to five AI calls — so REPO_DAILY_AI_LIMIT=150 allowed several
+# hundred calls — and comment, push and CI events were never charged at all.
+_metered_repo: contextvars.ContextVar = contextvars.ContextVar("metered_repo", default="")
+
+
+@contextlib.contextmanager
+def metered(repo: str):
+    """Charge every AI call made inside this block to `repo`."""
+    token = _metered_repo.set(repo or "")
+    try:
+        yield
+    finally:
+        _metered_repo.reset(token)
+
+
+class AIBudgetExceeded(RuntimeError):
+    """Today's AI budget for the metered repository is spent."""
+
+
+# Set when the router refused a call for budget during the current handler,
+# so the handler can say so instead of a generic failure. Per thread/context.
+_budget_refusal: contextvars.ContextVar = contextvars.ContextVar("budget_refusal", default="")
+
+
+def budget_refusal() -> str:
+    """The refusal message if an AI call was refused for budget in this context."""
+    return _budget_refusal.get()
+
+
+def reset_budget_refusal() -> None:
+    _budget_refusal.set("")
+
+
+def _daily_limit() -> int:
+    import os
+
+    try:
+        return max(0, int(os.environ.get("REPO_DAILY_AI_LIMIT", "150")))
+    except ValueError:
+        return 150
+
+
+def charge_ai_call() -> None:
+    """
+    Count one AI call against the metered repository, and refuse it — raise
+    AIBudgetExceeded — when that would exceed today's budget.
+
+    The budget used to be checked only when a pull request or issue event
+    STARTED, and slash commands never checked it at all: on a public repo any
+    commenter could keep running /improve and /test after REPO_DAILY_AI_LIMIT
+    was reached, and the documentation called the limit "shared across all
+    commands". Every AI call passes through here, so this is where it holds.
+
+    Fails open when the counter cannot be read (Redis down), as the start-of-
+    event check always has: the budget is a cost control, not a security gate.
+    """
+    repo = _metered_repo.get()
+    if not repo:
+        return
+    limit = _daily_limit()
+    try:
+        from app.core.redis_client import get_redis
+        import datetime
+
+        r = get_redis()
+        today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+        key = f"limit:{repo}:ai_calls:{today}"
+        count = int(r.incr(key))
+        r.expire(key, 86400)
+    except Exception as e:
+        log.debug(f"guardrails.charge_failed repo={repo}: {e}")
+        return
+    if count > limit:
+        with contextlib.suppress(Exception):
+            r.decr(key)  # a refused call is not a used one
+        message = (
+            f"Daily AI call limit ({limit}) for this repository reached. Resets at midnight UTC."
+        )
+        _budget_refusal.set(message)
+        raise AIBudgetExceeded(message)
+
+
 def increment_repo_usage(repo: str):
     try:
         from app.core.redis_client import get_redis
         import datetime
 
         r = get_redis()
-        today = datetime.date.today().isoformat()
+        today = (
+            datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+        )  # UTC, as the reset message says
         key = f"limit:{repo}:ai_calls:{today}"
         r.incr(key)
         r.expire(key, 86400)
@@ -201,6 +343,34 @@ def record_pr_risk(repo: str, pr_number, head_sha: str, risk: str) -> None:
         get_redis().set(_risk_key(repo, pr_number, head_sha), str(risk).lower(), ex=_RISK_TTL)
     except Exception as e:
         log.debug(f"guardrails.record_pr_risk_failed repo={repo} pr={pr_number}: {e}")
+
+
+_RISK_RANK = {"low": 0, "medium": 1, "high": 2}
+
+
+def raise_pr_risk(repo: str, pr_number, head_sha: str, risk: str) -> bool:
+    """
+    Record `risk` for this head unless a higher one is already recorded.
+    Only ever raises the level. True when the recorded level is now `risk`
+    or higher because of this call; False when it already was, or on error
+    (logged — this one gates merges).
+    """
+    if not (repo and head_sha and risk in _RISK_RANK):
+        return False
+    try:
+        from app.core.redis_client import get_redis
+
+        r = get_redis()
+        key = _risk_key(repo, pr_number, head_sha)
+        current = r.get(key)
+        current = (current.decode() if isinstance(current, bytes) else current) or ""
+        if _RISK_RANK.get(current.lower(), -1) >= _RISK_RANK[risk]:
+            return False
+        r.set(key, risk, ex=_RISK_TTL)
+        return True
+    except Exception as e:
+        log.error(f"guardrails.raise_pr_risk_failed repo={repo} pr={pr_number}: {e}")
+        return False
 
 
 def get_pr_risk(pr_data: dict) -> "str | None":

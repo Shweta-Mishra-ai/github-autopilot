@@ -10,12 +10,60 @@ import logging
 import re
 
 import contextlib
+from urllib.parse import quote
 from app.github.client import GitHubError
 from app.github.helpers import fmt_error
 from ._client import gh_get, gh_post, gh_put, gh_patch, gh_delete, router  # noqa: F401  (re-exported: tests patch these names)
 
 
 log = logging.getLogger(__name__)
+
+
+_CHECK_PAGES = 5
+
+
+def _all_check_runs(repo: str, sha: str, token: str) -> tuple[list, bool]:
+    """
+    Every check run on `sha`, and whether that is provably all of them.
+
+    One unpaginated GET returns GitHub's default of 30, so on a repository
+    with more checks than that a failing 31st was never seen. Returns
+    (runs, False) when the runs fetched fall short of `total_count` — the
+    caller must refuse rather than merge on a partial picture.
+    """
+    runs: list = []
+    total = 0
+    for page in range(1, _CHECK_PAGES + 1):
+        data = gh_get(f"/repos/{repo}/commits/{sha}/check-runs?per_page=100&page={page}", token)
+        if not isinstance(data, dict):
+            return runs, False
+        batch = data.get("check_runs") or []
+        total = int(data.get("total_count", len(batch)) or 0)
+        runs.extend(batch)
+        if len(runs) >= total or len(batch) < 100:
+            break
+    return runs, len(runs) >= total
+
+
+_REVIEW_PAGES = 10
+
+
+def _all_reviews(repo: str, number: int, token: str) -> list:
+    """
+    Every review on the PR. Reviews come oldest first, so with one page of
+    100 a change request made after the 100th review was never seen and the
+    "no blocking reviews" guard passed. gh_get raises on failure, so an
+    unreadable page refuses the merge rather than reading as "no reviews".
+    """
+    out: list = []
+    for page in range(1, _REVIEW_PAGES + 1):
+        batch = gh_get(f"/repos/{repo}/pulls/{number}/reviews?per_page=100&page={page}", token)
+        if not isinstance(batch, list):
+            raise ValueError("reviews response was not a list")
+        out.extend(batch)
+        if len(batch) < 100:
+            return out
+    raise ValueError(f"more than {_REVIEW_PAGES * 100} reviews; cannot read them all")
 
 
 def cmd_merge(
@@ -32,7 +80,12 @@ def cmd_merge(
 
     try:
         pr = gh_get(f"/repos/{repo}/pulls/{issue_number}", token)
-        reviews = gh_get(f"/repos/{repo}/pulls/{issue_number}/reviews", token)
+        # A merged or closed PR fell through to the guard, whose first
+        # answer was "GitHub hasn't computed mergeability yet — retry".
+        if pr.get("merged"):
+            return "## ℹ️ Already Merged\n\nThis pull request has already been merged."
+        if pr.get("state") == "closed":
+            return "## ℹ️ PR Is Closed\n\nReopen the pull request before merging it."
         # A PR whose source fork was deleted carries a null `head`. This
         # raised inside cmd_merge's try/except, so the user was told "Merge
         # failed" with a TypeError rather than the real reason.
@@ -43,11 +96,19 @@ def cmd_merge(
                 "## 🚫 Cannot Merge\n\n**Reason:** this PR has no head commit — "
                 "its source branch or fork was deleted."
             )
-        check_runs = gh_get(f"/repos/{repo}/commits/{commit_sha}/check-runs", token)
+        reviews = _all_reviews(repo, issue_number, token)
+        checks, complete = _all_check_runs(repo, commit_sha, token)
+        if not complete:
+            return (
+                "## 🚫 Cannot Merge\n\n**Reason:** could not read every check run on "
+                f"`{commit_sha[:8]}`, so it cannot be shown that they all passed."
+            )
+        status = gh_get(f"/repos/{repo}/commits/{commit_sha}/status?per_page=100", token)
+        statuses = status.get("statuses", []) if isinstance(status, dict) else []
 
         from app.core.guardrails import check_pr_auto_merge
 
-        guard = check_pr_auto_merge(pr, check_runs.get("check_runs", []), reviews, config)
+        guard = check_pr_auto_merge(pr, checks, reviews, config, statuses=statuses)
         if not guard.passed:
             return f"## 🚫 Cannot Merge\n\n**Reason:** {guard.reason}"
 
@@ -57,58 +118,44 @@ def cmd_merge(
             f"/repos/{repo}/pulls/{issue_number}/merge",
             token,
             {
-                "commit_title": f"feat: merge {head_branch} via /merge by @{author}",
+                # Not "feat: …": /release reads `feat:` subjects as features,
+                # so every /merge of a typo fix bumped the minor version.
+                "commit_title": f"Merge pull request #{issue_number} from {head_branch} "
+                f"(/merge by {author})",
                 "merge_method": "merge",
+                # Merge exactly the commit the checks above were read for.
+                # Without it, a commit pushed between the check and the merge
+                # was merged unchecked; with it, GitHub refuses (409) instead.
+                "sha": commit_sha,
             },
         )
 
         if result.get("merged"):
-            # Audit log — /merge is irreversible
-            try:
-                import json as _j
-                import time as _t
-                from app.core.redis_client import get_redis as _r
+            # /merge is irreversible: record who did it. Never blocks the merge;
+            # an unrecorded entry is logged as an error (app/core/audit.py).
+            from app.core.audit import record_merge
 
-                _r().lpush(
-                    "audit:merge",
-                    _j.dumps(
-                        {
-                            "repo": repo,
-                            "pr": issue_number,
-                            "by": author,
-                            "at": int(_t.time()),
-                            "sha": result.get("sha", "")[:12],
-                        }
-                    ),
-                )
-                _r().ltrim("audit:merge", 0, 999)
-            except Exception:
-                pass  # audit failure must not block the merge
+            record_merge(repo, issue_number, author, result.get("sha", ""))
 
-            with contextlib.suppress(Exception):
-                gh_delete(f"/repos/{repo}/git/refs/heads/{head_branch}", token)
-
-            # Learning loop: merging a bot-authored autofix branch is the
-            # strongest acceptance signal we get.
-            if head_branch.startswith("fix/bot-issue-"):
+            # Only a branch that lives in THIS repository. A fork PR's head
+            # branch is in the fork; deleting `heads/<its name>` here deleted
+            # whatever same-named branch this repository happened to have.
+            #
+            # And only a branch this App created (autofix). Any other head
+            # branch is the repository's: GitHub deletes it itself when the
+            # repo enables "automatically delete head branches", and when it
+            # does not, the branch is being kept on purpose — merging
+            # develop -> staging deleted develop, and GitHub then closed every
+            # PR targeting it. The name is quoted: `fix#12` deleted `fix`.
+            head_repo = (head.get("repo") or {}).get("full_name", "")
+            if head_branch.startswith("fix/bot-issue-") and head_repo == repo:
                 with contextlib.suppress(Exception):
-                    from app.core.learning import record_autofix_merged
+                    gh_delete(f"/repos/{repo}/git/refs/heads/{quote(head_branch, safe='/')}", token)
 
-                    m = re.search(r"issue-(\d+)", head_branch)
-                    record_autofix_merged(repo, issue_number, int(m.group(1)) if m else 0)
-
-                # Write it to the brain too. Nothing in the application called
-                # remember() before V7, so the memory store only ever held what
-                # a backup restored into it.
-                with contextlib.suppress(Exception):
-                    from app.intelligence.memory import remember
-
-                    remember(
-                        repo,
-                        f"Accepted fix merged for #{issue_number}: {issue.get('title', '')}",
-                        kind="fix",
-                        meta={"pr": issue_number, "by": author},
-                    )
+            # The learning record for an autofix branch is written from the
+            # PR's `closed` event (pull_request/outcomes.py), which sees every
+            # merge — this button and GitHub's — and every rejection. Writing
+            # it here as well counted a /merge twice.
 
             return (
                 f"## ✅ Merged!\n\n"
@@ -139,16 +186,20 @@ def cmd_apply(
         default_branch = repo_data.get("default_branch", "main")
 
         if not branch:
-            branches = gh_get(f"/repos/{repo}/branches?per_page=100", token)
+            # Only the prefixed refs. This read the first 100 branches and
+            # filtered them, so on a larger repository it answered "No Autofix
+            # Branches Found" while they existed.
+            refs = gh_get(f"/repos/{repo}/git/matching-refs/heads/fix/bot-issue-", token)
             fix_branches = [
-                b["name"]
-                for b in (branches if isinstance(branches, list) else [])
-                if b.get("name", "").startswith("fix/bot-issue-")
+                r["ref"].removeprefix("refs/heads/")
+                for r in (refs if isinstance(refs, list) else [])
+                if isinstance(r, dict) and str(r.get("ref", "")).startswith("refs/heads/")
             ]
             if not fix_branches:
                 return "## ℹ️ No Autofix Branches Found\n\nNo `fix/bot-issue-*` branches exist yet.\n\nRun `/autofix` on an issue first, then `/apply <branch>`."
             branch_list = "\n".join(f"- `{b}`" for b in fix_branches[:10])
-            return f"## 🌱 Available Autofix Branches\n\n{branch_list}\n\nReply with `/apply <branch-name>` to open a PR."
+            more = f"\n- … and {len(fix_branches) - 10} more" if len(fix_branches) > 10 else ""
+            return f"## 🌱 Available Autofix Branches\n\n{branch_list}{more}\n\nReply with `/apply <branch-name>` to open a PR."
 
         # Verify branch exists
         try:
@@ -166,15 +217,19 @@ def cmd_apply(
             return f"## ℹ️ PR Already Exists\n\n[#{pr['number']} — {pr['title'][:60]}]({pr['html_url']})"
 
         issue_ref = ""
+        # The issue the fix is for is the one its branch names, not the one
+        # /apply was typed on: the title said "#50" over "Closes #42".
+        fixed = issue_number
         m = re.search(r"issue-(\d+)", branch)
         if m:
-            issue_ref = f"\n\nCloses #{m.group(1)}"
+            fixed = int(m.group(1))
+            issue_ref = f"\n\nCloses #{fixed}"
 
         pr = gh_post(
             f"/repos/{repo}/pulls",
             token,
             {
-                "title": f"fix: autofix for issue #{issue_number}",
+                "title": f"fix: autofix for issue #{fixed}",
                 "head": branch,
                 "base": default_branch,
                 "body": (
@@ -188,13 +243,8 @@ def cmd_apply(
             },
         )
 
-        # Learning loop: a maintainer choosing to open a PR from a bot fix IS
-        # the acceptance signal. Feeds get_pattern_summary() → future /fix prompts.
-        with contextlib.suppress(Exception):
-            from app.core.learning import record_fix_accepted
-
-            record_fix_accepted(repo, issue_number, "autofix")
-
+        # Whether the PR is then merged or rejected is recorded from its
+        # `closed` event (pull_request/outcomes.py).
         with contextlib.suppress(Exception):
             from app.intelligence.memory import remember
 
@@ -224,16 +274,23 @@ def cmd_rollback(
 ) -> str:
     """Rollback command: preview/list snapshots and execute rollback."""
     from app.core.snapshot import (
+        SnapshotsUnavailable,
         get_snapshot_by_number,
         format_snapshot_list,
         format_rollback_result,
-        take_snapshot,
     )
 
     args = (cmd_args or "").strip()
+    unavailable = (
+        "## ⚠️ Snapshots Unavailable\n\nThe snapshot store (Redis) could not be read: "
+        "`{}`. This is not a report that nothing was recorded — nothing was rolled back."
+    )
 
     if not args:
-        return format_snapshot_list(repo)
+        try:
+            return format_snapshot_list(repo)
+        except SnapshotsUnavailable as e:
+            return unavailable.format(str(e)[:120])
 
     parts = args.split()
     n_str = parts[0]
@@ -244,9 +301,23 @@ def cmd_rollback(
     except ValueError:
         return f"## ⚠️ Invalid Snapshot Number\n\n`{n_str}` is not a number.\n\nUsage: `/rollback` → list, `/rollback 3` → preview, `/rollback 3 confirm` → execute"
 
-    snap = get_snapshot_by_number(repo, n)
+    try:
+        snap = get_snapshot_by_number(repo, n)
+    except SnapshotsUnavailable as e:
+        return unavailable.format(str(e)[:120])
     if not snap:
         return f"## ⚠️ Snapshot #{n} Not Found\n\nUse `/rollback` to see available snapshots (max 10, expire after 7 days)."
+
+    snap_id = str(snap.get("id") or "")
+    # Numbers shift when a newer snapshot appears; the preview names the id,
+    # and a confirm that carries one must still be looking at that snapshot.
+    given_id = parts[2] if confirm and len(parts) > 2 else ""
+    if given_id and not snap_id.startswith(given_id):
+        return (
+            f"## ⚠️ Snapshot #{n} Has Changed\n\nSnapshot #{n} is now `{snap_id[:8]}`, not "
+            f"`{given_id}` — a newer snapshot was recorded since the preview. Run "
+            f"`/rollback` to see the list again. Nothing was rolled back."
+        )
 
     bot_actions = snap.get("bot_actions", [])
     snap_ts = snap.get("timestamp", "")[:16].replace("T", " ")
@@ -258,32 +329,29 @@ def cmd_rollback(
     )
 
     if not confirm:
-        return f"## ⚠️ Confirm Rollback\n\n**Snapshot #{n}** — `{snap_ts}` trigger: `{snap.get('trigger', 'unknown')}`\n\n**Actions to undo:**\n{action_lines}\n\n{'*(and more...)*' if len(bot_actions) > 5 else ''}\n\n**Proceed:** `/rollback {n} confirm`\n**Cancel:** ignore this message"
+        return f"## ⚠️ Confirm Rollback\n\n**Snapshot #{n}** (`{snap_id[:8]}`) — `{snap_ts}` trigger: `{snap.get('trigger', 'unknown')}`\n\n**Actions to undo:**\n{action_lines}\n\n{'*(and more...)*' if len(bot_actions) > 5 else ''}\n\nAn action is undone only while it is still the bot's: a title or description someone has edited since is left as it is.\n\n**Proceed:** `/rollback {n} confirm {snap_id[:8]}`\n**Cancel:** ignore this message"
 
-    # Take a safety snapshot first — abort if it fails.
-    #
-    # take_snapshot() catches its own exceptions and returns None, so the
-    # try/except that used to guard this could never fire: a failed safety
-    # snapshot was swallowed and the rollback proceeded anyway, with nothing
-    # to undo it. The return value is what has to be checked.
+    # Once per snapshot, claimed before any write. Rolling the same snapshot
+    # back again re-issued every write — re-closing issues, re-setting titles
+    # over later edits — and two concurrent confirms both ran. The "safety
+    # snapshot" this replaces recorded no actions, so it could undo nothing,
+    # while each one pushed a real snapshot out of the last ten.
+    from app.core.redis_client import get_redis
+
+    done_key = f"snapshot_rolled_back:{repo}:{snap_id}"
     try:
-        safety_id = take_snapshot(repo, token, trigger=f"pre_rollback_by_{author}")
-    except Exception as exc:  # defensive — take_snapshot should not raise
-        log.error(f"cmd_rollback safety snapshot raised: {exc}")
-        safety_id = None
-
-    if not safety_id:
-        log.error(f"cmd_rollback.aborted repo={repo} — safety snapshot failed")
+        claimed = get_redis().set(done_key, author or "?", nx=True, ex=8 * 86400)
+    except Exception as e:
+        return unavailable.format(f"{type(e).__name__}: {e}"[:120])
+    if not claimed:
         return (
-            "## ⚠️ Rollback Aborted\n\n"
-            "Could not create a safety snapshot before rolling back, so there "
-            "would be no way to undo this. Rollback was **not** performed.\n\n"
-            "This usually means Redis or the GitHub API is unavailable. "
-            "Check `/health` and try again."
+            f"## ℹ️ Already Rolled Back\n\nSnapshot #{n} (`{snap_id[:8]}`) has already been "
+            "rolled back. Nothing was done again."
         )
 
     restored: list[str] = []
     failed: list[str] = []
+    skipped: list[str] = []
 
     # Newest action first. bot_actions arrives newest-first already, so the
     # previous `reversed()` undid oldest-first — and undoing is LIFO. With two
@@ -300,22 +368,51 @@ def cmd_rollback(
         num = action.get("number")
         try:
             if action_type == "create_issue" and num:
+                current = gh_get(f"/repos/{repo}/issues/{num}", token) or {}
+                if current.get("state") == "closed":
+                    skipped.append(f"Issue #{num} is already closed")
+                    continue
                 gh_patch(f"/repos/{repo}/issues/{num}", token, {"state": "closed"})
                 restored.append(f"Closed issue #{num}: {action.get('title', '')[:50]}")
 
             elif action_type == "edit_pr_title" and num:
-                old_title = action.get("old_title", "")
-                if old_title:
-                    gh_patch(f"/repos/{repo}/pulls/{num}", token, {"title": old_title})
-                    restored.append(f"Reverted PR #{num} title → `{old_title[:50]}`")
-                else:
+                # Title and/or description, whichever the bot rewrote — and
+                # only where the PR still shows what the bot wrote. A title
+                # someone changed after the bot was overwritten with the one
+                # before the bot.
+                current = gh_get(f"/repos/{repo}/pulls/{num}", token) or {}
+                revert, kept = {}, []
+                for field, label in (("title", "title"), ("body", "description")):
+                    if f"old_{field}" not in action or (
+                        field == "title" and not action.get("old_title")
+                    ):
+                        continue
+                    if f"new_{field}" not in action:
+                        kept.append(f"{label} (this record cannot show it is still the bot's)")
+                    elif (current.get(field) or "") != (action[f"new_{field}"] or ""):
+                        kept.append(f"{label} (edited since)")
+                    else:
+                        revert[field] = action[f"old_{field}"] or ""
+                if revert:
+                    gh_patch(f"/repos/{repo}/pulls/{num}", token, revert)
+                    what = " and ".join(k for k in ("title", "body") if k in revert).replace(
+                        "body", "description"
+                    )
+                    restored.append(f"Reverted PR #{num} {what}")
+                if kept:
+                    skipped.append(f"PR #{num}: left the " + ", ".join(kept))
+                if not revert and not kept:
                     failed.append(f"edit_pr_title #{num}: no old_title recorded")
 
             elif action_type == "add_labels" and num:
                 label_errors = []
                 for lbl in action.get("labels", []):
                     try:
-                        gh_delete(f"/repos/{repo}/issues/{num}/labels/{lbl}", token)
+                        # Quoted: bot labels contain spaces, colons and emoji,
+                        # and a "/" or "#" would address another resource.
+                        gh_delete(
+                            f"/repos/{repo}/issues/{num}/labels/{quote(str(lbl), safe='')}", token
+                        )
                     except GitHubError as le:
                         if le.status_code != 404:
                             label_errors.append(f"{lbl}: {str(le)[:40]}")
@@ -345,114 +442,22 @@ def cmd_rollback(
             log.error(f"cmd_rollback action {action_type} failed: {exc}")
             failed.append(f"{action_type} #{num or '?'}: {str(exc)[:60]}")
 
+    if not restored and failed:
+        # Nothing was undone: let it be tried again once the cause is fixed.
+        with contextlib.suppress(Exception):
+            get_redis().delete(done_key)
+    restored.extend(f"Skipped — {s}" for s in skipped)
+
     if not bot_actions:
         restored.append("No automated actions were recorded in this snapshot")
 
     return format_rollback_result(repo, snap, restored, failed)
 
 
-def cmd_release(repo: str, token: str, author: str) -> str:
-    """Draft a GitHub release from commits since last tag."""
-    try:
-        tags = gh_get(f"/repos/{repo}/tags?per_page=10", token)
-        commits = gh_get(f"/repos/{repo}/commits?per_page=20", token)
-
-        if not commits:
-            return "## ⚠️ No Commits Found\n\nThis repository has no commits yet."
-
-        tag_list = [t for t in (tags if isinstance(tags, list) else []) if isinstance(t, dict)]
-        existing_tags = [t["name"] for t in tag_list if t.get("name")]
-        latest_tag = existing_tags[0] if existing_tags else "v0.0.0"
-
-        # "commits since last tag", per the docstring — which this did not do.
-        # It listed the last 20 commits on the branch whatever the tag pointed
-        # at, so the drafted release notes re-announced everything already
-        # released in `latest_tag`.
-        from .reviewer import commits_since
-
-        commits = commits_since(
-            commits, (tag_list[0].get("commit") or {}).get("sha") if tag_list else None
-        )
-        if not commits:
-            return f"## ℹ️ Nothing to Release\n\nNo commits since `{latest_tag}`."
-
-        commit_list = "\n".join(
-            f"- {c['commit']['message'].split(chr(10))[0][:120]}" for c in commits[:15]
-        )
-
-        from app.ai.validator import as_text
-        from .reviewer import _bump_version
-        from app.handlers.comments import router
-
-        r, _ = router.ask(
-            "Technical writer. Generate a GitHub release. JSON only.",
-            f"""Generate release notes for the next version after {latest_tag}.
-Existing tags (DO NOT reuse): {", ".join(existing_tags[:10]) or "none"}
-Commits:
-{commit_list}
-
-Return JSON:
-{{
-  "version": "next semver e.g. v1.2.3",
-  "title": "short release title",
-  "highlights": ["key change 1"],
-  "breaking_changes": [],
-  "release_notes": "full markdown notes"
-}}""",
-            task="changelog",
-        )
-
-        version = as_text(r.get("version")).strip()
-        if not version or not re.match(r"^v\d+\.\d+\.\d+", version):
-            version = _bump_version(latest_tag)
-            log.warning(f"cmd_release: bad version from LLM, using {version}")
-        if version in existing_tags:
-            version = _bump_version(version)
-
-        try:
-            release = gh_post(
-                f"/repos/{repo}/releases",
-                token,
-                {
-                    "tag_name": version,
-                    "name": r.get("title", version),
-                    "body": r.get("release_notes", f"Release {version}"),
-                    "draft": True,
-                },
-            )
-        except GitHubError as exc:
-            if exc.status_code == 422:
-                return (
-                    f"## ⚠️ Tag Already Exists\n\n"
-                    f"`{version}` already exists. Try again — bot will auto-bump."
-                )
-            raise
-
-        highlights_md = (
-            "\n".join(f"- {h}" for h in r.get("highlights", [])[:5])
-            or "_No highlights identified._"
-        )
-        breaking = r.get("breaking_changes", [])
-        breaking_md = "\n".join(f"- ⚠️ {b}" for b in breaking[:3]) if breaking else ""
-
-        out = (
-            f"## 🚀 Draft Release Created\n\n"
-            f"**Version:** `{version}` | **Status:** Draft\n\n"
-            f"### Highlights\n{highlights_md}\n"
-        )
-        if breaking_md:
-            out += f"\n### ⚠️ Breaking Changes\n{breaking_md}\n"
-        out += (
-            f"\n[View & Edit Draft]({release.get('html_url', '')})\n\n"
-            f"> Review and publish when ready."
-        )
-        return out
-
-    except GitHubError as exc:
-        return f"## ⚠️ Release failed (GitHub API): `{str(exc)[:200]}`"
-    except Exception as exc:
-        log.error(f"cmd_release error: {exc}")
-        return f"## ⚠️ Release failed: `{str(exc)[:200]}`"
+# Moved to release.py when this module crossed the package's line ceiling.
+# Re-exported: the package __init__, reviewer's /version and the tests import
+# them from here.
+from .release import _semver, cmd_release, next_version  # noqa: E402,F401
 
 
 # Moved to integrations.py when this module crossed the package's line ceiling.

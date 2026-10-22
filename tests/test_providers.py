@@ -49,64 +49,6 @@ class TestGroqProvider:
         assert result.text == "hello"
         assert result.error is None
 
-    def test_token_tracking_uses_incrby(self):
-        """
-        V5 CRITICAL FIX: _track() must call incrby(tok_key, total_tokens)
-        not incr(tok_key). V4 always incremented by 1 making /budget useless.
-        """
-        rc.reset_client()
-        r = rc.get_redis()
-
-        from app.ai.providers.groq import GroqProvider
-        provider = GroqProvider()
-
-        import inspect
-        src = inspect.getsource(provider._track)
-        assert "incrby" in src, (
-            "CRITICAL: _track() must use r.incrby(tok_key, total_tokens) "
-            "not r.incr(tok_key). V4 always added 1 regardless of token count."
-        )
-
-    def test_token_tracking_accumulates_correctly(self):
-        rc.reset_client()
-        with patch.dict(os.environ, {"REDIS_URL": ""}):
-            r = rc.get_redis()
-
-        from app.ai.providers.groq import GroqProvider
-        provider = GroqProvider()
-
-        import datetime
-        today = datetime.date.today().isoformat()
-        tok_key = f"llm:tokens:{provider.provider_key}:{today}"
-
-        with patch("app.ai.providers.groq.get_redis", return_value=r):
-            provider._track(1500)  # First call: 1500 tokens
-            provider._track(500)   # Second call: 500 tokens
-            # Total must be 2000, not 2 (which incr(1) would give)
-            assert r.get(tok_key) == "2000", (
-                f"Token counter must be 2000 (sum of actual tokens), "
-                f"got {r.get(tok_key)}. V4 bug would give '2'."
-            )
-
-    def test_request_counter_uses_incr_one(self):
-        """Request counter (not token counter) must increment by 1 per call."""
-        rc.reset_client()
-        with patch.dict(os.environ, {"REDIS_URL": ""}):
-            r = rc.get_redis()
-
-        from app.ai.providers.groq import GroqProvider
-        provider = GroqProvider()
-
-        import datetime
-        today = datetime.date.today().isoformat()
-        req_key = f"llm:requests:{provider.provider_key}:{today}"
-
-        with patch("app.ai.providers.groq.get_redis", return_value=r):
-            provider._track(1500)
-            provider._track(2000)
-            provider._track(750)
-            assert r.get(req_key) == "3"  # 3 calls, each adds 1
-
     def test_rate_limit_returns_retry_after(self):
         from app.ai.providers.groq import GroqProvider
         provider = GroqProvider()
@@ -163,19 +105,6 @@ class TestGroqProvider:
                 mock_breaker.return_value.is_available.return_value = True
                 result = provider.call_raw("sys", "usr", 500, 0.2, 30)
         mock_breaker.return_value.record_failure.assert_called()
-
-    def test_track_skips_zero_tokens(self):
-        """_track with 0 tokens should be a no-op (no Redis writes)."""
-        rc.reset_client()
-        with patch.dict(os.environ, {"REDIS_URL": ""}):
-            r = rc.get_redis()
-        from app.ai.providers.groq import GroqProvider
-        provider = GroqProvider()
-        with patch("app.ai.providers.groq.get_redis", return_value=r):
-            provider._track(0)
-        import datetime
-        today = datetime.date.today().isoformat()
-        assert r.get(f"llm:tokens:{provider.provider_key}:{today}") is None
 
     def test_llm_response_fields(self):
         from app.ai.providers.groq import GroqProvider
@@ -258,7 +187,7 @@ class TestGeminiProvider:
                 result = provider.call_raw("sys", "usr", 500, 0.2, 30)
         assert "RATE_LIMIT" in result.error
         assert result.text == ""
-        mock_breaker.return_value.record_failure.assert_called()
+        mock_breaker.return_value.record_rate_limit.assert_called()
 
     def test_bad_request_is_reported_without_opening_the_circuit(self):
         """
@@ -324,36 +253,6 @@ class TestGeminiProvider:
         assert "Unexpected response format" in result.error
         mock_breaker.return_value.record_failure.assert_called()
 
-    def test_track_skips_zero_tokens(self):
-        """
-        _track with 0 tokens should be a no-op (no Redis writes). gemini.py
-        imports get_redis *inside* _track (unlike groq.py's module-level
-        import), so it always resolves the live redis_client singleton --
-        no patch target needed, just reset + let the fake store share state.
-        """
-        rc.reset_client()
-        with patch.dict(os.environ, {"REDIS_URL": ""}):
-            r = rc.get_redis()
-        from app.ai.providers.gemini import GeminiProvider
-        provider = GeminiProvider()
-        provider._track(0)
-        import datetime
-        today = datetime.date.today().isoformat()
-        assert r.get(f"llm:tokens:gemini:{today}") is None
-
-    def test_token_tracking_accumulates_correctly(self):
-        rc.reset_client()
-        with patch.dict(os.environ, {"REDIS_URL": ""}):
-            r = rc.get_redis()
-        from app.ai.providers.gemini import GeminiProvider
-        provider = GeminiProvider()
-        import datetime
-        today = datetime.date.today().isoformat()
-        tok_key = f"llm:tokens:gemini:{today}"
-        provider._track(1500)
-        provider._track(500)
-        assert r.get(tok_key) == "2000"
-
     def test_llm_response_fields(self):
         from app.ai.providers.gemini import GeminiProvider
         from app.ai.providers.base import LLMResponse
@@ -368,7 +267,7 @@ class TestGeminiProvider:
         assert result.prompt_tokens == 200
         assert result.completion_tokens == 100
         assert result.provider == "gemini"
-        assert result.model == "gemini-1.5-flash"
+        assert result.model == "gemini-flash-latest"
 
 
 class TestLLMResponse:

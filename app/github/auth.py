@@ -157,3 +157,41 @@ def clear_token_cache(installation_id: int = None):
             _token_cache.clear()
             _fetch_locks.clear()
             log.debug("auth.cache_cleared all")
+
+
+_bot_login: dict = {}  # {"login": "<slug>[bot]"} once read; "failed_at" after a failure
+_BOT_LOGIN_RETRY_SECONDS = 600
+
+
+def app_bot_login() -> str:
+    """
+    This App's bot account, `<slug>[bot]`, from GET /app. "" when it cannot
+    be read (no credentials, network). Cached for the process once known: an
+    App's slug does not change while it runs. A failure is not retried for
+    ten minutes, so a lookup that cannot succeed costs one request, not one
+    per comment examined.
+    """
+    if "login" in _bot_login:
+        return _bot_login["login"]
+    if time.time() - _bot_login.get("failed_at", 0) < _BOT_LOGIN_RETRY_SECONDS:
+        return ""
+    try:
+        r = requests.get(
+            "https://api.github.com/app",
+            headers={
+                "Authorization": f"Bearer {get_jwt()}",
+                "Accept": "application/vnd.github+json",
+            },
+            timeout=10,
+        )
+        r.raise_for_status()
+        slug = str((r.json() or {}).get("slug") or "")
+    except Exception as e:
+        log.warning(f"auth.app_slug_unavailable: {type(e).__name__}")
+        _bot_login["failed_at"] = time.time()
+        return ""
+    if slug:
+        _bot_login["login"] = f"{slug}[bot]"
+    else:
+        _bot_login["failed_at"] = time.time()
+    return _bot_login.get("login", "")

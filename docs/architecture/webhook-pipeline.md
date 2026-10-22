@@ -3,6 +3,13 @@
 > The security pipeline is the strongest engineering section in this project.
 > Every webhook passes seven sequential stages before any handler code runs.
 > This document explains each stage: what it checks, why, how it is implemented, and what it fails on.
+>
+> Code excerpts are illustrative; the source in `app/core/webhook_security.py`,
+> `app/core/idempotency.py`, `app/core/event_queue.py` and `server.py` is
+> authoritative. Sections 8–10 were rewritten in 2026-10: they described a
+> fingerprint keyed on the delivery id, a 1-hour dedup TTL and a pool that
+> dropped events behind a 202 — and relied on "GitHub retries for 72 hours",
+> which GitHub does not do.
 
 ---
 
@@ -16,7 +23,7 @@
 6. [Stage 4 — JSON Parse](#6-stage-4--json-parse)
 7. [Stage 5 — Bot Sender Detection](#7-stage-5--bot-sender-detection)
 8. [Stage 6 — Replay Protection and Idempotency](#8-stage-6--replay-protection-and-idempotency)
-9. [Stage 7 — Thread Pool Dispatch](#9-stage-7--thread-pool-dispatch)
+9. [Stage 7 — Enqueue, and recovery of what failed](#9-stage-7--enqueue-and-recovery-of-what-failed)
 10. [Failure Mode Summary](#10-failure-mode-summary)
 11. [Defense-in-Depth — Why Every Layer Matters](#11-defense-in-depth--why-every-layer-matters)
 
@@ -36,7 +43,7 @@ The pipeline is a **defense-in-depth** architecture. No single layer is sufficie
 | Duplicate processing after app restarts | Stage 6 (idempotency) |
 | Thread starvation from unbounded job queues | Stage 7 (pool cap) |
 
-**Guiding principle: fail closed.** A missing `GITHUB_WEBHOOK_SECRET` rejects all webhooks (HTTP 401). An overloaded job queue drops events silently rather than accepting them into an unbounded buffer. When in doubt, reject.
+**Guiding principle: fail closed.** A missing `GITHUB_WEBHOOK_SECRET` rejects all webhooks (HTTP 401). An overloaded queue answers 503 rather than accepting events into an unbounded buffer, and the redelivery sweep (§9) recovers them. When in doubt, reject.
 
 ---
 
@@ -48,7 +55,7 @@ The pipeline is a **defense-in-depth** architecture. No single layer is sufficie
                                       ▼
                      ┌────────────────────────────────────┐
                      │   [1]  Payload Size Check          │
-                     │        Content-Length > 25MB?      │──YES──► HTTP 413 stop
+                     │        body > 25MB?                │──YES──► HTTP 413 stop
                      └───────────────────┬────────────────┘
                                          │ NO (or no header)
                                          ▼
@@ -112,16 +119,15 @@ The pipeline is a **defense-in-depth** architecture. No single layer is sufficie
 ```python
 MAX_PAYLOAD_BYTES = 25 * 1024 * 1024   # 25MB
 
-content_length = request.content_length
-if content_length and content_length > MAX_PAYLOAD_BYTES:
+# The body's real length, not the Content-Length header: the header is
+# optional, and trusting it let a large body through when it was absent.
+if len(request.get_data()) > MAX_PAYLOAD_BYTES:
     return jsonify({"error": "Payload too large"}), 413
 ```
 
 **Why 25MB?** GitHub's largest legitimate payloads — push events with many commits, large diffs — are typically under 1MB. 25MB provides generous headroom for any unusual but legitimate event while blocking any attempt to send a payload large enough to exhaust the 512MB Render free-tier instance in a single request.
 
-**Edge case — stripped Content-Length:** Some HTTP proxies strip `Content-Length`. When the header is absent, the check is skipped. The Gunicorn worker timeout (60 seconds) limits the duration of any attack that exploits this path. Gunicorn's `--limit-request-line` and `--limit-request-fields-size` settings provide additional guards at the HTTP layer.
-
-**Response:** HTTP 413 (Payload Too Large). GitHub will not retry 413 responses.
+**Response:** HTTP 413 (Payload Too Large). GitHub does not retry any failed delivery by itself, and the redelivery sweep deliberately skips 413s.
 
 ---
 
@@ -301,139 +307,63 @@ Layer 3 (`OWN_BOT_LOGINS` set) explicitly catches this app's own accounts. If th
 
 ## 8. Stage 6 — Replay Protection and Idempotency
 
-**What it prevents:** Duplicate processing of the same event across multiple delivery attempts.
+**What it prevents:** processing one event twice — when GitHub (or the
+redelivery sweep, or an operator) delivers it again, or when a captured signed
+body is replayed.
 
-**The problem:** GitHub retries webhook deliveries for up to 72 hours on any failure (including server restarts, timeouts, or 5xx responses). Every Render deployment restart would previously cause the app to reprocess all events from the last hour — creating duplicate comments, duplicate labels, and wasted AI API quota.
-
-**Fingerprint construction:**
-```python
-def make_fingerprint(delivery_id: str, event_type: str, payload: dict) -> str:
-    number = (
-        payload.get("pull_request", {}).get("number")
-        or payload.get("issue",        {}).get("number")
-        or payload.get("check_run",    {}).get("id")
-        or ""
-    )
-    raw = "|".join([
-        delivery_id or "",
-        event_type  or "",
-        payload.get("action", ""),
-        payload.get("repository", {}).get("full_name", ""),
-        str(number),
-    ])
-    return hashlib.sha256(raw.encode()).hexdigest()[:16]
-```
-
-The fingerprint is **deterministic** — the same event always produces the same fingerprint — but **unique per delivery ID** — a GitHub retry of the same event (new `X-GitHub-Delivery` UUID) produces a different fingerprint and is processed fresh.
-
-**Idempotency store — why `SET NX` is the only correct primitive:**
+**Fingerprint: a hash of the payload.** GitHub signs the body only; the
+`X-GitHub-Delivery` and `X-GitHub-Event` headers are not signed. A fingerprint
+built from the delivery id let anyone holding one captured body replay it
+under a fresh delivery id and have it processed again. So the key is what
+GitHub signed:
 
 ```python
-def is_duplicate(fingerprint: str) -> bool:
-    r = get_redis()
-    result = r.set(f"idem:{fingerprint}", "1", nx=True, ex=3600)
-    return result is None   # None = key existed = already processed
+def make_fingerprint(delivery_id, event_type, payload) -> str:
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(canonical.encode("utf-8", "surrogatepass")).hexdigest()[:32]
 ```
 
-```python
-# WRONG — EXISTS + SET is two commands, has a race condition
-if not r.exists(key):       # Thread A: key doesn't exist
-    # Thread B runs here: Thread B also sees key doesn't exist
-    r.set(key, "1")         # Both set it
-    process_event()         # Both process — DUPLICATE
+A redelivery carries the same payload, so a redelivery of an event that was
+already processed is skipped — which is what makes the redelivery sweep (§9)
+safe to run.
 
-# CORRECT — SET NX is one command, atomic at Redis server level
-result = r.set(key, "1", nx=True, ex=3600)
-# Redis is single-threaded. One caller gets True, one gets None.
-# No race condition is possible at any concurrency level.
-```
+**Store:** `SET idem:<fingerprint> 1 NX EX 86400`. `SET NX` is one atomic
+command, so two concurrent deliveries get exactly one "new". 24 hours covers
+manual redeliveries and the sweep's 6-hour look-back. Every path that does not
+accept an event (queue full, pool saturated) releases the key, so the
+redelivery that follows is processed rather than called a duplicate.
 
-**Why 1-hour TTL and not 72-hour?** GitHub retries for 72 hours. A 1-hour TTL means events from more than 1 hour ago may reprocess after a long outage. This is the correct tradeoff: a 72-hour TTL for every event on a busy repo would consume most of the 25MB free Redis instance.
+**Limit:** a captured signed body replayed more than 24 hours later is
+processed again. GitHub sends no timestamp header, so there is nothing else in
+a delivery to date it by.
 
-**In-memory fallback when Redis is down:**
-```python
-_seen: OrderedDict[str, float] = OrderedDict()
-_MAX_SEEN = 10_000
-
-def _memory_is_duplicate(fp: str) -> bool:
-    now = time.time()
-    expired = [k for k, ts in _seen.items() if now - ts > 3600]
-    for k in expired:
-        del _seen[k]
-    while len(_seen) >= _MAX_SEEN:
-        _seen.popitem(last=False)   # evict oldest
-    if fp in _seen:
-        return True
-    _seen[fp] = now
-    return False
-```
-
-Thread-safe via Python's GIL for dict operations. Not durable across restarts. Prevents double-processing within a single server lifetime when Redis is unavailable.
+**Redis down:** an in-process `OrderedDict` with a lock stands in, bounded to
+2,000 entries. It does not survive a restart.
 
 ---
 
-## 9. Stage 7 — Thread Pool Dispatch
+## 9. Stage 7 — Enqueue, and recovery of what failed
 
-**What it prevents:** GitHub webhook timeout (10s) and OOM from unbounded concurrent processing.
+GitHub records a delivery as failed when the server does not answer within 10
+seconds or answers with an error — and **does not redeliver it**
+([GitHub docs](https://docs.github.com/webhooks/using-webhooks/handling-failed-webhook-deliveries)).
+So the request path does as little as possible: park the event in Redis and
+answer `202`.
 
-**Why async dispatch is required:**
+| Outcome | Answer | What happens to the event |
+|---------|--------|---------------------------|
+| Queued | `202` | Consumer threads process it; transient failures retry after 30 s, 5 min, 30 min, then dead-letter |
+| Queue full (200 events) | `503` | Dedup key released; the redelivery sweep asks GitHub to resend it |
+| Redis down, or envelope > 512 KB | `202` | Run on the in-process pool (6 workers, 50 pending) — not durable |
+| Pool saturated | `503` | Dedup key released; recovered by the sweep |
 
-GitHub marks a webhook delivery as failed if the server does not respond within 10 seconds. LLM calls take 1–10 seconds. Code review on a large PR can take 15 seconds. Waiting for processing to complete before ACKing would cause GitHub to retry every webhook it sent.
-
-The correct pattern: ACK immediately (< 50ms), process asynchronously, use idempotency to absorb GitHub's retries.
-
-**Implementation:**
-```python
-MAX_DISPATCH_WORKERS = int(os.environ.get("MAX_DISPATCH_WORKERS", "6"))
-_QUEUE_CAP = 50
-
-_pool = ThreadPoolExecutor(
-    max_workers=MAX_DISPATCH_WORKERS,
-    thread_name_prefix="webhook-dispatch",
-)
-_pending = 0
-_pending_lock = threading.Lock()
-
-def _dispatch(event: str, payload: dict, repo: str):
-    global _pending
-
-    with _pending_lock:
-        if _pending >= _QUEUE_CAP:
-            log.error(
-                f"dispatch.queue_full pending={_pending} cap={_QUEUE_CAP} "
-                f"event={event} repo={repo} — DROPPING"
-            )
-            return   # event dropped — caller gets HTTP 202 regardless
-        _pending += 1
-
-    def _run():
-        global _pending
-        try:
-            # Route to correct handler
-            if event == "pull_request":
-                from app.handlers.pull_request import handle; handle(payload)
-            elif event == "issues":
-                from app.handlers.issues import handle; handle(payload)
-            elif event == "issue_comment":
-                from app.handlers.comments import handle; handle(payload)
-            elif event == "push":
-                from app.handlers.push import handle; handle(payload)
-            elif event == "check_run":
-                from app.handlers.ci import handle; handle(payload)
-        except Exception as e:
-            log.error(f"dispatch.error event={event}: {e}", exc_info=True)
-        finally:
-            with _pending_lock:
-                _pending -= 1   # ALWAYS decrement — even on exception
-
-    _pool.submit(_run)
-```
-
-**Why `finally` for `_pending -= 1`:** If the handler raises an uncaught exception, the `except Exception` block logs it. Without `finally`, `_pending` would never be decremented for that slot. Over time, crashed handlers would accumulate phantom pending counts, eventually exhausting the queue cap and causing all new webhooks to be dropped — a silent failure mode that is very difficult to debug.
-
-**Why 6 workers specifically:** See [system-architecture.md §9.1](system-architecture.md#decision-1--threadpoolexecutor-over-celery) for the full analysis. Short version: Groq's free tier supports ~3.5 LLM calls/minute sustained. 6 workers provides 10× throughput headroom over the API limit while staying within 512MB RAM.
-
-**Why 50-job queue cap:** Without a cap, the `ThreadPoolExecutor` internal queue is unbounded. A GitHub retry storm (app was down for 2 hours; GitHub queued 500 retries) arriving simultaneously could enqueue 500 jobs consuming gigabytes of memory in a 512MB instance. At 50 pending, new arrivals are dropped. GitHub retries them in the next window (5 minutes). Individual events are delayed; the server stays alive.
+**The redelivery sweep** (`app/github/redelivery.py`): 45 s after boot and
+every 10 minutes, list the App's deliveries from the last 6 hours (JWT,
+`GET /app/hook/deliveries`) and redeliver each event none of whose attempts
+succeeded, when its last failure was no response, a 429 or a 5xx
+(`POST /app/hook/deliveries/{id}/attempts`). At most two redeliveries per
+event. 400/401/413 are deliberate refusals and are left alone. On Render's
+free tier this is what recovers the delivery that woke a sleeping instance.
 
 ---
 
@@ -441,14 +371,16 @@ def _dispatch(event: str, payload: dict, repo: str):
 
 | Stage | Failure scenario | Behaviour | Recovery |
 |-------|-----------------|-----------|---------|
-| 1 — Size | `Content-Length` stripped by proxy | Check skipped | Gunicorn 60s timeout limits damage |
-| 2 — Rate limit | Redis unavailable | Fail open (allow) | Per-process in-memory counter activates |
-| 3 — HMAC | `WEBHOOK_SECRET` empty | HTTP 401 (fail closed) | `_startup_check()` prevents this at boot |
-| 3 — HMAC | Proxy re-signs payload | HTTP 401 | Configure proxy to pass raw signatures |
-| 4 — JSON | Malformed body | HTTP 400 | GitHub retries with correct content |
-| 5 — Bot | Bot without `[bot]` suffix | Event processed (missed) | Add to `OWN_BOT_LOGINS` |
-| 6 — Replay | Redis unavailable | In-memory fallback | Durability lost until Redis recovers |
-| 7 — Pool | All workers busy | Drop + HTTP 202 | GitHub retries in 5 minutes |
+| 1 — Size | Body over 25 MB | HTTP 413 | None — a deliberate refusal |
+| 2 — Rate limit | Over 100/min from one source IP | HTTP 429 | Redelivery sweep |
+| 2 — Rate limit | Redis unavailable | Per-process counter | Automatic |
+| 3 — HMAC | `GITHUB_WEBHOOK_SECRET` empty | HTTP 401 (fail closed); `startup_check()` refuses to boot | Set the secret |
+| 4 — JSON | Not a JSON object | HTTP 400 | None — a deliberate refusal |
+| 5 — Bot | Bot sender | HTTP 200, skipped | — |
+| 6 — Dedup | Redis unavailable | In-memory fallback | Durable again when Redis returns |
+| 7 — Queue | Full / pool saturated | HTTP 503, dedup released | Redelivery sweep |
+| — | Cold start longer than 10 s | GitHub records a failure | Redelivery sweep, 45 s after boot |
+| — | Redis restarted (free tier keeps nothing on disk) | Queue and dedup keys lost | Events in flight are lost; recovered only if their delivery had failed |
 
 ---
 

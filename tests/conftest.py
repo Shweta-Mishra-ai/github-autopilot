@@ -18,6 +18,12 @@ import time
 import pytest
 from unittest.mock import patch
 
+# Importing server boots the app, which starts the webhook redelivery thread
+# (app/github/redelivery.py). Left on, it would wake mid-suite and call the
+# GitHub API from inside whichever test happened to be running. Its tests
+# call sweep() directly.
+os.environ["WEBHOOK_REDELIVERY"] = "0"
+
 # ── Ensure project root is on sys.path ────────────────────────────────────────
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
@@ -334,7 +340,14 @@ def no_real_network(request):
             host.startswith(("127.", "localhost", "::1")) or host in ("", "0.0.0.0")
         )
 
+    attempts: list[str] = []
+
     def _refuse(host):
+        # Recorded as well as raised: the app catches broad exceptions on most
+        # network paths and carries on as "no data", so a raise alone left the
+        # test passing on the error path it never meant to test. Teardown
+        # fails the test if anything was recorded.
+        attempts.append(str(host))
         raise RuntimeError(
             f"A unit test tried to open a real connection to {host!r}.\n"
             "Mock the client instead. If the test genuinely needs the network, "
@@ -380,13 +393,41 @@ def no_real_network(request):
     http.client.HTTPConnection.set_tunnel = _guard_set_tunnel
     http.client.HTTPConnection.putrequest = _guard_putrequest
     try:
-        yield
+        yield attempts  # the guard's own tests read and clear this
     finally:
         socket.socket.connect = real_connect
         socket.getaddrinfo = real_getaddrinfo
         http.client.HTTPConnection.set_tunnel = real_set_tunnel
         http.client.HTTPConnection.putrequest = real_putrequest
         os.environ.update(saved_proxy_env)
+    if attempts:
+        pytest.fail(
+            f"tried to reach the network ({', '.join(sorted(set(attempts)))}); the app "
+            "swallowed the refusal, so this test ran the 'no data' path. Mock the client.",
+            pytrace=False,
+        )
+
+
+@pytest.fixture(autouse=True)
+def clean_config_cache():
+    """Config caches (and the last valid config) are per process; tests reuse
+    repo names with different configs."""
+    from app.core.config import invalidate_config_cache
+
+    invalidate_config_cache()
+    yield
+    invalidate_config_cache()
+
+
+@pytest.fixture(autouse=True)
+def clean_tree_cache():
+    """repo_file_context caches trees for a minute; tests reuse repo names
+    with different trees."""
+    from app.github.helpers import clear_tree_cache
+
+    clear_tree_cache()
+    yield
+    clear_tree_cache()
 
 
 @pytest.fixture(autouse=True)
@@ -396,6 +437,21 @@ def clean_redis_singleton():
     rc.reset_client()
     yield
     rc.reset_client()
+
+
+@pytest.fixture(autouse=True)
+def clean_idempotency_memory():
+    """Every test starts with no event recorded as seen.
+
+    Without Redis the dedup set is a module-level dict. The fingerprint is a
+    hash of the payload alone, and many tests send the same three-key payload,
+    so one test's webhook marked another test's event as a duplicate — which
+    test failed depended on the random order.
+    """
+    import app.core.idempotency as idem
+    idem._seen_local.clear()
+    yield
+    idem._seen_local.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -471,3 +527,73 @@ def mock_github_client(monkeypatch):
     monkeypatch.setattr("app.github.client.gh_get", mock_get)
     monkeypatch.setattr("app.github.client.gh_post", mock_post)
     return {"get": mock_get, "post": mock_post}
+
+
+# ── No real network in unit tests ────────────────────────────────────────────
+#
+# A unit test that reaches api.github.com is not a unit test: it passes or
+# fails on the network, sends unauthenticated requests from CI, and — because
+# the app treats a failed fetch as "no data" — hides that it ever happened.
+# The 2026-10-08 audit found 51 such calls in the review tests alone (the
+# surrounding-code fetch). Every request to a non-local host now fails at
+# once with ConnectionError, which is exactly the offline path the code
+# already handles. Integration and e2e tests talk to local servers only.
+_LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1", "[::1]")
+
+
+@pytest.fixture(autouse=True)
+def _no_external_network(request, monkeypatch):
+    import requests
+    from urllib.parse import urlparse
+
+    # A module that watches egress at the socket level (and blocks it there
+    # itself) needs requests to reach the socket layer, or its watcher sees
+    # nothing and its control test fails.
+    if request.node.get_closest_marker("socket_egress_watch"):
+        yield
+        return
+
+    original = requests.Session.request
+
+    def guarded(self, method, url, *args, **kwargs):
+        host = urlparse(str(url)).hostname or ""
+        if host not in _LOCAL_HOSTS:
+            raise requests.ConnectionError(f"unit tests may not reach the network: {method} {url}")
+        return original(self, method, url, *args, **kwargs)
+
+    monkeypatch.setattr(requests.Session, "request", guarded)
+    yield
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """
+    Fail the run if a test left a mock installed in an application module.
+
+    A test that monkeypatched a name another fixture had already patched
+    "restored" the mock on teardown, and service.gh_post stayed a MagicMock
+    for every later test in the process: those tests posted nowhere and
+    passed or failed depending on the random order. Nothing pointed at the
+    cause. This names it.
+    """
+    import sys
+    from unittest import mock
+
+    leaked = []
+    # Hard dependencies that are always installed: a mock standing in for one
+    # was a test file's module-level setdefault winning the collection race,
+    # and it broke whichever tests happened to run after it.
+    for dep in ("requests", "flask", "jwt", "cryptography", "yaml"):
+        if isinstance(sys.modules.get(dep), mock.Base):
+            leaked.append(f"sys.modules[{dep!r}]")
+    for name, module in list(sys.modules.items()):
+        if module is None or not (name == "server" or name.startswith("app.")):
+            continue
+        for attr, value in list(vars(module).items()):
+            if isinstance(value, mock.Base):
+                leaked.append(f"{name}.{attr}")
+    if leaked:
+        sys.stderr.write(
+            "\nA test left these patched after it finished (restore them):\n  "
+            + "\n  ".join(sorted(leaked)) + "\n"
+        )
+        session.exitstatus = 1

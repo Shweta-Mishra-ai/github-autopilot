@@ -1,13 +1,8 @@
 """
 app/ai/providers/groq.py
-V5 — Fixed token tracking.
-
-FIXES vs V4:
-  1. TOKEN COUNTER BUG: _track() used r.incr(tokens_key) which always adds 1,
-     not the actual token count. Replaced with r.incrby(tokens_key, total_tokens).
-     The /budget command now shows real token usage instead of a request count.
-  2. REQUEST COUNTER separated from token counter: tokens tracked via incrby,
-     requests tracked via incr(1) — both correct.
+Usage (requests, tokens, cost) is counted once, by the router, under this
+provider's key — see LLMRouter._log_and_track. This module used to count it
+too, which doubled Gemini's figures and split Groq's across two keys.
 """
 
 import logging
@@ -24,8 +19,9 @@ from app.ai.providers.base import (
     client_error_detail,
     substituted_model,
     throttle_pause,
+    truncated_error,
+    was_cut_off,
 )
-from app.core.redis_client import get_redis
 
 log = logging.getLogger(__name__)
 
@@ -174,7 +170,7 @@ class GroqProvider(LLMProvider):
                     # Still throttled after waiting: the account really is
                     # saturated, so back off properly and let the breaker see it.
                     retry_after, _ = throttle_pause(r, default=retry_after)
-                    breaker.record_failure(f"rate_limit retry_after={retry_after}s")
+                    breaker.record_rate_limit(retry_after)
                     return LLMResponse(
                         text="",
                         provider="groq",
@@ -236,6 +232,20 @@ class GroqProvider(LLMProvider):
                     error=detail,
                 )
 
+            # Any other 4xx (400 bad parameter, 413 request too large, 422) is
+            # a fault in THIS request, not an outage. It used to fall into the
+            # generic handler below, whose `"raise_for_status" not in err`
+            # guard could never be true, so three oversized prompts opened the
+            # breaker and blocked every groq_70b call for a minute.
+            if 400 <= _status < 500 and _status != 429:
+                log.warning(f"groq.client_error status={_status} model={model}")
+                return LLMResponse(
+                    text="",
+                    provider="groq",
+                    model=model,
+                    error=f"Client error {_status}: {r.text[:150]}",
+                )
+
             r.raise_for_status()
             data = r.json()
             usage = data.get("usage", {})
@@ -243,10 +253,10 @@ class GroqProvider(LLMProvider):
             c_tok = usage.get("completion_tokens", 0)
             t_tok = usage.get("total_tokens", 0)
             cost = (t_tok / 1000) * GROQ_COST.get(self.provider_key, 0)
-            text = data["choices"][0]["message"]["content"]
+            choice = data["choices"][0]
+            text = (choice.get("message") or {}).get("content") or ""
 
             breaker.record_success()
-            self._track(t_tok)
 
             return LLMResponse(
                 text=text,
@@ -256,6 +266,9 @@ class GroqProvider(LLMProvider):
                 completion_tokens=c_tok,
                 total_tokens=t_tok,
                 cost_usd=round(cost, 6),
+                error=truncated_error(max_tokens)
+                if was_cut_off(choice.get("finish_reason"))
+                else None,
             )
 
         except http_requests.exceptions.Timeout:
@@ -267,41 +280,13 @@ class GroqProvider(LLMProvider):
                 error="Request timed out",
             )
         except Exception as e:
-            err = str(e)
-            if "raise_for_status" not in err:
-                breaker.record_failure(err[:60])
+            from app.core.redaction import redact_secrets
+
+            err = redact_secrets(str(e))
+            breaker.record_failure(err[:60])
             return LLMResponse(
                 text="",
                 provider="groq",
                 model=model,
                 error=err[:200],
             )
-
-    def _track(self, total_tokens: int):
-        """
-        Track token + request usage in Redis for /budget command.
-
-        FIXED: tokens key now uses incrby(total_tokens) instead of incr(1).
-        The old code incremented the token counter by 1 per call regardless
-        of how many tokens were consumed, making /budget data meaningless.
-        """
-        try:
-            import datetime
-
-            if total_tokens <= 0:
-                return
-            r = get_redis()
-            today = datetime.date.today().isoformat()
-
-            # Tokens: add actual count
-            tok_key = f"llm:tokens:{self.provider_key}:{today}"
-            r.incrby(tok_key, total_tokens)
-            r.expire(tok_key, 86400)
-
-            # Requests: always +1 per call
-            req_key = f"llm:requests:{self.provider_key}:{today}"
-            r.incr(req_key)
-            r.expire(req_key, 86400)
-
-        except Exception as e:
-            log.debug(f"groq.track_usage_failed provider={self.provider_key}: {e}")

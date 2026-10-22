@@ -170,6 +170,32 @@ class TestOrderingIsActuallyFIFO:
 # ── At-least-once and crash recovery ─────────────────────────────────────────
 
 
+def _claimed_by_a_dead_process(queue, live_redis, raw):
+    """What a crash leaves: the envelope claimed by a process whose
+    heartbeat key has expired (it was never set here)."""
+    live_redis.hset(
+        queue.CLAIMS_KEY, queue._claim_id(raw), json.dumps({"pid": "crashed-proc", "at": 0})
+    )
+
+
+class TestDeployOverlap:
+    def test_an_event_another_live_process_is_handling_is_not_stolen(self, queue, live_redis):
+        """A zero-downtime deploy boots the new instance while the old one is
+        still handling events. Recovery requeued them, so they ran twice."""
+        queue.enqueue("pull_request", {"n": 2}, "o/r", "d2")
+        raw = live_redis.rpoplpush(queue.PENDING_KEY, queue.PROCESSING_KEY)
+        live_redis.hset(
+            queue.CLAIMS_KEY, queue._claim_id(raw), json.dumps({"pid": "old-instance", "at": int(time.time())})
+        )
+        live_redis.set(queue.ALIVE_KEY.format("old-instance"), "1", ex=30)
+
+        assert queue.recover_stale() == 0
+        assert live_redis.llen(queue.PROCESSING_KEY) == 1
+
+        live_redis.delete(queue.ALIVE_KEY.format("old-instance"))  # it stopped
+        assert queue.recover_stale() == 1
+
+
 class TestAnEventSurvivesACrash:
     """The reason the queue exists. A thread pool loses everything on restart;
     this must not."""
@@ -181,6 +207,7 @@ class TestAnEventSurvivesACrash:
         # and the process dies before LREM.
         raw = live_redis.rpoplpush(queue.PENDING_KEY, queue.PROCESSING_KEY)
         assert raw is not None
+        _claimed_by_a_dead_process(queue, live_redis, raw)
         assert live_redis.llen(queue.PROCESSING_KEY) == 1
         assert live_redis.llen(queue.PENDING_KEY) == 0
 
@@ -190,8 +217,11 @@ class TestAnEventSurvivesACrash:
 
     def test_a_poison_event_dead_letters_instead_of_looping(self, queue, live_redis):
         """Without this it is requeued forever and the queue never drains."""
-        env = json.dumps({"id": "d1", "event": "push", "repo": "o/r", "payload": {}, "attempts": 1})
+        env = json.dumps(
+            {"id": "d1", "event": "push", "repo": "o/r", "payload": {}, "attempts": queue.MAX_ATTEMPTS - 1}
+        )
         live_redis.lpush(queue.PROCESSING_KEY, env)
+        _claimed_by_a_dead_process(queue, live_redis, env)
 
         assert queue.recover_stale() == 0
         assert live_redis.llen(queue.DEAD_KEY) == 1
@@ -199,13 +229,16 @@ class TestAnEventSurvivesACrash:
 
     def test_unparseable_json_is_dead_lettered_not_crashed_on(self, queue, live_redis):
         live_redis.lpush(queue.PROCESSING_KEY, "{not json at all")
+        _claimed_by_a_dead_process(queue, live_redis, "{not json at all")
         queue.recover_stale()
         assert live_redis.llen(queue.DEAD_KEY) == 1
 
     def test_the_dead_letter_list_stays_bounded(self, queue, live_redis):
         """25MB of Redis. An unbounded debug list is a slow outage."""
         for i in range(queue.DEAD_MAX + 25):
-            live_redis.lpush(queue.PROCESSING_KEY, json.dumps({"id": i, "attempts": 5}))
+            raw = json.dumps({"id": i, "attempts": 5})
+            live_redis.lpush(queue.PROCESSING_KEY, raw)
+            _claimed_by_a_dead_process(queue, live_redis, raw)
         queue.recover_stale(max_items=queue.DEAD_MAX + 25)
         assert live_redis.llen(queue.DEAD_KEY) == queue.DEAD_MAX
 
@@ -337,8 +370,10 @@ class TestIdempotencyAgainstRealRedis:
     def test_two_different_deliveries_do_not_collide(self, live_redis):
         import app.core.idempotency as idem
 
-        a = idem.make_fingerprint("delivery-1", "push", {"a": 1})
-        b = idem.make_fingerprint("delivery-2", "push", {"a": 1})
+        # Two real deliveries differ in their bodies; the same signed body under
+        # a new delivery id is a replay (see test_idempotency).
+        a = idem.make_fingerprint("delivery-1", "push", {"after": "aaa"})
+        b = idem.make_fingerprint("delivery-2", "push", {"after": "bbb"})
         assert a != b
         assert idem.is_duplicate(a) is False
         assert idem.is_duplicate(b) is False
@@ -403,3 +438,60 @@ class TestLosingRedisDegradesRatherThanBreaks:
         import app.core.event_queue as eq
 
         assert eq.recover_stale() == 0
+
+
+class TestAParkedReplyIsDeliveredByTheQueue:
+    """A reply GitHub refused for a passing reason waits on the delayed set,
+    is promoted when due, and is posted by the real runner — on its own, with
+    the command that produced it never run again."""
+
+    def test_park_promote_deliver(self, queue, live_redis, monkeypatch):
+        from unittest.mock import MagicMock, patch
+
+        # Importing server boots it; with REDIS_URL live that would start
+        # background consumers that take the job before this test does.
+        monkeypatch.setattr(queue, "CONSUMER_COUNT", 0)
+        import server
+        from app.github import deferred_reply
+        from app.github.client import GitHubError
+
+        post = MagicMock(side_effect=GitHubError("bad gateway", 502))
+        deferred_reply.post_comment("o/r", 4, "tok", 9, "the answer", post=post)
+        assert live_redis.llen(queue.PENDING_KEY) == 0, "parked, not run at once"
+        assert queue.promote_due() == 0, "not due yet"
+
+        (raw,) = live_redis.zrange(queue.DELAYED_KEY, 0, -1)
+        live_redis.zadd(queue.DELAYED_KEY, {raw: time.time() - 1})  # its time has come
+        assert queue.promote_due() == 1
+
+        # The first POST's answer was lost, not necessarily the comment: the
+        # delivery looks for its marker first, and finds none here.
+        with patch("app.github.auth.get_installation_token", return_value="fresh"), \
+             patch("app.github.client.gh_get", return_value=[]), \
+             patch("app.github.deferred_reply.gh_post") as delivered:
+            assert queue._consume_once(server._run_handler)
+        (path, token, body), _ = delivered.call_args
+        assert (path, token) == ("/repos/o/r/issues/4/comments", "fresh")
+        assert body["body"].startswith("the answer\n<!-- autopilot-reply:")
+        assert live_redis.llen(queue.PROCESSING_KEY) == 0
+
+
+def test_a_reused_repository_name_is_cleared_on_a_real_server(live_redis):
+    """app/core/repo_identity.py against a real server: SCAN patterns and
+    bytes/str handling differ from the in-process fake."""
+    from app.core import repo_identity
+    from app.intelligence import memory
+
+    repo_identity.ensure("o/r", 111)
+    memory.remember("o/r", "old owner's decision", kind="decision")
+    live_redis.set("snapshot:o/r:3", "{}")
+    live_redis.set("analytics:o/r:cmd:fix:2026-10-15", "4")
+    live_redis.set("analytics:o/r2:cmd:fix:2026-10-15", "1")
+
+    assert repo_identity.ensure("o/r", 111) is False
+    assert repo_identity.ensure("o/r", 222) is True
+    assert live_redis.get("snapshot:o/r:3") is None
+    assert live_redis.get("analytics:o/r:cmd:fix:2026-10-15") is None
+    assert live_redis.lrange("mem:o/r", 0, -1) == []
+    assert live_redis.get("analytics:o/r2:cmd:fix:2026-10-15") == "1"
+    assert live_redis.get("repo_id:o/r") == "222"

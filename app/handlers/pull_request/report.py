@@ -19,6 +19,7 @@ def _build_pr_report(
     gaps_md: str,
     pr: dict,
     files: list,
+    notices_md: str = "",
 ) -> str:
     """
     Assemble the single sticky body.
@@ -34,6 +35,15 @@ def _build_pr_report(
         f"## 🤖 Autopilot — PR #{pr.get('number', '?')}\n",
         f"**Files:** {len(files)} · **+{adds} −{dels}**",
     ]
+    from app.github.helpers import PR_FILES_MAX_PAGES, PR_FILES_PER_PAGE
+
+    if len(files) >= PR_FILES_MAX_PAGES * PR_FILES_PER_PAGE:
+        parts.append(
+            f"> ℹ️ GitHub lists at most {len(files):,} files for a pull request. "
+            "This report covers those; any beyond them were not seen."
+        )
+    if notices_md:
+        parts.append(notices_md)
     if summary_md:
         parts.append(summary_md)
     if analysis_md:

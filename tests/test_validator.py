@@ -114,15 +114,15 @@ class TestIssueTriageValidator:
         assert result["priority"] == "medium"
         assert result["labels"] == []
 
-    def test_invalid_priority_clamped_to_medium(self):
-        data = {"priority": "critical_blocker"}
-        result = validate_issue_triage(data)
-        assert result["priority"] == "medium"
+    def test_an_invalid_priority_is_none_not_medium(self):
+        """A default was rendered as the model's verdict."""
+        assert validate_issue_triage({"priority": "critical_blocker"})["priority"] is None
 
-    def test_invalid_type_clamped_to_question(self):
-        data = {"type": "random_type"}
-        result = validate_issue_triage(data)
-        assert result["type"] == "question"
+    def test_an_invalid_type_is_none_not_question(self):
+        assert validate_issue_triage({"type": "random_type"})["type"] is None
+
+    def test_a_given_synonym_still_maps(self):
+        assert validate_issue_triage({"priority": "Urgent"})["priority"] == "critical"
 
     def test_error_dict_returns_safe_defaults(self):
         result = validate_issue_triage({"error": "timeout"})
@@ -148,10 +148,18 @@ class TestCodeReviewValidator:
         result = validate_code_review({"score": -5})
         assert result["score"] == 0
 
-    def test_issues_truncated_at_10(self):
-        data = {"issues": [{"severity": "minor", "message": f"issue {i}"} for i in range(20)]}
+    def test_issues_are_bounded(self):
+        data = {"issues": [{"severity": "minor", "message": f"issue {i}"} for i in range(80)]}
         result = validate_code_review(data)
-        assert len(result["issues"]) <= 10
+        assert len(result["issues"]) == 50
+
+    def test_a_critical_finding_listed_late_is_kept_and_sorted_first(self):
+        """The first ten were kept in the model's order: a critical eleventh
+        finding was dropped and not even counted as hidden."""
+        data = {"issues": [{"severity": "minor", "issue": f"m{i}"} for i in range(12)]
+                + [{"severity": "critical", "issue": "sql injection"}]}
+        result = validate_code_review(data)
+        assert result["issues"][0]["issue"] == "sql injection"
 
     def test_invalid_severity_replaced_with_minor(self):
         data = {"issues": [{"severity": "apocalyptic", "message": "bad"}]}
@@ -160,9 +168,9 @@ class TestCodeReviewValidator:
 
     def test_missing_fields_use_safe_defaults(self):
         result = validate_code_review({})
-        # Default score is 7.0 — reasonable quality baseline
-        # Better than 0.0 which caused confusing "0/10" displays
-        assert result["score"] == 7.0
+        # No score given means no score — not 7.0. A default "acceptable"
+        # score published a mark the model never gave.
+        assert result["score"] is None
         assert result["issues"] == []
 
     def test_non_integer_score_handled(self):
@@ -254,4 +262,4 @@ class TestNoDeadValidatorFields:
         out = validate_code_review(
             {"issues": [{"severity": "critical", "line": "12", "issue": "x", "fix": "y"}]}
         )
-        assert set(out["issues"][0]) == {"severity", "line", "issue", "fix"}
+        assert set(out["issues"][0]) == {"severity", "line", "code", "issue", "fix"}

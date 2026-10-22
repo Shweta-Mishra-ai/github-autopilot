@@ -24,7 +24,7 @@ class TestConfidenceGate:
     def test_confidence_note_present_when_blocked(self):
         result = self.gate.evaluate("pr_title_rewrite", {"confidence": 0.50})
         assert result["confidence_note"] is not None
-        assert "human review" in result["confidence_note"]
+        assert "nothing was applied automatically" in result["confidence_note"]
 
     def test_no_confidence_note_when_auto_applied(self):
         result = self.gate.evaluate("fix_command", {"confidence": 0.90})

@@ -1,6 +1,7 @@
 """tests/test_sticky.py — one bot comment per thread, edited in place."""
 
 from urllib.parse import parse_qs, urlparse
+import pytest
 from unittest.mock import patch
 
 from app.github.sticky import MARKER_PR_REPORT, find_sticky, upsert_sticky
@@ -21,7 +22,11 @@ def _paged(total: int, marker_at: int | None, per_page: int = 100):
         pages.append(page)
         start = (page - 1) * per_page
         return [
-            {"id": 1000 + i, "body": MARKER_PR_REPORT if i == marker_at else "human comment"}
+            {
+                "id": 1000 + i,
+                "body": MARKER_PR_REPORT if i == marker_at else "human comment",
+                "user": {"type": "Bot" if i == marker_at else "User"},
+            }
             for i in range(start, min(start + per_page, total))
         ]
 
@@ -32,7 +37,7 @@ class TestFindSticky:
     def test_finds_comment_bearing_the_marker(self):
         comments = [
             {"id": 1, "body": "unrelated human comment"},
-            {"id": 2, "body": f"## Report\n{MARKER_PR_REPORT}"},
+            {"id": 2, "body": f"## Report\n{MARKER_PR_REPORT}", "user": {"type": "Bot"}},
         ]
         with patch("app.github.sticky.gh_get", return_value=comments):
             assert find_sticky("o/r", 5, "t", MARKER_PR_REPORT) == 2
@@ -154,10 +159,88 @@ class TestUpsertSticky:
 
     def test_falls_back_to_post_when_patch_fails(self):
         """A deleted sticky must not lose the report."""
+        from app.github.client import GitHubError
+
         with (
             patch("app.github.sticky.find_sticky", return_value=42),
-            patch("app.github.sticky.gh_patch", side_effect=Exception("404")),
+            patch("app.github.sticky.gh_patch", side_effect=GitHubError("Not Found", 404)),
             patch("app.github.sticky.gh_post", return_value={"id": 9}) as post,
         ):
             upsert_sticky("o/r", 5, "t", MARKER_PR_REPORT, "body")
         post.assert_called_once()
+
+    def test_a_failed_update_is_raised_not_posted_again(self):
+        """Round-4 audit: a timeout or 5xx on the PATCH posted a second report,
+        and the stale one stayed on the PR."""
+        from app.github.client import GitHubError
+
+        with (
+            patch("app.github.sticky.find_sticky", return_value=42),
+            patch("app.github.sticky.gh_patch", side_effect=GitHubError("Bad Gateway", 502)),
+            patch("app.github.sticky.gh_post") as post,
+            pytest.raises(GitHubError),
+        ):
+            upsert_sticky("o/r", 5, "t", MARKER_PR_REPORT, "body")
+        post.assert_not_called()
+
+
+
+class TestOnlyTheAppsOwnCommentIsTheSticky:
+    """Anyone could paste the marker into a comment; the bot then PATCHed its
+    report into that comment, which its author could edit (2026-10-08 audit)."""
+
+    def test_a_human_comment_carrying_the_marker_is_ignored(self):
+        comments = [
+            {"id": 1, "body": f"planted {MARKER_PR_REPORT}", "user": {"type": "User", "login": "mallory"}},
+            {"id": 2, "body": f"## Report\n{MARKER_PR_REPORT}", "user": {"type": "Bot"}},
+        ]
+        with patch("app.github.sticky.gh_get", return_value=comments):
+            assert find_sticky("o/r", 5, "t", MARKER_PR_REPORT) == 2
+
+    def test_another_apps_comment_is_ignored_when_the_app_id_is_known(self, monkeypatch):
+        monkeypatch.setenv("GITHUB_APP_ID", "111")
+        comments = [
+            {"id": 1, "body": MARKER_PR_REPORT, "user": {"type": "Bot"}, "performed_via_github_app": {"id": 999}},
+            {"id": 2, "body": MARKER_PR_REPORT, "user": {"type": "Bot"}, "performed_via_github_app": {"id": 111}},
+        ]
+        with patch("app.github.sticky.gh_get", return_value=comments):
+            assert find_sticky("o/r", 5, "t", MARKER_PR_REPORT) == 2
+
+
+class TestWithoutPerformedViaGithubApp:
+    """Round-3 audit C10: with no performed_via_github_app on the comment, any
+    bot account's comment carrying the marker was taken as this App's."""
+
+    def _comments(self):
+        return [
+            {"id": 1, "body": MARKER_PR_REPORT, "user": {"type": "Bot", "login": "other-app[bot]"}},
+            {"id": 2, "body": MARKER_PR_REPORT, "user": {"type": "Bot", "login": "autopilot[bot]"}},
+        ]
+
+    def test_another_bots_comment_is_ignored(self):
+        with patch("app.github.auth.app_bot_login", return_value="autopilot[bot]"), \
+             patch("app.github.sticky.gh_get", return_value=self._comments()):
+            assert find_sticky("o/r", 5, "t", MARKER_PR_REPORT) == 2
+
+    def test_when_the_login_cannot_be_read_a_bot_comment_still_counts(self):
+        with patch("app.github.auth.app_bot_login", return_value=""), \
+             patch("app.github.sticky.gh_get", return_value=self._comments()):
+            assert find_sticky("o/r", 5, "t", MARKER_PR_REPORT) == 1
+
+    def test_the_login_lookup_is_cached_and_a_failure_is_not_retried_per_call(self, monkeypatch):
+        from unittest.mock import MagicMock
+
+        from app.github import auth
+
+        monkeypatch.setattr(auth, "_bot_login", {})
+        monkeypatch.setattr(auth, "get_jwt", lambda: "jwt")
+        get = MagicMock(side_effect=ConnectionError("down"))
+        monkeypatch.setattr(auth.requests, "get", get)
+        assert auth.app_bot_login() == "" and auth.app_bot_login() == ""
+        assert get.call_count == 1
+
+        monkeypatch.setattr(auth, "_bot_login", {})
+        ok = MagicMock(return_value=MagicMock(json=lambda: {"slug": "autopilot"}, raise_for_status=lambda: None))
+        monkeypatch.setattr(auth.requests, "get", ok)
+        assert auth.app_bot_login() == "autopilot[bot]" == auth.app_bot_login()
+        assert ok.call_count == 1

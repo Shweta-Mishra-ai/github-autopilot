@@ -192,6 +192,17 @@ class TestThePass:
 
 
 class TestRestoreIsNonDestructive:
+    """
+    Render's free Redis keeps nothing on disk and can be restarted — emptied —
+    at any time while the app runs. Restore used to run only at app boot and
+    only when memory was empty, so a wipe mid-life was never restored, and the
+    first memory written after it let the next backup replace the good one.
+
+    Now a marker records that this Redis's memory is accounted for. While it is
+    missing, reconcile() MERGES the backup in (never deleting anything) and
+    backups refuse to run.
+    """
+
     @pytest.fixture(autouse=True)
     def _configured(self, monkeypatch):
         from cryptography.fernet import Fernet
@@ -200,62 +211,81 @@ class TestRestoreIsNonDestructive:
         monkeypatch.setenv("MEMORY_BACKUP_REPO", "o/private-backup")
         monkeypatch.setenv("MEMORY_BACKUP_TOKEN", "ghp_test")
 
-    def test_existing_memory_is_never_overwritten(self, redis):
-        """The whole safety argument. A restart during normal operation, a
-        second worker booting, or a partially-warm instance must all be no-ops."""
-        with (
-            patch("app.intelligence.memory.known_repos", return_value=["o/r"]),
-            patch.object(MB, "restore_from_github") as restore,
-        ):
-            assert MB.maybe_restore_on_boot() == 0
-        restore.assert_not_called()
+    @staticmethod
+    def _backup_holding(text):
+        """GitHub serving an encrypted backup that holds one memory for o/r."""
+        import base64
 
-    def test_it_restores_when_memory_is_empty(self, redis):
-        with (
-            patch("app.intelligence.memory.known_repos", return_value=[]),
-            patch.object(MB, "restore_from_github", return_value=4) as restore,
-        ):
-            assert MB.maybe_restore_on_boot() == 4
-        restore.assert_called_once()
+        from app.intelligence import memory
 
-    def test_it_refuses_when_it_cannot_prove_memory_is_empty(self, redis):
-        """'Could not read memory' is not 'memory is empty'."""
-        with (
-            patch("app.intelligence.memory.known_repos", side_effect=Exception("redis down")),
-            patch.object(MB, "restore_from_github") as restore,
-        ):
-            assert MB.maybe_restore_on_boot() == 0
-        restore.assert_not_called()
+        memory.remember("o/r", text)
+        blob = MB.export_encrypted(["o/r"])
+        memory.clear("o/r")
+        return {"content": base64.b64encode(blob).decode(), "sha": "s", "size": len(blob)}
 
-    def test_only_one_worker_restores(self, redis):
-        with (
-            patch("app.intelligence.memory.known_repos", return_value=[]),
-            patch.object(MB, "restore_from_github", return_value=1) as restore,
-        ):
-            [MB.maybe_restore_on_boot() for _ in range(4)]
-        assert restore.call_count == 1
+    def test_a_wipe_mid_life_is_merged_back_keeping_what_arrived_since(self, redis):
+        from app.intelligence import memory
+
+        served = self._backup_holding("decision from before the wipe")
+        memory.remember("o/r", "written after the wipe")  # memory is NOT empty now
+        with patch("app.github.client.gh_get", return_value=served):
+            assert MB.reconcile() == 1
+        texts = [i.text for i in memory.recall("o/r", "decision wipe written before after", top_k=10)]
+        assert "decision from before the wipe" in texts and "written after the wipe" in texts
+
+    def test_a_reconciled_redis_is_left_alone(self, redis):
+        redis.set(MB.WIPE_MARKER, "1")
+        with patch("app.github.client.gh_get") as get:
+            assert MB.reconcile() == 0
+        get.assert_not_called()
+
+    def test_no_backup_yet_is_not_a_failure(self, redis):
+        from app.github.client import GitHubError
+
+        with patch("app.github.client.gh_get", side_effect=GitHubError("Not found", 404)):
+            assert MB.reconcile() == 0
+        assert redis.exists(MB.WIPE_MARKER), "backups may start"
+
+    def test_an_unreachable_backup_pauses_backups(self, redis):
+        with patch("app.github.client.gh_get", side_effect=ConnectionError("down")):
+            assert MB.reconcile() == 0
+        assert not redis.exists(MB.WIPE_MARKER)
+        with patch.object(MB, "backup_to_github") as push:
+            assert MB.run_backup_once() is False
+        push.assert_not_called()
+
+    def test_the_merge_does_not_duplicate_on_a_second_pass(self, redis):
+        from app.intelligence import memory
+
+        served = self._backup_holding("only once")
+        with patch("app.github.client.gh_get", return_value=served):
+            MB.reconcile()
+            redis.delete(MB.WIPE_MARKER)
+            redis.delete(MB._RESTORE_LOCK_KEY)
+            MB.reconcile()
+        assert len(redis.lrange("mem:o/r", 0, -1)) == 1
+        assert memory.remember("o/r", "only once") is False, "the dedup index was rebuilt"
+
+    def test_only_one_worker_reconciles(self, redis):
+        with patch.object(MB, "_fetch_backup", return_value=None) as fetch:
+            redis.set(MB._RESTORE_LOCK_KEY, "1")  # another worker holds it
+            assert MB.reconcile() == 0
+        fetch.assert_not_called()
 
     def test_an_unconfigured_destination_is_a_silent_no_op(self, monkeypatch, redis):
         monkeypatch.delenv("MEMORY_BACKUP_REPO", raising=False)
-        with patch.object(MB, "restore_from_github") as restore:
+        with patch.object(MB, "_fetch_backup") as fetch:
             assert MB.maybe_restore_on_boot() == 0
-        restore.assert_not_called()
+        fetch.assert_not_called()
 
-    def test_nothing_on_a_timer_can_trigger_a_restore(self):
-        """Export is scheduled; restore is not. The maintenance module must not
-        reference the restore path at all."""
-        import ast
-        import pathlib
-
-        tree = ast.parse(pathlib.Path("app/core/maintenance.py").read_text(encoding="utf-8"))
-        names = {
-            node.attr if isinstance(node, ast.Attribute) else node.id
-            for node in ast.walk(tree)
-            if isinstance(node, (ast.Name, ast.Attribute))
-        }
-        assert "restore_from_github" not in names
-        assert "import_encrypted" not in names
-        assert "maybe_restore_on_boot" not in names
+    def test_the_hourly_tick_reconciles_and_backs_up_daily(self, redis):
+        with patch.object(MB, "reconcile", return_value=0) as rec, \
+             patch.object(MB, "run_backup_once", return_value=True) as backup:
+            first = M.memory_care(now=1_000_000)
+            M.memory_care(now=1_000_000 + 3600)  # an hour later: not due
+            M.memory_care(now=1_000_000 + 25 * 3600)  # a day later: due
+        assert rec.call_count == 3
+        assert first["backed_up"] is True and backup.call_count == 2
 
 
 # ── Configuration must be all-or-nothing ──────────────────────────────────────
@@ -405,3 +435,69 @@ class TestRepoIndexIsASet:
 
         with patch("app.core.redis_client.get_redis", side_effect=Exception("down")):
             assert M.known_repos() == []
+
+
+class TestEveryRepoIsEventuallyScanned:
+    """The sweep took sorted()[:25] every cycle (2026-10-08 audit)."""
+
+    def test_successive_cycles_cover_every_repository(self, monkeypatch):
+        from app.core import maintenance
+
+        class KV(dict):
+            def get(self, k):
+                return super().get(k)
+
+            def set(self, k, v, **kw):
+                self[k] = v
+                return True
+
+        kv = KV()
+        monkeypatch.setattr("app.core.redis_client.get_redis", lambda: kv)
+        ordered = [(f"o/r{i:02d}", i) for i in range(60)]
+        seen = set()
+        for _ in range(3):
+            batch = maintenance._this_cycles_batch(ordered)
+            assert len(batch) == maintenance.MAX_REPOS_PER_RUN
+            seen.update(r for r, _ in batch)
+        assert seen == {r for r, _ in ordered}
+
+
+class TestAPartialScanIsSaidToBePartial:
+    """A repository with one of three sources unreadable was "ok" with nothing
+    saying which were missed, and its 0 findings read as clean."""
+
+    def test_the_missed_sources_are_recorded_and_counted(self):
+        from unittest.mock import patch
+
+        from app.core import maintenance
+        from app.security.scanner import SecurityReport
+
+        report = SecurityReport(repo="o/r", errors=["CodeQL (not enabled or no permission)"])
+        with patch("app.github.auth.get_installation_token", return_value="t"), \
+             patch("app.security.scanner.run_security_scan", return_value=report):
+            record = maintenance.scan_repo("o/r", 1)
+        assert record["ok"] is True
+        assert record["missed"] == ["CodeQL"]
+
+        with patch("app.core.installations.known_installations", return_value={"o/r": 1}), \
+             patch.object(maintenance, "scan_repo", return_value=record), \
+             patch("app.core.memory_backup.run_backup_once", return_value=True), \
+             patch.object(maintenance, "_store_result"):
+            result = maintenance.run_pass()
+        assert result["repos_partial"] == ["o/r"]
+
+
+def test_a_refused_backup_is_retried_next_tick_not_next_day(monkeypatch):
+    import app.core.redis_client as rc
+    from cryptography.fernet import Fernet
+
+    monkeypatch.setenv("REDIS_URL", "")
+    rc.reset_client()
+    monkeypatch.setenv("MEMORY_BACKUP_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("MEMORY_BACKUP_REPO", "o/b")
+    monkeypatch.setenv("MEMORY_BACKUP_TOKEN", "ghp_x")
+    with patch.object(MB, "reconcile", return_value=0), \
+         patch.object(MB, "run_backup_once", side_effect=[False, True]) as backup:
+        M.memory_care(now=2_000_000)
+        M.memory_care(now=2_000_000 + 3600)
+    assert backup.call_count == 2

@@ -2,9 +2,42 @@
 app/github/helpers.py — Shared GitHub API helpers.
 """
 
+import collections
 import logging
+import threading
+import time
 
 log = logging.getLogger(__name__)
+
+
+# GitHub refuses an issue or comment body over 65,536 characters with a 422.
+GITHUB_BODY_LIMIT = 65536
+
+
+def fit_comment(body: str, reserve: int = 0) -> str:
+    """
+    The body, cut to fit GitHub's limit, saying so when it is cut.
+
+    Nothing checked the size. /secfull on a repository at the scanner's own
+    page limits rendered 69,000 characters; the POST was refused and the
+    person who asked got no reply at all — on the repository with the most
+    findings. Cut at a line boundary, with what was left out stated.
+    `reserve` leaves room for text the caller appends (a sticky's marker).
+    """
+    limit = GITHUB_BODY_LIMIT - reserve
+    if len(body) <= limit:
+        return body
+    note = (
+        "\n\n> ✂️ **Cut to fit GitHub's comment limit** — {n:,} characters "
+        "of this report are not shown."
+    )
+    room = limit - len(note.format(n=len(body))) - 4  # 4: a closing fence
+    cut = body.rfind("\n", 0, room)
+    head = body[: cut if cut > room // 2 else room]
+    hidden = len(body) - len(head)
+    if head.count("```") % 2:  # cut inside a code block: close it
+        head += "\n```"
+    return head + note.format(n=hidden)
 
 
 def fmt_error(label: str, e: Exception, limit: int = 200) -> str:
@@ -34,23 +67,61 @@ def repo_file_context(repo: str, token: str, ref: str = "HEAD", extra=(), get=No
     if get is None:
         from app.github.client import gh_get as get
 
-    try:
-        tree = get(f"/repos/{repo}/git/trees/{ref}?recursive=1", token)
-    except Exception as e:
-        log.debug(f"repo_file_context.unavailable repo={repo} ref={ref}: {e}")
-        return {}
+    paths = _cached_tree(repo, ref)
+    if paths is None:
+        try:
+            tree = get(f"/repos/{repo}/git/trees/{ref}?recursive=1", token)
+        except Exception as e:
+            log.debug(f"repo_file_context.unavailable repo={repo} ref={ref}: {e}")
+            return {}
 
-    if not isinstance(tree, dict) or tree.get("truncated"):
-        return {}
-    entries = tree.get("tree")
-    paths = {
-        t["path"]
-        for t in (entries if isinstance(entries, list) else [])
-        if isinstance(t, dict) and t.get("type") == "blob" and t.get("path")
-    }
+        if not isinstance(tree, dict) or tree.get("truncated"):
+            return {}
+        entries = tree.get("tree")
+        paths = frozenset(
+            t["path"]
+            for t in (entries if isinstance(entries, list) else [])
+            if isinstance(t, dict) and t.get("type") == "blob" and t.get("path")
+        )
+        del tree, entries  # the parsed response is the large part; keep only paths
+        if paths:
+            _remember_tree(repo, ref, paths)
     if not paths:
         return {}
     return {"files": sorted(paths | {e for e in extra if e})}
+
+
+# Recently read trees, as path sets. One PR event read the whole recursive
+# tree up to three times (review, impact, a command), and on a large
+# repository each parse peaked at 30–90 MB of a 512 MB instance. A minute is
+# short enough that a file added since is rarely missing — and files a PR
+# adds come in through `extra` regardless.
+_TREE_TTL = 60
+_TREE_CACHE_MAX = 4
+_tree_cache: "collections.OrderedDict[tuple, tuple[float, frozenset]]" = collections.OrderedDict()
+_tree_lock = threading.Lock()
+
+
+def _cached_tree(repo: str, ref: str):
+    with _tree_lock:
+        hit = _tree_cache.get((repo, ref))
+        if hit and time.monotonic() - hit[0] < _TREE_TTL:
+            _tree_cache.move_to_end((repo, ref))
+            return hit[1]
+        return None
+
+
+def _remember_tree(repo: str, ref: str, paths: frozenset) -> None:
+    with _tree_lock:
+        _tree_cache[(repo, ref)] = (time.monotonic(), paths)
+        _tree_cache.move_to_end((repo, ref))
+        while len(_tree_cache) > _TREE_CACHE_MAX:
+            _tree_cache.popitem(last=False)
+
+
+def clear_tree_cache() -> None:
+    with _tree_lock:
+        _tree_cache.clear()
 
 
 # GitHub serves at most 3,000 files for one pull request, 100 per page.
@@ -68,11 +139,14 @@ def pr_files(repo: str, number: int, token: str, get=None) -> list:
     repository's own PR #108, at 32 files, was reported as "Files: 30 ·
     +2101 −235" when it was +3,618 −249.
 
-    A first-page failure raises, exactly as the single fetch did, so every
-    caller's existing error handling is unchanged. A later-page failure keeps
-    the pages already fetched and logs — losing 100 files is better than losing
-    all of them. `get` defaults to the GitHub client and exists so a caller can
-    pass the name its own tests patch.
+    Any page failing raises. A later-page failure used to keep the pages
+    already fetched and only log, and no caller could tell: the PR report said
+    "Files: 100" for a 250-file PR, the risk recorded for the head (which
+    /merge trusts) was judged on 100 of them, and /security said "No secrets
+    detected in the 100 changed file(s) scanned" with the secret in file 180.
+    A partial list presented as the whole PR is worse than none. `get`
+    defaults to the GitHub client and exists so a caller can pass the name its
+    own tests patch.
     """
     if get is None:
         from app.github.client import gh_get as get
@@ -80,13 +154,7 @@ def pr_files(repo: str, number: int, token: str, get=None) -> list:
     files: list = []
     for page in range(1, PR_FILES_MAX_PAGES + 1):
         path = f"/repos/{repo}/pulls/{number}/files?per_page={PR_FILES_PER_PAGE}&page={page}"
-        try:
-            batch = get(path, token)
-        except Exception as e:
-            if page == 1:
-                raise
-            log.warning(f"pr_files.partial repo={repo} pr={number} pages={page - 1}: {e}")
-            break
+        batch = get(path, token)
         if not isinstance(batch, list) or not batch:
             break
         files.extend(batch)

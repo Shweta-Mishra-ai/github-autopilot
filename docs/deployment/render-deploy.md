@@ -46,7 +46,7 @@
 │  │          Redis (free)                 │                     │
 │  │                                       │  25MB               │
 │  │  Idempotency keys    Rate limits      │  No persistence SLA  │
-│  │  Analytics           Snapshots        │  allkeys-lru policy │
+│  │  Analytics           Snapshots        │  noeviction policy  │
 │  │  LLM budget          CI patterns      │                     │
 │  └───────────────────────────────────────┘                     │
 └─────────────────────────────────────────────────────────────────┘
@@ -116,7 +116,14 @@ Do not change `--worker-class` to `gevent` or `eventlet` — the thread-based ar
    | Name | `github-autopilot-redis` | Any name |
    | Region | Same as your web service | Reduces latency |
    | Plan | **Free** | 25MB, no credit card |
-   | Max Memory Policy | `allkeys-lru` | Evicts oldest keys when full |
+   | Max Memory Policy | `noeviction` | **Not** `allkeys-lru`: LRU silently evicts the dedup keys, and evicted keys mean events processed twice. `noeviction` makes a full Redis fail loudly instead. `render.yaml` sets this. |
+
+   > **The free instance keeps nothing on disk.** Render can restart it at any
+   > time, and everything in it is lost: the event queue, dedup keys, budgets,
+   > rollback snapshots and repository memory. Set up the encrypted memory
+   > backup (`MEMORY_BACKUP_KEY`, `MEMORY_BACKUP_REPO`, `MEMORY_BACKUP_TOKEN` —
+   > see `.env.example`) so memory comes back on its own; the rest is rebuilt
+   > as events arrive. A paid instance with persistence removes this.
 
 3. Click **Create Redis**
 
@@ -226,9 +233,7 @@ Then paste the single-line result.
 |----------|---------|---------|
 | `DISCORD_WEBHOOK_URL` | None | Discord channel for high-risk PR + secret alerts |
 | `SLACK_WEBHOOK_URL` | None | Slack channel notifications |
-| `QDRANT_URL` | None | Qdrant Cloud URL for vector code context |
-| `QDRANT_API_KEY` | None | Qdrant Cloud API key |
-| `METRICS_AUTH_TOKEN` | None | Bearer token to protect `/metrics` endpoint |
+| `METRICS_AUTH_TOKEN` | None | Bearer token for `/health`, `/metrics`, `/graph.json`, `/setup/doctor`; without it they refuse every request in production |
 | `MAX_DISPATCH_WORKERS` | `6` | Thread pool worker count (integer) |
 | `REPO_DAILY_AI_LIMIT` | `150` | Max AI calls per repo per day (integer) |
 | `LOG_LEVEL` | `INFO` | Set to `DEBUG` for verbose logging |
@@ -388,7 +393,7 @@ Render free tier spins down after 15 minutes of inactivity. The first webhook af
 2. **New Monitor** → **HTTP(s)**
 3. Configure:
    ```
-   URL: https://your-service-name.onrender.com/health
+   URL: https://your-service-name.onrender.com/ping
    Check interval: 5 minutes
    Alert contacts: your email
    ```
@@ -396,7 +401,10 @@ Render free tier spins down after 15 minutes of inactivity. The first webhook af
 
 UptimeRobot pings `/ping` every 5 minutes, keeping the service warm indefinitely. It also emails you if the service goes down.
 
-**Alternative — GitHub Actions keep-alive:**
+**Not a substitute — GitHub Actions keep-alive.** GitHub runs scheduled
+workflows on a best-effort basis: this repository's `*/10` schedule ran every
+2–7 hours in practice (October 2026), so it does not keep the service warm.
+It is still useful as an "is production up" check:
 ```yaml
 # .github/workflows/keepalive.yml
 name: Keep Render Warm
@@ -407,7 +415,7 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - run: curl -f https://your-service-name.onrender.com/health
+      - run: curl -f https://your-service-name.onrender.com/ping
 ```
 
 ---
@@ -420,7 +428,7 @@ Render automatically redeploys the service when you push to the connected branch
 - In-flight requests complete on the old workers
 - New workers start with the updated code
 - Redis state is preserved (Redis is not redeployed)
-- No downtime for users — GitHub retries any webhooks that hit a deploying worker
+- A webhook that arrives while the service is restarting fails — GitHub does not retry it by itself; the app's redelivery sweep asks GitHub to resend it within about 10 minutes of coming back (`app/github/redelivery.py`)
 
 ### Environment variable changes trigger redeploy
 
@@ -470,7 +478,7 @@ Before paying for more compute, extend LLM capacity at zero cost:
 Add to environment variables: `MAX_DISPATCH_WORKERS=10`. This allows more concurrent LLM calls — useful if you have more API quota than the default 6 workers can utilise.
 
 ### Step 5 — Add a task queue (when needed)
-When jobs must not be lost across restarts, consider adding a dedicated task queue. The codebase has Celery wiring in `archive/tasks.py` that can be activated. This requires a separate worker process and a Redis broker instance.
+The event queue is already durable in Redis (`app/core/event_queue.py`) — as durable as the Redis behind it. To take processing off the web process, run `python worker.py` as a Render worker service with the same environment, and set `EVENT_QUEUE_CONSUMERS=0` on the web service. No code changes are needed.
 
 ---
 
@@ -538,9 +546,14 @@ Check Redis usage:
 redis-cli -u $REDIS_URL INFO memory | grep used_memory_human
 ```
 
-If close to 25MB:
-1. The `allkeys-lru` policy evicts oldest keys automatically — this is correct behaviour
-2. If eviction is causing issues (idempotency keys evicted prematurely), upgrade to paid Redis
-3. Consider reducing `TTL` on analytics keys (currently permanent — add `r.expire()` calls)
-4. Clear old CI failure tracking keys: `redis-cli -u $REDIS_URL KEYS "ci:*" | xargs redis-cli -u $REDIS_URL DEL`
+If close to the limit:
+1. With `noeviction`, a full Redis refuses writes — new events fail loudly
+   instead of old dedup keys disappearing silently. `/health` reports Redis
+   memory under `checks.redis_memory`.
+2. Most keys expire on their own (dedup 24 h, analytics 7 days, learning 90
+   days, snapshots on their TTL). Memory is capped per repository by
+   `MEMORY_MAX_ITEMS` (default 500); lowering it is the main lever.
+3. Look before deleting: `redis-cli -u $REDIS_URL --scan --pattern 'ci_fail:*' | head`
+   (use `--scan`, never `KEYS`, on a live instance — `KEYS` blocks the server).
+4. If it keeps filling, upgrade to a paid instance.
 

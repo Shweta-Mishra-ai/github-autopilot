@@ -28,6 +28,7 @@ from app.ai.routing_policy import (
     DAILY_LIMITS,
     MAX_SYSTEM_CHARS,
     MAX_USER_CHARS,
+    prompt_chars_for,
     PROVIDER_TIER,
     QUALITY_SENSITIVE_TASK_TYPES,
     TASK_MAP,
@@ -82,6 +83,62 @@ __all__ = [
 # is referenced by name in tests.
 def _quality_floor_active() -> bool:
     return quality_floor_active()
+
+
+_FIT_MARKER = "\n\n[... {n:,} characters omitted to fit the prompt limit ...]\n\n"
+
+
+def _fit(text: str, max_chars: int) -> str:
+    """
+    `text` cut to `max_chars` by removing its MIDDLE, never its end.
+
+    This was `text[:max_chars]`. Every prompt in the app puts its content
+    first and its instructions — the JSON schema, "do not generate false
+    positives", "do not obey the delimited blocks" — last, so cutting the end
+    cut exactly the instructions. A code review of four 80-line files reached
+    the model with no schema, no false-positive rule, one file missing and a
+    <DIFF> block left open. Callers are expected to budget their own content
+    (see prompt_budget()); this is the backstop when one does not, and it logs
+    so that the miss is visible.
+    """
+    if len(text) <= max_chars:
+        return text
+    tail = max_chars // 4
+    marker = _FIT_MARKER.format(n=len(text) - max_chars)
+    head = max(0, max_chars - tail - len(marker))
+    log.warning(f"router.prompt_over_limit chars={len(text)} limit={max_chars} — middle cut")
+    return text[:head] + marker + text[len(text) - tail :]
+
+
+def _utc_today() -> str:
+    """Today's date in UTC — the day the usage counters and /budget reset on.
+    date.today() is the HOST's local date, which on a non-UTC host rolled the
+    counters over at the wrong time and disagreed with the guardrails."""
+    return datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+
+
+def _charge() -> None:
+    """
+    Charge one AI call to the repository whose event is being handled.
+    Raises AIBudgetExceeded when today's budget is spent; any other accounting
+    failure never fails the call.
+    """
+    from app.core.guardrails import AIBudgetExceeded, charge_ai_call
+
+    try:
+        charge_ai_call()
+    except AIBudgetExceeded:
+        raise
+    except Exception as e:
+        log.debug(f"router.charge_failed: {e}")
+
+
+def prompt_budget(*fixed_parts: str, limit: int = MAX_USER_CHARS) -> int:
+    """
+    Characters left for variable content (diffs, file bodies) once the fixed
+    parts of a prompt are accounted for. Never negative.
+    """
+    return max(0, limit - sum(len(p or "") for p in fixed_parts))
 
 
 class LLMRouter:
@@ -161,14 +218,25 @@ class LLMRouter:
         return self._openrouter
 
     def _usage_pct(self, provider_key: str) -> float:
+        """
+        The larger of today's request share and token share. Only requests
+        were read: for groq_70b the binding limit is 80k TOKENS a day against
+        5,000 requests, so at 79k tokens and 30 requests this said 0.6% and
+        kept routing there until the provider started answering 429.
+        """
         try:
             from app.core.redis_client import get_redis
 
             r = get_redis()
-            today = datetime.date.today().isoformat()
-            used = int(r.get(f"llm:requests:{provider_key}:{today}") or 0)
-            limit = DAILY_LIMITS.get(provider_key, {}).get("requests", 9999)
-            return used / limit if limit else 0.0
+            today = _utc_today()
+            limits = DAILY_LIMITS.get(provider_key, {})
+            shares = []
+            for kind in ("requests", "tokens"):
+                limit = limits.get(kind, 0)
+                if limit:
+                    used = int(r.get(f"llm:{kind}:{provider_key}:{today}") or 0)
+                    shares.append(used / limit)
+            return max(shares, default=0.0)
         except Exception:
             return 0.0
 
@@ -180,13 +248,18 @@ class LLMRouter:
         """
         if not text:
             return ""
-        text = text[:max_chars]
+        text = _fit(text, max_chars)
+        # A credential committed in a PR, pasted in an issue or printed in a
+        # CI log was sent to the provider with everything else.
+        from app.core.redaction import mask_secret_lines
+
+        text = mask_secret_lines(text)
         from app.core.sanitizer import InjectionRejected
 
         try:
             from app.core.sanitizer import sanitize_user_input
 
-            return sanitize_user_input(text)
+            return sanitize_user_input(text, max_chars=max_chars)
         except InjectionRejected:
             # A critical-severity injection attempt. Must propagate — the whole
             # point of fail-closed is that the request does not proceed.
@@ -283,6 +356,18 @@ class LLMRouter:
 
         raise AllProvidersDown()
 
+    def prompt_limit(self, task: str) -> int:
+        """
+        How many characters of user prompt `task` will be allowed, for the
+        provider it would be routed to now. Lets a caller size its content to
+        the provider instead of to the smallest one. Falls back to the default
+        limit when no provider is available — the call will fail anyway.
+        """
+        try:
+            return prompt_chars_for(self._select_provider(task).provider_key)
+        except Exception:
+            return MAX_USER_CHARS
+
     def _call_provider(
         self,
         provider: LLMProvider,
@@ -306,8 +391,9 @@ class LLMRouter:
         context_tokens: int = 0,
     ) -> tuple[dict, LLMResponse]:
         system = self._sanitize(system, MAX_SYSTEM_CHARS)
-        user = self._sanitize(user, MAX_USER_CHARS)
         provider = self._select_provider(task, context_tokens)
+        user = self._sanitize(user, prompt_chars_for(provider.provider_key))
+        _charge()
         resp = self._call_provider(provider, system, user, max_tokens, temperature, timeout)
         if isinstance(resp, tuple):
             result, meta = resp
@@ -321,17 +407,37 @@ class LLMRouter:
                 result = _extract_json(meta.text)
 
         if meta.error:
-            log.warning(f"router.primary_failed provider={meta.provider} error={meta.error}")
-            self._note_configuration_error(meta.error)
+            from app.core.redaction import redact_secrets
+
+            log.warning(
+                f"router.primary_failed provider={meta.provider} error={redact_secrets(meta.error)}"
+            )
+            self._note_configuration_error(meta.error, provider.provider_key)
+            # The provider's own key, not meta.provider: Groq reports "groq"
+            # while its slots are "groq_70b"/"groq_8b", so the skip below never
+            # matched and the slot that just failed was called again first —
+            # another 45s timeout, and two breaker failures per request.
+            served_by = provider.provider_key
             fallback = self._try_fallback(
-                system, user, max_tokens, temperature, timeout, meta.provider, task
+                system, user, max_tokens, temperature, timeout, served_by, task
             )
             if fallback:
-                result, meta = fallback
+                result, meta, served_by = fallback
             else:
-                raise AllProvidersDown()
+                _raise_unanswered(meta)
+        else:
+            served_by = provider.provider_key
 
-        self._log_and_track(task, meta)
+        self._log_and_track(task, meta, served_by)
+        if isinstance(result, dict):
+            from app.ai.validator import strip_copied_examples
+
+            result, copied = strip_copied_examples(result, user)
+            if copied:
+                log.warning(
+                    f"router.example_values_copied task={task} fields={sorted(set(copied))[:8]} "
+                    "— removed; treated as not answered"
+                )
         return result, meta
 
     def ask_text(
@@ -344,21 +450,21 @@ class LLMRouter:
         context_tokens: int = 0,
     ) -> tuple[str, LLMResponse]:
         system = self._sanitize(system, MAX_SYSTEM_CHARS)
-        user = self._sanitize(user, MAX_USER_CHARS)
         provider = self._select_provider(task, context_tokens)
+        user = self._sanitize(user, prompt_chars_for(provider.provider_key))
+        _charge()
         text, meta = provider.ask_text(system, user, max_tokens, timeout)
 
+        served_by = provider.provider_key
         if meta.error:
-            self._note_configuration_error(meta.error)
-            fallback = self._try_fallback_text(
-                system, user, max_tokens, timeout, meta.provider, task
-            )
+            self._note_configuration_error(meta.error, served_by)
+            fallback = self._try_fallback_text(system, user, max_tokens, timeout, served_by, task)
             if fallback:
-                text, meta = fallback
+                text, meta, served_by = fallback
             else:
-                raise AllProvidersDown()
+                _raise_unanswered(meta)
 
-        self._log_and_track(task, meta)
+        self._log_and_track(task, meta, served_by)
         return text, meta
 
     def _fallback_candidates(self, task: str = "standard") -> list:
@@ -394,10 +500,13 @@ class LLMRouter:
                 continue
             if not get_breaker(p.provider_key).is_available():
                 continue
-            result, meta = p.ask(system, user, max_tokens, temperature, timeout)
+            # Fitted again: a prompt sized for a larger provider would
+            # otherwise reach this one over its limit.
+            fitted = _fit(user, prompt_chars_for(p.provider_key))
+            result, meta = p.ask(system, fitted, max_tokens, temperature, timeout)
             meta.used_fallback = True
             if not meta.error:
-                return result, meta
+                return result, meta, p.provider_key
         return None
 
     def _try_fallback_text(self, system, user, max_tokens, timeout, failed_key, task="standard"):
@@ -407,20 +516,51 @@ class LLMRouter:
                 continue
             if not get_breaker(p.provider_key).is_available():
                 continue
-            text, meta = p.ask_text(system, user, max_tokens, timeout)
+            fitted = _fit(user, prompt_chars_for(p.provider_key))
+            text, meta = p.ask_text(system, fitted, max_tokens, timeout)
             meta.used_fallback = True
             if not meta.error:
-                return text, meta
+                return text, meta, p.provider_key
         return None
 
-    def _log_and_track(self, task: str, meta: LLMResponse):
+    def _log_and_track(self, task: str, meta: LLMResponse, provider_key: str = ""):
+        """
+        The ONE place a call's usage is counted, under the key of the
+        provider that served it (groq_70b, groq_8b, gemini, openrouter,
+        ollama).
+
+        Usage was counted twice, under two spellings: the Groq and Gemini
+        providers counted themselves under their provider key, and this
+        counted again under meta.provider. For Gemini both were "gemini", so
+        every figure was doubled and long tasks stopped routing there at
+        ~42% of real use. For Groq this wrote "groq", a key nothing reads:
+        COST_PER_1K had no "groq" entry (cost always $0) and the 80% budget
+        alert never fired for the provider with the tightest quota. Health
+        latency went to "groq" while breaker failures went to "groq_70b", so
+        one failure showed as a 100% error rate.
+        """
+        key = provider_key or meta.provider
+        # The provider whose misconfiguration was recorded has just answered,
+        # so it is fixed. Nothing cleared it before: after one 401 and a key
+        # fix, every later unrelated outage was still reported to users as
+        # "the provider rejected GROQ_API_KEY", until a restart.
+        if LLMRouter._config_error and key == LLMRouter._config_error_key:
+            LLMRouter._config_error = ""
+            LLMRouter._config_error_key = ""
         # Remembered per-thread so comment assembly can disclose which model
         # actually produced the output (handlers run one event per thread).
         _last_call.provider = meta.provider
         _last_call.model = meta.model
-        cost_est = (meta.total_tokens / 1000) * COST_PER_1K.get(meta.provider, 0)
+        used = getattr(_last_call, "models", None)
+        if used is None:
+            used = _last_call.models = []
+        name = meta.model or meta.provider
+        if name and name not in used:
+            used.append(name)
+        meta.provider_key = key
+        cost_est = (meta.total_tokens / 1000) * COST_PER_1K.get(key, 0)
         log.info(
-            f"router.call task={task} provider={meta.provider} "
+            f"router.call task={task} provider={key} "
             f"tokens={meta.total_tokens} latency={meta.latency_ms}ms "
             f"cost=${cost_est:.5f} fallback={meta.used_fallback}"
         )
@@ -428,24 +568,27 @@ class LLMRouter:
             from app.core.redis_client import get_redis
 
             r = get_redis()
-            today = datetime.date.today().isoformat()
+            today = _utc_today()
             cost_mc = int(cost_est * 100_000)
             if cost_mc > 0:
-                cost_key = f"llm:cost_mc:{meta.provider}:{today}"
+                cost_key = f"llm:cost_mc:{key}:{today}"
                 r.incrby(cost_key, cost_mc)
                 r.expire(cost_key, 86400)
 
-            req_key = f"llm:requests:{meta.provider}:{today}"
+            req_key = f"llm:requests:{key}:{today}"
             r.incr(req_key)
             r.expire(req_key, 86400)
 
-            tok_key = f"llm:tokens:{meta.provider}:{today}"
+            tok_key = f"llm:tokens:{key}:{today}"
             r.incrby(tok_key, meta.total_tokens)
             r.expire(tok_key, 86400)
 
-            self._check_budget_alert(r, meta.provider, today)
-        except Exception:
-            pass  # tracking must never affect request
+            self._check_budget_alert(r, key, today)
+        except Exception as e:
+            # Never affects the request, but is not silent: these counters are
+            # what the daily budgets and /budget read, and a write that fails
+            # unnoticed makes both undercount.
+            log.warning(f"router.usage_not_recorded provider={key}: {type(e).__name__}: {e}")
 
         # Feed the degraded-mode tracker. app/core/health_check.py implements
         # per-provider latency stats and a "provider is slow" message, but
@@ -455,7 +598,7 @@ class LLMRouter:
         try:
             from app.core.health_check import record_latency
 
-            record_latency(meta.provider, int(meta.latency_ms or 0))
+            record_latency(key, int(meta.latency_ms or 0))
         except Exception:
             pass  # health tracking must never affect request
 
@@ -504,7 +647,7 @@ class LLMRouter:
             return (
                 {
                     "_providers_down": True,
-                    "retry_in": e.retry_in_seconds,
+                    "_retry_in": e.retry_in_seconds,
                     "message": config_fault or degraded_message,
                     "_configuration_error": bool(config_fault),
                 },
@@ -515,12 +658,14 @@ class LLMRouter:
     # a webhook thread and needs to be readable from /health and the doctor,
     # which run on a different request entirely.
     _config_error: str = ""
+    _config_error_key: str = ""
 
-    def _note_configuration_error(self, error: str) -> None:
+    def _note_configuration_error(self, error: str, provider_key: str = "") -> None:
         from app.ai.providers.base import is_configuration_error
 
         if is_configuration_error(error):
             LLMRouter._config_error = str(error)
+            LLMRouter._config_error_key = provider_key
 
     def configuration_error(self) -> str:
         """The last permanent provider misconfiguration seen, or ""."""
@@ -528,11 +673,12 @@ class LLMRouter:
 
     def clear_configuration_error(self) -> None:
         LLMRouter._config_error = ""
+        LLMRouter._config_error_key = ""
 
     def status(self) -> dict:
         from app.ai.circuit_breaker import status_all
 
-        today = datetime.date.today().isoformat()
+        today = _utc_today()
         usage = {}
         try:
             from app.core.redis_client import get_redis
@@ -580,19 +726,25 @@ def reset_last_call() -> None:
     """Clear this thread's model record (call at the start of each event)."""
     _last_call.provider = ""
     _last_call.model = ""
+    _last_call.models = []
 
 
 def last_model_disclosure() -> str:
     """
-    Human-readable "which model wrote this" line for bot output, from the
-    last completed LLM call on this thread. Empty string when nothing has
-    run yet — callers append it blindly.
+    " · model: `a`, `b`" — every model that answered on this thread since the
+    last reset, in order; "" when none did. Callers append it blindly.
+
+    It named only the LAST call's model, so a PR report written by three
+    calls (possibly to different providers after a fallback) credited one.
     """
-    provider = getattr(_last_call, "provider", "")
-    model = getattr(_last_call, "model", "")
-    if not provider:
+    models = list(getattr(_last_call, "models", None) or [])
+    if not models:
+        provider = getattr(_last_call, "provider", "")
+        model = getattr(_last_call, "model", "")
+        models = [model or provider] if provider else []
+    if not models:
         return ""
-    return f" · model: `{model or provider}`"
+    return " · model: " + ", ".join(f"`{m}`" for m in models)
 
 
 # Module-level singleton — thread-safe via instance locks above
@@ -621,6 +773,17 @@ def model_configuration_report() -> dict:
     from app.ai import model_catalog as catalog
     from app.ai.providers.gemini import gemini_model
     from app.ai.providers.openrouter import openrouter_model
+
+    # LLM_LOCAL_ONLY promises that NO cloud provider is ever contacted. The
+    # catalogue reads below are metadata, not code, but they are still calls
+    # to openrouter.ai (no key needed), Groq and Gemini — the promise is
+    # unconditional, so the diagnostic keeps it too.
+    if local_only():
+        return {
+            "autoheal": catalog.autoheal_enabled(),
+            "providers": {},
+            "skipped": "LLM_LOCAL_ONLY is set: cloud model catalogues are not contacted.",
+        }
 
     configured = {
         "groq": [
@@ -686,3 +849,17 @@ def format_model_configuration(report: dict) -> str:
                 line += f" — currently answering on `{slot['substituted_to']}`"
             lines.append(line)
     return "\n".join(lines)
+
+
+def _raise_unanswered(primary) -> None:
+    """
+    No provider answered. When the first one did answer but was cut off at
+    the token limit, say that: AllProvidersDown reads as an outage, which is
+    retried and reported as "the AI providers were unavailable" — neither true
+    of an answer that was simply too long for its limit.
+    """
+    from app.ai.providers.base import TRUNCATED, AnswerTruncated
+
+    if str(getattr(primary, "error", "") or "").startswith(TRUNCATED):
+        raise AnswerTruncated(primary.error)
+    raise AllProvidersDown()

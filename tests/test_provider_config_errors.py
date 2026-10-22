@@ -491,17 +491,16 @@ class TestAThrottleIsNotAnOutage:
         )
         assert result.error.startswith("RATE_LIMIT:")
         assert slept == [5]
-        assert breaker.record_failure.called, (
-            "if it is still throttled after waiting, the account is saturated "
-            "and the breaker should back off"
-        )
+        # Still throttled after waiting: the account is saturated, and the
+        # breaker backs off for as long as the provider said.
+        breaker.record_rate_limit.assert_called_once_with(30)
 
     def test_a_long_delay_is_reported_rather_than_waited_for(self, monkeypatch):
         # Holding a shared worker thread for a minute is worse than failing.
         result, breaker, slept = self._call([self._resp(429, retry_after=300)], monkeypatch)
         assert slept == [], "must not sleep for a delay beyond the bound"
         assert result.error == "RATE_LIMIT:300"
-        assert breaker.record_failure.called
+        breaker.record_rate_limit.assert_called_once_with(300)
 
     def test_waiting_can_be_disabled(self, monkeypatch):
         result, breaker, slept = self._call(
@@ -572,7 +571,7 @@ class TestTheFallbackProviderThrottlesTheSameWay:
             [self._resp(429, retry_after=3), self._resp(429, retry_after=17)], monkeypatch
         )
         assert result.error == "RATE_LIMIT:17", f"got {result.error!r}"
-        assert breaker.record_failure.called
+        breaker.record_rate_limit.assert_called_once_with(17)
 
     def test_a_long_delay_is_reported_rather_than_waited_for(self, monkeypatch):
         result, breaker, slept = self._call([self._resp(429, retry_after=600)], monkeypatch)
@@ -672,7 +671,7 @@ class TestTheEmergencyFallbackHadItToo:
         )
         assert slept == [4.0]
         assert meta.error == "RATE_LIMIT:9", f"got {meta.error!r}"
-        assert breaker.record_failure.called
+        breaker.record_rate_limit.assert_called_once_with(9)
 
     def test_a_long_delay_is_reported_rather_than_waited_for(self, monkeypatch):
         _r, meta, _b, slept = self._call([self._resp(429, retry_after=900)], monkeypatch)

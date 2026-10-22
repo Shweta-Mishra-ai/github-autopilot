@@ -15,18 +15,25 @@ NOTE on fingerprint collision security:
 """
 
 import hashlib
-import time
 import logging
+import threading
+import time
 from collections import OrderedDict
 
 from app.core.redis_client import get_redis, is_redis_available
 
 log = logging.getLogger(__name__)
 
-_TTL_SECONDS = 86400  # 24h — GitHub retries for up to 24h
+# 24h. GitHub does not retry by itself; this covers manual redeliveries and
+# those app/github/redelivery.py requests (it looks back 6 hours).
+_TTL_SECONDS = 86400
 _MAX_LOCAL = 2000  # In-memory fallback max size
 
 _seen_local: OrderedDict = OrderedDict()
+# Webhooks are handled on several threads. Without this, two deliveries of
+# one event could both find the fingerprint absent and both run, and one
+# thread's pruning could delete the key another had just read (KeyError).
+_local_lock = threading.Lock()
 
 # Whether the last call fell back to memory. The fallback warning used to be
 # emitted on EVERY event, and "Redis is unavailable" does not become more true
@@ -40,23 +47,22 @@ _in_fallback = False
 
 def make_fingerprint(delivery_id: str, event_type: str, payload: dict) -> str:
     """
-    Create a stable 32-char fingerprint for a webhook event.
-    Uses delivery_id (unique per GitHub delivery) + key payload fields.
+    A stable 32-char fingerprint for a webhook event: a hash of the payload
+    itself.
+
+    It hashed the delivery id, the event header and a few payload fields. The
+    signature covers only the body — X-GitHub-Delivery and X-GitHub-Event are
+    not signed — so anyone holding one captured signed body could replay it
+    under a fresh delivery id (or another event header) and have it processed
+    again. The payload is what GitHub signed, so it is what identifies the
+    event. A genuine redelivery of an event that was not processed still runs:
+    every path that does not accept an event releases its fingerprint.
+    `delivery_id` and `event_type` are kept in the signature for callers.
     """
-    key_fields = {
-        "delivery": delivery_id,
-        "event": event_type,
-        "action": payload.get("action", ""),
-        "repo": payload.get("repository", {}).get("full_name", ""),
-        "number": (
-            payload.get("pull_request", {}).get("number")
-            or payload.get("issue", {}).get("number")
-            or payload.get("comment", {}).get("id")
-            or ""
-        ),
-    }
-    raw = "|".join(str(v) for v in key_fields.values())
-    return hashlib.sha256(raw.encode()).hexdigest()[:32]
+    import json
+
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(canonical.encode("utf-8", "surrogatepass")).hexdigest()[:32]
 
 
 def is_duplicate(fingerprint: str) -> bool:
@@ -87,6 +93,20 @@ def is_duplicate(fingerprint: str) -> bool:
     return _is_duplicate_local(fingerprint)
 
 
+def forget(fingerprint: str) -> None:
+    """
+    Release a fingerprint recorded by is_duplicate(), for an event that was
+    seen but NOT accepted (the server answered 503). Never raises.
+    """
+    with _local_lock:
+        _seen_local.pop(fingerprint, None)
+    try:
+        if is_redis_available():
+            get_redis().delete(f"idem:{fingerprint}")
+    except Exception as e:
+        log.warning(f"idempotency.forget_failed fingerprint={fingerprint}: {e}")
+
+
 def _enter_fallback(reason: str) -> None:
     """Log the transition into memory-only dedup, once per episode."""
     global _in_fallback
@@ -107,7 +127,12 @@ def _leave_fallback() -> None:
 
 
 def _is_duplicate_local(fingerprint: str) -> bool:
-    """In-memory fallback. Not safe across restarts."""
+    """In-memory fallback. Not safe across restarts; safe across threads."""
+    with _local_lock:
+        return _check_and_record_local(fingerprint)
+
+
+def _check_and_record_local(fingerprint: str) -> bool:
     now = time.time()
 
     # Pop from the front while the oldest entry is expired, rather than

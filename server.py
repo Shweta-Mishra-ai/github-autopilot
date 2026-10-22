@@ -18,9 +18,10 @@ from flask import Flask, jsonify, request
 from app import __version__
 from app.core.logger import setup_logging
 from app.core.metrics import metrics
-from app.core.redis_client import is_redis_available
+import app.core.redis_client as redis_client
 from app.core.thread_pool import is_saturated, pool_stats, shutdown
 from app.core.webhook_security import MAX_PAYLOAD_BYTES, startup_check
+from app.github.deferred_reply import INTERNAL_PREFIX, REPLY_EVENT
 import app.core.idempotency as idempotency
 import app.core.thread_pool as thread_pool
 import app.core.webhook_security as webhook_security
@@ -32,6 +33,10 @@ def is_duplicate(*a, **kw):
 
 def make_fingerprint(*a, **kw):
     return idempotency.make_fingerprint(*a, **kw)
+
+
+def forget(*a, **kw):
+    return idempotency.forget(*a, **kw)
 
 
 def dispatch(*a, **kw):
@@ -96,22 +101,83 @@ def _payload_too_large(_e):
     return jsonify({"error": "Payload too large"}), 413
 
 
+_PRODUCTION = (
+    os.environ.get("ENVIRONMENT", "") == "production"
+    or os.environ.get("FLASK_ENV", "") == "production"
+)
+
+
+# Which env var makes each circuit breaker's provider usable.
+_PROVIDER_ENV = {
+    "groq_70b": "GROQ_API_KEY",
+    "groq_8b": "GROQ_API_KEY",
+    "gemini": "GEMINI_API_KEY",
+    "openrouter": "OPENROUTER_API_KEY",
+    "ollama": "OLLAMA_HOST",
+}
+
+
+def _any_configured_provider_up(breakers: dict) -> bool:
+    """
+    True when some CONFIGURED provider is not tripped. A provider without its
+    key is never called, so its breaker stays closed: with Groq's daily quota
+    spent and no Gemini or OpenRouter key, /health said "ok" while every AI
+    command failed. A configured provider not yet called has no breaker and
+    counts as up.
+    """
+    for name, env in _PROVIDER_ENV.items():
+        if not os.environ.get(env):
+            continue
+        if (breakers.get(name) or {"state": "closed"}).get("state") == "closed":
+            return True
+    return False
+
+
 def _authorized(req) -> bool:
     """
-    Constant-time bearer check for /health and /metrics.
+    Constant-time bearer check for /health, /metrics, /graph.json and
+    /setup/doctor.
 
     Behaviour:
-      - METRICS_TOKEN unset  → open (no secret to enforce). Logged once at boot.
       - METRICS_TOKEN set    → require exact `Authorization: Bearer <token>`,
                                compared in constant time to avoid timing leaks.
+      - METRICS_TOKEN unset  → closed in production (ENVIRONMENT=production,
+                               which render.yaml sets); open elsewhere, for
+                               local development.
+
+    Unset used to mean open everywhere, and these endpoints describe the
+    deployment: which providers and keys are configured, the memory-backup
+    repository, repositories the maintenance sweep could not read. Render's
+    health check and the keepalive use /ping, which stays open.
     """
     if not METRICS_TOKEN:
-        return True
+        return not _PRODUCTION
     auth = req.headers.get("Authorization", "")
-    return hmac.compare_digest(auth, f"Bearer {METRICS_TOKEN}")
+    # Bytes: compare_digest raises TypeError on a str with any non-ASCII
+    # character, so `Bearer é` was a 500 rather than a 401.
+    return hmac.compare_digest(auth.encode("utf-8"), f"Bearer {METRICS_TOKEN}".encode("utf-8"))
+
+
+def _unauthorized():
+    if not METRICS_TOKEN and _PRODUCTION:
+        return jsonify(
+            {
+                "error": "Unauthorized",
+                "detail": "METRICS_AUTH_TOKEN is not set on this production deployment. "
+                "Set it, then send it as `Authorization: Bearer <token>`.",
+            }
+        ), 401
+    return jsonify({"error": "Unauthorized"}), 401
 
 
 # ── Graceful shutdown ───────────────────────────────────────────────────────
+
+
+# The handler this one replaces. Gunicorn installs its worker's exit handler
+# before importing the app, so installing ours REPLACED it: the worker drained
+# and then kept running until the graceful timeout SIGKILLed it, and under
+# `python server.py` the process kept serving after SIGTERM.
+_previous_sigterm = signal.getsignal(signal.SIGTERM)
 
 
 def _handle_sigterm(signum, frame):
@@ -121,6 +187,10 @@ def _handle_sigterm(signum, frame):
     stop_consumers()
     shutdown(wait=True)
     log.info("server.graceful_shutdown_complete")
+    if callable(_previous_sigterm):
+        _previous_sigterm(signum, frame)  # gunicorn's worker exit
+    else:
+        raise SystemExit(0)
 
 
 signal.signal(signal.SIGTERM, _handle_sigterm)
@@ -185,7 +255,7 @@ def graph_json():
     looking at.
     """
     if not _authorized(request):
-        return jsonify({"error": "Unauthorized"}), 401
+        return _unauthorized()
 
     path = os.environ.get("CODEGRAPH_PATH", "docs/diagrams/codegraph.json")
     try:
@@ -223,51 +293,76 @@ def setup():
     same permission list published in the README, and the only secret in this
     flow appears on the callback, which requires a code GitHub issues.
     """
-    from app.setup_flow import setup_page
+    from app.setup_flow import STATE_COOKIE, STATE_TTL_SECONDS, new_state, setup_page
 
-    return setup_page(_base_url()), 200, {"Content-Type": "text/html; charset=utf-8"}
+    state = new_state()
+    resp = app.make_response(
+        (setup_page(_base_url(), state), 200, {"Content-Type": "text/html; charset=utf-8"})
+    )
+    # Bound to this browser: the callback must present the same value.
+    # SameSite=Lax still sends it on GitHub's top-level redirect back here.
+    resp.set_cookie(
+        STATE_COOKIE,
+        state,
+        max_age=STATE_TTL_SECONDS,
+        path="/setup",
+        httponly=True,
+        secure=request.is_secure or _base_url().startswith("https://"),
+        samesite="Lax",
+    )
+    return resp
 
 
 @app.route("/setup/callback", methods=["GET"])
 def setup_callback():
     """Exchange GitHub's one-time code for the App credentials, and show them once."""
-    from app.setup_flow import consume_state, credentials_page, exchange_code
+    import html as _html
+
+    from app.setup_flow import (
+        STATE_COOKIE,
+        consume_state,
+        credentials_page,
+        exchange_code,
+        valid_code,
+    )
 
     code = (request.args.get("code") or "").strip()
     state = (request.args.get("state") or "").strip()
+    cookie = request.cookies.get(STATE_COOKIE, "")
 
-    if not code:
-        return (
-            "<h1>Missing code</h1><p>Start again at <a href='/setup'>/setup</a>.</p>",
-            400,
-            {"Content-Type": "text/html; charset=utf-8"},
+    def _page(body, status, extra=None):
+        resp = app.make_response(
+            (body, status, {"Content-Type": "text/html; charset=utf-8", **(extra or {})})
         )
-    if not consume_state(state):
-        # A callback this server did not initiate, or one already used.
-        log.warning("setup.callback_state_rejected")
-        return (
-            "<h1>This link is no longer valid</h1><p>Setup links are single-use. "
-            "Start again at <a href='/setup'>/setup</a>.</p>",
+        # Single use, whatever the outcome.
+        resp.delete_cookie(STATE_COOKIE, path="/setup")
+        return resp
+
+    if not valid_code(code):
+        return _page(
+            "<h1>Missing or malformed code</h1><p>Start again at <a href='/setup'>/setup</a>.</p>",
             400,
-            {"Content-Type": "text/html; charset=utf-8"},
+        )
+    if not consume_state(state, cookie):
+        # Not the browser that started this setup, or a link already used.
+        log.warning("setup.callback_state_rejected cookie_present=%s", bool(cookie))
+        return _page(
+            "<h1>This link is not valid here</h1><p>Setup links work once, in the "
+            "browser that opened /setup. Start again at <a href='/setup'>/setup</a>.</p>",
+            400,
         )
 
     data, error = exchange_code(code)
     if error:
-        return (
-            f"<h1>Setup could not complete</h1><p>{error}</p>"
+        return _page(
+            f"<h1>Setup could not complete</h1><p>{_html.escape(error)}</p>"
             "<p><a href='/setup'>Start again</a></p>",
             502,
-            {"Content-Type": "text/html; charset=utf-8"},
         )
 
     # Deliberately no logging of `data` — it carries the private key.
     log.info("setup.app_created app_id=%s", data.get("id"))
-    return (
-        credentials_page(data, _base_url()),
-        200,
-        {"Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store"},
-    )
+    return _page(credentials_page(data, _base_url()), 200, {"Cache-Control": "no-store"})
 
 
 @app.route("/setup/doctor", methods=["GET"])
@@ -283,7 +378,19 @@ def setup_doctor():
     Probes are all GETs, so calling this can change nothing.
     """
     if not _authorized(request):
-        return jsonify({"error": "Unauthorized"}), 401
+        return _unauthorized()
+    # With no METRICS_AUTH_TOKEN, _authorized() lets everyone through, which
+    # is fine for the settings report but not for a repository probe: that
+    # mints an installation token and reports what the App may do on any
+    # repository the caller names, private ones included. The docstring
+    # promised it was gated; without a token, it was public.
+    if not METRICS_TOKEN and (request.args.get("repo") or request.args.get("installation_id")):
+        return jsonify(
+            {
+                "error": "Repository probes need METRICS_AUTH_TOKEN to be set, "
+                "and the request to carry it as a Bearer token."
+            }
+        ), 403
 
     from app.core.preflight import (
         diagnose,
@@ -376,17 +483,22 @@ def health():
     Use /ping for Render health checks (no auth needed).
     """
     if not _authorized(request):
-        return jsonify({"error": "Unauthorized"}), 401
+        return _unauthorized()
 
     from app.ai.circuit_breaker import status_all
     from app.core.redis_client import redis_memory_status
     from app.github.rate_limit import get_status as gh_rl_status
 
-    redis_ok = is_redis_available()
+    redis_ok = redis_client.is_redis_available()
     redis_mem = redis_memory_status()
-    gh_ok = gh_rl_status().get("remaining", 5000) > 50
+    # No call since start means no rate-limit headers have been seen: the
+    # 5000 get_status() falls back to is a default, not a reading.
+    gh_rl = gh_rl_status()
+    gh_measured = bool(gh_rl.get("installations"))
+    gh_ok = not gh_measured or gh_rl.get("remaining", 0) > 50
+    gh_check = ("ok" if gh_ok else "rate_limited") if gh_measured else "unknown (no call since start)"
     breaker_status = status_all()
-    any_llm_ok = any(s["state"] == "closed" for s in breaker_status.values())
+    any_llm_ok = _any_configured_provider_up(breaker_status)
 
     # A provider misconfiguration is worse than a degraded provider: it cannot
     # recover on its own and every AI command fails until someone changes an
@@ -411,10 +523,26 @@ def health():
     except Exception as exc:  # health must not fail on its own reporting
         log.debug(f"health.llm_status_failed: {exc}")
 
-    overall = "ok" if (gh_ok and any_llm_ok and not llm_config_error) else "degraded"
+    # Redis counts: without it the durable queue, dedupe, budgets and memory
+    # are all down, and /health used to say "ok" regardless.
+    redis_configured = bool(os.environ.get("REDIS_URL"))
+    overall = (
+        "ok"
+        if (gh_ok and any_llm_ok and not llm_config_error and (redis_ok or not redis_configured))
+        else "degraded"
+    )
     if llm_substitutions:
         # Answering, but on a model nobody configured. Not "ok", not an outage.
         overall = "degraded" if overall == "ok" else overall
+    # A full noeviction Redis still answers PING, so redis_ok stayed true while
+    # every write failed: queued events stranded (BLMOVE refused), budgets
+    # unenforced. The watermark is what shows it.
+    if redis_mem.get("level") == "warn" and overall == "ok":
+        overall = "degraded"
+    from app.core.event_queue import consumer_failing
+
+    if consumer_failing() and overall == "ok":
+        overall = "degraded"
     if llm_config_error:
         overall = "misconfigured"
 
@@ -429,7 +557,7 @@ def health():
             "checks": {
                 "redis": "ok" if redis_ok else "unavailable",
                 "redis_memory": redis_mem,
-                "github_api": "ok" if gh_ok else "rate_limited",
+                "github_api": gh_check,
                 "llm_providers": breaker_status,
                 "llm_models": llm_models,
                 # Non-empty means the provider is answering, and refusing:
@@ -453,12 +581,16 @@ def health():
                 "events_total": metrics.get("events.total", 0),
                 "errors_total": metrics.get("events.error", 0),
                 "events_dropped": metrics.get("events.dropped", 0),
-                "secondary_rate_limited": metrics.get("events.secondary_rate_limited", 0),
+                "secondary_rate_limited": metrics.get("github.secondary_rate_limited", 0),
                 # Non-zero means the collaborator-permission API is failing, so
                 # every maintainer-only command is being denied regardless of who
                 # runs it. Surfaced here because the symptom (commands "not
                 # working") otherwise looks nothing like its cause.
                 "permission_check_failures": metrics.get("auth.permission_check_failed", 0),
+                # Non-zero: the queue consumers failed to take or finish work
+                # (Redis full or unreachable) at some point since start.
+                "queue_consumer_errors": metrics.get("queue.consumer_error", 0),
+                "queue_enqueue_failed": metrics.get("queue.enqueue_failed", 0),
             },
             # Notifications are delivered on daemon threads, so a rejected
             # webhook only ever produced a log line nobody reads. "Slack went
@@ -474,6 +606,9 @@ def health():
             # a bare on/off — an operator can see it is due, overdue, or never
             # configured.
             "maintenance": _maintenance_status(),
+            # GitHub never retries a failed webhook; this is the sweep that asks
+            # it to (app/github/redelivery.py). null until the first sweep.
+            "webhook_redelivery": _redelivery_status(),
         }
     ), 200 if overall == "ok" else 207
 
@@ -481,7 +616,7 @@ def health():
 @app.route("/metrics", methods=["GET"])
 def get_metrics():
     if not _authorized(request):
-        return jsonify({"error": "Unauthorized"}), 401
+        return _unauthorized()
     return jsonify(metrics.snapshot())
 
 
@@ -497,6 +632,9 @@ def mcp_endpoint():
         body = request.get_json(force=True) or {}
     except Exception:
         return jsonify({"error": {"code": -32700, "message": "Parse error"}}), 400
+    if not isinstance(body, dict):
+        # A JSON array or string parsed fine and then `.get` raised: a 500.
+        return jsonify({"error": {"code": -32600, "message": "Invalid request"}}), 400
 
     resp, status = handle_mcp_request(body.get("method", ""), body.get("params", {}), token)
     return jsonify(resp), status
@@ -546,6 +684,10 @@ def webhook():
 
     webhook_event = request.headers.get("X-GitHub-Event", "")
     delivery_id = request.headers.get("X-GitHub-Delivery", "")
+    # Internal job names are never a GitHub event. Refused here so that only
+    # the app itself can park one on the queue.
+    if webhook_event.startswith(INTERNAL_PREFIX):
+        return jsonify({"error": "Unsupported event"}), 400
     repo = payload.get("repository", {}).get("full_name", "unknown")
 
     # Bot loop prevention
@@ -570,7 +712,7 @@ def webhook():
     # Survives restarts/deploys — thread-pool queue does not.
     from app.core.event_queue import EnqueueResult, enqueue
 
-    eq = enqueue(webhook_event, payload, repo, delivery_id)
+    eq = enqueue(webhook_event, payload, repo, delivery_id, fingerprint=fingerprint)
 
     if eq == EnqueueResult.OK:
         metrics.increment(f"events.{webhook_event}.queued")
@@ -578,19 +720,25 @@ def webhook():
         return jsonify({"status": "queued"}), 202
 
     if eq == EnqueueResult.FULL:
-        # Bounded queue full → 503 so GitHub redelivers later.
+        # Bounded queue full → 503. GitHub does not redeliver on its own, so
+        # the dedup key recorded above is released: it used to stay set for
+        # 24 hours, and a manual redelivery (same delivery id) was then
+        # answered "duplicate — skipped" and never processed at all.
+        forget(fingerprint)
         metrics.increment("events.dropped")
         return jsonify({"error": "Server busy — please retry", "retry_after": 30}), 503
 
     # Redis down or envelope too large → degrade to direct thread-pool dispatch.
     result = _dispatch(webhook_event, payload, repo)
 
-    # Saturated pool → 503 so GitHub retries automatically
+    # Saturated pool → 503. GitHub does not retry by itself; the redelivery
+    # sweep (app/github/redelivery.py) asks it to resend.
     if is_saturated(result):
+        forget(fingerprint)  # see the FULL branch above
         metrics.increment("events.dropped")
         log.error(
             f"dispatch.saturated event={webhook_event} repo={repo} "
-            "— returning 503 for GitHub retry"
+            "— returning 503; the redelivery sweep will ask GitHub to resend it"
         )
         return jsonify(
             {
@@ -607,8 +755,14 @@ def webhook():
 # ── Dispatch ───────────────────────────────────────────────────────────────
 
 
-def _run_handler(webhook_event: str, payload: dict, repo: str):
-    """Runs inside the thread pool. All errors caught — never crashes pool."""
+def _run_handler(webhook_event: str, payload: dict, repo: str) -> str:
+    """
+    Runs inside the thread pool or a queue consumer. All errors caught —
+    never crashes either. Returns a HandlerOutcome so the queue can retry a
+    transient failure instead of dropping the event.
+    """
+    from app.core.event_queue import HandlerOutcome
+
     try:
         log.info(f"dispatch.start event={webhook_event} repo={repo}")
 
@@ -617,63 +771,121 @@ def _run_handler(webhook_event: str, payload: dict, repo: str):
         # schedule rather than in response to an event (the 15-day security
         # sweep) had no credential for any repository at all.
         try:
-            from app.core.installations import remember_installation, touch
-
-            inst = (payload.get("installation") or {}).get("id", 0)
-            if repo and inst:
-                remember_installation(repo, inst)
-                touch(repo)
+            _track_installations(webhook_event, payload, repo)
         except Exception as e:
             log.debug(f"installations.record_skipped repo={repo}: {e}")
 
-        if webhook_event == "pull_request":
-            from app.handlers.pull_request import handle
+        # State is stored by repository NAME; make sure the name still means
+        # the repository it meant when that state was written (see
+        # app/core/repo_identity.py). Not blocking: an unreadable Redis is
+        # logged and the event goes on, as every other Redis read here does.
+        try:
+            from app.core.repo_identity import ensure
 
-            handle(payload)
+            ensure(repo, ((payload or {}).get("repository") or {}).get("id"))
+        except Exception as e:
+            log.warning(f"repo_identity.unchecked repo={repo}: {e}")
 
-        elif webhook_event == "issues":
-            from app.handlers.issues import handle
+        # Every AI call a handler makes is charged to this repository's
+        # daily budget as it happens (see guardrails.metered).
+        from app.core.guardrails import metered
 
-            handle(payload)
-
-        elif webhook_event == "issue_comment":
-            from app.handlers.comments import handle
-
-            handle(payload)
-
-        elif webhook_event == "push":
-            from app.handlers.push import handle
-
-            handle(payload)
-
-        elif webhook_event == "check_run":
-            try:
-                from app.handlers.ci import handle
+        with metered(repo):
+            if webhook_event == "pull_request":
+                from app.handlers.pull_request import handle
 
                 handle(payload)
-            except ImportError:
-                log.debug("ci handler not available — skipping")
 
-        else:
-            log.debug(f"dispatch.unhandled event={webhook_event}")
-            return
+            elif webhook_event == "issues":
+                from app.handlers.issues import handle
+
+                handle(payload)
+
+            elif webhook_event == "issue_comment":
+                from app.handlers.comments import handle
+
+                handle(payload)
+
+            elif webhook_event == "push":
+                from app.handlers.push import handle
+
+                handle(payload)
+
+            elif webhook_event == "check_run":
+                try:
+                    from app.handlers.ci import handle
+
+                    handle(payload)
+                except ImportError:
+                    log.debug("ci handler not available — skipping")
+
+            elif webhook_event == REPLY_EVENT:
+                from app.github.deferred_reply import deliver
+
+                deliver(payload)
+
+            else:
+                log.debug(f"dispatch.unhandled event={webhook_event}")
+                return HandlerOutcome.OK
 
         metrics.increment(f"events.{webhook_event}.success")
         log.info(f"dispatch.done event={webhook_event}")
+        return HandlerOutcome.OK
 
     except Exception as e:
-        from app.github.client import GitHubSecondaryRateLimitError
-
-        if isinstance(e, GitHubSecondaryRateLimitError):
+        metrics.increment(f"events.{webhook_event}.error")
+        metrics.increment("events.error")
+        if _is_transient(e):
             log.warning(
-                f"dispatch.secondary_rate_limit event={webhook_event} repo={repo} "
-                f"retry_after={e.retry_after}s — dropping, GitHub will retry"
+                f"dispatch.transient event={webhook_event} repo={repo}: "
+                f"{type(e).__name__}: {e} — will retry once if queued"
             )
-            metrics.increment("events.secondary_rate_limited")
-        else:
-            log.error(f"dispatch.error event={webhook_event} repo={repo}: {e}")
-            log.error(traceback.format_exc())
-            metrics.increment(f"events.{webhook_event}.error")
+            return HandlerOutcome.RETRY
+        log.error(f"dispatch.error event={webhook_event} repo={repo}: {e}")
+        log.error(traceback.format_exc())
+        return HandlerOutcome.FAILED
+
+
+def _track_installations(webhook_event: str, payload: dict, repo: str) -> None:
+    """
+    Keep the installation registry in step with GitHub.
+
+    `installation` and `installation_repositories` events carry no
+    `repository`, so `repo` arrived here as "unknown" and was registered as a
+    repository — which the maintenance sweep then scanned and reported as a
+    failure every cycle. And forget_installation() had no caller: an
+    uninstalled repository stayed in the registry until its entry expired.
+    """
+    from app.core.installations import forget_installation, remember_installation, touch
+
+    inst = (payload.get("installation") or {}).get("id", 0)
+    action = payload.get("action", "")
+    if webhook_event == "installation":
+        names = [r.get("full_name", "") for r in payload.get("repositories") or []]
+        for name in filter(None, names):
+            if action in ("deleted", "suspend"):
+                forget_installation(name)
+            elif action in ("created", "unsuspend") and inst:
+                remember_installation(name, inst)
+        return
+    if webhook_event == "installation_repositories":
+        for r in payload.get("repositories_removed") or []:
+            if r.get("full_name"):
+                forget_installation(r["full_name"])
+        for r in payload.get("repositories_added") or []:
+            if r.get("full_name") and inst:
+                remember_installation(r["full_name"], inst)
+        return
+    if repo and repo != "unknown" and inst:
+        remember_installation(repo, inst)
+        touch(repo)
+
+
+def _is_transient(e: Exception) -> bool:
+    """A failure that the same event can succeed after, a little later."""
+    from app.core.transient import is_transient
+
+    return is_transient(e)
 
 
 def _dispatch(webhook_event: str, payload: dict, repo: str):
@@ -687,9 +899,12 @@ def _web_process_check() -> dict:
         from app.core.process_guard import active_process_count, verdict
 
         state, message = verdict()
-        return {"state": state, "count": active_process_count(), "detail": message}
+        # None, not 0, when it could not be counted: "0 processes" from the
+        # process answering the request is not a reading.
+        count = active_process_count() if state != "unknown" else None
+        return {"state": state, "count": count, "detail": message}
     except Exception as e:
-        return {"state": "unknown", "count": 0, "detail": str(e)[:120]}
+        return {"state": "unknown", "count": None, "detail": str(e)[:120]}
 
 
 def _queue_stats() -> dict:
@@ -712,6 +927,16 @@ def _provider_health() -> dict:
     except Exception as e:
         log.debug(f"health.provider_stats_unavailable: {e}")
         return {}
+
+
+def _redelivery_status() -> dict:
+    """Never raises: /health must answer whatever state the sweep is in."""
+    try:
+        from app.github.redelivery import enabled, last_result
+
+        return {"enabled": enabled(), "last_sweep": last_result()}
+    except Exception as e:
+        return {"enabled": None, "last_sweep": None, "error": str(e)[:120]}
 
 
 def _maintenance_status() -> dict:
@@ -746,7 +971,7 @@ def _notification_status() -> dict:
     `configured: false` means no webhook URL is set for that channel — the most
     common reason notifications "stop working", and previously invisible.
     """
-    from app.github.notifications import discord_enabled, slack_enabled
+    from app.github.notifications import discord_enabled, last_outcome, slack_enabled
 
     out = {}
     for channel, configured in (
@@ -759,7 +984,15 @@ def _notification_status() -> dict:
             "configured": configured,
             "sent": sent,
             "failed": failed,
-            "status": "ok" if configured and not failed else ("failing" if failed else "off"),
+            # The latest delivery decides: a channel that failed once and has
+            # delivered since is working.
+            "status": (
+                "off"
+                if not configured
+                else "failing"
+                if last_outcome.get(channel) == "failed"
+                else "ok"
+            ),
         }
     return out
 
@@ -808,6 +1041,16 @@ def _boot_maintenance():
         start_scheduler()
     except Exception as e:
         log.warning(f"boot.maintenance_not_started: {e}")
+
+    # GitHub does not redeliver a failed webhook by itself; on a free tier the
+    # one that woke a sleeping instance has always failed. See
+    # app/github/redelivery.py.
+    try:
+        from app.github.redelivery import start_scheduler as start_redelivery
+
+        start_redelivery()
+    except Exception as e:
+        log.warning(f"boot.redelivery_not_started: {e}")
 
 
 # ── Boot ───────────────────────────────────────────────────────────────────

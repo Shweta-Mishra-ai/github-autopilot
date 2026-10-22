@@ -5,13 +5,21 @@ and handler logic. Imported as MCP_TOOLS by the server and re-exported there
 for backward compatibility.
 """
 
+from app.security.enhanced_secrets import PATTERNS as _SECRET_PATTERNS
+
+# Every tool that reads GitHub needs an installation token, and the handlers
+# refuse a call without one. The schemas for analyze_pr, fix_issue and
+# get_repo_health did not declare it, so an MCP client following the schema
+# could never make a call that succeeded.
+_INSTALLATION_ID = {"type": "integer", "description": "GitHub App installation ID"}
+
 MCP_TOOLS = [
     {
         "name": "analyze_pr",
         "description": (
-            "Analyze a GitHub pull request for code quality, security risks, "
-            "test coverage gaps, and blast radius. Returns grade (A-F), "
-            "findings, and improvement suggestions."
+            "Analyze a GitHub pull request's diff: a summary, security issues, "
+            "test gaps, blast radius and improvements the model found, and an "
+            "approve/request_changes recommendation. No grade or score."
         ),
         "inputSchema": {
             "type": "object",
@@ -23,8 +31,9 @@ MCP_TOOLS = [
                     "enum": ["security", "performance", "quality", "all"],
                     "default": "all",
                 },
+                "installation_id": _INSTALLATION_ID,
             },
-            "required": ["repo", "pr_number"],
+            "required": ["repo", "pr_number", "installation_id"],
         },
     },
     {
@@ -39,15 +48,18 @@ MCP_TOOLS = [
                 "repo": {"type": "string"},
                 "issue_number": {"type": "integer"},
                 "context": {"type": "string", "description": "Extra code context or stack trace"},
+                "installation_id": _INSTALLATION_ID,
             },
-            "required": ["repo", "issue_number"],
+            "required": ["repo", "issue_number", "installation_id"],
         },
     },
     {
         "name": "scan_secrets",
         "description": (
             "Scan a code snippet for exposed secrets and credentials. "
-            "Uses 41 patterns with entropy gating."
+            # Counted, not written down: the hand-typed "41" was already wrong.
+            f"Uses {len(_SECRET_PATTERNS)} patterns with entropy gating. Files "
+            "named as examples or templates (e.g. .env.example) are not scanned."
         ),
         "inputSchema": {
             "type": "object",
@@ -94,7 +106,11 @@ MCP_TOOLS = [
     },
     {
         "name": "security_review",
-        "description": "Security review of code or requirements.txt for CVEs and vulnerabilities.",
+        "description": (
+            "Model review of code or config for security weaknesses. Not an "
+            "advisory lookup: it names no CVEs. Use /security on a PR for "
+            "GitHub's advisory data on pinned dependencies."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -110,13 +126,17 @@ MCP_TOOLS = [
     },
     {
         "name": "get_repo_health",
-        "description": "Get the health grade (A-F) for a repository with recommendations.",
+        "description": (
+            "Repository health checks (open issues, open PRs, license, "
+            "description) with a recommendation for each one flagged. No grade."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {
                 "repo": {"type": "string", "description": "owner/repo format"},
+                "installation_id": _INSTALLATION_ID,
             },
-            "required": ["repo"],
+            "required": ["repo", "installation_id"],
         },
     },
     {
@@ -170,7 +190,7 @@ MCP_TOOLS = [
                 "issue_number": {"type": "integer"},
                 "command": {"type": "string", "description": "e.g. /fix, /explain, /security"},
                 "context": {"type": "string"},
-                "installation_id": {"type": "integer", "description": "GitHub App installation ID"},
+                "installation_id": _INSTALLATION_ID,
             },
             "required": ["repo", "issue_number", "command", "installation_id"],
         },

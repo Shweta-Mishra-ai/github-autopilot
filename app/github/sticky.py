@@ -14,8 +14,9 @@ the marker is invisible to readers but trivially greppable for us.
 from __future__ import annotations
 
 import logging
+import os
 
-from app.github.client import gh_get, gh_patch, gh_post
+from app.github.client import GitHubError, gh_get, gh_patch, gh_post
 
 log = logging.getLogger(__name__)
 
@@ -28,7 +29,36 @@ MAX_COMMENT_PAGES = 5
 PER_PAGE = 100
 
 
-def find_sticky(repo: str, issue_number: int, token: str, marker: str) -> int | None:
+def _posted_by_this_app(comment: dict) -> bool:
+    """
+    True for a comment this App wrote. The marker alone proved nothing: anyone
+    can paste `<!-- github-autopilot:pr-report -->` into a comment, and the
+    bot then PATCHed its report into THAT comment — which its author could
+    edit afterwards — and, being older than the real one, it was found first
+    on every update.
+    """
+    app = comment.get("performed_via_github_app") or {}
+    app_id = os.environ.get("GITHUB_APP_ID", "").strip()
+    if app and app_id:
+        return str(app.get("id", "")) == app_id
+    user = comment.get("user") or {}
+    if user.get("type") != "Bot":
+        return False
+    # Without performed_via_github_app this accepted ANY bot account, so
+    # another installed App could plant the marker and have this report
+    # written into its comment. The comment's author must be this App's own
+    # bot login. Only when that login cannot be read does any bot pass —
+    # the alternative, a fresh report on every push, is worse than the
+    # narrow case it guards against.
+    from app.github.auth import app_bot_login
+
+    login = app_bot_login()
+    return user.get("login") == login if login else True
+
+
+def find_sticky(
+    repo: str, issue_number: int, token: str, marker: str, strict: bool = False
+) -> int | None:
     """
     Comment id of the bot's marker-bearing comment, or None.
 
@@ -45,6 +75,9 @@ def find_sticky(repo: str, issue_number: int, token: str, marker: str) -> int | 
 
     Never raises: a lookup failure means "post a fresh one", which is the safe
     direction — a duplicate comment is recoverable, a lost report is not.
+    Except with `strict`, for a caller that merges into the existing body:
+    for it "not found" means "discard what is there", so it must not be
+    told that when the truth is "could not look".
     """
     try:
         path = f"/repos/{repo}/issues/{issue_number}/comments"
@@ -54,14 +87,28 @@ def find_sticky(repo: str, issue_number: int, token: str, marker: str) -> int | 
                 return None
 
             for c in comments:
-                if marker in (c.get("body") or ""):
+                if marker in (c.get("body") or "") and _posted_by_this_app(c):
                     return c.get("id")
 
             if len(comments) < PER_PAGE:
                 return None  # short page: that was the end of the thread
     except Exception as e:
+        if strict:
+            raise
         log.debug(f"sticky.find_failed repo={repo} issue={issue_number}: {e}")
     return None
+
+
+def _fit_with_marker(body: str, marker: str) -> str:
+    """Fit GitHub's size limit and keep the marker: a report cut past its
+    marker could not be found again, and every update would post a new one."""
+    from app.core.sanitizer import quiet_mentions
+    from app.github.helpers import fit_comment
+
+    # Every sticky is a report of model output (PR analysis, CI analysis);
+    # none means to mention anyone.
+    body = fit_comment(quiet_mentions(body), reserve=len(marker) + 2)
+    return body if marker in body else f"{body}\n\n{marker}"
 
 
 def upsert_sticky(repo: str, issue_number: int, token: str, marker: str, body: str) -> dict:
@@ -72,14 +119,34 @@ def upsert_sticky(repo: str, issue_number: int, token: str, marker: str, body: s
     by a maintainer since we found it — so a report is never lost to a stale
     comment id.
     """
-    if marker not in body:
-        body = f"{body}\n\n{marker}"
+    body = _fit_with_marker(body, marker)
 
     existing = find_sticky(repo, issue_number, token, marker)
     if existing is not None:
         try:
             return gh_patch(f"/repos/{repo}/issues/comments/{existing}", token, {"body": body})
-        except Exception as e:
-            log.warning(f"sticky.patch_failed id={existing} — posting fresh: {e}")
+        except GitHubError as e:
+            # Only a deleted comment is a reason to post a new one. A timeout,
+            # 5xx or rate limit fell through to the POST too, and the PR then
+            # carried two reports — the stale one for good. Raised instead,
+            # so the event is retried against the one that exists.
+            if e.status_code != 404:
+                raise
+            log.warning(f"sticky.deleted id={existing} — posting fresh")
 
     return gh_post(f"/repos/{repo}/issues/{issue_number}/comments", token, {"body": body})
+
+
+def update_sticky_if_present(
+    repo: str, issue_number: int, token: str, marker: str, body: str
+) -> dict | None:
+    """
+    PATCH the existing sticky and return it, or return None when there is
+    none. Never creates one: for an update with nothing new to flag, where a
+    fresh comment would be noise but a stale one would be wrong.
+    """
+    body = _fit_with_marker(body, marker)
+    existing = find_sticky(repo, issue_number, token, marker)
+    if existing is None:
+        return None
+    return gh_patch(f"/repos/{repo}/issues/comments/{existing}", token, {"body": body})

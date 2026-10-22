@@ -133,7 +133,13 @@ class TestStructuralSeparation:
         cfg.get.return_value = 4
         files = [{"filename": "app/a.py", "patch": "@@ -1,1 +1,1 @@\n+evil = 1\n"}]
 
-        with patch.object(pr_mod.router, "ask", side_effect=fake_ask):
+        import contextlib
+
+        from app.handlers.pull_request.errors import SectionUnavailable
+
+        # Only the prompt is checked; an answer naming no file now raises.
+        with patch.object(pr_mod.router, "ask", side_effect=fake_ask), \
+             contextlib.suppress(SectionUnavailable):
             pr_mod._review_code(
                 {"head": {"sha": "s"}}, "o/r", 1, files, "t", cfg, MagicMock(), "", MagicMock()
             )

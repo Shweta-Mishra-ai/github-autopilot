@@ -4,6 +4,7 @@ app/core/redis_client.py — Thread-safe Redis singleton; fails loud in producti
 
 from __future__ import annotations
 
+from app.core.env import env_int
 import os
 import logging
 import threading
@@ -23,6 +24,17 @@ _client = None
 # from inside its own `with _client_lock:` block. A plain Lock would deadlock the
 # same thread against itself there; RLock allows that same-thread reentry.
 _client_lock = threading.RLock()
+
+
+def _redis_host(url: str) -> str:
+    """host:port from a Redis URL, never its credentials."""
+    from urllib.parse import urlsplit
+
+    try:
+        parts = urlsplit(url)
+        return f"{parts.hostname or '?'}:{parts.port or 6379}"
+    except ValueError:
+        return "?"
 
 
 def get_redis() -> "redis_lib.Redis | _FakeRedis":
@@ -65,15 +77,27 @@ def get_redis() -> "redis_lib.Redis | _FakeRedis":
             )
             _client = redis_lib.Redis(connection_pool=_pool)
             _client.ping()
-            log.info(f"redis.connected url={redis_url[:30]}...")
+            # Host only. This logged the first 30 characters of the URL, which
+            # for rediss://default:<password>@host is most of the password.
+            log.info(f"redis.connected host={_redis_host(redis_url)}")
         except Exception as e:
             if _IS_PRODUCTION:
+                _client = None
                 raise RuntimeError(
                     f"Redis connection failed in production: {e}. "
                     "Check REDIS_URL and that the Redis service is running."
                 ) from e
-            log.warning(f"Redis connection failed: {e} — using in-memory fallback (dev/test only)")
-            _client = _FakeRedis()
+            # REDIS_URL is set, so the in-memory stand-in is never used: it
+            # was cached for the life of the process after ONE failed ping
+            # (Redis still starting at deploy, a blip), and from then on the
+            # queue never ran and dedupe, budgets, memory and analytics lived
+            # in process memory and vanished on restart, while /health said
+            # "ok". The real client reconnects on its own; until then every
+            # call fails, and every caller already handles that.
+            log.error(
+                f"redis.unreachable host={_redis_host(redis_url)}: {e} — "
+                "calls fail until it is reachable"
+            )
 
         return _client
 
@@ -127,17 +151,15 @@ def get_redis_blocking() -> "redis_lib.Redis | _FakeRedis":
             )
             _blocking_client = redis_lib.Redis(connection_pool=_blocking_pool)
             _blocking_client.ping()
-            log.info(f"redis.blocking_connected url={redis_url[:30]}...")
+            log.info(f"redis.blocking_connected host={_redis_host(redis_url)}")
         except Exception as e:
             if _IS_PRODUCTION:
                 raise RuntimeError(
                     f"Redis (blocking pool) connection failed in production: {e}. "
                     "Check REDIS_URL and that the Redis service is running."
                 ) from e
-            log.warning(
-                f"Redis blocking-pool connection failed: {e} — using in-memory fallback (dev/test only)"
-            )
-            _blocking_client = _FakeRedis()
+            # The real client, which reconnects on its own — see get_redis().
+            log.error(f"redis.blocking_unreachable host={_redis_host(redis_url)}: {e}")
 
         return _blocking_client
 
@@ -154,7 +176,7 @@ def is_redis_available() -> bool:
         return False
 
 
-REDIS_MEMORY_WARN_PCT = int(os.environ.get("REDIS_MEMORY_WARN_PCT", "80"))
+REDIS_MEMORY_WARN_PCT = env_int("REDIS_MEMORY_WARN_PCT", 80, minimum=1, maximum=100)
 
 
 def redis_memory_status() -> dict:
@@ -264,6 +286,19 @@ class _FakeRedis:
         with self._lock:
             if key in self._store:
                 self._expiry[key] = time.time() + seconds
+
+    def ttl(self, key: str) -> int:
+        """Redis semantics: -2 no such key, -1 no expiry, else seconds left."""
+        import math
+        import time
+
+        with self._lock:
+            self._evict(key)
+            if key not in self._store:
+                return -2
+            if key not in self._expiry:
+                return -1
+            return max(0, math.ceil(self._expiry[key] - time.time()))
 
     def delete(self, *keys):
         with self._lock:
@@ -489,6 +524,45 @@ class _FakeRedis:
         with self._lock:
             h = self._store.get(key, {})
             return h.get(field) if isinstance(h, dict) else None
+
+    def hsetnx(self, name: str, key: str, value) -> int:
+        with self._lock:
+            h = self._store.get(name, {})
+            if not isinstance(h, dict):
+                h = {}
+            if str(key) in h:
+                return 0
+            h[str(key)] = str(value)
+            self._store[name] = h
+            return 1
+
+    def hdel(self, name: str, *keys) -> int:
+        with self._lock:
+            h = self._store.get(name, {})
+            if not isinstance(h, dict):
+                return 0
+            return sum(1 for k in keys if h.pop(str(k), None) is not None)
+
+    def zrangebyscore(self, key: str, min_score, max_score, start=None, num=None):
+        with self._lock:
+            zset = self._store.get(key, {})
+            if not isinstance(zset, dict):
+                return []
+            items = [
+                k
+                for k, v in sorted(zset.items(), key=lambda x: x[1])
+                if min_score <= v <= max_score
+            ]
+            if start is not None and num is not None:
+                items = items[start : start + num]
+            return items
+
+    def zrem(self, key: str, *members) -> int:
+        with self._lock:
+            zset = self._store.get(key, {})
+            if not isinstance(zset, dict):
+                return 0
+            return sum(1 for m in members if zset.pop(m, None) is not None)
 
     def hgetall(self, key: str) -> dict:
         with self._lock:

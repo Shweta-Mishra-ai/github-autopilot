@@ -125,7 +125,7 @@ The credentials are shown once. Put them in your host's environment:
 | `GITHUB_WEBHOOK_SECRET` | the setup page |
 | `GROQ_API_KEY` | [console.groq.com](https://console.groq.com), free — **or skip it and use Option 4 instead** |
 | `REDIS_URL` | wired automatically by `render.yaml` |
-| `METRICS_AUTH_TOKEN` | any strong random string — recommended |
+| `METRICS_AUTH_TOKEN` | any strong random string — needed to read `/health` and `/metrics` in production |
 | `MCP_API_KEY` | `python3 -c "import secrets; print(secrets.token_hex(32))"` |
 
 <details>
@@ -138,8 +138,9 @@ The credentials are shown once. Put them in your host's environment:
 - Webhook URL: `https://<your-deployment>/webhook`
 - Webhook secret: `python3 -c "import secrets; print(secrets.token_hex(32))"`
 - Repository permissions: Issues ✏️ · Pull requests ✏️ · Contents ✏️ ·
-  Actions ✏️ · Metadata 👁 · Checks 👁 · Code scanning alerts 👁
-- Subscribe to: Push · Pull request · Issues · Issue comment
+  Actions ✏️ · Metadata 👁 · Checks 👁 · Code scanning alerts 👁 ·
+  Dependabot alerts 👁 · Secret scanning alerts 👁
+- Subscribe to: Push · Pull request · Issues · Issue comment · Check run
 - Generate and download the private key (`.pem`)
 
 The `/setup` flow exists because this list is easy to get subtly wrong. If you
@@ -238,11 +239,13 @@ cloud was not involved.
 
 </details>
 
-> **On cold starts.** The demo instance is on Render's free tier. A scheduled
-> [keep-alive workflow](.github/workflows/keepalive.yml) pings it every ten
-> minutes, and the badge above turns red if production is genuinely down. If a
-> ping window is missed, the first request can take around 50 seconds while the
-> instance wakes. Retry once.
+> **On cold starts.** The demo instance is on Render's free tier, which sleeps
+> after 15 idle minutes; the first request after that takes around 50 seconds.
+> The [health workflow](.github/workflows/keepalive.yml) is scheduled every ten
+> minutes but GitHub runs schedules on a best-effort basis — in practice every
+> 2–7 hours — so it does not keep the instance warm; an external pinger on
+> `/ping` (UptimeRobot, cron-job.org) does. Webhooks lost to a cold start are
+> redelivered automatically (`app/github/redelivery.py`).
 
 ---
 
@@ -266,9 +269,12 @@ Three guarantees worth being precise about:
 - **`LLM_LOCAL_ONLY=1` fails closed.** If Ollama is unreachable, the call
   errors. It does not silently reach for a cloud provider, on the first attempt
   or on any fallback path, and there is no configuration that relaxes this.
-- **Learned repository memory is local by default.** Recalled context is only
-  injected into a prompt when a local model is active, unless you explicitly set
-  `MEMORY_ALLOW_CLOUD=1` and accept the egress.
+- **Learned repository memory goes to the cloud provider by default, redacted.**
+  The standard deployment is cloud-first, so recalled memory is part of cloud
+  prompts unless you set `MEMORY_ALLOW_CLOUD=0`. Every entry is redacted before
+  it is stored (code blocks removed, secret-shaped strings replaced), so what
+  can leave is prose, file paths and symbol names. With `LLM_LOCAL_ONLY=1`
+  nothing leaves your infrastructure at all.
 - **The promise is tested, not asserted.**
   [`tests/test_privacy_no_egress.py`](tests/test_privacy_no_egress.py) sets
   every cloud credential, enables `LLM_LOCAL_ONLY`, points Ollama at a dead
@@ -288,11 +294,11 @@ Reported cost in local mode is always `0`.
 <!-- autopilot:stats:start -->
 | | |
 |---|---|
-| Modules | 94 |
-| Lines of code | 23,326 |
+| Modules | 106 |
+| Lines of code | 29,822 |
 | Slash commands | 27 |
 | MCP tools | 9 |
-| Internal imports | 304 |
+| Internal imports | 434 |
 <!-- autopilot:stats:end -->
 
 <sub>Regenerated from the code by CI — see [managed README sections](#managed-readme-sections).</sub>
@@ -318,7 +324,7 @@ and anything irreversible asks for confirmation first.
 | `/arch` | Architecture review | Anyone |
 | `/ci` | Analyse a CI failure | Anyone |
 | `/security` | Secret and dependency scan on a PR | Anyone |
-| `/secfull` | Full repository scan plus licence compliance | Maintainers |
+| `/secfull` | Full repository scan plus licence compliance (counts only on public repos) | Admins |
 | `/health` | Repository health grade | Anyone |
 | `/version` | Tags, releases, recent commits | Anyone |
 | `/summarize` | Summarise an issue thread | Anyone |
@@ -328,7 +334,7 @@ and anything irreversible asks for confirmation first.
 | `/impact` | Pull request blast radius | Anyone |
 | `/merge` | Merge a PR once checks pass | Maintainers |
 | `/apply` | Open a PR from an autofix branch | Maintainers |
-| `/rollback N` | Restore to snapshot N | Maintainers |
+| `/rollback N confirm` | Undo the bot's recorded actions in snapshot N | Maintainers |
 | `/release` | Draft a GitHub release | Maintainers |
 | `/runtests` | Trigger a CI workflow | Maintainers |
 | `/notify` | Send a Discord or Slack alert | Maintainers |
@@ -361,8 +367,9 @@ flowchart TB
 ### The real dependency graph
 
 The diagram above is the request flow, drawn by hand. The one below is not
-drawn at all — it is generated from the import graph on every CI run, so it
-cannot drift from the code:
+drawn at all — it is generated from the import graph, and every CI run
+regenerates it and fails if the committed copy differs, so it cannot drift
+from the code unnoticed:
 
 <img src="docs/diagrams/codegraph.svg" alt="Module dependency map: every Python module in this repository on a ring grouped by layer, with imports drawn as curves through the centre" width="100%"/>
 
@@ -372,11 +379,14 @@ body, which this codebase uses deliberately to break cycles. Dot size is lines
 of code.
 
 **Read the panel, not the middle.** A chord diagram draws every edge, and past
-roughly fifty the centre is texture — all 292 imports are in there and not one
+roughly fifty the centre is texture — every import is in there and not one
 of them can be traced from dot to dot. So the panel answers the question the
-picture cannot: which layers actually touch, and how hard. `handlers → core` at
-45 is expected; `core → github` at 9 is the sort of thing worth knowing about
-your own architecture, and it was invisible in the hairball.
+picture cannot: which layers actually touch, and how hard. Heavy
+`handlers → core` traffic is expected; any `core → github` count is the sort of
+thing worth knowing about your own architecture, and it was invisible in the
+hairball. The counts themselves are in the panel, which is regenerated with
+the picture; they are not repeated here because prose numbers drift, and
+these had (the text said 292 imports when the graph held 397).
 
 The panel also reports the three things that are defects rather than facts —
 import cycles, modules nothing imports, and two files claiming one import path
@@ -400,10 +410,10 @@ Regenerate either form with
 ```mermaid
 graph LR
     ai["ai<br/>16 modules"]
-    core["core<br/>25 modules"]
-    github["github<br/>8 modules"]
-    handlers["handlers<br/>23 modules"]
-    intelligence["intelligence<br/>7 modules"]
+    core["core<br/>29 modules"]
+    github["github<br/>10 modules"]
+    handlers["handlers<br/>31 modules"]
+    intelligence["intelligence<br/>5 modules"]
     mcp["mcp<br/>4 modules"]
     other["other<br/>6 modules"]
     security["security<br/>5 modules"]
@@ -450,7 +460,12 @@ graph LR
   is requeued at boot; poison events dead-letter after two attempts.
 - **Bounded** — 200 events, 512KB per envelope, 50 dead-lettered. Nothing grows
   without limit on a 512MB instance with 25MB of Redis.
-- **Backpressured** — a full queue returns `503`, and GitHub redelivers.
+- **Backpressured** — a full queue returns `503`. GitHub does **not** retry a
+  failed webhook by itself, so the app asks it to: every 10 minutes (and 45
+  seconds after boot, which is when a cold start has just lost one) it lists
+  the App's recent deliveries and redelivers those that timed out, got a 429
+  or a 5xx — at most twice each (`app/github/redelivery.py`,
+  `WEBHOOK_REDELIVERY=0` to turn off).
 - **Degradable** — if Redis dies, it falls back to the bounded thread pool with
   reduced durability, and says so in the logs.
 - **Scale-ready** — run [`worker.py`](worker.py) as a separate service and set
@@ -613,7 +628,10 @@ gets no edits at all — you opt in one region at a time.
 
 Refreshes arrive as a pull request, never as a direct commit to the default
 branch. Set `README_SELF_UPDATE_REPO=owner/repo` to enable it for the
-deployment's own repository.
+deployment's own repository. The regions are rendered from the running code, so
+a refresh is only proposed when that code is the commit that was pushed:
+the deployed revision is read from `AUTOPILOT_DEPLOYED_SHA`, `RENDER_GIT_COMMIT`
+or `RAILWAY_GIT_COMMIT_SHA`, and with none of them set nothing is proposed.
 
 ---
 

@@ -32,6 +32,9 @@ class LLMResponse:
     cost_usd: float = 0.0  # Estimated cost
     used_fallback: bool = False  # Was a fallback model used?
     error: str | None = None  # Non-None if call failed
+    # Which configured provider answered (groq_70b, groq_8b, gemini, …), set by
+    # the router. `provider` is the vendor and cannot tell the tiers apart.
+    provider_key: str = ""
 
     @property
     def is_error(self) -> bool:
@@ -114,51 +117,73 @@ class LLMProvider(ABC):
         if resp.error:
             return "", resp
 
-        return resp.text.strip(), resp
+        # `or ""`: a reasoning model that spends the budget thinking returns
+        # content null, and this raised AttributeError instead of an error.
+        return (resp.text or "").strip(), resp
+
+
+# A completion the provider stopped at max_tokens. No provider read the stop
+# reason, so a cut-off answer was returned as a success: plain-text callers
+# (/changelog, /explain, the PR summary) published half an answer as the
+# whole one, and JSON callers saw a fragment and reported "the model returned
+# garbage". The provider is healthy — its circuit is not charged — but the
+# answer is not one, so it is returned as an error and another provider tried.
+TRUNCATED = "TRUNCATED"
+_CUT_REASONS = frozenset({"length", "max_tokens"})
+
+
+def was_cut_off(finish_reason) -> bool:
+    """True for every provider's spelling of "stopped at the token limit"."""
+    return str(finish_reason or "").strip().lower() in _CUT_REASONS
+
+
+def truncated_error(max_tokens: int) -> str:
+    return f"{TRUNCATED}: the answer reached its {max_tokens}-token limit and was cut off"
+
+
+class AnswerTruncated(Exception):
+    """Every provider tried stopped at the token limit. Not an outage, so not
+    retried: the same prompt with the same limit ends the same way."""
 
 
 def _extract_json(text: str) -> dict:
     """
-    Shared JSON extractor — used by all providers.
-    Brace-depth method: finds first complete {...} object.
+    The first JSON OBJECT in a model's answer, or {"raw": text}.
+
+    Shared by all providers. The JSON decoder itself finds the object
+    (raw_decode at each "{"), so braces inside strings are understood. The
+    hand-written brace counter this replaces did not: with any preamble
+    ("Here is the review:") a code snippet such as "if (x) {" inside a string
+    unbalanced the count, and a valid answer was published as unparseable.
+
+    Always a dict. A bare `null`, number or list parsed directly and was
+    returned as-is, despite the signature; autofix's `"raw" in r` then raised
+    TypeError on None.
     """
     import json
+    import re
 
-    stripped = text.strip()
+    stripped = (text or "").strip()
+    decoder = json.JSONDecoder()
 
-    # Direct parse
-    try:
-        return json.loads(stripped)
-    except json.JSONDecodeError:
-        pass
-
-    # Strip markdown fences
+    candidates = [stripped]
     if "```" in stripped:
-        import re
-
-        stripped = re.sub(r"```(?:json)?\n?", "", stripped).strip()
+        candidates.append(re.sub(r"```(?:json)?\n?", "", stripped).strip())
+    for candidate in candidates:
         try:
-            return json.loads(stripped)
+            value = json.loads(candidate)
         except json.JSONDecodeError:
-            pass
-
-    # Brace-depth scan
-    for start_idx, ch in enumerate(text):
-        if ch != "{":
             continue
-        depth = 0
-        for end_idx in range(start_idx, len(text)):
-            c = text[end_idx]
-            if c == "{":
-                depth += 1
-            elif c == "}":
-                depth -= 1
-            if depth == 0:
-                candidate = text[start_idx : end_idx + 1]
-                try:
-                    return json.loads(candidate)
-                except json.JSONDecodeError:
-                    break
+        if isinstance(value, dict):
+            return value
+
+    for match in re.finditer(r"\{", stripped):
+        try:
+            value, _end = decoder.raw_decode(stripped, match.start())
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, dict):
+            return value
 
     return {"raw": text}
 
@@ -249,6 +274,13 @@ def client_error_detail(
 # had actually said.
 MAX_THROTTLE_WAIT_SECONDS = float(os.environ.get("LLM_MAX_THROTTLE_WAIT_SECONDS", "10"))
 
+# The longest provider wait believed. A spent daily quota answers 429 with
+# hours to go; the shared one-hour clamp (sized for the GitHub client, which
+# sleeps) cut that to an hour, so the breaker re-probed and replies said
+# "resets in ~59 min" all day. Nothing sleeps for this — it only sets how long
+# the breaker stays open — and a daily quota resets within a day.
+MAX_PROVIDER_RETRY_AFTER = 24 * 3600
+
 
 def throttle_pause(response, default: int = 30) -> tuple[int, float]:
     """
@@ -261,7 +293,9 @@ def throttle_pause(response, default: int = 30) -> tuple[int, float]:
     """
     from app.core.retry_after import parse_retry_after
 
-    retry_after = parse_retry_after(_header(response, "Retry-After"), default)
+    retry_after = parse_retry_after(
+        _header(response, "Retry-After"), default, cap=MAX_PROVIDER_RETRY_AFTER
+    )
     if 0 < retry_after <= MAX_THROTTLE_WAIT_SECONDS:
         return retry_after, float(retry_after)
     return retry_after, 0.0

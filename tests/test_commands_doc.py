@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from app.core.commands import ALL_COMMANDS, RESTRICTED_COMMANDS
+from app.core.commands import ADMIN_COMMANDS, ALL_COMMANDS, RESTRICTED_COMMANDS
 
 DOC = Path(__file__).resolve().parent.parent / "docs" / "COMMANDS.md"
 README = Path(__file__).resolve().parent.parent / "README.md"
@@ -59,6 +59,13 @@ class TestAccessLevelsMatchTheCode:
         match = re.search(r"\| \*\*Maintainer\*\* \|[^|]*\|([^|]*)\|", doc_text)
         assert match, "docs/COMMANDS.md must carry the access table"
         listed = {f"/{m}" for m in re.findall(r"`/([a-z]+)`", match.group(1))}
+        admin = re.search(r"\| \*\*Admin\*\* \|[^|]*\|([^|]*)\|", doc_text)
+        admin_listed = {f"/{m}" for m in re.findall(r"`/([a-z]+)`", admin.group(1))} if admin else set()
+        assert admin_listed == set(ADMIN_COMMANDS), (
+            f"The access table's Admin row says {sorted(admin_listed)}; the code "
+            f"requires admin for {sorted(ADMIN_COMMANDS)}."
+        )
+        listed |= admin_listed
         assert listed == set(RESTRICTED_COMMANDS), (
             f"The access table says {sorted(listed)} but the code restricts "
             f"{sorted(RESTRICTED_COMMANDS)}. A wrong permission claim sends a "
@@ -72,8 +79,9 @@ class TestAccessLevelsMatchTheCode:
     ):
         rows = [ln for ln in doc_text.splitlines() if ln.startswith(f"| `{command}`")]
         assert rows, f"{command} has no row of its own in docs/COMMANDS.md"
-        assert any("Maintainer" in row for row in rows), (
-            f"{command} is restricted in code but its row does not say Maintainer: {rows}"
+        tier = "Admin" if command in ADMIN_COMMANDS else "Maintainer"
+        assert any(tier in row for row in rows), (
+            f"{command} is restricted in code but its row does not say {tier}: {rows}"
         )
 
     @pytest.mark.parametrize(
@@ -102,8 +110,9 @@ class TestReadmeStaysConsistent:
             rows = [ln for ln in text.splitlines() if ln.startswith(f"| `{command}")]
             if not rows:
                 continue
-            assert any("Maintainer" in r for r in rows), (
-                f"README lists {command} without marking it Maintainers-only"
+            tier = "Admin" if command in ADMIN_COMMANDS else "Maintainer"
+            assert any(tier in r for r in rows), (
+                f"README lists {command} without marking it {tier}s-only"
             )
 
 

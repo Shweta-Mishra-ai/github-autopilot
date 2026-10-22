@@ -8,6 +8,9 @@ none of them was caught by the 2,609 tests that were passing at the time.
 
 from unittest.mock import MagicMock, patch
 
+import contextlib
+
+from app.handlers.pull_request.errors import SectionUnavailable
 import pytest
 
 from app.core.confidence import ConfidenceGate
@@ -92,7 +95,8 @@ class TestDemotionNeverDeletesAFinding:
 
     def test_demoted_file_says_why(self):
         md, _inline = _review({"files": [_entry()]}, gate=self._demoting_gate())
-        assert "Confidence 40%" in md
+        assert "scored low on the reliability checks" in md
+        assert "40%" not in md, "a weighted heuristic shown as a probability"
 
     def test_confident_file_still_anchors_and_stays_out_of_the_body(self):
         md, inline = _review({"files": [_entry()]})
@@ -141,20 +145,31 @@ class TestBatchConfidenceIsRead:
         assert seen == [0.4]
 
 
-class TestScoreZeroSurvives:
-    """`r.get("score") or 8` turned the one score that means "do not merge"
-    into a passing grade."""
+class TestNoInventedScore:
+    """
+    The per-file heading was "Score: N/10", where N was a number the prompt's
+    own example put at 8 and the validator defaulted to 7 when absent. It now
+    states what was actually found.
+    """
 
-    @pytest.mark.parametrize("given,shown", [(0, "0/10"), (2, "2/10"), (7.5, "7.5/10")])
-    def test_score_is_rendered_as_given(self, given, shown):
-        md, _ = _review({"files": [_entry(score=given, issues=[])]})
-        assert f"Score: {shown}" in md
+    @pytest.mark.parametrize("given", [0, 2, 7.5, None, "high"])
+    def test_heading_never_carries_a_mark_out_of_ten(self, given):
+        md, _ = _review({"files": [_entry(score=given)]})
+        assert "/10" not in md
+        assert "1 critical" in md
 
-    def test_a_missing_score_still_falls_back(self):
-        entry = _entry(issues=[])
-        entry.pop("score")
-        md, _ = _review({"files": [entry]})
-        assert "Score: 7/10" in md  # validator's documented default
+    def test_a_clean_file_says_so(self):
+        md, _ = _review({"files": [_entry(issues=[])]})
+        assert "no issues found" in md and "/10" not in md
+
+    def test_counts_are_worst_first_and_hidden_findings_are_disclosed(self):
+        issues = [
+            {"severity": s, "line": "", "issue": f"problem {n}", "fix": ""}
+            for n, s in enumerate(["minor", "critical", "minor", "major", "minor", "minor"])
+        ]
+        md, _ = _review({"files": [_entry(issues=issues)]})
+        assert "1 critical, 1 major, 4 minor" in md
+        assert "2 less severe finding(s) not shown" in md
 
 
 class TestNoCommittableProse:
@@ -243,6 +258,17 @@ class TestNoCommittableProse:
         assert "```suggestion" not in body
 
 
+# A diff that changes the body of `f`, the function the gaps below name. A
+# gap is published only for a function the PR actually changes.
+GAP_FILES = [
+    {
+        "filename": "app/a.py",
+        "patch": "@@ -1,2 +1,2 @@\n def load_rows(x):\n-    return 0\n+    raise ValueError(x)\n",
+        "status": "modified",
+    }
+]
+
+
 class TestGapSectionSurvivesItsOwnInput:
     def _gaps(self, payload, files=None, log=None):
         with patch.object(gaps_mod.router, "ask", return_value=(payload, MagicMock())):
@@ -250,7 +276,7 @@ class TestGapSectionSurvivesItsOwnInput:
                 {},
                 "o/r",
                 1,
-                files if files is not None else FILES,
+                files if files is not None else GAP_FILES,
                 "t",
                 _cfg(),
                 log or MagicMock(),
@@ -262,7 +288,7 @@ class TestGapSectionSurvivesItsOwnInput:
         "gaps": [
             {
                 "file": "app/a.py",
-                "function": "f",
+                "function": "load_rows",
                 "risk": "high",
                 "suggested_test": "cover the raise",
             }
@@ -277,6 +303,39 @@ class TestGapSectionSurvivesItsOwnInput:
         out = self._gaps({**self.BASE, "coverage_score": score}, log=log)
         assert "cover the raise" in out, f"section lost for coverage_score={score!r}"
         assert log.error.call_count == 0
+        # Whatever the model claims, it is not published as a score.
+        assert "/10" not in out and "Coverage Score" not in out
+
+    def test_the_headline_is_counted_from_the_diff(self):
+        src = {
+            "filename": "app/calc.py",
+            "status": "modified",
+            "patch": "@@ -1,0 +1,4 @@\n+def add_tax(x):\n+    return x\n+def strip_tax(x):\n+    return x",
+        }
+        test = {
+            "filename": "tests/test_calc.py",
+            "status": "modified",
+            "patch": "@@ -1,0 +1,2 @@\n+def test_add():\n+    assert add_tax(1) == 1",
+        }
+        payload = {
+            **self.BASE,
+            "gaps": [{"file": "app/calc.py", "function": "strip_tax", "risk": "high",
+                      "suggested_test": "cover strip_tax"}],
+        }
+        out = self._gaps(payload, files=[src, test])
+        assert "Changed symbols referenced by this PR's tests: 1 of 2" in out
+        assert "Tests already in the repository are not searched" in out
+
+    def test_the_prompt_offers_no_example_score_to_copy(self):
+        seen = {}
+
+        def ask(system, user, **kw):
+            seen["user"] = user
+            return {"has_gaps": False}, MagicMock()
+
+        with patch.object(gaps_mod.router, "ask", side_effect=ask):
+            gaps_mod._detect_test_gaps({}, "o/r", 1, FILES, "t", _cfg(), MagicMock())
+        assert "coverage_score" not in seen["user"]
 
     def test_gap_against_a_file_not_in_the_pr_is_dropped(self):
         out = self._gaps(
@@ -309,7 +368,7 @@ class TestGapSectionSurvivesItsOwnInput:
                     },
                     {
                         "file": "app/a.py",
-                        "function": "f",
+                        "function": "load_rows",
                         "risk": "high",
                         "suggested_test": "genuine",
                     },
@@ -327,7 +386,7 @@ class TestGapSectionSurvivesItsOwnInput:
                 "gaps": [
                     {
                         "file": "app/a.py",
-                        "function": "f",
+                        "function": "load_rows",
                         "risk": "CATASTROPHIC",
                         "suggested_test": "t",
                     }
@@ -422,81 +481,88 @@ class TestNonNumericConfidenceKeepsTheAnalysis:
         assert "Failed" not in out
         assert "Confidence:" not in out, "invented a percentage the model never gave"
 
-    def test_a_real_confidence_is_still_shown(self):
-        assert "Confidence: 90%" in self._ci(0.9)
+    def test_a_given_confidence_is_not_shown_either(self):
+        """Round-4 audit M5: "self-estimate: 93%" sat under a root cause
+        naming a test the log never mentions. No self-rating is printed."""
+        out = self._ci(0.9)
+        assert "yanked release" in out
+        assert "90%" not in out and "self-estimate" not in out
 
 
 class TestReleaseStopsAtTheTag:
-    """`/release` said "commits since last tag" in its docstring and listed the
-    last 20 commits on the branch regardless, so every draft re-announced work
-    already shipped in that tag. It also duplicated the fetch instead of using
-    the shared helper, which is how the two drifted apart."""
+    """`/release` said "commits since last tag" and listed the last 20 commits
+    on the branch regardless, so every draft re-announced work already
+    shipped. It now asks GitHub for exactly the commits since the tag."""
 
-    COMMITS = [
-        {"sha": "NEW", "commit": {"message": "feat: unreleased thing"}},
-        {"sha": "TAGGED", "commit": {"message": "feat: shipped in v1.1.0"}},
-    ]
-
-    def _release(self, tags, commits):
+    def _release(self, tags, since_tag):
         from app.handlers.comments import _cmd_release
 
-        plan = {
-            "version": "v1.2.0",
-            "title": "t",
-            "highlights": [],
-            "breaking_changes": [],
-            "release_notes": "n",
-        }
         prompts = []
+        gh = _release_gh(tags, since_tag)
         with (
             patch(
                 "app.handlers.comments.router.ask",
-                side_effect=lambda s, u, **k: (prompts.append(u), (plan, MagicMock()))[1],
+                side_effect=lambda s, u, **k: (prompts.append(u), ({"title": "t", "release_notes": "n"}, MagicMock()))[1],
             ),
-            patch("app.handlers.comments.gh_get", side_effect=[tags, commits]),
-            patch(
-                "app.handlers.comments.gh_post",
-                return_value={"html_url": "u", "number": 1},
-            ) as post,
+            patch("app.handlers.comments.gh_get", side_effect=gh),
+            patch("app.handlers.comments.gh_post", return_value={"html_url": "u", "number": 1}) as post,
         ):
             out = _cmd_release("o/r", "t", "a")
-        return out, prompts, post
+        return out, prompts, post, gh.seen
 
-    def test_released_commits_are_not_re_announced(self):
-        _out, prompts, _post = self._release(
-            [{"name": "v1.1.0", "commit": {"sha": "TAGGED"}}], self.COMMITS
+    def test_only_commits_since_the_tag_are_used(self):
+        _out, prompts, _post, seen = self._release(
+            [{"name": "v1.1.0"}], [{"sha": "NEW", "commit": {"message": "feat: unreleased thing"}}]
         )
+        assert any("/compare/v1.1.0...HEAD" in p for p in seen)
         assert "unreleased thing" in prompts[0]
-        assert "shipped in v1.1.0" not in prompts[0]
 
     def test_nothing_new_drafts_nothing(self):
-        out, prompts, post = self._release(
-            [{"name": "v1.1.0", "commit": {"sha": "TAGGED"}}],
-            [{"sha": "TAGGED", "commit": {"message": "feat: shipped in v1.1.0"}}],
-        )
+        out, prompts, post, _seen = self._release([{"name": "v1.1.0"}], [])
         assert prompts == [], "spent an LLM call with nothing to release"
         post.assert_not_called()
         assert "Nothing to Release" in out and "v1.1.0" in out
 
-    def test_a_tag_payload_without_a_sha_still_works(self):
-        """The shape the existing suite mocks — no `commit` key at all."""
-        _out, prompts, _post = self._release([{"name": "v1.1.0"}], self.COMMITS)
-        assert "unreleased thing" in prompts[0]
-        assert "shipped in v1.1.0" in prompts[0]
+    def test_the_highest_version_tag_is_the_latest(self):
+        """GitHub lists tags by name, so v1.9.0 came before v1.10.0."""
+        _out, _prompts, _post, seen = self._release(
+            [{"name": "v1.9.0"}, {"name": "v1.10.0"}], [{"commit": {"message": "fix: y"}}]
+        )
+        assert any("/compare/v1.10.0...HEAD" in p for p in seen)
+
+
+def _release_gh(tags, since_tag, commits=()):
+    seen = []
+
+    def get(path, token):
+        seen.append(path)
+        if "/tags" in path:
+            return tags
+        if "/releases" in path:
+            return []  # no drafts yet
+        if "/compare/" in path:
+            return {"commits": list(since_tag), "total_commits": len(since_tag)}
+        if "/commits" in path:
+            return list(commits)
+        raise AssertionError(f"unexpected GET {path}")
+
+    get.seen = seen
+    return get
 
 
 class TestReviewFalsePositiveSources:
     """Four ways the review said something untrue about the code, none of which
     involved the model being wrong."""
 
-    def test_a_moved_anchor_gets_no_commit_button(self):
+    def test_an_unproven_line_is_never_pinned_to_a_neighbour(self):
         """
-        `nearest_commentable` may move a finding up to five lines to reach a
-        line GitHub accepts. A ```suggestion REPLACES the line it sits on, so on
-        a moved anchor the button commits the fix over a different statement —
-        presented by GitHub as a reviewed patch.
+        `nearest_commentable` used to move a finding up to five lines to reach a
+        line GitHub accepts — usually a different statement, presented on the
+        diff as a claim about it. A finding is now placed only on a line it is
+        shown to be about; one with a wrong number and no quote goes in the
+        report, marked unverified, with its fix and no commit button.
         """
-        # Only line 1 is commentable; the model reports line 4.
+        # Only line 1 is commentable; the model reports line 4 and quotes nothing.
         md, inline = _review(
             {
                 "files": [
@@ -513,12 +579,62 @@ class TestReviewFalsePositiveSources:
                 ]
             }
         )
-        assert len(inline) == 1
-        body = inline[0]["body"]
-        assert inline[0]["line"] == 1, "expected the anchor to have moved"
-        assert "```suggestion" not in body, "committable suggestion built on a moved anchor"
-        assert "size = min(size, MAX)" in body, "the fix must still be shown"
-        assert "Reported at line 4" in body, "the drift must be stated, not hidden"
+        assert inline == [], "an unproven line must not get an inline comment"
+        assert "unbounded read" in md and "unverified" in md
+        assert "size = min(size, MAX)" in md, "the fix must still be shown"
+        assert "```suggestion" not in md
+
+    def test_a_correct_quote_moves_the_finding_to_its_real_line(self):
+        """The common model error: right code, wrong number. The quote fixes it."""
+        patch_ = "@@ -10,2 +10,3 @@ def page(items):\n start = 0\n+end = start + size + 1\n return items\n"
+        files = [{"filename": "app/a.py", "patch": patch_, "status": "modified"}]
+        batch = {
+            "files": [
+                _entry(
+                    issues=[
+                        {
+                            "severity": "major",
+                            "line": "2",  # counted from the hunk, as models do
+                            "code": "end = start + size + 1",
+                            "issue": "off by one",
+                            "fix": "end = start + size",
+                        }
+                    ]
+                )
+            ]
+        }
+        with patch.object(pr_mod.router, "ask", return_value=(batch, MagicMock())):
+            _md, inline = pr_mod._review_code(
+                {"head": {"sha": "s"}}, "o/r", 1, files, "t", _cfg(),
+                ConfidenceGate(None), "", MagicMock(),
+            )
+        assert len(inline) == 1 and inline[0]["line"] == 11
+        assert "```suggestion" in inline[0]["body"], "anchored exactly, so the button is safe"
+
+    def test_a_quote_of_code_not_in_the_diff_is_withheld_and_counted(self):
+        md, inline = _review(
+            {
+                "files": [
+                    _entry(
+                        issues=[
+                            {
+                                "severity": "critical",
+                                "line": "1",
+                                "code": "cursor.execute(query % user_input)",
+                                "issue": "SQL injection",
+                                "fix": "parameterise",
+                            }
+                        ]
+                    )
+                ]
+            }
+        )
+        assert inline == []
+        assert "1 withheld" in md, "the heading must say a finding was withheld"
+        # Round-4 audit L1: "no issues found · 1 withheld" contradicted itself.
+        assert "no verified issues · 1 withheld" in md
+        assert "no issues found" not in md.lower()
+        assert "SQL injection" in md, "withheld is listed, never silently dropped"
 
     def test_an_exact_anchor_still_gets_a_commit_button(self):
         _md, inline = _review(
@@ -567,7 +683,7 @@ class TestReviewFalsePositiveSources:
             pr_mod.router,
             "ask",
             side_effect=lambda s, u, **k: (sent.append(u), ({"files": []}, MagicMock()))[1],
-        ):
+        ), contextlib.suppress(SectionUnavailable):  # only the prompt is checked
             pr_mod._review_code(
                 {"head": {"sha": "s"}},
                 "o/r",
@@ -592,7 +708,7 @@ class TestReviewFalsePositiveSources:
             pr_mod.router,
             "ask",
             side_effect=lambda s, u, **k: (sent.append(u), ({"files": []}, MagicMock()))[1],
-        ):
+        ), contextlib.suppress(SectionUnavailable):  # only the prompt is checked
             pr_mod._review_code(
                 {"head": {"sha": "s"}},
                 "o/r",
@@ -614,7 +730,7 @@ class TestReviewFalsePositiveSources:
             pr_mod.router,
             "ask",
             side_effect=lambda s, u, **k: (sent.append(u), ({"files": []}, MagicMock()))[1],
-        ):
+        ), contextlib.suppress(SectionUnavailable):  # only the prompt is checked
             pr_mod._review_code(
                 {"head": {"sha": "s"}},
                 "o/r",
@@ -790,10 +906,9 @@ class TestJunkFieldDoesNotDiscardTheAnalysis:
             patch("app.handlers.comments.router.ask", return_value=(plan, MagicMock())),
             patch(
                 "app.handlers.comments.gh_get",
-                side_effect=[
-                    [{"name": "v1.1.0"}],
-                    [{"sha": "a", "commit": {"message": "feat: x"}}],
-                ],
+                side_effect=_release_gh(
+                    [{"name": "v1.1.0"}], [{"sha": "a", "commit": {"message": "feat: x"}}]
+                ),
             ),
             patch(
                 "app.handlers.comments.gh_post", return_value={"html_url": "u", "number": 1}
@@ -802,8 +917,9 @@ class TestJunkFieldDoesNotDiscardTheAnalysis:
             out = _cmd_release("o/r", "t", "a")
 
         post.assert_called_once()
-        # A bad version falls back to a patch bump rather than losing the draft.
-        assert post.call_args[0][2]["tag_name"] == "v1.1.1"
+        # The version is computed from the commits (a feat: is a minor bump),
+        # so a junk version from the model cannot lose or mislabel the draft.
+        assert post.call_args[0][2]["tag_name"] == "v1.2.0"
         assert "Error" not in out and "Failed" not in out
 
     def test_as_text_coerces_without_raising(self):
@@ -1063,6 +1179,7 @@ class TestRepoFileContext:
         guarded_ask never forwards, and passed vacuously."""
         from app.ai import guarded
         from app.ai import hallucination
+        from app.handlers.comments import impact as im
         from app.handlers.comments import reviewer as rv
 
         pr_files = [{"filename": "app/auth.py"}]
@@ -1080,7 +1197,7 @@ class TestRepoFileContext:
             return seen["verdict"]
 
         with (
-            patch.object(rv, "gh_get", side_effect=gh),
+            patch.object(im, "gh_get", side_effect=gh),
             patch.object(guarded, "safe_router_ask", return_value=(answer, MagicMock())),
             patch.object(guarded, "check_response", side_effect=recording_check),
         ):
@@ -1363,7 +1480,8 @@ class TestGapModelSeesWhatTheTestsReference:
 
     SOURCE = (
         "@@ -1,3 +1,9 @@ def scan_repo(repo, installation_id):\n"
-        " x = 1\n"
+        "     x = 1\n"
+        "+    y = 2\n"
         "+_SHA_REF = re.compile('x')\n"
         "+def as_text(value, default=''):\n"
         "+    return value\n"
@@ -1554,17 +1672,21 @@ class TestEveryFileInAPullRequest:
         with pytest.raises(RuntimeError):
             pr_files("o/r", 1, "t", get=get)
 
-    def test_a_later_page_failure_keeps_what_was_fetched(self):
+    def test_a_later_page_failure_is_raised_not_returned_as_the_whole_pr(self):
+        # It kept the first page and logged, and every caller then presented
+        # 100 files as the PR: "Files: 100", a risk judged on 100, and
+        # "no secrets in the 100 files scanned" with the secret in file 180.
         from app.github.helpers import pr_files
 
-        files, _calls, good = self._pages(250)
+        _files, _calls, good = self._pages(250)
 
         def get(path, token):
             if path.endswith("page=2"):
                 raise RuntimeError("blip")
             return good(path, token)
 
-        assert pr_files("o/r", 1, "t", get=get) == files[:100]
+        with pytest.raises(RuntimeError, match="blip"):
+            pr_files("o/r", 1, "t", get=get)
 
     def test_it_stops_at_githubs_cap(self):
         from app.github.helpers import PR_FILES_MAX_PAGES, pr_files
@@ -1620,3 +1742,45 @@ class TestEveryFileInAPullRequest:
         ):
             P.handle(payload)
         assert seen["n"] == 35, f"the review saw {seen.get('n')} of 35 files"
+
+
+class TestAShortQuoteCannotMoveAFinding:
+    """Round-4 audit H3: an invented critical finding cited at line 40 with
+    code "return" was re-anchored to the nearest `return` and given a commit
+    button there, with no note that it had moved."""
+
+    PATCH = (
+        "@@ -10,3 +10,8 @@ def lookup(db, oid):\n"
+        " rows = db.query(oid)\n"
+        "+if not rows:\n"
+        "+    return None\n"
+        "+log.info('found')\n"
+        "+return rows.fetchall()\n"
+        " # end\n"
+    )
+
+    def _run(self, issue):
+        files = [{"filename": "app/a.py", "patch": self.PATCH, "status": "modified"}]
+        batch = {"files": [_entry(issues=[issue])]}
+        with patch.object(pr_mod.router, "ask", return_value=(batch, MagicMock())):
+            return pr_mod._review_code(
+                {"head": {"sha": "s"}}, "o/r", 1, files, "t", _cfg(),
+                ConfidenceGate(None), "", MagicMock(),
+            )
+
+    def test_a_fragment_on_the_wrong_line_is_not_anchored(self):
+        md, inline = self._run({
+            "severity": "critical", "line": "40", "code": "return",
+            "issue": "Race condition corrupts results", "fix": "with db.lock(): return rows.fetchall()",
+        })
+        assert inline == []
+        assert "Race condition" in md and "```suggestion" not in md
+
+    def test_a_distinctive_quote_on_the_wrong_line_is_moved_without_a_button_when_partial(self):
+        md, inline = self._run({
+            "severity": "major", "line": "40", "code": "rows.fetchall()",
+            "issue": "Loads every row into memory", "fix": "return rows.fetchmany(100)",
+        })
+        assert len(inline) == 1 and inline[0]["line"] == 14
+        assert "```suggestion" not in inline[0]["body"]
+        assert "Reported at line 40; the code it quotes is on line 14" in inline[0]["body"]

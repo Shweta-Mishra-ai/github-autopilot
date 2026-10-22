@@ -43,8 +43,9 @@ log = logging.getLogger(__name__)
 SAFETY_BUFFER = 50
 
 # The longest this will ever block a worker thread. A primary rate limit
-# resets on the hour, so the honest answer to a long wait is to refuse and let
-# GitHub redeliver the webhook — the queue is built for exactly that. Waiting
+# resets on the hour, so the honest answer to a long wait is to refuse: the
+# handler raises a transient error and the event queue retries the event later
+# (app/core/transient.py). GitHub itself never redelivers. Waiting
 # is only ever worth it for the last few seconds of a window.
 DEFAULT_MAX_WAIT_SECONDS = 10
 
@@ -57,6 +58,10 @@ _GLOBAL_KEY = "unknown"
 
 _state: dict[str, dict] = {}
 _lock = threading.Lock()
+
+
+class GitHubRateLimitExhausted(RuntimeError):
+    """Too few GitHub API calls left to start this work. Transient."""
 
 
 def _max_wait_seconds() -> float:
@@ -112,9 +117,22 @@ def update_from_headers(headers: dict, token: str | None = None) -> None:
     """
     try:
         key = token_key(token)
-        remaining = headers.get("X-RateLimit-Remaining")
-        reset_at = headers.get("X-RateLimit-Reset")
-        resource = headers.get("X-RateLimit-Resource", "core")
+        # HTTP header names are case-insensitive, and the caller passes
+        # dict(response.headers), which is not: GitHub's edge sends
+        # `x-ratelimit-remaining` (and some proxies `X-Ratelimit-Remaining`),
+        # so the exact-case lookup always missed and the tracked figure sat
+        # at 5000 forever — no throttling, and /health reporting a number
+        # nobody had measured.
+        h = {str(k).lower(): v for k, v in (headers or {}).items()}
+        remaining = h.get("x-ratelimit-remaining")
+        reset_at = h.get("x-ratelimit-reset")
+        resource = str(h.get("x-ratelimit-resource") or "core").lower()
+
+        # Only the core limit gates ordinary REST calls. Search has its own
+        # budget of 30 a minute: recording its "29 remaining" here made every
+        # following core call look nearly exhausted and stall or refuse.
+        if resource != "core":
+            return
 
         with _lock:
             entry = _state.setdefault(key, _blank(key))
@@ -125,11 +143,8 @@ def update_from_headers(headers: dict, token: str | None = None) -> None:
             entry["last_checked"] = time.time()
             entry["resource"] = resource
             _evict_if_needed()
-
-        if remaining is not None:
-            _try_redis_set(f"gh_rl_{resource}_{key}_remaining", remaining)
-        if reset_at is not None:
-            _try_redis_set(f"gh_rl_{resource}_{key}_reset", reset_at)
+        # No longer copied to Redis: two SETs after every GitHub response
+        # (34 of 44 SETs in one PR event), and nothing ever read them.
 
     except Exception as e:
         log.debug(f"rate_limit.update_from_headers_failed: {e}")
@@ -140,9 +155,10 @@ def check_and_wait(token: str | None = None) -> None:
     Hold briefly, or refuse, when this installation's budget is nearly spent.
 
     Never blocks longer than `GITHUB_MAX_RATE_LIMIT_WAIT_SECONDS` (default 10).
-    Beyond that it raises, because the caller is a pooled worker thread and the
-    webhook that triggered it will be redelivered by GitHub — losing one
-    request is strictly better than freezing every other one behind it.
+    Beyond that it raises, because the caller is a pooled worker thread. The
+    raise is transient (app/core/transient.py), so the event queue retries the
+    event later — GitHub does not redeliver it — and failing one request is
+    strictly better than freezing every other one behind it.
 
     Raises RuntimeError, matching the previous contract so existing error
     handling is unaffected.
@@ -153,8 +169,8 @@ def check_and_wait(token: str | None = None) -> None:
         remaining = entry["remaining"] if entry else 5000
         reset_at = entry["reset_at"] if entry else 0
 
-    if remaining >= SAFETY_BUFFER:
-        return
+    if remaining >= SAFETY_BUFFER or (reset_at and reset_at <= time.time()):
+        return  # plenty left, or the window this figure belongs to is over
 
     wait_seconds = max(0.0, reset_at - time.time())
     limit = _max_wait_seconds()
@@ -172,7 +188,7 @@ def check_and_wait(token: str | None = None) -> None:
         f"github.rate_limit_exhausted remaining={remaining} "
         f"resets_in={wait_seconds:.0f}s — refusing rather than holding a worker"
     )
-    raise RuntimeError(
+    raise GitHubRateLimitExhausted(
         f"GitHub rate limit exhausted ({remaining} remaining). " f"Resets in {wait_seconds:.0f}s."
     )
 
@@ -188,8 +204,15 @@ def get_status(token: str | None = None) -> dict:
     """
     now = time.time()
     with _lock:
-        entries = [dict(e) for e in _state.values()]
+        # An entry whose window has already reset says nothing about now.
+        # Installation tokens rotate about hourly, so one old low entry used
+        # to hold /health at "rate_limited" until the process restarted.
+        entries = [
+            dict(e) for e in _state.values() if not (e.get("reset_at") and e["reset_at"] <= now)
+        ]
         specific = dict(_state.get(token_key(token), {})) if token else {}
+        if specific.get("reset_at") and specific["reset_at"] <= now:
+            specific = {}
 
     if specific:
         worst = specific
@@ -256,13 +279,3 @@ def reset_state() -> None:
     """Drop all tracked state. For tests and for a re-installed App."""
     with _lock:
         _state.clear()
-
-
-def _try_redis_set(key: str, value, ttl: int = 3600):
-    """Share state across processes. Best effort — never affects the request."""
-    try:
-        from app.core.redis_client import get_redis
-
-        get_redis().set(f"github:{key}", str(value), ex=ttl)
-    except Exception as e:
-        log.debug(f"rate_limit.redis_set_failed key={key}: {e}")

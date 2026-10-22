@@ -58,9 +58,10 @@ def _ip_rate_limit() -> int:
     to this application: GitHub delivers every webhook for every installation
     from its own small IP range. Each source address is therefore shared by all
     of an organisation's repositories, so a busy org consumes one bucket
-    between them. Nothing is lost when it trips — a 429 makes GitHub redeliver,
-    and it keeps retrying for about 24 hours — but work is delayed, and the
-    operator watching it had no knob.
+    between them. GitHub does NOT retry a 429 by itself; the event is recovered
+    only because app/github/redelivery.py asks GitHub to redeliver failed
+    deliveries (every 10 minutes, up to twice per event). Work is delayed, and
+    the operator watching it had no knob.
 
     Read at call time so it can be changed without a redeploy on hosts that
     allow it.
@@ -106,7 +107,12 @@ def startup_check():
     if not app_id:
         errors.append("GITHUB_APP_ID is not set.")
     elif not app_id.strip().isdigit():
-        errors.append(f"GITHUB_APP_ID must be numeric, got: {app_id!r}")
+        # Not echoed: a value pasted into the wrong variable (a private key,
+        # a token) would otherwise be written into the boot log.
+        errors.append(
+            f"GITHUB_APP_ID must be numeric; it is set to a {len(app_id)}-character "
+            "value that is not a number."
+        )
 
     private_key = os.environ.get("GITHUB_PRIVATE_KEY", "")
     if not private_key:
@@ -122,8 +128,9 @@ def startup_check():
     if not os.environ.get("METRICS_AUTH_TOKEN", "").strip():
         log.warning(
             "webhook_security.metrics_unauthed: METRICS_AUTH_TOKEN is NOT set — "
-            "/health and /metrics expose internal state PUBLICLY. Set a strong "
-            "random value to lock them (and the dashboard)."
+            "/health, /metrics, /graph.json and /setup/doctor refuse every request "
+            "in production (and are open in local development). Set a strong "
+            "random value to read them and to use the dashboard."
         )
     if not os.environ.get("MCP_API_KEY", "").strip():
         log.warning(
@@ -167,7 +174,10 @@ def verify_signature(payload_bytes: bytes, signature_header: str) -> bool:
 
     expected = "sha256=" + hmac.new(secret, payload_bytes, hashlib.sha256).hexdigest()
 
-    ok = hmac.compare_digest(expected, signature_header)
+    # Bytes: a str holding any non-ASCII character makes compare_digest raise
+    # TypeError, which turned a forged signature into a 500 — and GitHub
+    # redelivers on a 5xx.
+    ok = hmac.compare_digest(expected.encode("utf-8"), signature_header.encode("utf-8"))
     if not ok:
         log.warning("webhook_security.invalid_signature")
     return ok
@@ -182,7 +192,11 @@ def verify_timestamp(headers: dict) -> bool:
     GitHub does not consistently send a timestamp — idempotency (delivery ID
     dedup) handles replay protection for the common case.
     """
-    ts_header = headers.get("X-GitHub-Event-Time") or headers.get("X-Timestamp")
+    # Case-insensitive: the caller passes dict(request.headers), and
+    # Werkzeug spells it "X-Github-Event-Time", so the exact-case lookup
+    # never matched and this check never ran.
+    lowered = {str(k).lower(): v for k, v in (headers or {}).items()}
+    ts_header = lowered.get("x-github-event-time") or lowered.get("x-timestamp")
     if not ts_header:
         return True
 

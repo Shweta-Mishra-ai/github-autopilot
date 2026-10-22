@@ -104,7 +104,11 @@ def main(outdir, *specs):
         matrix[name] = {c: (f"{c}.txt" in found) for c in CASES
                         if c.startswith(prefixes[kind])}
     with open(os.path.join(outdir, "reproducer_matrix.json"), "w") as fh:
-        json.dump({"cases": CASES, "found": matrix}, fh, indent=2)
+        # the cases with their values masked: a token-shaped literal in a
+        # committed file is (rightly) rejected by secret scanning
+        shown = {c: t.replace(HEX, "<32 hex>").replace(HF, "<34 letters>")
+                 .replace(R8[:36], "<36 alphanumerics>") for c, t in CASES.items()}
+        json.dump({"cases": shown, "found": matrix}, fh, indent=2)
     for name, row in matrix.items():
         print(name.ljust(26), " ".join(f"{c}:{'found' if v else 'MISSED'}"
                                         for c, v in row.items()))

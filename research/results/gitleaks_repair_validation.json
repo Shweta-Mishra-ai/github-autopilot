@@ -1,0 +1,1029 @@
+{
+  "design": "validate_gitleaks_repair.py \u2014 What the two repairs of repair_gitleaks.py cost",
+  "n_projects": 31,
+  "n_files": 38309,
+  "n_lines": 9870820,
+  "totals": {
+    "original": 1101,
+    "R1": 1126,
+    "R1P": 1101,
+    "R2": 1154
+  },
+  "totals_by_repo": {
+    "original": {
+      "gin-gonic/gin": 3,
+      "sendgrid/sendgrid-go": 0,
+      "expressjs/express": 0,
+      "stripe/stripe-node": 9,
+      "nestjs/nest": 36,
+      "slackapi/node-slack-sdk": 0,
+      "google/gson": 0,
+      "square/retrofit": 0,
+      "sinatra/sinatra": 1,
+      "jekyll/jekyll": 1,
+      "tokio-rs/axum": 8,
+      "BurntSushi/ripgrep": 0,
+      "guzzle/guzzle": 0,
+      "twilio/twilio-php": 31,
+      "JamesNK/Newtonsoft.Json": 1,
+      "App-vNext/Polly": 0,
+      "openai/openai-python": 3,
+      "psf/requests": 4,
+      "pallets/flask": 6,
+      "redis/redis-py": 2,
+      "cli/cli": 18,
+      "digitalocean/godo": 44,
+      "npm/cli": 18,
+      "openai/openai-node": 7,
+      "Shopify/shopify-app-js": 821,
+      "huggingface/huggingface_hub": 8,
+      "python-gitlab/python-gitlab": 11,
+      "slackapi/python-slack-sdk": 6,
+      "anthropics/anthropic-sdk-python": 58,
+      "stripe/stripe-java": 3,
+      "stripe/stripe-ruby": 2
+    },
+    "R1": {
+      "gin-gonic/gin": 3,
+      "sendgrid/sendgrid-go": 0,
+      "expressjs/express": 0,
+      "stripe/stripe-node": 9,
+      "nestjs/nest": 37,
+      "slackapi/node-slack-sdk": 0,
+      "google/gson": 0,
+      "square/retrofit": 1,
+      "sinatra/sinatra": 1,
+      "jekyll/jekyll": 1,
+      "tokio-rs/axum": 8,
+      "BurntSushi/ripgrep": 0,
+      "guzzle/guzzle": 0,
+      "twilio/twilio-php": 31,
+      "JamesNK/Newtonsoft.Json": 1,
+      "App-vNext/Polly": 0,
+      "openai/openai-python": 3,
+      "psf/requests": 4,
+      "pallets/flask": 6,
+      "redis/redis-py": 2,
+      "cli/cli": 19,
+      "digitalocean/godo": 44,
+      "npm/cli": 30,
+      "openai/openai-node": 7,
+      "Shopify/shopify-app-js": 829,
+      "huggingface/huggingface_hub": 8,
+      "python-gitlab/python-gitlab": 11,
+      "slackapi/python-slack-sdk": 8,
+      "anthropics/anthropic-sdk-python": 58,
+      "stripe/stripe-java": 3,
+      "stripe/stripe-ruby": 2
+    },
+    "R1P": {
+      "gin-gonic/gin": 3,
+      "sendgrid/sendgrid-go": 0,
+      "expressjs/express": 0,
+      "stripe/stripe-node": 9,
+      "nestjs/nest": 36,
+      "slackapi/node-slack-sdk": 0,
+      "google/gson": 0,
+      "square/retrofit": 0,
+      "sinatra/sinatra": 1,
+      "jekyll/jekyll": 1,
+      "tokio-rs/axum": 8,
+      "BurntSushi/ripgrep": 0,
+      "guzzle/guzzle": 0,
+      "twilio/twilio-php": 31,
+      "JamesNK/Newtonsoft.Json": 1,
+      "App-vNext/Polly": 0,
+      "openai/openai-python": 3,
+      "psf/requests": 4,
+      "pallets/flask": 6,
+      "redis/redis-py": 2,
+      "cli/cli": 18,
+      "digitalocean/godo": 44,
+      "npm/cli": 18,
+      "openai/openai-node": 7,
+      "Shopify/shopify-app-js": 821,
+      "huggingface/huggingface_hub": 8,
+      "python-gitlab/python-gitlab": 11,
+      "slackapi/python-slack-sdk": 6,
+      "anthropics/anthropic-sdk-python": 58,
+      "stripe/stripe-java": 3,
+      "stripe/stripe-ruby": 2
+    },
+    "R2": {
+      "gin-gonic/gin": 3,
+      "sendgrid/sendgrid-go": 0,
+      "expressjs/express": 0,
+      "stripe/stripe-node": 9,
+      "nestjs/nest": 37,
+      "slackapi/node-slack-sdk": 0,
+      "google/gson": 0,
+      "square/retrofit": 1,
+      "sinatra/sinatra": 1,
+      "jekyll/jekyll": 1,
+      "tokio-rs/axum": 8,
+      "BurntSushi/ripgrep": 0,
+      "guzzle/guzzle": 0,
+      "twilio/twilio-php": 31,
+      "JamesNK/Newtonsoft.Json": 1,
+      "App-vNext/Polly": 0,
+      "openai/openai-python": 4,
+      "psf/requests": 4,
+      "pallets/flask": 6,
+      "redis/redis-py": 2,
+      "cli/cli": 25,
+      "digitalocean/godo": 44,
+      "npm/cli": 44,
+      "openai/openai-node": 9,
+      "Shopify/shopify-app-js": 829,
+      "huggingface/huggingface_hub": 8,
+      "python-gitlab/python-gitlab": 16,
+      "slackapi/python-slack-sdk": 8,
+      "anthropics/anthropic-sdk-python": 58,
+      "stripe/stripe-java": 3,
+      "stripe/stripe-ruby": 2
+    }
+  },
+  "added": {
+    "R1": {
+      "n": 25,
+      "by_category": {
+        "placeholder_or_test_value": 14,
+        "in_test_doc_or_example_path": 10,
+        "other": 1
+      },
+      "by_char_after_secret": {
+        "\\": 19,
+        "&": 3,
+        ",": 2,
+        ")": 1
+      },
+      "by_rule": {
+        "generic-api-key": 25
+      },
+      "by_repo": {
+        "npm/cli": 12,
+        "Shopify/shopify-app-js": 8,
+        "slackapi/python-slack-sdk": 2,
+        "nestjs/nest": 1,
+        "square/retrofit": 1,
+        "cli/cli": 1
+      }
+    },
+    "R1P": {
+      "n": 0,
+      "by_category": {},
+      "by_char_after_secret": {},
+      "by_rule": {},
+      "by_repo": {}
+    },
+    "R2": {
+      "n": 53,
+      "by_category": {
+        "placeholder_or_test_value": 28,
+        "in_test_doc_or_example_path": 24,
+        "other": 1
+      },
+      "by_char_after_secret": {
+        "\\": 19,
+        "+": 10,
+        "%": 8,
+        "(": 4,
+        "#": 4,
+        "&": 3,
+        ",": 2,
+        "/": 1,
+        ")": 1,
+        "$": 1
+      },
+      "by_rule": {
+        "generic-api-key": 53
+      },
+      "by_repo": {
+        "npm/cli": 26,
+        "Shopify/shopify-app-js": 8,
+        "cli/cli": 7,
+        "python-gitlab/python-gitlab": 5,
+        "openai/openai-node": 2,
+        "slackapi/python-slack-sdk": 2,
+        "nestjs/nest": 1,
+        "square/retrofit": 1,
+        "openai/openai-python": 1
+      }
+    }
+  },
+  "removed": {
+    "R1": {
+      "n": 0,
+      "by_category": {},
+      "by_char_after_secret": {},
+      "by_rule": {},
+      "by_repo": {}
+    },
+    "R1P": {
+      "n": 0,
+      "by_category": {},
+      "by_char_after_secret": {},
+      "by_rule": {},
+      "by_repo": {}
+    },
+    "R2": {
+      "n": 0,
+      "by_category": {},
+      "by_char_after_secret": {},
+      "by_rule": {},
+      "by_repo": {}
+    }
+  },
+  "added_findings": {
+    "R1": [
+      {
+        "repo": "nestjs/nest",
+        "language": "typescript",
+        "stratum": "general",
+        "file": "packages/core/test/injector/nested-transient-isolation.spec.ts",
+        "line": 345,
+        "rule": "generic-api-key",
+        "char_after_secret": ",",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "square/retrofit",
+        "language": "java",
+        "stratum": "general",
+        "file": ".github/CONTRIBUTING.md",
+        "line": 15,
+        "rule": "generic-api-key",
+        "char_after_secret": "&",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "cli/cli",
+        "language": "go",
+        "stratum": "credential_dense",
+        "file": ".github/workflows/scripts/spam-detection/eval-prompts.yml",
+        "line": 2210,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/readable-stream.json",
+        "line": 5398,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/readable-stream.json",
+        "line": 5398,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/readable-stream.json",
+        "line": 5398,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/readable-stream.json",
+        "line": 5660,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/readable-stream.json",
+        "line": 5660,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/readable-stream.json",
+        "line": 5660,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/readable-stream.json",
+        "line": 7286,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/readable-stream.json",
+        "line": 7286,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/readable-stream.json",
+        "line": 7286,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/readable-stream.json",
+        "line": 7582,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/sockjs-client.json",
+        "line": 2441,
+        "rule": "generic-api-key",
+        "char_after_secret": ")",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/libnpmpublish/lib/provenance.js",
+        "line": 86,
+        "rule": "generic-api-key",
+        "char_after_secret": ",",
+        "category": "other"
+      },
+      {
+        "repo": "Shopify/shopify-app-js",
+        "language": "typescript",
+        "stratum": "credential_dense",
+        "file": "packages/apps/shopify-api/rest/admin/__tests__/2024-10/apple_pay_certificate.test.ts",
+        "line": 118,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "Shopify/shopify-app-js",
+        "language": "typescript",
+        "stratum": "credential_dense",
+        "file": "packages/apps/shopify-api/rest/admin/__tests__/2025-01/apple_pay_certificate.test.ts",
+        "line": 118,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "Shopify/shopify-app-js",
+        "language": "typescript",
+        "stratum": "credential_dense",
+        "file": "packages/apps/shopify-api/rest/admin/__tests__/2025-04/apple_pay_certificate.test.ts",
+        "line": 118,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "Shopify/shopify-app-js",
+        "language": "typescript",
+        "stratum": "credential_dense",
+        "file": "packages/apps/shopify-api/rest/admin/__tests__/2025-07/apple_pay_certificate.test.ts",
+        "line": 118,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "Shopify/shopify-app-js",
+        "language": "typescript",
+        "stratum": "credential_dense",
+        "file": "packages/apps/shopify-api/rest/admin/__tests__/2025-10/apple_pay_certificate.test.ts",
+        "line": 118,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "Shopify/shopify-app-js",
+        "language": "typescript",
+        "stratum": "credential_dense",
+        "file": "packages/apps/shopify-api/rest/admin/__tests__/2026-01/apple_pay_certificate.test.ts",
+        "line": 118,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "Shopify/shopify-app-js",
+        "language": "typescript",
+        "stratum": "credential_dense",
+        "file": "packages/apps/shopify-api/rest/admin/__tests__/2026-04/apple_pay_certificate.test.ts",
+        "line": 118,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "Shopify/shopify-app-js",
+        "language": "typescript",
+        "stratum": "credential_dense",
+        "file": "packages/apps/shopify-api/rest/admin/__tests__/2026-07/apple_pay_certificate.test.ts",
+        "line": 118,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "slackapi/python-slack-sdk",
+        "language": "python",
+        "stratum": "credential_dense",
+        "file": "tests/signature/test_signature_verifier.py",
+        "line": 21,
+        "rule": "generic-api-key",
+        "char_after_secret": "&",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "slackapi/python-slack-sdk",
+        "language": "python",
+        "stratum": "credential_dense",
+        "file": "tests/slack_sdk/signature/test_signature_verifier.py",
+        "line": 21,
+        "rule": "generic-api-key",
+        "char_after_secret": "&",
+        "category": "placeholder_or_test_value"
+      }
+    ],
+    "R1P": [],
+    "R2": [
+      {
+        "repo": "nestjs/nest",
+        "language": "typescript",
+        "stratum": "general",
+        "file": "packages/core/test/injector/nested-transient-isolation.spec.ts",
+        "line": 345,
+        "rule": "generic-api-key",
+        "char_after_secret": ",",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "square/retrofit",
+        "language": "java",
+        "stratum": "general",
+        "file": ".github/CONTRIBUTING.md",
+        "line": 15,
+        "rule": "generic-api-key",
+        "char_after_secret": "&",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "openai/openai-python",
+        "language": "python",
+        "stratum": "general",
+        "file": "tests/lib/test_webhooks.py",
+        "line": 24,
+        "rule": "generic-api-key",
+        "char_after_secret": "+",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "cli/cli",
+        "language": "go",
+        "stratum": "credential_dense",
+        "file": ".github/workflows/scripts/spam-detection/eval-prompts.yml",
+        "line": 2210,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "cli/cli",
+        "language": "go",
+        "stratum": "credential_dense",
+        "file": "pkg/cmd/attestation/test/data/trusted_root.json",
+        "line": 1,
+        "rule": "generic-api-key",
+        "char_after_secret": "/",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "cli/cli",
+        "language": "go",
+        "stratum": "credential_dense",
+        "file": "pkg/cmd/secret/set/set_test.go",
+        "line": 461,
+        "rule": "generic-api-key",
+        "char_after_secret": "+",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "cli/cli",
+        "language": "go",
+        "stratum": "credential_dense",
+        "file": "pkg/cmd/secret/set/set_test.go",
+        "line": 503,
+        "rule": "generic-api-key",
+        "char_after_secret": "+",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "cli/cli",
+        "language": "go",
+        "stratum": "credential_dense",
+        "file": "pkg/cmd/secret/set/set_test.go",
+        "line": 647,
+        "rule": "generic-api-key",
+        "char_after_secret": "+",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "cli/cli",
+        "language": "go",
+        "stratum": "credential_dense",
+        "file": "pkg/cmd/secret/set/set_test.go",
+        "line": 733,
+        "rule": "generic-api-key",
+        "char_after_secret": "+",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "cli/cli",
+        "language": "go",
+        "stratum": "credential_dense",
+        "file": "pkg/cmd/secret/set/set_test.go",
+        "line": 778,
+        "rule": "generic-api-key",
+        "char_after_secret": "+",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "test/lib/commands/audit.js",
+        "line": 297,
+        "rule": "generic-api-key",
+        "char_after_secret": "+",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "test/lib/commands/audit.js",
+        "line": 1737,
+        "rule": "generic-api-key",
+        "char_after_secret": "+",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/node-forge.json",
+        "line": 13571,
+        "rule": "generic-api-key",
+        "char_after_secret": "(",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/node-forge.json",
+        "line": 13571,
+        "rule": "generic-api-key",
+        "char_after_secret": "(",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/node-forge.json",
+        "line": 13571,
+        "rule": "generic-api-key",
+        "char_after_secret": "(",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/node-forge.json",
+        "line": 13571,
+        "rule": "generic-api-key",
+        "char_after_secret": "(",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/readable-stream.json",
+        "line": 5398,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/readable-stream.json",
+        "line": 5398,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/readable-stream.json",
+        "line": 5398,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/readable-stream.json",
+        "line": 5660,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/readable-stream.json",
+        "line": 5660,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/readable-stream.json",
+        "line": 5660,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/readable-stream.json",
+        "line": 7286,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/readable-stream.json",
+        "line": 7286,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/readable-stream.json",
+        "line": 7286,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/readable-stream.json",
+        "line": 7582,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/sockjs-client.json",
+        "line": 2441,
+        "rule": "generic-api-key",
+        "char_after_secret": ")",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/terser.json",
+        "line": 11662,
+        "rule": "generic-api-key",
+        "char_after_secret": "%",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/terser.json",
+        "line": 11662,
+        "rule": "generic-api-key",
+        "char_after_secret": "%",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/terser.json",
+        "line": 11833,
+        "rule": "generic-api-key",
+        "char_after_secret": "%",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/terser.json",
+        "line": 11833,
+        "rule": "generic-api-key",
+        "char_after_secret": "%",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/terser.json",
+        "line": 12004,
+        "rule": "generic-api-key",
+        "char_after_secret": "%",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/terser.json",
+        "line": 12004,
+        "rule": "generic-api-key",
+        "char_after_secret": "%",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/terser.json",
+        "line": 14399,
+        "rule": "generic-api-key",
+        "char_after_secret": "%",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/arborist/test/fixtures/registry-mocks/content/terser.json",
+        "line": 14399,
+        "rule": "generic-api-key",
+        "char_after_secret": "%",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "npm/cli",
+        "language": "javascript",
+        "stratum": "credential_dense",
+        "file": "workspaces/libnpmpublish/lib/provenance.js",
+        "line": 86,
+        "rule": "generic-api-key",
+        "char_after_secret": ",",
+        "category": "other"
+      },
+      {
+        "repo": "openai/openai-node",
+        "language": "typescript",
+        "stratum": "credential_dense",
+        "file": "tests/api-resources/webhooks.test.ts",
+        "line": 20,
+        "rule": "generic-api-key",
+        "char_after_secret": "+",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "openai/openai-node",
+        "language": "typescript",
+        "stratum": "credential_dense",
+        "file": "tests/lib/webhooks.test.ts",
+        "line": 13,
+        "rule": "generic-api-key",
+        "char_after_secret": "+",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "Shopify/shopify-app-js",
+        "language": "typescript",
+        "stratum": "credential_dense",
+        "file": "packages/apps/shopify-api/rest/admin/__tests__/2024-10/apple_pay_certificate.test.ts",
+        "line": 118,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "Shopify/shopify-app-js",
+        "language": "typescript",
+        "stratum": "credential_dense",
+        "file": "packages/apps/shopify-api/rest/admin/__tests__/2025-01/apple_pay_certificate.test.ts",
+        "line": 118,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "Shopify/shopify-app-js",
+        "language": "typescript",
+        "stratum": "credential_dense",
+        "file": "packages/apps/shopify-api/rest/admin/__tests__/2025-04/apple_pay_certificate.test.ts",
+        "line": 118,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "Shopify/shopify-app-js",
+        "language": "typescript",
+        "stratum": "credential_dense",
+        "file": "packages/apps/shopify-api/rest/admin/__tests__/2025-07/apple_pay_certificate.test.ts",
+        "line": 118,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "Shopify/shopify-app-js",
+        "language": "typescript",
+        "stratum": "credential_dense",
+        "file": "packages/apps/shopify-api/rest/admin/__tests__/2025-10/apple_pay_certificate.test.ts",
+        "line": 118,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "Shopify/shopify-app-js",
+        "language": "typescript",
+        "stratum": "credential_dense",
+        "file": "packages/apps/shopify-api/rest/admin/__tests__/2026-01/apple_pay_certificate.test.ts",
+        "line": 118,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "Shopify/shopify-app-js",
+        "language": "typescript",
+        "stratum": "credential_dense",
+        "file": "packages/apps/shopify-api/rest/admin/__tests__/2026-04/apple_pay_certificate.test.ts",
+        "line": 118,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "Shopify/shopify-app-js",
+        "language": "typescript",
+        "stratum": "credential_dense",
+        "file": "packages/apps/shopify-api/rest/admin/__tests__/2026-07/apple_pay_certificate.test.ts",
+        "line": 118,
+        "rule": "generic-api-key",
+        "char_after_secret": "\\",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "python-gitlab/python-gitlab",
+        "language": "python",
+        "stratum": "credential_dense",
+        "file": "tests/functional/api/test_groups.py",
+        "line": 13,
+        "rule": "generic-api-key",
+        "char_after_secret": "#",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "python-gitlab/python-gitlab",
+        "language": "python",
+        "stratum": "credential_dense",
+        "file": "tests/functional/api/test_groups.py",
+        "line": 21,
+        "rule": "generic-api-key",
+        "char_after_secret": "#",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "python-gitlab/python-gitlab",
+        "language": "python",
+        "stratum": "credential_dense",
+        "file": "tests/functional/api/test_users.py",
+        "line": 19,
+        "rule": "generic-api-key",
+        "char_after_secret": "$",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "python-gitlab/python-gitlab",
+        "language": "python",
+        "stratum": "credential_dense",
+        "file": "tests/functional/api/test_users.py",
+        "line": 72,
+        "rule": "generic-api-key",
+        "char_after_secret": "#",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "python-gitlab/python-gitlab",
+        "language": "python",
+        "stratum": "credential_dense",
+        "file": "tests/functional/api/test_users.py",
+        "line": 107,
+        "rule": "generic-api-key",
+        "char_after_secret": "#",
+        "category": "in_test_doc_or_example_path"
+      },
+      {
+        "repo": "slackapi/python-slack-sdk",
+        "language": "python",
+        "stratum": "credential_dense",
+        "file": "tests/signature/test_signature_verifier.py",
+        "line": 21,
+        "rule": "generic-api-key",
+        "char_after_secret": "&",
+        "category": "placeholder_or_test_value"
+      },
+      {
+        "repo": "slackapi/python-slack-sdk",
+        "language": "python",
+        "stratum": "credential_dense",
+        "file": "tests/slack_sdk/signature/test_signature_verifier.py",
+        "line": 21,
+        "rule": "generic-api-key",
+        "char_after_secret": "&",
+        "category": "placeholder_or_test_value"
+      }
+    ]
+  },
+  "removed_findings": {
+    "R1": [],
+    "R1P": [],
+    "R2": []
+  }
+}

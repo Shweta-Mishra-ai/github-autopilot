@@ -1,0 +1,4762 @@
+{
+  "patterns_ending_in_group_then_word_boundary": 998,
+  "n_patterns_repaired": 403,
+  "n_files_changed": 342,
+  "not_analysable": [],
+  "files": {
+    "accuweather/v1/accuweather.go": [
+      {
+        "original": "([a-z0-9A-Z\\%]{35})\\b",
+        "repaired": "([a-z0-9A-Z\\%]{35})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "%"
+        ]
+      }
+    ],
+    "adobeio/adobeio.go": [
+      {
+        "original": "\\b([a-zA-Z0-9.]{12})\\b",
+        "repaired": "\\b([a-zA-Z0-9.]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "."
+        ]
+      }
+    ],
+    "airbrakeprojectkey/airbrakeprojectkey.go": [
+      {
+        "original": "\\b([a-zA-Z-0-9]{32})\\b",
+        "repaired": "\\b([a-zA-Z-0-9]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "airbrakeuserkey/airbrakeuserkey.go": [
+      {
+        "original": "\\b([a-zA-Z-0-9]{40})\\b",
+        "repaired": "\\b([a-zA-Z-0-9]{40})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "airtableoauth/airtableoauth.go": [
+      {
+        "original": "\\b([[:alnum:]]+\\.v1\\.[a-zA-Z0-9_-]+\\.[a-f0-9]+)\\b",
+        "repaired": "\\b([[:alnum:]]+\\.v1\\.[a-zA-Z0-9_-]+\\.[a-f0-9]+)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          ".",
+          ":",
+          "[",
+          "]"
+        ]
+      }
+    ],
+    "airtablepersonalaccesstoken/airtablepersonalaccesstoken.go": [
+      {
+        "original": "\\b(pat[[:alnum:]]{14}\\.[a-f0-9]{64})\\b",
+        "repaired": "\\b(pat[[:alnum:]]{14}\\.[a-f0-9]{64})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          ".",
+          ":",
+          "[",
+          "]"
+        ]
+      }
+    ],
+    "airvisual/airvisual.go": [
+      {
+        "original": "\\b([a-z0-9-]{36})\\b",
+        "repaired": "\\b([a-z0-9-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "alegra/alegra.go": [
+      {
+        "original": "\\b([a-z0-9-]{20})\\b",
+        "repaired": "\\b([a-z0-9-]{20})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "anthropic/anthropic.go": [
+      {
+        "original": "\\b(sk-ant-(?:admin01|api03)-[\\w\\-]{93}AA)\\b",
+        "repaired": "\\b(sk-ant-(?:admin01|api03)-[\\w\\-]{93}AA)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "anypoint/anypoint.go": [
+      {
+        "original": "\\b([0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})\\b",
+        "repaired": "\\b([0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})\\b",
+        "repaired": "\\b([0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "apacta/apacta.go": [
+      {
+        "original": "\\b([a-z0-9-]{36})\\b",
+        "repaired": "\\b([a-z0-9-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "apideck/apideck.go": [
+      {
+        "original": "\\b(sk_live_[a-z0-9A-Z-]{93})\\b",
+        "repaired": "\\b(sk_live_[a-z0-9A-Z-]{93})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "apifonica/apifonica.go": [
+      {
+        "original": "\\b([0-9a-z]{11}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})\\b",
+        "repaired": "\\b([0-9a-z]{11}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "apify/apify.go": [
+      {
+        "original": "\\b(apify\\_api\\_[a-zA-Z-0-9]{36})\\b",
+        "repaired": "\\b(apify\\_api\\_[a-zA-Z-0-9]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "apimatic/apimatic.go": [
+      {
+        "original": "\\b([a-zA-Z0-9_-]{64})\\b",
+        "repaired": "\\b([a-zA-Z0-9_-]{64})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "appcues/appcues.go": [
+      {
+        "original": "\\b([a-z0-9-]{36})\\b",
+        "repaired": "\\b([a-z0-9-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([a-z0-9-]{39})\\b",
+        "repaired": "\\b([a-z0-9-]{39})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "appfollow/appfollow.go": [
+      {
+        "original": "\\b(eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9\\.[0-9A-Za-z]{74}\\.[0-9A-Z-a-z\\-_]{43})\\b",
+        "repaired": "\\b(eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9\\.[0-9A-Za-z]{74}\\.[0-9A-Z-a-z\\-_]{43})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "apptivo/apptivo.go": [
+      {
+        "original": "\\b([a-z0-9-]{36})\\b",
+        "repaired": "\\b([a-z0-9-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([a-zA-Z0-9-]{32})\\b",
+        "repaired": "\\b([a-zA-Z0-9-]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "asanaoauth/asanaoauth.go": [
+      {
+        "original": "\\b([a-z\\/:0-9]{51})\\b",
+        "repaired": "\\b([a-z\\/:0-9]{51})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "/",
+          ":"
+        ]
+      }
+    ],
+    "asanapersonalaccesstoken/asanapersonalaccesstoken.go": [
+      {
+        "original": "\\b([0-9]{1,}\\/[0-9]{16,}(?:\\/[0-9]{16,})?:[A-Za-z0-9]{32,})\\b",
+        "repaired": "\\b([0-9]{1,}\\/[0-9]{16,}(?:\\/[0-9]{16,})?:[A-Za-z0-9]{32,})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "/",
+          ":"
+        ]
+      }
+    ],
+    "atlassian/v2/atlassian.go": [
+      {
+        "original": "\\b(ATCTT3xFfG[A-Za-z0-9+/=_-]+=[A-Za-z0-9]{8})\\b",
+        "repaired": "\\b(ATCTT3xFfG[A-Za-z0-9+/=_-]+=[A-Za-z0-9]{8})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "+",
+          "-",
+          "/",
+          "="
+        ]
+      },
+      {
+        "original": "\\b([0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})\\b",
+        "repaired": "\\b([0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "audd/audd.go": [
+      {
+        "original": "\\b([a-z0-9-]{32})\\b",
+        "repaired": "\\b([a-z0-9-]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "auth0managementapitoken/auth0managementapitoken.go": [
+      {
+        "original": "\\b(ey[a-zA-Z0-9._-]+)\\b",
+        "repaired": "\\b(ey[a-zA-Z0-9._-]+)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "auth0oauth/auth0oauth.go": [
+      {
+        "original": "\\b([a-zA-Z0-9_-]{32,60})\\b",
+        "repaired": "\\b([a-zA-Z0-9_-]{32,60})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([a-zA-Z0-9_-]{64,})\\b",
+        "repaired": "\\b([a-zA-Z0-9_-]{64,})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([a-zA-Z0-9][a-zA-Z0-9._-]*auth0(?:app)?\\.com)\\b",
+        "repaired": "\\b([a-zA-Z0-9][a-zA-Z0-9._-]*auth0(?:app)?\\.com)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "autoklose/autoklose.go": [
+      {
+        "original": "\\b([a-zA-Z0-9-]{32})\\b",
+        "repaired": "\\b([a-zA-Z0-9-]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "avazapersonalaccesstoken/avazapersonalaccesstoken.go": [
+      {
+        "original": "\\b([0-9]+-[0-9a-f]{40})\\b",
+        "repaired": "\\b([0-9]+-[0-9a-f]{40})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "aws/appsync/appsync.go": [
+      {
+        "original": "\\b(da2-[a-z0-9]{26})\\b",
+        "repaired": "\\b(da2-[a-z0-9]{26})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "ayrshare/ayrshare.go": [
+      {
+        "original": "\\b([A-Z0-9]{8}-[A-Z0-9]{8}-[A-Z0-9]{8}-[A-Z0-9]{8})\\b",
+        "repaired": "\\b([A-Z0-9]{8}-[A-Z0-9]{8}-[A-Z0-9]{8}-[A-Z0-9]{8})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "azuredevopspersonalaccesstoken/azuredevopspersonalaccesstoken.go": [
+      {
+        "original": "\\b([0-9a-zA-Z][0-9a-zA-Z-]{5,48}[0-9a-zA-Z])\\b",
+        "repaired": "\\b([0-9a-zA-Z][0-9a-zA-Z-]{5,48}[0-9a-zA-Z])(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "azurefunctionkey/azurefunctionkey.go": [
+      {
+        "original": "\\bhttps:\\/\\/([a-zA-Z0-9-]{2,30})\\.azurewebsites\\.net\\/api\\/([a-zA-Z0-9-]{2,30})\\b",
+        "repaired": "\\bhttps:\\/\\/([a-zA-Z0-9-]{2,30})\\.azurewebsites\\.net\\/api\\/([a-zA-Z0-9-]{2,30})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "bitbucketapppassword/bitbucketapppassword.go": [
+      {
+        "original": "(?:^|[^A-Za-z0-9-_])(?P<username>[A-Za-z0-9-_]{1,30}):(?P<password>ATBB[A-Za-z0-9_=.-]+)\\b",
+        "repaired": "(?:^|[^A-Za-z0-9-_])(?P<username>[A-Za-z0-9-_]{1,30}):(?P<password>ATBB[A-Za-z0-9_=.-]+)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          ".",
+          "="
+        ]
+      }
+    ],
+    "bitfinex/bitfinex.go": [
+      {
+        "original": "\\b([A-Za-z0-9_-]{43})\\b",
+        "repaired": "\\b([A-Za-z0-9_-]{43})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([A-Za-z0-9_-]{43})\\b",
+        "repaired": "\\b([A-Za-z0-9_-]{43})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "bitlyaccesstoken/bitlyaccesstoken.go": [
+      {
+        "original": "\\b([a-zA-Z-0-9]{40})\\b",
+        "repaired": "\\b([a-zA-Z-0-9]{40})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "blazemeter/blazemeter.go": [
+      {
+        "original": "\\b([0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})\\b",
+        "repaired": "\\b([0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "blitapp/blitapp.go": [
+      {
+        "original": "\\b([a-zA-Z0-9_-]{39})\\b",
+        "repaired": "\\b([a-zA-Z0-9_-]{39})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "blocknative/blocknative.go": [
+      {
+        "original": "\\b([0-9Aa-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b",
+        "repaired": "\\b([0-9Aa-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "borgbase/borgbase.go": [
+      {
+        "original": "\\b([a-zA-Z0-9/_.-]{148,152})\\b",
+        "repaired": "\\b([a-zA-Z0-9/_.-]{148,152})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          ".",
+          "/"
+        ]
+      }
+    ],
+    "braintrust/braintrust.go": [
+      {
+        "original": "\\b(sk-[A-Za-z0-9]{48})\\b",
+        "repaired": "\\b(sk-[A-Za-z0-9]{48})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "browserstack/browserstack.go": [
+      {
+        "original": "\\b([a-zA-Z\\d]{3,18}[._-]*[a-zA-Z\\d]{6,11})\\b",
+        "repaired": "\\b([a-zA-Z\\d]{3,18}[._-]*[a-zA-Z\\d]{6,11})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "browshot/browshot.go": [
+      {
+        "original": "\\b([a-zA-Z-0-9]{28})\\b",
+        "repaired": "\\b([a-zA-Z-0-9]{28})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "budibase/budibase.go": [
+      {
+        "original": "\\b([a-f0-9]{32}-[a-f0-9]{78,80})\\b",
+        "repaired": "\\b([a-f0-9]{32}-[a-f0-9]{78,80})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "bugsnag/bugsnag.go": [
+      {
+        "original": "\\b([0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})\\b",
+        "repaired": "\\b([0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "bulksms/bulksms.go": [
+      {
+        "original": "\\b([a-zA-Z0-9!@#$%^&*()]{29})\\b",
+        "repaired": "\\b([a-zA-Z0-9!@#$%^&*()]{29})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "!",
+          "#",
+          "$",
+          "%",
+          "&",
+          "(",
+          ")",
+          "*",
+          "@",
+          "^"
+        ]
+      },
+      {
+        "original": "\\b([A-F0-9-]{37})\\b",
+        "repaired": "\\b([A-F0-9-]{37})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "caflou/caflou.go": [
+      {
+        "original": "\\b(eyJhbGciOiJIUzI1NiJ9[a-zA-Z0-9._-]{135})\\b",
+        "repaired": "\\b(eyJhbGciOiJIUzI1NiJ9[a-zA-Z0-9._-]{135})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "calendlyapikey/calendlyapikey.go": [
+      {
+        "original": "\\b(eyJ[A-Za-z0-9-_]{100,300}\\.eyJ[A-Za-z0-9-_]{100,300}\\.[A-Za-z0-9-_]+)\\b",
+        "repaired": "\\b(eyJ[A-Za-z0-9-_]{100,300}\\.eyJ[A-Za-z0-9-_]{100,300}\\.[A-Za-z0-9-_]+)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "cannyio/cannyio.go": [
+      {
+        "original": "\\b([a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12})\\b",
+        "repaired": "\\b([a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "capsulecrm/capsulecrm.go": [
+      {
+        "original": "\\b([a-zA-Z0-9-._+=]{64})\\b",
+        "repaired": "\\b([a-zA-Z0-9-._+=]{64})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "+",
+          "-",
+          ".",
+          "="
+        ]
+      }
+    ],
+    "captaindata/v1/captaindata.go": [
+      {
+        "original": "\\b([0-9a-f]{8}\\-[0-9a-f]{4}\\-[0-9a-f]{4}\\-[0-9a-f]{4}\\-[0-9a-f]{12})\\b",
+        "repaired": "\\b([0-9a-f]{8}\\-[0-9a-f]{4}\\-[0-9a-f]{4}\\-[0-9a-f]{4}\\-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "captaindata/v2/captaindata.go": [
+      {
+        "original": "\\b([0-9a-f]{8}\\-[0-9a-f]{4}\\-[0-9a-f]{4}\\-[0-9a-f]{4}\\-[0-9a-f]{12})\\b",
+        "repaired": "\\b([0-9a-f]{8}\\-[0-9a-f]{4}\\-[0-9a-f]{4}\\-[0-9a-f]{4}\\-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "cashboard/cashboard.go": [
+      {
+        "original": "\\b([0-9A-Z]{3}-[0-9A-Z]{3}-[0-9A-Z]{3}-[0-9A-Z]{3})\\b",
+        "repaired": "\\b([0-9A-Z]{3}-[0-9A-Z]{3}-[0-9A-Z]{3}-[0-9A-Z]{3})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "censys/censys.go": [
+      {
+        "original": "\\b([a-z0-9-]{36})\\b",
+        "repaired": "\\b([a-z0-9-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "checkout/checkout.go": [
+      {
+        "original": "\\b((sk_|sk_test_)[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\\b",
+        "repaired": "\\b((sk_|sk_test_)[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "clickhelp/clickhelp.go": [
+      {
+        "original": "\\b([0-9A-Za-z-]{3,20}\\.(?:try\\.)?clickhelp\\.co)\\b",
+        "repaired": "\\b([0-9A-Za-z-]{3,20}\\.(?:try\\.)?clickhelp\\.co)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "cliengo/cliengo.go": [
+      {
+        "original": "\\b([0-9a-f]{8}\\-[0-9a-f]{4}\\-[0-9a-f]{4}\\-[0-9a-f]{4}\\-[0-9a-f]{12})\\b",
+        "repaired": "\\b([0-9a-f]{8}\\-[0-9a-f]{4}\\-[0-9a-f]{4}\\-[0-9a-f]{4}\\-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "clientary/clientary.go": [
+      {
+        "original": "\\b([0-9Aa-zA-Z-]{4,25})\\b",
+        "repaired": "\\b([0-9Aa-zA-Z-]{4,25})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "closecrm/close.go": [
+      {
+        "original": "\\b(api_[a-z0-9A-Z.]{45})\\b",
+        "repaired": "\\b(api_[a-z0-9A-Z.]{45})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "."
+        ]
+      }
+    ],
+    "cloudflareapitoken/v1/cloudflareapitoken.go": [
+      {
+        "original": "\\b([A-Za-z0-9_-]{40})\\b",
+        "repaired": "\\b([A-Za-z0-9_-]{40})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "cloudflarecakey/cloudflarecakey.go": [
+      {
+        "original": "\\b(v1\\.0-[A-Za-z0-9-]{171})\\b",
+        "repaired": "\\b(v1\\.0-[A-Za-z0-9-]{171})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "cloudinary/cloudinary.go": [
+      {
+        "original": "\\b([a-zA-Z][a-zA-Z0-9-]{2,49})\\b",
+        "repaired": "\\b([a-zA-Z][a-zA-Z0-9-]{2,49})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([A-Za-z0-9_-]{27})\\b",
+        "repaired": "\\b([A-Za-z0-9_-]{27})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "cloudmersive/cloudmersive.go": [
+      {
+        "original": "\\b([a-z0-9-]{36})\\b",
+        "repaired": "\\b([a-z0-9-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "cloudplan/cloudplan.go": [
+      {
+        "original": "\\b([A-Z0-9-]{32})\\b",
+        "repaired": "\\b([A-Z0-9-]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "cloverly/cloverly.go": [
+      {
+        "original": "\\b([a-z0-9:_]{28})\\b",
+        "repaired": "\\b([a-z0-9:_]{28})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          ":"
+        ]
+      }
+    ],
+    "coda/coda.go": [
+      {
+        "original": "\\b([0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})\\b",
+        "repaired": "\\b([0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "codequiry/codequiry.go": [
+      {
+        "original": "\\b([a-zA-Z-0-9]{64})\\b",
+        "repaired": "\\b([a-zA-Z-0-9]{64})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "coinapi/coinapi.go": [
+      {
+        "original": "\\b([A-Z0-9-]{36})\\b",
+        "repaired": "\\b([A-Z0-9-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "coinbase/coinbase.go": [
+      {
+        "original": "\\b(organizations\\\\*/\\w{8}-\\w{4}-\\w{4}-\\w{4}-\\w{12}\\\\*/apiKeys\\\\*/\\w{8}-\\w{4}-\\w{4}-\\w{4}-\\w{12})\\b",
+        "repaired": "\\b(organizations\\\\*/\\w{8}-\\w{4}-\\w{4}-\\w{4}-\\w{12}\\\\*/apiKeys\\\\*/\\w{8}-\\w{4}-\\w{4}-\\w{4}-\\w{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "/",
+          "\\"
+        ]
+      }
+    ],
+    "collect2/collect2.go": [
+      {
+        "original": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b",
+        "repaired": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "companyhub/companyhub.go": [
+      {
+        "original": "\\b([a-zA-Z0-9$%^=-]{4,32})\\b",
+        "repaired": "\\b([a-zA-Z0-9$%^=-]{4,32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "$",
+          "%",
+          "-",
+          "=",
+          "^"
+        ]
+      }
+    ],
+    "confluent/confluent.go": [
+      {
+        "original": "\\b([a-zA-Z0-9\\+\\/]{64})\\b",
+        "repaired": "\\b([a-zA-Z0-9\\+\\/]{64})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "+",
+          "/"
+        ]
+      }
+    ],
+    "contentfulpersonalaccesstoken/contentfulpersonalaccesstoken.go": [
+      {
+        "original": "\\b(CFPAT-[a-zA-Z0-9_\\-]{43})\\b",
+        "repaired": "\\b(CFPAT-[a-zA-Z0-9_\\-]{43})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "conversiontools/conversiontools.go": [
+      {
+        "original": "\\b(ey[a-zA-Z0-9_.]{157,165})\\b",
+        "repaired": "\\b(ey[a-zA-Z0-9_.]{157,165})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "."
+        ]
+      }
+    ],
+    "convier/convier.go": [
+      {
+        "original": "\\b([0-9]{2}\\|[a-zA-Z0-9]{40})\\b",
+        "repaired": "\\b([0-9]{2}\\|[a-zA-Z0-9]{40})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "|"
+        ]
+      }
+    ],
+    "copper/copper.go": [
+      {
+        "original": "\\b([a-z0-9]{4,25}@[a-zA-Z0-9]{2,12}.[a-zA-Z0-9]{2,6})\\b",
+        "repaired": "\\b([a-z0-9]{4,25}@[a-zA-Z0-9]{2,12}.[a-zA-Z0-9]{2,6})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "\t",
+          "\r",
+          " ",
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "couchbase/couchbase.go": [
+      {
+        "original": "\\b(cb\\.[a-z0-9]+\\.cloud\\.couchbase\\.com)\\b",
+        "repaired": "\\b(cb\\.[a-z0-9]+\\.cloud\\.couchbase\\.com)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "."
+        ]
+      }
+    ],
+    "coveralls/coveralls.go": [
+      {
+        "original": "\\b([a-zA-Z0-9-]{37})\\b",
+        "repaired": "\\b([a-zA-Z0-9-]{37})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "cryptocompare/cryptocompare.go": [
+      {
+        "original": "\\b([a-z-0-9]{64})\\b",
+        "repaired": "\\b([a-z-0-9]{64})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "databrickstoken/databrickstoken.go": [
+      {
+        "original": "\\b([a-z0-9-]+(?:\\.[a-z0-9-]+)*\\.(cloud\\.databricks\\.com|gcp\\.databricks\\.com|azuredatabricks\\.net))\\b",
+        "repaired": "\\b([a-z0-9-]+(?:\\.[a-z0-9-]+)*\\.(cloud\\.databricks\\.com|gcp\\.databricks\\.com|azuredatabricks\\.net))(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      },
+      {
+        "original": "\\b(dapi[0-9a-f]{32}(-\\d)?)\\b",
+        "repaired": "\\b(dapi[0-9a-f]{32}(-\\d)?)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "datadogapikey/datadogapikey.go": [
+      {
+        "original": "\\b([a-zA-Z0-9-]{32})\\b",
+        "repaired": "\\b([a-zA-Z0-9-]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b(api(?:\\.[a-z0-9-]+)?\\.(?:datadoghq|ddog-gov)\\.(com|eu))\\b",
+        "repaired": "\\b(api(?:\\.[a-z0-9-]+)?\\.(?:datadoghq|ddog-gov)\\.(com|eu))(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "datadogtoken/datadogtoken.go": [
+      {
+        "original": "\\b([a-zA-Z-0-9]{40})\\b",
+        "repaired": "\\b([a-zA-Z-0-9]{40})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([a-zA-Z-0-9]{32})\\b",
+        "repaired": "\\b([a-zA-Z-0-9]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b(api(?:\\.[a-z0-9-]+)?\\.(?:datadoghq|ddog-gov)\\.(com|eu))\\b",
+        "repaired": "\\b(api(?:\\.[a-z0-9-]+)?\\.(?:datadoghq|ddog-gov)\\.(com|eu))(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "deepai/deepai.go": [
+      {
+        "original": "\\b([a-z0-9-]{36})\\b",
+        "repaired": "\\b([a-z0-9-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "deepseek/deepseek.go": [
+      {
+        "original": "\\b(sk-[a-z0-9]{32})\\b",
+        "repaired": "\\b(sk-[a-z0-9]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "deputy/deputy.go": [
+      {
+        "original": "\\b([0-9a-z]{1,}\\.as\\.deputy\\.com)\\b",
+        "repaired": "\\b([0-9a-z]{1,}\\.as\\.deputy\\.com)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "."
+        ]
+      }
+    ],
+    "digitaloceantoken/digitaloceantoken.go": [
+      {
+        "original": "\\b([A-Za-z0-9_-]{64})\\b",
+        "repaired": "\\b([A-Za-z0-9_-]{64})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "discordbottoken/discordbottoken.go": [
+      {
+        "original": "\\b([A-Za-z0-9_-]{24}\\.[A-Za-z0-9_-]{6}\\.[A-Za-z0-9_-]{27})\\b",
+        "repaired": "\\b([A-Za-z0-9_-]{24}\\.[A-Za-z0-9_-]{6}\\.[A-Za-z0-9_-]{27})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "ditto/ditto.go": [
+      {
+        "original": "\\b([a-z0-9]{8}\\-[a-z0-9]{4}\\-[a-z0-9]{4}\\-[a-z0-9]{4}\\-[a-z0-9]{12}\\.[a-z0-9]{40})\\b",
+        "repaired": "\\b([a-z0-9]{8}\\-[a-z0-9]{4}\\-[a-z0-9]{4}\\-[a-z0-9]{4}\\-[a-z0-9]{12}\\.[a-z0-9]{40})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "dnscheck/dnscheck.go": [
+      {
+        "original": "\\b([a-z0-9A-Z-]{36})\\b",
+        "repaired": "\\b([a-z0-9A-Z-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "dockerhub/v1/dockerhub.go": [
+      {
+        "original": "\\b([a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12})\\b",
+        "repaired": "\\b([a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "documo/documo.go": [
+      {
+        "original": "\\b(ey[a-zA-Z0-9]{34}.ey[a-zA-Z0-9]{154}.[a-zA-Z0-9_-]{43})\\b",
+        "repaired": "\\b(ey[a-zA-Z0-9]{34}.ey[a-zA-Z0-9]{154}.[a-zA-Z0-9_-]{43})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "\t",
+          "\r",
+          " ",
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "doppler/doppler.go": [
+      {
+        "original": "\\b(dp\\.pt\\.[a-zA-Z0-9]{43})\\b",
+        "repaired": "\\b(dp\\.pt\\.[a-zA-Z0-9]{43})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "."
+        ]
+      },
+      {
+        "original": "\\b(dp\\.(?:ct|pt|st(?:\\.[a-z0-9\\-_]{2,35})?|sa|scim|audit)\\.[a-zA-Z0-9]{40,44})\\b",
+        "repaired": "\\b(dp\\.(?:ct|pt|st(?:\\.[a-z0-9\\-_]{2,35})?|sa|scim|audit)\\.[a-zA-Z0-9]{40,44})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "dotdigital/dotdigital.go": [
+      {
+        "original": "\\b(apiuser-[a-z0-9]{12}@apiconnector.com)\\b",
+        "repaired": "\\b(apiuser-[a-z0-9]{12}@apiconnector.com)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "\t",
+          "\r",
+          " ",
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      },
+      {
+        "original": "\\b([a-zA-Z0-9\\S]{8,24})\\b",
+        "repaired": "\\b([a-zA-Z0-9\\S]{8,24})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "dropbox/dropbox.go": [
+      {
+        "original": "\\b(sl\\.(u\\.)?[A-Za-z0-9\\-\\_]{130,})\\b",
+        "repaired": "\\b(sl\\.(u\\.)?[A-Za-z0-9\\-\\_]{130,})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "duo/duo.go": [
+      {
+        "original": "\\b([a-z0-9-]{6,}\\.duosecurity\\.com)\\b",
+        "repaired": "\\b([a-z0-9-]{6,}\\.duosecurity\\.com)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "duply/duply.go": [
+      {
+        "original": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b",
+        "repaired": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([0-9A-Z]{7}-[0-9A-Z]{7}-[0-9A-Z]{7}-[0-9A-Z]{7})\\b",
+        "repaired": "\\b([0-9A-Z]{7}-[0-9A-Z]{7}-[0-9A-Z]{7}-[0-9A-Z]{7})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "dwolla/dwolla.go": [
+      {
+        "original": "\\b([a-zA-Z-0-9]{50})\\b",
+        "repaired": "\\b([a-zA-Z-0-9]{50})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([a-zA-Z-0-9]{50})\\b",
+        "repaired": "\\b([a-zA-Z-0-9]{50})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "dynalist/dynalist.go": [
+      {
+        "original": "\\b([a-zA-Z0-9-_]{128})\\b",
+        "repaired": "\\b([a-zA-Z0-9-_]{128})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "eagleeyenetworks/eagleeyenetworks.go": [
+      {
+        "original": "\\b([a-zA-Z0-9]{3,20}@[a-zA-Z0-9]{2,12}.[a-zA-Z0-9]{2,5})\\b",
+        "repaired": "\\b([a-zA-Z0-9]{3,20}@[a-zA-Z0-9]{2,12}.[a-zA-Z0-9]{2,5})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "\t",
+          "\r",
+          " ",
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "ecostruxureit/ecostruxureit.go": [
+      {
+        "original": "\\b(AK1[0-9a-zA-Z\\/]{50,55})\\b",
+        "repaired": "\\b(AK1[0-9a-zA-Z\\/]{50,55})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "/"
+        ]
+      }
+    ],
+    "edenai/edenai.go": [
+      {
+        "original": "\\b([a-zA-Z0-9]{36}.[a-zA-Z0-9]{92}.[a-zA-Z0-9_]{43})\\b",
+        "repaired": "\\b([a-zA-Z0-9]{36}.[a-zA-Z0-9]{92}.[a-zA-Z0-9_]{43})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "\t",
+          "\r",
+          " ",
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "elasticemail/elasticemail.go": [
+      {
+        "original": "\\b([A-Za-z0-9_-]{96})\\b",
+        "repaired": "\\b([A-Za-z0-9_-]{96})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "endorlabs/endorlabs.go": [
+      {
+        "original": "\\b(endr\\+[a-zA-Z0-9-]{16})\\b",
+        "repaired": "\\b(endr\\+[a-zA-Z0-9-]{16})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "+",
+          "-"
+        ]
+      }
+    ],
+    "ethplorer/ethplorer.go": [
+      {
+        "original": "\\b([a-z0-9A-Z-]{22})\\b",
+        "repaired": "\\b([a-z0-9A-Z-]{22})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "everhour/everhour.go": [
+      {
+        "original": "\\b([0-9Aa-f]{4}-[0-9a-f]{4}-[0-9a-f]{6}-[0-9a-f]{6}-[0-9a-f]{8})\\b",
+        "repaired": "\\b([0-9Aa-f]{4}-[0-9a-f]{4}-[0-9a-f]{6}-[0-9a-f]{6}-[0-9a-f]{8})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "exportsdk/exportsdk.go": [
+      {
+        "original": "\\b([0-9a-z]{5,15}_[0-9a-z-]{36})\\b",
+        "repaired": "\\b([0-9a-z]{5,15}_[0-9a-z-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([0-9a-z-]{36})\\b",
+        "repaired": "\\b([0-9a-z-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "extractorapi/extractorapi.go": [
+      {
+        "original": "\\b([a-zA-Z-0-9]{40})\\b",
+        "repaired": "\\b([a-zA-Z-0-9]{40})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "faceplusplus/faceplusplus.go": [
+      {
+        "original": "\\b([0-9a-zA-Z_-]{32})\\b",
+        "repaired": "\\b([0-9a-zA-Z_-]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([0-9a-zA-Z_-]{32})\\b",
+        "repaired": "\\b([0-9a-zA-Z_-]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "fastforex/fastforex.go": [
+      {
+        "original": "\\b([a-z0-9-]{28})\\b",
+        "repaired": "\\b([a-z0-9-]{28})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "fastlypersonaltoken/fastlypersonaltoken.go": [
+      {
+        "original": "\\b([A-Za-z0-9_-]{32})\\b",
+        "repaired": "\\b([A-Za-z0-9_-]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "fetchrss/fetchrss.go": [
+      {
+        "original": "\\b([a-zA-Z0-9.]{40})\\b",
+        "repaired": "\\b([a-zA-Z0-9.]{40})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "."
+        ]
+      }
+    ],
+    "fibery/fibery.go": [
+      {
+        "original": "\\b([0-9a-f]{8}\\.[0-9a-f]{35})\\b",
+        "repaired": "\\b([0-9a-f]{8}\\.[0-9a-f]{35})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "."
+        ]
+      }
+    ],
+    "figmapersonalaccesstoken/v1/figmapersonalaccesstoken.go": [
+      {
+        "original": "\\b([0-9]{6}-[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})\\b",
+        "repaired": "\\b([0-9]{6}-[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "figmapersonalaccesstoken/v2/figmapersonalaccesstoken_v2.go": [
+      {
+        "original": "\\b(fig[d|((u|o)(r|h)?)]_[a-z0-9A-Z_-]{40})\\b",
+        "repaired": "\\b(fig[d|((u|o)(r|h)?)]_[a-z0-9A-Z_-]{40})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "(",
+          ")",
+          "-",
+          "?",
+          "|"
+        ]
+      }
+    ],
+    "fileio/fileio.go": [
+      {
+        "original": "\\b([A-Z0-9.-]{39})\\b",
+        "repaired": "\\b([A-Z0-9.-]{39})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "findl/findl.go": [
+      {
+        "original": "\\b([a-z0-9]{8}\\-[a-z0-9]{4}\\-[a-z0-9]{4}\\-[a-z0-9]{4}\\-[a-z0-9]{12})\\b",
+        "repaired": "\\b([a-z0-9]{8}\\-[a-z0-9]{4}\\-[a-z0-9]{4}\\-[a-z0-9]{4}\\-[a-z0-9]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "flightlabs/flightlabs.go": [
+      {
+        "original": "\\b(eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9\\.ey[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]{86})\\b",
+        "repaired": "\\b(eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9\\.ey[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]{86})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "flutterwave/flutterwave.go": [
+      {
+        "original": "\\b(FLWSECK-[0-9a-z]{32}-X)\\b",
+        "repaired": "\\b(FLWSECK-[0-9a-z]{32}-X)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "flyio/flyio.go": [
+      {
+        "original": "\\b(FlyV1 fm\\d+_[A-Za-z0-9+\\/=,_-]{500,700})\\b",
+        "repaired": "\\b(FlyV1 fm\\d+_[A-Za-z0-9+\\/=,_-]{500,700})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          " ",
+          "+",
+          ",",
+          "-",
+          "/",
+          "="
+        ]
+      }
+    ],
+    "fmfw/fmfw.go": [
+      {
+        "original": "\\b([a-zA-Z0-9_-]{32})\\b",
+        "repaired": "\\b([a-zA-Z0-9_-]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([a-zA-Z0-9-]{32})\\b",
+        "repaired": "\\b([a-zA-Z0-9-]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "frameio/frameio.go": [
+      {
+        "original": "\\b(fio-u-[0-9a-zA-Z_-]{64})\\b",
+        "repaired": "\\b(fio-u-[0-9a-zA-Z_-]{64})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "freshbooks/freshbooks.go": [
+      {
+        "original": "\\b(https://www.[0-9A-Za-z_-]{1,}.com)\\b",
+        "repaired": "\\b(https://www.[0-9A-Za-z_-]{1,}.com)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "\t",
+          "\r",
+          " ",
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "freshdesk/freshdesk.go": [
+      {
+        "original": "\\b([0-9a-z-]{1,}\\.freshdesk\\.com)\\b",
+        "repaired": "\\b([0-9a-z-]{1,}\\.freshdesk\\.com)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "front/front.go": [
+      {
+        "original": "\\b([0-9a-zA-Z]{36}.[0-9a-zA-Z\\.\\-\\_]{188,244})\\b",
+        "repaired": "\\b([0-9a-zA-Z]{36}.[0-9a-zA-Z\\.\\-\\_]{188,244})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "\t",
+          "\r",
+          " ",
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "fullstory/v1/fullstory.go": [
+      {
+        "original": "\\b([a-zA-Z-0-9/+]{88})\\b",
+        "repaired": "\\b([a-zA-Z-0-9/+]{88})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "+",
+          "-",
+          "/"
+        ]
+      }
+    ],
+    "fullstory/v2/fullstory_v2.go": [
+      {
+        "original": "\\b(na1\\.[A-Za-z0-9\\+\\/]{100})\\b",
+        "repaired": "\\b(na1\\.[A-Za-z0-9\\+\\/]{100})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "+",
+          ".",
+          "/"
+        ]
+      }
+    ],
+    "fxmarket/fxmarket.go": [
+      {
+        "original": "\\b([0-9Aa-zA-Z-_=]{20})\\b",
+        "repaired": "\\b([0-9Aa-zA-Z-_=]{20})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "="
+        ]
+      }
+    ],
+    "gemini/gemini.go": [
+      {
+        "original": "\\b((?:master-|account-)[0-9A-Za-z]{20})\\b",
+        "repaired": "\\b((?:master-|account-)[0-9A-Za-z]{20})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "geocodio/geocodio.go": [
+      {
+        "original": "\\b([a-zA-Z0-9\\S]{7,30})\\b",
+        "repaired": "\\b([a-zA-Z0-9\\S]{7,30})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "getemail/getemail.go": [
+      {
+        "original": "\\b([a-zA-Z0-9-]{20})\\b",
+        "repaired": "\\b([a-zA-Z0-9-]{20})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "getemails/getemails.go": [
+      {
+        "original": "\\b([a-z0-9-]{26})\\b",
+        "repaired": "\\b([a-z0-9-]{26})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([a-z0-9-]{18})\\b",
+        "repaired": "\\b([a-z0-9-]{18})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "getsandbox/getsandbox.go": [
+      {
+        "original": "\\b([a-z0-9-]{40})\\b",
+        "repaired": "\\b([a-z0-9-]{40})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([a-z0-9-]{15,30})\\b",
+        "repaired": "\\b([a-z0-9-]{15,30})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "gitlab/v1/gitlab.go": [
+      {
+        "original": "\\b([a-zA-Z0-9][a-zA-Z0-9\\-=_]{19,21})\\b",
+        "repaired": "\\b([a-zA-Z0-9][a-zA-Z0-9\\-=_]{19,21})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "="
+        ]
+      }
+    ],
+    "gitlab/v2/gitlab_v2.go": [
+      {
+        "original": "\\b(glpat-[a-zA-Z0-9\\-=_]{20,22})\\b",
+        "repaired": "\\b(glpat-[a-zA-Z0-9\\-=_]{20,22})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "="
+        ]
+      }
+    ],
+    "gitlab/v3/gitlab_v3.go": [
+      {
+        "original": "\\b(glpat-[a-zA-Z0-9\\-=_]{27,300}.[0-9a-z]{2}.[a-z0-9]{9})\\b",
+        "repaired": "\\b(glpat-[a-zA-Z0-9\\-=_]{27,300}.[0-9a-z]{2}.[a-z0-9]{9})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "\t",
+          "\r",
+          " ",
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "gitlaboauth2/gitlaboauth2.go": [
+      {
+        "original": "\\b(gloas-[0-9a-f]{64})\\b",
+        "repaired": "\\b(gloas-[0-9a-f]{64})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "gitter/gitter.go": [
+      {
+        "original": "\\b([a-z0-9-]{40})\\b",
+        "repaired": "\\b([a-z0-9-]{40})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "grafanaserviceaccount/grafanaserviceaccount.go": [
+      {
+        "original": "\\b([a-zA-Z0-9-]+\\.grafana\\.net)\\b",
+        "repaired": "\\b([a-zA-Z0-9-]+\\.grafana\\.net)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "graphcms/graphcms.go": [
+      {
+        "original": "\\b(ey[a-zA-Z0-9]{73}.ey[a-zA-Z0-9]{365}.[a-zA-Z0-9_-]{683})\\b",
+        "repaired": "\\b(ey[a-zA-Z0-9]{73}.ey[a-zA-Z0-9]{365}.[a-zA-Z0-9_-]{683})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "\t",
+          "\r",
+          " ",
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "graphhopper/graphhopper.go": [
+      {
+        "original": "\\b([a-z0-9-]{36})\\b",
+        "repaired": "\\b([a-z0-9-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "guardianapi/guardianapi.go": [
+      {
+        "original": "\\b([0-9Aa-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})\\b",
+        "repaired": "\\b([0-9Aa-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "gumroad/gumroad.go": [
+      {
+        "original": "\\b([a-z0-9A-Z-]{43})\\b",
+        "repaired": "\\b([a-z0-9A-Z-]{43})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "guru/guru.go": [
+      {
+        "original": "\\b([a-zA-Z0-9]{3,20}@[a-zA-Z0-9]{2,12}.[a-zA-Z0-9]{2,5})\\b",
+        "repaired": "\\b([a-zA-Z0-9]{3,20}@[a-zA-Z0-9]{2,12}.[a-zA-Z0-9]{2,5})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "\t",
+          "\r",
+          " ",
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      },
+      {
+        "original": "\\b([a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12})\\b",
+        "repaired": "\\b([a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "gyazo/gyazo.go": [
+      {
+        "original": "\\b([0-9A-Za-z-]{43})\\b",
+        "repaired": "\\b([0-9A-Za-z-]{43})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "harness/harness.go": [
+      {
+        "original": "\\b(pat\\.[A-Za-z0-9_]{22}\\.[0-9a-f]{24}\\.[A-Za-z0-9]{20})\\b",
+        "repaired": "\\b(pat\\.[A-Za-z0-9_]{22}\\.[0-9a-f]{24}\\.[A-Za-z0-9]{20})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "."
+        ]
+      }
+    ],
+    "harvest/harvest.go": [
+      {
+        "original": "\\b([a-z0-9A-Z._]{97})\\b",
+        "repaired": "\\b([a-z0-9A-Z._]{97})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "."
+        ]
+      }
+    ],
+    "hashicorpvaultauth/hashicorpvaultauth.go": [
+      {
+        "original": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b",
+        "repaired": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\\b",
+        "repaired": "\\b([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "hasura/hasura.go": [
+      {
+        "original": "\\b([a-zA-Z0-9-]+\\.hasura\\.app)\\b",
+        "repaired": "\\b([a-zA-Z0-9-]+\\.hasura\\.app)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "hellosign/hellosign.go": [
+      {
+        "original": "\\b([a-zA-Z-0-9/+]{64})\\b",
+        "repaired": "\\b([a-zA-Z-0-9/+]{64})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "+",
+          "-",
+          "/"
+        ]
+      }
+    ],
+    "hereapi/hereapi.go": [
+      {
+        "original": "\\b([a-zA-Z0-9\\S]{43})\\b",
+        "repaired": "\\b([a-zA-Z0-9\\S]{43})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "heroku/v1/heroku.go": [
+      {
+        "original": "\\b([0-9Aa-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b",
+        "repaired": "\\b([0-9Aa-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "heroku/v2/heroku.go": [
+      {
+        "original": "\\b(HRKU-AA[0-9a-zA-Z_-]{58})\\b",
+        "repaired": "\\b(HRKU-AA[0-9a-zA-Z_-]{58})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "hiveage/hiveage.go": [
+      {
+        "original": "\\b([0-9A-Za-z\\_\\-]{20})\\b",
+        "repaired": "\\b([0-9A-Za-z\\_\\-]{20})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "holidayapi/holidayapi.go": [
+      {
+        "original": "\\b([a-z0-9-]{36})\\b",
+        "repaired": "\\b([a-z0-9-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "hubspot_apikey/v1/apikey.go": [
+      {
+        "original": "\\b([a-zA-Z0-9]{8}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{12})\\b",
+        "repaired": "\\b([a-zA-Z0-9]{8}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "hubspot_apikey/v2/apikey.go": [
+      {
+        "original": "\\b(pat-(?:eu|na)1-[A-Za-z0-9]{8}\\-[A-Za-z0-9]{4}\\-[A-Za-z0-9]{4}\\-[A-Za-z0-9]{4}\\-[A-Za-z0-9]{12})\\b",
+        "repaired": "\\b(pat-(?:eu|na)1-[A-Za-z0-9]{8}\\-[A-Za-z0-9]{4}\\-[A-Za-z0-9]{4}\\-[A-Za-z0-9]{4}\\-[A-Za-z0-9]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "humioapitoken/humioapitoken.go": [
+      {
+        "original": "\\b([A-Za-z0-9]{24}(?:[A-Za-z0-9]{8})?~[A-Za-z0-9]{44})\\b",
+        "repaired": "\\b([A-Za-z0-9]{24}(?:[A-Za-z0-9]{8})?~[A-Za-z0-9]{44})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "~"
+        ]
+      }
+    ],
+    "hunter/hunter.go": [
+      {
+        "original": "\\b([a-z0-9_-]{40})\\b",
+        "repaired": "\\b([a-z0-9_-]{40})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "hypertrack/hypertrack.go": [
+      {
+        "original": "\\b([0-9a-zA-Z\\_\\-]{27})\\b",
+        "repaired": "\\b([0-9a-zA-Z\\_\\-]{27})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([0-9a-zA-Z\\_\\-]{54})\\b",
+        "repaired": "\\b([0-9a-zA-Z\\_\\-]{54})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "ibmclouduserkey/ibmclouduserkey.go": [
+      {
+        "original": "\\b([A-Za-z0-9_-]{44})\\b",
+        "repaired": "\\b([A-Za-z0-9_-]{44})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "insightly/insightly.go": [
+      {
+        "original": "\\b([a-z0-9-]{36})\\b",
+        "repaired": "\\b([a-z0-9-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "interseller/interseller.go": [
+      {
+        "original": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b",
+        "repaired": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "intra42/intra42.go": [
+      {
+        "original": "\\b(s-s4t2(?:ud|af)-[a-f0-9]{64})\\b",
+        "repaired": "\\b(s-s4t2(?:ud|af)-[a-f0-9]{64})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b(u-s4t2(?:ud|af)-[a-f0-9]{64})\\b",
+        "repaired": "\\b(u-s4t2(?:ud|af)-[a-f0-9]{64})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "invoiceocean/invoiceocean.go": [
+      {
+        "original": "\\b([0-9a-z]{1,}\\.invoiceocean\\.com)\\b",
+        "repaired": "\\b([0-9a-z]{1,}\\.invoiceocean\\.com)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "."
+        ]
+      }
+    ],
+    "jdbc/jdbc.go": [
+      {
+        "original": "(?i)pass.*?=(.+?)\\b",
+        "repaired": "(?i)pass.*?=(.+?)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "\t",
+          "\r",
+          " ",
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "jiratoken/v1/jiratoken.go": [
+      {
+        "original": "\\b([a-zA-Z-0-9]{24})\\b",
+        "repaired": "\\b([a-zA-Z-0-9]{24})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b((?:[a-zA-Z0-9-]{1,24}\\.)+[a-zA-Z0-9-]{2,24}\\.[a-zA-Z0-9-]{2,16})\\b",
+        "repaired": "\\b((?:[a-zA-Z0-9-]{1,24}\\.)+[a-zA-Z0-9-]{2,24}\\.[a-zA-Z0-9-]{2,16})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "jiratoken/v2/jiratoken_v2.go": [
+      {
+        "original": "\\b(ATATT[A-Za-z0-9+/=_-]+=[A-Za-z0-9]{8})\\b",
+        "repaired": "\\b(ATATT[A-Za-z0-9+/=_-]+=[A-Za-z0-9]{8})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "+",
+          "-",
+          "/",
+          "="
+        ]
+      },
+      {
+        "original": "\\b((?:[a-zA-Z0-9-]{1,24}\\.)+[a-zA-Z0-9-]{2,24}\\.[a-zA-Z0-9-]{2,16})\\b",
+        "repaired": "\\b((?:[a-zA-Z0-9-]{1,24}\\.)+[a-zA-Z0-9-]{2,24}\\.[a-zA-Z0-9-]{2,16})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "jwt/jwt.go": [
+      {
+        "original": "\\b((?:eyJ|ewogIC|ewoid)[A-Za-z0-9_-]{12,}={0,2}\\.(?:eyJ|ewo)[A-Za-z0-9_-]{12,}={0,2}\\.[A-Za-z0-9_-]{12,})\\b",
+        "repaired": "\\b((?:eyJ|ewogIC|ewoid)[A-Za-z0-9_-]{12,}={0,2}\\.(?:eyJ|ewo)[A-Za-z0-9_-]{12,}={0,2}\\.[A-Za-z0-9_-]{12,})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          ".",
+          "="
+        ]
+      }
+    ],
+    "kanban/kanban.go": [
+      {
+        "original": "\\b([0-9a-z]{1,}\\.kanbantool\\.com)\\b",
+        "repaired": "\\b([0-9a-z]{1,}\\.kanbantool\\.com)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "."
+        ]
+      }
+    ],
+    "kucoin/kucoin.go": [
+      {
+        "original": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b",
+        "repaired": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "kylas/kylas.go": [
+      {
+        "original": "\\b([a-z0-9-]{36})\\b",
+        "repaired": "\\b([a-z0-9-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "langfuse/langfuse.go": [
+      {
+        "original": "\\b(pk-lf-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b",
+        "repaired": "\\b(pk-lf-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b(sk-lf-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b",
+        "repaired": "\\b(sk-lf-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "launchdarkly/launchdarkly.go": [
+      {
+        "original": "\\b((?:api|sdk)-[a-z0-9]{8}-[a-z0-9]{4}-4[a-z0-9]{3}-[a-z0-9]{4}-[a-z0-9]{12})\\b",
+        "repaired": "\\b((?:api|sdk)-[a-z0-9]{8}-[a-z0-9]{4}-4[a-z0-9]{3}-[a-z0-9]{4}-[a-z0-9]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "leadfeeder/leadfeeder.go": [
+      {
+        "original": "\\b([a-zA-Z0-9-]{43})\\b",
+        "repaired": "\\b([a-zA-Z0-9-]{43})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "lemonsqueezy/lemonsqueezy.go": [
+      {
+        "original": "\\b(eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9\\.[0-9A-Za-z]{314}\\.[0-9A-Za-z-_]{512})\\b",
+        "repaired": "\\b(eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9\\.[0-9A-Za-z]{314}\\.[0-9A-Za-z-_]{512})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "lendflow/lendflow.go": [
+      {
+        "original": "\\b([a-zA-Z0-9]{36}\\.[a-zA-Z0-9]{235}\\.[a-zA-Z0-9]{32}\\-[a-zA-Z0-9]{47}\\-[a-zA-Z0-9_]{162}\\-[a-zA-Z0-9]{42}\\-[a-zA-Z0-9_]{40}\\-[a-zA-Z0-9_]{66}\\-[a-zA-Z0-9_]{59}\\-[a-zA-Z0-9]{7}\\-[a-zA-Z0-9_]{220})\\b",
+        "repaired": "\\b([a-zA-Z0-9]{36}\\.[a-zA-Z0-9]{235}\\.[a-zA-Z0-9]{32}\\-[a-zA-Z0-9]{47}\\-[a-zA-Z0-9_]{162}\\-[a-zA-Z0-9]{42}\\-[a-zA-Z0-9_]{40}\\-[a-zA-Z0-9_]{66}\\-[a-zA-Z0-9_]{59}\\-[a-zA-Z0-9]{7}\\-[a-zA-Z0-9_]{220})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "lessannoyingcrm/lessannoyingcrm.go": [
+      {
+        "original": "\\b([a-zA-Z0-9-]{57})\\b",
+        "repaired": "\\b([a-zA-Z0-9-]{57})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "lexigram/lexigram.go": [
+      {
+        "original": "\\b([a-zA-Z0-9\\S]{301})\\b",
+        "repaired": "\\b([a-zA-Z0-9\\S]{301})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "linemessaging/linemessaging.go": [
+      {
+        "original": "\\b([A-Za-z0-9+/]{171,172})\\b",
+        "repaired": "\\b([A-Za-z0-9+/]{171,172})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "+",
+          "/"
+        ]
+      }
+    ],
+    "liveagent/liveagent.go": [
+      {
+        "original": "\\b(https?://[A-Za-z0-9-]+\\.ladesk\\.com)\\b",
+        "repaired": "\\b(https?://[A-Za-z0-9-]+\\.ladesk\\.com)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          ".",
+          "/",
+          ":"
+        ]
+      }
+    ],
+    "locationiq/locationiq.go": [
+      {
+        "original": "\\b(pk\\.[a-zA-Z-0-9]{32})\\b",
+        "repaired": "\\b(pk\\.[a-zA-Z-0-9]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "loggly/loggly.go": [
+      {
+        "original": "\\b([a-zA-Z0-9-]+\\.loggly\\.com)\\b",
+        "repaired": "\\b([a-zA-Z0-9-]+\\.loggly\\.com)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      },
+      {
+        "original": "\\b([a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12})\\b",
+        "repaired": "\\b([a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "loginradius/loginradius.go": [
+      {
+        "original": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b",
+        "repaired": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "logzio/logzio.go": [
+      {
+        "original": "\\b([0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})\\b",
+        "repaired": "\\b([0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "loyverse/loyverse.go": [
+      {
+        "original": "\\b([0-9-a-z]{32})\\b",
+        "repaired": "\\b([0-9-a-z]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "luno/luno.go": [
+      {
+        "original": "\\b([a-zA-Z0-9_-]{43})\\b",
+        "repaired": "\\b([a-zA-Z0-9_-]{43})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "magicbell/magicbell.go": [
+      {
+        "original": "\\b([a-zA-Z-0-9]{40})\\b",
+        "repaired": "\\b([a-zA-Z-0-9]{40})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "magnetic/magnetic.go": [
+      {
+        "original": "\\b([0-9Aa-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})\\b",
+        "repaired": "\\b([0-9Aa-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "mailgun/mailgun.go": [
+      {
+        "original": "\\b([a-zA-Z0-9-]{72})\\b",
+        "repaired": "\\b([a-zA-Z0-9-]{72})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b(key-[a-z0-9]{32})\\b",
+        "repaired": "\\b(key-[a-z0-9]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([a-f0-9]{32}-[a-f0-9]{8}-[a-f0-9]{8})\\b",
+        "repaired": "\\b([a-f0-9]{32}-[a-f0-9]{8}-[a-f0-9]{8})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "mailmodo/mailmodo.go": [
+      {
+        "original": "\\b([A-Z0-9]{7}-[A-Z0-9]{7}-[A-Z0-9]{7}-[A-Z0-9]{7})\\b",
+        "repaired": "\\b([A-Z0-9]{7}-[A-Z0-9]{7}-[A-Z0-9]{7}-[A-Z0-9]{7})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "mandrill/mandrill.go": [
+      {
+        "original": "\\b([A-Za-z0-9_-]{22})\\b",
+        "repaired": "\\b([A-Za-z0-9_-]{22})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "manifest/manifest.go": [
+      {
+        "original": "\\b([a-zA-z0-9]{32})\\b",
+        "repaired": "\\b([a-zA-z0-9]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`"
+        ]
+      }
+    ],
+    "mapbox/mapbox.go": [
+      {
+        "original": "\\b(sk\\.[a-zA-Z-0-9\\.]{80,240})\\b",
+        "repaired": "\\b(sk\\.[a-zA-Z-0-9\\.]{80,240})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "mattermostpersonaltoken/mattermostpersonaltoken.go": [
+      {
+        "original": "\\b([A-Za-z0-9-_]{1,}.cloud.mattermost.com)\\b",
+        "repaired": "\\b([A-Za-z0-9-_]{1,}.cloud.mattermost.com)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "\t",
+          "\r",
+          " ",
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "messagebird/messagebird.go": [
+      {
+        "original": "\\b([A-Za-z0-9_-]{25})\\b",
+        "repaired": "\\b([A-Za-z0-9_-]{25})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "metabase/metabase.go": [
+      {
+        "original": "\\b([a-zA-Z0-9-]{36})\\b",
+        "repaired": "\\b([a-zA-Z0-9-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b(https?:\\/\\/[-a-zA-Z0-9@:%._\\+~#=]{7,256})\\b",
+        "repaired": "\\b(https?:\\/\\/[-a-zA-Z0-9@:%._\\+~#=]{7,256})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "#",
+          "%",
+          "+",
+          "-",
+          ".",
+          "/",
+          ":",
+          "=",
+          "@",
+          "~"
+        ]
+      }
+    ],
+    "mite/mite.go": [
+      {
+        "original": "\\b([0-9a-z-]{1,}.mite.yo.lk)\\b",
+        "repaired": "\\b([0-9a-z-]{1,}.mite.yo.lk)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "\t",
+          "\r",
+          " ",
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "mixmax/mixmax.go": [
+      {
+        "original": "\\b([a-zA-Z0-9_-]{36})\\b",
+        "repaired": "\\b([a-zA-Z0-9_-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "mixpanel/mixpanel.go": [
+      {
+        "original": "\\b([a-zA-Z0-9-]{32})\\b",
+        "repaired": "\\b([a-zA-Z0-9-]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([a-zA-Z0-9.-]{30,40})\\b",
+        "repaired": "\\b([a-zA-Z0-9.-]{30,40})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "moderation/moderation.go": [
+      {
+        "original": "\\b([a-zA-Z0-9]{36}\\.[a-zA-Z0-9]{115}\\.[a-zA-Z0-9_]{43})\\b",
+        "repaired": "\\b([a-zA-Z0-9]{36}\\.[a-zA-Z0-9]{115}\\.[a-zA-Z0-9_]{43})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "."
+        ]
+      }
+    ],
+    "monday/monday.go": [
+      {
+        "original": "\\b(eyJ[A-Za-z0-9-_]{15,100}\\.eyJ[A-Za-z0-9-_]{100,300}\\.[A-Za-z0-9-_]{25,100})\\b",
+        "repaired": "\\b(eyJ[A-Za-z0-9-_]{15,100}\\.eyJ[A-Za-z0-9-_]{100,300}\\.[A-Za-z0-9-_]{25,100})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "moosend/moosend.go": [
+      {
+        "original": "\\b([0-9Aa-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b",
+        "repaired": "\\b([0-9Aa-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "mux/mux.go": [
+      {
+        "original": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b",
+        "repaired": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "myfreshworks/myfreshworks.go": [
+      {
+        "original": "\\b([a-z0-9A-Z-_]{22})\\b",
+        "repaired": "\\b([a-z0-9A-Z-_]{22})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([a-zA-Z0-9-_]{2,20})\\b",
+        "repaired": "\\b([a-zA-Z0-9-_]{2,20})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "nasdaqdatalink/nasdaqdatalink.go": [
+      {
+        "original": "\\b([a-zA-Z0-9_-]{20})\\b",
+        "repaired": "\\b([a-zA-Z0-9_-]{20})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "nethunt/nethunt.go": [
+      {
+        "original": "\\b([a-z0-9-\\S]{36})\\b",
+        "repaired": "\\b([a-z0-9-\\S]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      },
+      {
+        "original": "\\b([a-zA-Z0-9.-@]{25,30})\\b",
+        "repaired": "\\b([a-zA-Z0-9.-@]{25,30})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@"
+        ]
+      }
+    ],
+    "netlify/v1/netlify_v1.go": [
+      {
+        "original": "\\b([A-Za-z0-9_-]{43,45})\\b",
+        "repaired": "\\b([A-Za-z0-9_-]{43,45})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "netsuite/netsuite.go": [
+      {
+        "original": "\\b([a-zA-Z0-9-_]{6,15})\\b",
+        "repaired": "\\b([a-zA-Z0-9-_]{6,15})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "newrelicbrowserkey/newrelicbrowserkey.go": [
+      {
+        "original": "\\b(NRBR-[0-9a-f]{19})\\b",
+        "repaired": "\\b(NRBR-[0-9a-f]{19})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "newrelicmobileapptoken/newrelicmobileapptoken.go": [
+      {
+        "original": "\\b((AA[0-9a-f]{40}|eu01xx[0-9a-f]{36})-NRMA)\\b",
+        "repaired": "\\b((AA[0-9a-f]{40}|eu01xx[0-9a-f]{36})-NRMA)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "newrelicpersonalapikey/newrelicpersonalapikey.go": [
+      {
+        "original": "\\b([A-Za-z0-9_\\.]{4}-[A-Za-z0-9_\\.]{42})\\b",
+        "repaired": "\\b([A-Za-z0-9_\\.]{4}-[A-Za-z0-9_\\.]{42})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "newrelicuserkey/newrelicuserkey.go": [
+      {
+        "original": "\\b(NRAK-[A-Z0-9]{27})\\b",
+        "repaired": "\\b(NRAK-[A-Z0-9]{27})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "nexmoapikey/nexmoapikey.go": [
+      {
+        "original": "\\b([A-Za-z0-9_-]{8})\\b",
+        "repaired": "\\b([A-Za-z0-9_-]{8})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([A-Za-z0-9_-]{16})\\b",
+        "repaired": "\\b([A-Za-z0-9_-]{16})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "nftport/nftport.go": [
+      {
+        "original": "\\b([a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12})\\b",
+        "repaired": "\\b([a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "ngc/ngc.go": [
+      {
+        "original": "\\b([[:alnum:]]{26}:[[:alnum:]]{8}-[[:alnum:]]{4}-[[:alnum:]]{4}-[[:alnum:]]{4}-[[:alnum:]]{12})\\b",
+        "repaired": "\\b([[:alnum:]]{26}:[[:alnum:]]{8}-[[:alnum:]]{4}-[[:alnum:]]{4}-[[:alnum:]]{4}-[[:alnum:]]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          ":",
+          "[",
+          "]"
+        ]
+      },
+      {
+        "original": "\\b([[:alnum:]]{84})\\b",
+        "repaired": "\\b([[:alnum:]]{84})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          ":",
+          "[",
+          "]"
+        ]
+      },
+      {
+        "original": "\\b([[:alnum:]]{26}:[[:alnum:]]{8}-[[:alnum:]]{4}-[[:alnum:]]{4}-[[:alnum:]]{4}-[[:alnum:]]{12})\\b",
+        "repaired": "\\b([[:alnum:]]{26}:[[:alnum:]]{8}-[[:alnum:]]{4}-[[:alnum:]]{4}-[[:alnum:]]{4}-[[:alnum:]]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          ":",
+          "[",
+          "]"
+        ]
+      }
+    ],
+    "nightfall/nightfall.go": [
+      {
+        "original": "\\b(NF\\-[a-zA-Z0-9]{32})\\b",
+        "repaired": "\\b(NF\\-[a-zA-Z0-9]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "npmtoken/npmtoken.go": [
+      {
+        "original": "\\b([0-9Aa-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b",
+        "repaired": "\\b([0-9Aa-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "nvapi/nvapi.go": [
+      {
+        "original": "\\b(nvapi-[a-zA-Z0-9_-]{64})\\b",
+        "repaired": "\\b(nvapi-[a-zA-Z0-9_-]{64})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "octopusdeploy/octopusdeploy.go": [
+      {
+        "original": "\\b(API-[A-Z0-9]{29,34})\\b",
+        "repaired": "\\b(API-[A-Z0-9]{29,34})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([a-z0-9-]+\\.octopus\\.app)\\b",
+        "repaired": "\\b([a-z0-9-]+\\.octopus\\.app)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "okta/okta.go": [
+      {
+        "original": "\\b[a-z0-9-]{1,40}\\.(?:okta(?:preview|-emea|-gov)?\\.com|okta\\.mil)\\b",
+        "repaired": "\\b[a-z0-9-]{1,40}\\.(?:okta(?:preview|-emea|-gov)?\\.com|okta\\.mil)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "omnisend/omnisend.go": [
+      {
+        "original": "\\b([a-z0-9A-Z-]{75})\\b",
+        "repaired": "\\b([a-z0-9A-Z-]{75})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "openai/openai.go": [
+      {
+        "original": "\\b(sk-(?:(?:proj|svcacct|service)-[A-Za-z0-9_-]+|[a-zA-Z0-9]+)T3BlbkFJ[A-Za-z0-9_-]+)\\b",
+        "repaired": "\\b(sk-(?:(?:proj|svcacct|service)-[A-Za-z0-9_-]+|[a-zA-Z0-9]+)T3BlbkFJ[A-Za-z0-9_-]+)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "openaiadmin/openaiadmin.go": [
+      {
+        "original": "\\b(sk-admin-[A-Za-z0-9_-]{58}T3BlbkFJ[A-Za-z0-9_-]{58})\\b",
+        "repaired": "\\b(sk-admin-[A-Za-z0-9_-]{58}T3BlbkFJ[A-Za-z0-9_-]{58})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "openrouter/openrouter.go": [
+      {
+        "original": "\\b(sk-or-v1-[0-9a-f]{64})\\b",
+        "repaired": "\\b(sk-or-v1-[0-9a-f]{64})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "openvpn/openvpn.go": [
+      {
+        "original": "\\b([A-Za-z0-9-]{3,40}\\.[A-Za-z0-9-]{3,40})\\b",
+        "repaired": "\\b([A-Za-z0-9-]{3,40}\\.[A-Za-z0-9-]{3,40})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      },
+      {
+        "original": "\\b([a-zA-Z0-9_-]{64,})\\b",
+        "repaired": "\\b([a-zA-Z0-9_-]{64,})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b(https?://[A-Za-z0-9-]+\\.api\\.openvpn\\.com)\\b",
+        "repaired": "\\b(https?://[A-Za-z0-9-]+\\.api\\.openvpn\\.com)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          ".",
+          "/",
+          ":"
+        ]
+      }
+    ],
+    "opsgenie/opsgenie.go": [
+      {
+        "original": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b",
+        "repaired": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "optimizely/optimizely.go": [
+      {
+        "original": "\\b([0-9A-Za-z-:]{54})\\b",
+        "repaired": "\\b([0-9A-Za-z-:]{54})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          ":"
+        ]
+      }
+    ],
+    "overloop/overloop.go": [
+      {
+        "original": "\\b([a-zA-Z\\_\\-0-9]{50})\\b",
+        "repaired": "\\b([a-zA-Z\\_\\-0-9]{50})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "pagerdutyapikey/pagerdutyapikey.go": [
+      {
+        "original": "\\b(u\\+[a-zA-Z0-9_+-]{18})\\b",
+        "repaired": "\\b(u\\+[a-zA-Z0-9_+-]{18})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "+",
+          "-"
+        ]
+      }
+    ],
+    "paperform/paperform.go": [
+      {
+        "original": "\\b([a-z0-9A-Z-._]{850,1000})\\b",
+        "repaired": "\\b([a-z0-9A-Z-._]{850,1000})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "paypaloauth/paypaloauth.go": [
+      {
+        "original": "\\b([A-Za-z0-9_\\.]{7}-[A-Za-z0-9_\\.]{72}|[A-Za-z0-9_\\.]{5}-[A-Za-z0-9_\\.]{38})\\b",
+        "repaired": "\\b([A-Za-z0-9_\\.]{7}-[A-Za-z0-9_\\.]{72}|[A-Za-z0-9_\\.]{5}-[A-Za-z0-9_\\.]{38})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      },
+      {
+        "original": "\\b([A-Za-z0-9_\\.\\-]{44,80})\\b",
+        "repaired": "\\b([A-Za-z0-9_\\.\\-]{44,80})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "pepipost/pepipost.go": [
+      {
+        "original": "\\b([a-zA-Z-0-9]{32})\\b",
+        "repaired": "\\b([a-zA-Z-0-9]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "pixabay/pixabay.go": [
+      {
+        "original": "\\b([a-z0-9-]{34})\\b",
+        "repaired": "\\b([a-z0-9-]{34})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "plaidkey/plaidkey.go": [
+      {
+        "original": "\\b(access-(sandbox|production)-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\\b",
+        "repaired": "\\b(access-(sandbox|production)-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "planviewleankit/planviewleankit.go": [
+      {
+        "original": "(?:subdomain).\\b([a-zA-Z][a-zA-Z0-9.-]{1,23}[a-zA-Z0-9])\\b",
+        "repaired": "(?:subdomain).\\b([a-zA-Z][a-zA-Z0-9.-]{1,23}[a-zA-Z0-9])(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "plivo/plivo.go": [
+      {
+        "original": "\\b([A-Za-z0-9_-]{40})\\b",
+        "repaired": "\\b([A-Za-z0-9_-]{40})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "poloniex/poloniex.go": [
+      {
+        "original": "\\b([0-9A-Z]{8}-[0-9A-Z]{8}-[0-9A-Z]{8}-[0-9A-Z]{8})\\b",
+        "repaired": "\\b([0-9A-Z]{8}-[0-9A-Z]{8}-[0-9A-Z]{8}-[0-9A-Z]{8})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "portainer/portainer.go": [
+      {
+        "original": "\\b(https?:\\/\\/\\S+(:[0-9]{4,5})?)\\b",
+        "repaired": "\\b(https?:\\/\\/\\S+(:[0-9]{4,5})?)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      },
+      {
+        "original": "\\b(eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\\.[0-9A-Za-z]{50,310}\\.[0-9A-Z-a-z\\-_]{43})\\b",
+        "repaired": "\\b(eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\\.[0-9A-Za-z]{50,310}\\.[0-9A-Z-a-z\\-_]{43})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "portainertoken/portainertoken.go": [
+      {
+        "original": "\\b(https?:\\/\\/\\S+(:[0-9]{4,5})?)\\b",
+        "repaired": "\\b(https?:\\/\\/\\S+(:[0-9]{4,5})?)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "postbacks/postbacks.go": [
+      {
+        "original": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b",
+        "repaired": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "postman/postman.go": [
+      {
+        "original": "\\b(PMAK-[a-zA-Z-0-9]{59})\\b",
+        "repaired": "\\b(PMAK-[a-zA-Z-0-9]{59})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "postmark/postmark.go": [
+      {
+        "original": "\\b([0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})\\b",
+        "repaired": "\\b([0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "privacy/privacy.go": [
+      {
+        "original": "\\b([a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12})\\b",
+        "repaired": "\\b([a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "prospectcrm/prospectcrm.go": [
+      {
+        "original": "\\b([a-z0-9-]{32})\\b",
+        "repaired": "\\b([a-z0-9-]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "pubnubpublishkey/pubnubpublishkey.go": [
+      {
+        "original": "\\b(pub-c-[0-9a-z]{8}-[0-9a-z]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12})\\b",
+        "repaired": "\\b(pub-c-[0-9a-z]{8}-[0-9a-z]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b(sub-c-[0-9a-z]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12})\\b",
+        "repaired": "\\b(sub-c-[0-9a-z]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "pubnubsubscriptionkey/pubnubsubscriptionkey.go": [
+      {
+        "original": "\\b(sub-c-[0-9a-z]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12})\\b",
+        "repaired": "\\b(sub-c-[0-9a-z]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "pulumi/pulumi.go": [
+      {
+        "original": "\\b(pul-[a-z0-9]{40})\\b",
+        "repaired": "\\b(pul-[a-z0-9]{40})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "pushbulletapikey/pushbulletapikey.go": [
+      {
+        "original": "\\b([A-Za-z0-9_\\.]{34})\\b",
+        "repaired": "\\b([A-Za-z0-9_\\.]{34})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "."
+        ]
+      }
+    ],
+    "railwayapp/railwayapp.go": [
+      {
+        "original": "\\b([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})\\b",
+        "repaired": "\\b([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "ramp/ramp.go": [
+      {
+        "original": "\\b(ramp_id_[[:alnum:]]{40})\\b",
+        "repaired": "\\b(ramp_id_[[:alnum:]]{40})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          ":",
+          "[",
+          "]"
+        ]
+      },
+      {
+        "original": "\\b(ramp_sec_[[:alnum:]]{48})\\b",
+        "repaired": "\\b(ramp_sec_[[:alnum:]]{48})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          ":",
+          "[",
+          "]"
+        ]
+      }
+    ],
+    "rapidapi/rapidapi.go": [
+      {
+        "original": "\\b([A-Za-z0-9_-]{50})\\b",
+        "repaired": "\\b([A-Za-z0-9_-]{50})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "raven/raven.go": [
+      {
+        "original": "\\b([A-Z0-9-]{16})\\b",
+        "repaired": "\\b([A-Z0-9-]{16})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "reachmail/reachmail.go": [
+      {
+        "original": "\\b([a-zA-Z0-9-_]{64})\\b",
+        "repaired": "\\b([a-zA-Z0-9-_]{64})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "reallysimplesystems/reallysimplesystems.go": [
+      {
+        "original": "\\b(ey[a-zA-Z0-9-._]{153}.ey[a-zA-Z0-9-._]{916,1000})\\b",
+        "repaired": "\\b(ey[a-zA-Z0-9-._]{153}.ey[a-zA-Z0-9-._]{916,1000})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "\t",
+          "\r",
+          " ",
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "refiner/refiner.go": [
+      {
+        "original": "\\b([0-9Aa-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b",
+        "repaired": "\\b([0-9Aa-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "rentman/rentman.go": [
+      {
+        "original": "\\b(ey[a-zA-Z0-9]{34}.ey[a-zA-Z0-9._-]{250,300})\\b",
+        "repaired": "\\b(ey[a-zA-Z0-9]{34}.ey[a-zA-Z0-9._-]{250,300})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "\t",
+          "\r",
+          " ",
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "repairshopr/repairshopr.go": [
+      {
+        "original": "\\b([a-zA-Z0-9-]{51})\\b",
+        "repaired": "\\b([a-zA-Z0-9-]{51})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([a-zA-Z0-9_.!+$#^*]{3,32})\\b",
+        "repaired": "\\b([a-zA-Z0-9_.!+$#^*]{3,32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "!",
+          "#",
+          "$",
+          "*",
+          "+",
+          ".",
+          "^"
+        ]
+      }
+    ],
+    "replicate/replicate.go": [
+      {
+        "original": "\\b(r8_[0-9A-Za-z-_]{37})\\b",
+        "repaired": "\\b(r8_[0-9A-Za-z-_]{37})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "requestfinance/requestfinance.go": [
+      {
+        "original": "\\b([0-9A-Z]{7}-[0-9A-Z]{7}-[0-9A-Z]{7}-[0-9A-Z]{7})\\b",
+        "repaired": "\\b([0-9A-Z]{7}-[0-9A-Z]{7}-[0-9A-Z]{7}-[0-9A-Z]{7})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "revampcrm/revampcrm.go": [
+      {
+        "original": "\\b([a-zA-Z0-9.-@]{25,30})\\b",
+        "repaired": "\\b([a-zA-Z0-9.-@]{25,30})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@"
+        ]
+      }
+    ],
+    "ringcentral/ringcentral.go": [
+      {
+        "original": "\\b([0-9A-Za-z_-]{22})\\b",
+        "repaired": "\\b([0-9A-Za-z_-]{22})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b(https://www.[0-9A-Za-z_-]{1,}.com)\\b",
+        "repaired": "\\b(https://www.[0-9A-Za-z_-]{1,}.com)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "\t",
+          "\r",
+          " ",
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "roaring/roaring.go": [
+      {
+        "original": "\\b([0-9A-Za-z_-]{28})\\b",
+        "repaired": "\\b([0-9A-Za-z_-]{28})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([0-9A-Za-z_-]{28})\\b",
+        "repaired": "\\b([0-9A-Za-z_-]{28})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "robinhoodcrypto/robinhoodcrypto.go": [
+      {
+        "original": "\\b(rh-api-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\\b",
+        "repaired": "\\b(rh-api-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "rocketreach/rocketreach.go": [
+      {
+        "original": "\\b([a-z0-9-]{39})\\b",
+        "repaired": "\\b([a-z0-9-]{39})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "rownd/rownd.go": [
+      {
+        "original": "\\b([a-z0-9]{8}\\-[a-z0-9]{4}\\-[a-z0-9]{4}\\-[a-z0-9]{4}\\-[a-z0-9]{12})\\b",
+        "repaired": "\\b([a-z0-9]{8}\\-[a-z0-9]{4}\\-[a-z0-9]{4}\\-[a-z0-9]{4}\\-[a-z0-9]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "salesblink/salesblink.go": [
+      {
+        "original": "\\b(key-[a-zA-Z0-9]{64})\\b",
+        "repaired": "\\b(key-[a-zA-Z0-9]{64})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "salescookie/salescookie.go": [
+      {
+        "original": "\\b([a-zA-z0-9]{32})\\b",
+        "repaired": "\\b([a-zA-z0-9]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`"
+        ]
+      }
+    ],
+    "salesforceoauth2/salesforceoauth2.go": [
+      {
+        "original": "\\b(?:https?://)?([0-9a-zA-Z\\-\\.]{1,100}\\.my\\.salesforce\\.com)\\b",
+        "repaired": "\\b(?:https?://)?([0-9a-zA-Z\\-\\.]{1,100}\\.my\\.salesforce\\.com)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      },
+      {
+        "original": "\\b([A-Za-z0-9+/=.]{64}|[0-9]{19})\\b",
+        "repaired": "\\b([A-Za-z0-9+/=.]{64}|[0-9]{19})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "+",
+          ".",
+          "/",
+          "="
+        ]
+      }
+    ],
+    "salesforcerefreshtoken/salesforcerefreshtoken.go": [
+      {
+        "original": "(?i)\\b(5AEP861[a-zA-Z0-9._=]{80,})\\b",
+        "repaired": "(?i)\\b(5AEP861[a-zA-Z0-9._=]{80,})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          ".",
+          "="
+        ]
+      },
+      {
+        "original": "\\b([A-Za-z0-9+/=.]{64}|[0-9]{19})\\b",
+        "repaired": "\\b([A-Za-z0-9+/=.]{64}|[0-9]{19})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "+",
+          ".",
+          "/",
+          "="
+        ]
+      }
+    ],
+    "salesmate/salesmate.go": [
+      {
+        "original": "\\b([0-9Aa-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b",
+        "repaired": "\\b([0-9Aa-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "saucelabs/saucelabs.go": [
+      {
+        "original": "\\b([a-z0-9]{8}\\-[a-z0-9]{4}\\-[a-z0-9]{4}\\-[a-z0-9]{4}\\-[a-z0-9]{12})\\b",
+        "repaired": "\\b([a-z0-9]{8}\\-[a-z0-9]{4}\\-[a-z0-9]{4}\\-[a-z0-9]{4}\\-[a-z0-9]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b(api\\.(?:us|eu)-(?:west|east|central)-[0-9].saucelabs\\.com)\\b",
+        "repaired": "\\b(api\\.(?:us|eu)-(?:west|east|central)-[0-9].saucelabs\\.com)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "\t",
+          "\r",
+          " ",
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "scalewaykey/scalewaykey.go": [
+      {
+        "original": "\\b([0-9a-z]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[0-9a-z]{4}-[0-9a-z]{12})\\b",
+        "repaired": "\\b([0-9a-z]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[0-9a-z]{4}-[0-9a-z]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "scrapfly/scrapfly.go": [
+      {
+        "original": "\\b([a-z0-9]{32}|scp-(?:live|test)-[a-z0-9]{32})\\b",
+        "repaired": "\\b([a-z0-9]{32}|scp-(?:live|test)-[a-z0-9]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "screenshotapi/screenshotapi.go": [
+      {
+        "original": "\\b([0-9A-Z]{7}\\-[0-9A-Z]{7}\\-[0-9A-Z]{7}\\-[0-9A-Z]{7})\\b",
+        "repaired": "\\b([0-9A-Z]{7}\\-[0-9A-Z]{7}\\-[0-9A-Z]{7}\\-[0-9A-Z]{7})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "segmentapikey/segmentapikey.go": [
+      {
+        "original": "\\b([A-Za-z0-9_\\-a-zA-Z]{43}\\.[A-Za-z0-9_\\-a-zA-Z]{43})\\b",
+        "repaired": "\\b([A-Za-z0-9_\\-a-zA-Z]{43}\\.[A-Za-z0-9_\\-a-zA-Z]{43})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "selectpdf/selectpdf.go": [
+      {
+        "original": "\\b([a-z0-9-]{36})\\b",
+        "repaired": "\\b([a-z0-9-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "sendbird/sendbird.go": [
+      {
+        "original": "\\b([0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12})\\b",
+        "repaired": "\\b([0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "sendinbluev2/sendinbluev2.go": [
+      {
+        "original": "\\b(xkeysib\\-[A-Za-z0-9_-]{81})\\b",
+        "repaired": "\\b(xkeysib\\-[A-Za-z0-9_-]{81})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "sentryorgtoken/sentryorgtoken.go": [
+      {
+        "original": "\\b(sntrys_eyJ[a-zA-Z0-9=_+/]{197})\\b",
+        "repaired": "\\b(sntrys_eyJ[a-zA-Z0-9=_+/]{197})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "+",
+          "/",
+          "="
+        ]
+      }
+    ],
+    "shipday/shipday.go": [
+      {
+        "original": "\\b([a-zA-Z0-9.]{11}[a-zA-Z0-9]{20})\\b",
+        "repaired": "\\b([a-zA-Z0-9.]{11}[a-zA-Z0-9]{20})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "."
+        ]
+      }
+    ],
+    "shopifyoauth/shopifyoauth.go": [
+      {
+        "original": "\\b([a-zA-Z0-9][-a-zA-Z0-9]*\\.myshopify\\.com)\\b",
+        "repaired": "\\b([a-zA-Z0-9][-a-zA-Z0-9]*\\.myshopify\\.com)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "shortcut/shortcut.go": [
+      {
+        "original": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b",
+        "repaired": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "shutterstockoauth/shutterstockoauth.go": [
+      {
+        "original": "\\b(v2/[0-9A-Za-z]{388})\\b",
+        "repaired": "\\b(v2/[0-9A-Za-z]{388})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "/"
+        ]
+      }
+    ],
+    "signable/signable.go": [
+      {
+        "original": "\\b([a-zA-Z-0-9]{32})\\b",
+        "repaired": "\\b([a-zA-Z-0-9]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "signalwire/signalwire.go": [
+      {
+        "original": "\\b([0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})\\b",
+        "repaired": "\\b([0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([0-9a-z-]{3,64}\\.signalwire\\.com)\\b",
+        "repaired": "\\b([0-9a-z-]{3,64}\\.signalwire\\.com)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "simplynoted/simplynoted.go": [
+      {
+        "original": "\\b([a-zA-Z0-9\\S]{340,360})\\b",
+        "repaired": "\\b([a-zA-Z0-9\\S]{340,360})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "smartystreets/smartystreets.go": [
+      {
+        "original": "\\b([a-z0-9-]{36})\\b",
+        "repaired": "\\b([a-z0-9-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "smooch/smooch.go": [
+      {
+        "original": "\\b([0-9a-zA-Z_-]{86})\\b",
+        "repaired": "\\b([0-9a-zA-Z_-]{86})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "snowflake/snowflake.go": [
+      {
+        "original": "\\b([a-zA-Z]{7}-[0-9a-zA-Z-_]{1,255}(.privatelink)?)\\b",
+        "repaired": "\\b([a-zA-Z]{7}-[0-9a-zA-Z-_]{1,255}(.privatelink)?)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "\t",
+          "\r",
+          " ",
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "snykkey/snykkey.go": [
+      {
+        "original": "\\b([0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})\\b",
+        "repaired": "\\b([0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "solarwindsobservability/solarwindsobservability.go": [
+      {
+        "original": "\\b([0-9a-zA-Z_-]{71})\\b",
+        "repaired": "\\b([0-9a-zA-Z_-]{71})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "sonarcloud/v2/sonarcloud.go": [
+      {
+        "original": "\\b(sqco_[[:alnum:]]{59})\\b",
+        "repaired": "\\b(sqco_[[:alnum:]]{59})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          ":",
+          "[",
+          "]"
+        ]
+      }
+    ],
+    "spectralops/spectralops.go": [
+      {
+        "original": "\\b(spu-[a-z0-9]{32})\\b",
+        "repaired": "\\b(spu-[a-z0-9]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "squarespace/squarespace.go": [
+      {
+        "original": "\\b([0-9Aa-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b",
+        "repaired": "\\b([0-9Aa-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "statuspage/statuspage.go": [
+      {
+        "original": "\\b([0-9a-z-]{36})\\b",
+        "repaired": "\\b([0-9a-z-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "storecove/storecove.go": [
+      {
+        "original": "\\b([a-zA-Z0-9_-]{43})\\b",
+        "repaired": "\\b([a-zA-Z0-9_-]{43})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "stormglass/stormglass.go": [
+      {
+        "original": "\\b([0-9Aa-z-]{73})\\b",
+        "repaired": "\\b([0-9Aa-z-]{73})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "storyblokpersonalaccesstoken/storyblok.go": [
+      {
+        "original": "\\b([0-9A-Za-z]{22}tt-[0-9]{6}-[A-Za-z0-9_-]{20})\\b",
+        "repaired": "\\b([0-9A-Za-z]{22}tt-[0-9]{6}-[A-Za-z0-9_-]{20})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "stripo/stripo.go": [
+      {
+        "original": "\\b(eyJhbGciOiJIUzI1NiJ9\\.[0-9A-Za-z]{130}\\.[0-9A-Za-z_-]{43})\\b",
+        "repaired": "\\b(eyJhbGciOiJIUzI1NiJ9\\.[0-9A-Za-z]{130}\\.[0-9A-Za-z_-]{43})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "stytch/stytch.go": [
+      {
+        "original": "\\b([a-z0-9-]{49})\\b",
+        "repaired": "\\b([a-z0-9-]{49})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "sugester/sugester.go": [
+      {
+        "original": "\\b([a-zA-Z0-9_.!+$#^*%]{3,32})\\b",
+        "repaired": "\\b([a-zA-Z0-9_.!+$#^*%]{3,32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "!",
+          "#",
+          "$",
+          "%",
+          "*",
+          "+",
+          ".",
+          "^"
+        ]
+      }
+    ],
+    "surveyanyplace/surveyanyplace.go": [
+      {
+        "original": "\\b([a-z0-9A-Z-]{36})\\b",
+        "repaired": "\\b([a-z0-9A-Z-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "surveybot/surveybot.go": [
+      {
+        "original": "\\b([A-Za-z0-9-]{80})\\b",
+        "repaired": "\\b([A-Za-z0-9-]{80})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "surveysparrow/surveysparrow.go": [
+      {
+        "original": "\\b([a-zA-Z0-9-_]{88})\\b",
+        "repaired": "\\b([a-zA-Z0-9-_]{88})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "swiftype/swiftype.go": [
+      {
+        "original": "\\b([a-zA-z-0-9]{6}\\_[a-zA-z-0-9]{6}\\-[a-zA-z-0-9]{6})\\b",
+        "repaired": "\\b([a-zA-z-0-9]{6}\\_[a-zA-z-0-9]{6}\\-[a-zA-z-0-9]{6})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`"
+        ]
+      }
+    ],
+    "tableau/tableau.go": [
+      {
+        "original": "\\b([A-Za-z0-9+/]{22}==:[A-Za-z0-9]{32})\\b",
+        "repaired": "\\b([A-Za-z0-9+/]{22}==:[A-Za-z0-9]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "+",
+          "/",
+          ":",
+          "="
+        ]
+      },
+      {
+        "original": "\\b([a-zA-Z0-9\\-]+\\.online\\.tableau\\.com)\\b",
+        "repaired": "\\b([a-zA-Z0-9\\-]+\\.online\\.tableau\\.com)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "tallyfy/tallyfy.go": [
+      {
+        "original": "\\b([0-9A-Za-z]{36}\\.[0-9A-Za-z]{264}\\.[0-9A-Za-z\\-\\_]{683})\\b",
+        "repaired": "\\b([0-9A-Za-z]{36}\\.[0-9A-Za-z]{264}\\.[0-9A-Za-z\\-\\_]{683})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "tatumio/tatumio.go": [
+      {
+        "original": "\\b([0-9a-z-]{36})\\b",
+        "repaired": "\\b([0-9a-z-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "telegrambottoken/telegrambottoken.go": [
+      {
+        "original": "\\b([0-9]{8,10}:[a-zA-Z0-9_-]{35})\\b",
+        "repaired": "\\b([0-9]{8,10}:[a-zA-Z0-9_-]{35})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          ":"
+        ]
+      }
+    ],
+    "teletype/teletype.go": [
+      {
+        "original": "\\b([0-9a-zA-Z-]{64})\\b",
+        "repaired": "\\b([0-9a-zA-Z-]{64})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "telnyx/telnyx.go": [
+      {
+        "original": "\\b(KEY[0-9A-Za-z_-]{55})\\b",
+        "repaired": "\\b(KEY[0-9A-Za-z_-]{55})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "terraformcloudpersonaltoken/terraformcloudpersonaltoken.go": [
+      {
+        "original": "\\b([A-Za-z0-9]{14}.atlasv1.[A-Za-z0-9]{67})\\b",
+        "repaired": "\\b([A-Za-z0-9]{14}.atlasv1.[A-Za-z0-9]{67})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "\t",
+          "\r",
+          " ",
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "thousandeyes/thousandeyes.go": [
+      {
+        "original": "\\b([a-zA-Z0-9]{3,20}@[a-zA-Z0-9]{2,12}.[a-zA-Z0-9]{2,5})\\b",
+        "repaired": "\\b([a-zA-Z0-9]{3,20}@[a-zA-Z0-9]{2,12}.[a-zA-Z0-9]{2,5})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "\t",
+          "\r",
+          " ",
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "tokeet/tokeet.go": [
+      {
+        "original": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b",
+        "repaired": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([0-9]{10}.[0-9]{4})\\b",
+        "repaired": "\\b([0-9]{10}.[0-9]{4})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "\t",
+          "\r",
+          " ",
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "transferwise/transferwise.go": [
+      {
+        "original": "\\b([0-9a-f-]{8}-[0-9a-f-]{4}-[0-9a-f-]{4}-[0-9a-f-]{4}-[0-9a-f-]{12})\\b",
+        "repaired": "\\b([0-9a-f-]{8}-[0-9a-f-]{4}-[0-9a-f-]{4}-[0-9a-f-]{4}-[0-9a-f-]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "trelloapikey/trelloapikey.go": [
+      {
+        "original": "\\b([a-zA-Z-0-9]{64})\\b",
+        "repaired": "\\b([a-zA-Z-0-9]{64})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([a-zA-Z-0-9]{32})\\b",
+        "repaired": "\\b([a-zA-Z-0-9]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "tru/tru.go": [
+      {
+        "original": "\\b([0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})\\b",
+        "repaired": "\\b([0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([0-9a-zA-Z.-_]{26})\\b",
+        "repaired": "\\b([0-9a-zA-Z.-_]{26})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^"
+        ]
+      }
+    ],
+    "twitter/v1/twitter_v1.go": [
+      {
+        "original": "\\b([A-Z]{22}%[a-zA-Z-0-9]{23}%[a-zA-Z-0-9]{6}%[a-zA-Z-0-9]{3}%[a-zA-Z-0-9]{9}%[a-zA-Z-0-9]{52})\\b",
+        "repaired": "\\b([A-Z]{22}%[a-zA-Z-0-9]{23}%[a-zA-Z-0-9]{6}%[a-zA-Z-0-9]{3}%[a-zA-Z-0-9]{9}%[a-zA-Z-0-9]{52})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "%",
+          "-"
+        ]
+      }
+    ],
+    "twitter/v2/twitter_v2.go": [
+      {
+        "original": "\\b([a-zA-Z0-9]{20,59}%([a-zA-Z0-9]{3,}%){0,2}[a-zA-Z0-9]{52})\\b",
+        "repaired": "\\b([a-zA-Z0-9]{20,59}%([a-zA-Z0-9]{3,}%){0,2}[a-zA-Z0-9]{52})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "%"
+        ]
+      }
+    ],
+    "ubidots/ubidots.go": [
+      {
+        "original": "\\b(BBFF-[0-9a-zA-Z]{30})\\b",
+        "repaired": "\\b(BBFF-[0-9a-zA-Z]{30})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "uplead/uplead.go": [
+      {
+        "original": "\\b([a-z0-9-]{32})\\b",
+        "repaired": "\\b([a-z0-9-]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "uptimerobot/uptimerobot.go": [
+      {
+        "original": "\\b([a-zA-Z0-9]{9}-[a-zA-Z0-9]{24})\\b",
+        "repaired": "\\b([a-zA-Z0-9]{9}-[a-zA-Z0-9]{24})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "urlscan/urlscan.go": [
+      {
+        "original": "\\b([a-z0-9-]{36})\\b",
+        "repaired": "\\b([a-z0-9-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "user/user.go": [
+      {
+        "original": "\\b([a-z0-9-]+\\.user\\.com)\\b",
+        "repaired": "\\b([a-z0-9-]+\\.user\\.com)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "vagrantcloudpersonaltoken/vagrantcloudpersonaltoken.go": [
+      {
+        "original": "\\b([A-Za-z0-9]{14}.atlasv1.[A-Za-z0-9]{67})\\b",
+        "repaired": "\\b([A-Za-z0-9]{14}.atlasv1.[A-Za-z0-9]{67})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "\t",
+          "\r",
+          " ",
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "versioneye/versioneye.go": [
+      {
+        "original": "\\b([a-zA-Z0-9-]{40})\\b",
+        "repaired": "\\b([a-zA-Z0-9-]{40})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "voiceflow/voiceflow.go": [
+      {
+        "original": "\\b(VF\\.(?:(?:DM|WS)\\.)?[a-fA-F0-9]{24}\\.[a-zA-Z0-9]{16})\\b",
+        "repaired": "\\b(VF\\.(?:(?:DM|WS)\\.)?[a-fA-F0-9]{24}\\.[a-zA-Z0-9]{16})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "."
+        ]
+      }
+    ],
+    "voicegain/voicegain.go": [
+      {
+        "original": "\\b(ey[0-9a-zA-Z_-]{34}.ey[0-9a-zA-Z_-]{108}.[0-9a-zA-Z_-]{43})\\b",
+        "repaired": "\\b(ey[0-9a-zA-Z_-]{34}.ey[0-9a-zA-Z_-]{108}.[0-9a-zA-Z_-]{43})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "\t",
+          "\r",
+          " ",
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "vouchery/vouchery.go": [
+      {
+        "original": "\\b([a-z0-9-]{36})\\b",
+        "repaired": "\\b([a-z0-9-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([a-zA-Z0-9-\\S]{2,20})\\b",
+        "repaired": "\\b([a-zA-Z0-9-\\S]{2,20})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "!",
+          "\"",
+          "#",
+          "$",
+          "%",
+          "&",
+          "'",
+          "(",
+          ")",
+          "*",
+          "+",
+          ",",
+          "-",
+          ".",
+          "/",
+          ":",
+          ";",
+          "<",
+          "=",
+          ">",
+          "?",
+          "@",
+          "[",
+          "\\",
+          "]",
+          "^",
+          "`",
+          "{",
+          "|",
+          "}",
+          "~"
+        ]
+      }
+    ],
+    "web3storage/web3storage.go": [
+      {
+        "original": "\\b(eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\\.eyJ[A-Za-z0-9-_]{100,300}\\.[A-Za-z0-9-_]{25,100})\\b",
+        "repaired": "\\b(eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\\.eyJ[A-Za-z0-9-_]{100,300}\\.[A-Za-z0-9-_]{25,100})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "websitepulse/websitepulse.go": [
+      {
+        "original": "\\b([0-9a-zA-Z._]{4,22})\\b",
+        "repaired": "\\b([0-9a-zA-Z._]{4,22})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "."
+        ]
+      }
+    ],
+    "wepay/wepay.go": [
+      {
+        "original": "\\b([a-zA-Z0-9_?]{62})\\b",
+        "repaired": "\\b([a-zA-Z0-9_?]{62})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "?"
+        ]
+      }
+    ],
+    "wrike/wrike.go": [
+      {
+        "original": "\\b(ey[a-zA-Z0-9-._]{333})\\b",
+        "repaired": "\\b(ey[a-zA-Z0-9-._]{333})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "xai/xai.go": [
+      {
+        "original": "\\b(xai-[0-9a-zA-Z_]{80})\\b",
+        "repaired": "\\b(xai-[0-9a-zA-Z_]{80})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "yandex/yandex.go": [
+      {
+        "original": "\\b([a-z0-9A-Z.]{83})\\b",
+        "repaired": "\\b([a-z0-9A-Z.]{83})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "."
+        ]
+      }
+    ],
+    "yelp/yelp.go": [
+      {
+        "original": "\\b([a-zA-Z0-9_\\\\=\\.\\-]{128})\\b",
+        "repaired": "\\b([a-zA-Z0-9_\\\\=\\.\\-]{128})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          ".",
+          "=",
+          "\\"
+        ]
+      }
+    ],
+    "youtubeapikey/youtubeapikey.go": [
+      {
+        "original": "\\b([a-zA-Z-0-9_]{39})\\b",
+        "repaired": "\\b([a-zA-Z-0-9_]{39})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      },
+      {
+        "original": "\\b([a-zA-Z-0-9]{24})\\b",
+        "repaired": "\\b([a-zA-Z-0-9]{24})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "zendeskapi/zendeskapi.go": [
+      {
+        "original": "\\b([a-zA-Z-0-9-]{5,16}\\@[a-zA-Z-0-9]{4,16}\\.[a-zA-Z-0-9]{3,6})\\b",
+        "repaired": "\\b([a-zA-Z-0-9-]{5,16}\\@[a-zA-Z-0-9]{4,16}\\.[a-zA-Z-0-9]{3,6})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          ".",
+          "@"
+        ]
+      },
+      {
+        "original": "\\b([a-zA-Z-0-9]{3,25}\\.zendesk\\.com)\\b",
+        "repaired": "\\b([a-zA-Z-0-9]{3,25}\\.zendesk\\.com)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "zenkitapi/zenkitapi.go": [
+      {
+        "original": "\\b([0-9a-z]{8}\\-[0-9A-Za-z]{32})\\b",
+        "repaired": "\\b([0-9a-z]{8}\\-[0-9A-Za-z]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "zenscrape/zenscrape.go": [
+      {
+        "original": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b",
+        "repaired": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "zenserp/zenserp.go": [
+      {
+        "original": "\\b([0-9a-z-]{36})\\b",
+        "repaired": "\\b([0-9a-z-]{36})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "zeplin/zeplin.go": [
+      {
+        "original": "\\b([a-zA-Z0-9-.]{350,400})\\b",
+        "repaired": "\\b([a-zA-Z0-9-.]{350,400})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ],
+    "zipcodebase/zipcodebase.go": [
+      {
+        "original": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\b",
+        "repaired": "\\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-"
+        ]
+      }
+    ],
+    "zohocrm/zohocrm.go": [
+      {
+        "original": "\\b(1000\\.[a-f0-9]{32}\\.[a-f0-9]{32})\\b",
+        "repaired": "\\b(1000\\.[a-f0-9]{32}\\.[a-f0-9]{32})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "."
+        ]
+      }
+    ],
+    "zulipchat/zulipchat.go": [
+      {
+        "original": "\\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})\\b",
+        "repaired": "\\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "%",
+          "+",
+          "-",
+          ".",
+          "@"
+        ]
+      },
+      {
+        "original": "(?i)\\b([a-z0-9-]+\\.zulip(?:chat)?\\.com|chat\\.zulip\\.org)\\b",
+        "repaired": "(?i)\\b([a-z0-9-]+\\.zulip(?:chat)?\\.com|chat\\.zulip\\.org)(?:\\b|\\W|$)",
+        "non_word_chars_in_alphabet": [
+          "-",
+          "."
+        ]
+      }
+    ]
+  }
+}

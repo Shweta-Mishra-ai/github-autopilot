@@ -1,0 +1,1183 @@
+{
+  "design": "analysis_multitool.py \u2014 Cluster-robust statistics for the six-scanner",
+  "n_types": 1238,
+  "n_providers": 760,
+  "types_per_provider_max": 34,
+  "neutral": {
+    "autopilot_vs_gitleaks": {
+      "n_types": 675,
+      "only_autopilot": 3,
+      "only_gitleaks": 41,
+      "p_type_level": 1.6183321349672042e-09,
+      "n_providers": 607,
+      "providers_favouring_autopilot": 2,
+      "providers_favouring_gitleaks": 30,
+      "p_cluster": 2.4633482098579407e-07,
+      "coverage_difference": -0.0563,
+      "coverage_difference_ci95_cluster_bootstrap": [
+        -0.0833,
+        -0.032
+      ],
+      "p_type_level_holm": 1.6183321349672042e-08,
+      "p_cluster_holm": 2.4633482098579407e-06
+    },
+    "autopilot_vs_trufflehog": {
+      "n_types": 648,
+      "only_autopilot": 7,
+      "only_trufflehog": 114,
+      "p_type_level": 5.0549056627657954e-26,
+      "n_providers": 268,
+      "providers_favouring_autopilot": 4,
+      "providers_favouring_trufflehog": 62,
+      "p_cluster": 2.0835438409305684e-14,
+      "coverage_difference": -0.1651,
+      "coverage_difference_ci95_cluster_bootstrap": [
+        -0.2182,
+        -0.118
+      ],
+      "p_type_level_holm": 7.582358494148693e-25,
+      "p_cluster_holm": 3.1253157613958527e-13
+    },
+    "autopilot_vs_noseyparker": {
+      "n_types": 1105,
+      "only_autopilot": 10,
+      "only_noseyparker": 63,
+      "p_type_level": 1.5535957242568204e-10,
+      "n_providers": 740,
+      "providers_favouring_autopilot": 4,
+      "providers_favouring_noseyparker": 29,
+      "p_cluster": 1.0928604751825333e-05,
+      "coverage_difference": -0.048,
+      "coverage_difference_ci95_cluster_bootstrap": [
+        -0.0755,
+        -0.0217
+      ],
+      "p_type_level_holm": 1.8643148691081845e-09,
+      "p_cluster_holm": 8.742883801460266e-05
+    },
+    "autopilot_vs_kingfisher": {
+      "n_types": 675,
+      "only_autopilot": 2,
+      "only_kingfisher": 66,
+      "p_type_level": 1.5903890617646743e-17,
+      "n_providers": 607,
+      "providers_favouring_autopilot": 2,
+      "providers_favouring_kingfisher": 54,
+      "p_cluster": 4.4325654258159375e-14,
+      "coverage_difference": -0.0948,
+      "coverage_difference_ci95_cluster_bootstrap": [
+        -0.1241,
+        -0.0671
+      ],
+      "p_type_level_holm": 2.226544686470544e-16,
+      "p_cluster_holm": 6.205591596142312e-13
+    },
+    "autopilot_vs_detectsecrets": {
+      "n_types": 1214,
+      "only_autopilot": 26,
+      "only_detectsecrets": 53,
+      "p_type_level": 0.0031830106288350717,
+      "n_providers": 760,
+      "providers_favouring_autopilot": 10,
+      "providers_favouring_detectsecrets": 10,
+      "p_cluster": 1.0,
+      "coverage_difference": -0.0222,
+      "coverage_difference_ci95_cluster_bootstrap": [
+        -0.0742,
+        0.0175
+      ],
+      "p_type_level_holm": 0.014675278216600418,
+      "p_cluster_holm": 1.0
+    },
+    "gitleaks_vs_trufflehog": {
+      "n_types": 133,
+      "only_gitleaks": 19,
+      "only_trufflehog": 16,
+      "p_type_level": 0.7358788008568808,
+      "n_providers": 66,
+      "providers_favouring_gitleaks": 12,
+      "providers_favouring_trufflehog": 10,
+      "p_cluster": 0.8318119049072266,
+      "coverage_difference": 0.0226,
+      "coverage_difference_ci95_cluster_bootstrap": [
+        -0.1171,
+        0.1458
+      ],
+      "p_type_level_holm": 1.0,
+      "p_cluster_holm": 1.0
+    },
+    "gitleaks_vs_noseyparker": {
+      "n_types": 590,
+      "only_gitleaks": 26,
+      "only_noseyparker": 8,
+      "p_type_level": 0.0029350556433200836,
+      "n_providers": 570,
+      "providers_favouring_gitleaks": 24,
+      "providers_favouring_noseyparker": 7,
+      "p_cluster": 0.003326892852783203,
+      "coverage_difference": 0.0305,
+      "coverage_difference_ci95_cluster_bootstrap": [
+        0.0087,
+        0.0522
+      ],
+      "p_type_level_holm": 0.014675278216600418,
+      "p_cluster_holm": 0.013307571411132812
+    },
+    "gitleaks_vs_kingfisher": {
+      "n_types": 699,
+      "only_gitleaks": 5,
+      "only_kingfisher": 30,
+      "p_type_level": 2.2361520677804947e-05,
+      "n_providers": 609,
+      "providers_favouring_gitleaks": 5,
+      "providers_favouring_kingfisher": 29,
+      "p_cluster": 3.8558151572942734e-05,
+      "coverage_difference": -0.0358,
+      "coverage_difference_ci95_cluster_bootstrap": [
+        -0.0535,
+        -0.0194
+      ],
+      "p_type_level_holm": 0.00015653064474463463,
+      "p_cluster_holm": 0.00026990706101059914
+    },
+    "gitleaks_vs_detectsecrets": {
+      "n_types": 699,
+      "only_gitleaks": 46,
+      "only_detectsecrets": 8,
+      "p_type_level": 1.3843354973452904e-07,
+      "n_providers": 609,
+      "providers_favouring_gitleaks": 33,
+      "providers_favouring_detectsecrets": 4,
+      "p_cluster": 1.0843941709026694e-06,
+      "coverage_difference": 0.0544,
+      "coverage_difference_ci95_cluster_bootstrap": [
+        0.0307,
+        0.0808
+      ],
+      "p_type_level_holm": 1.1074683978762323e-06,
+      "p_cluster_holm": 9.759547538124025e-06
+    },
+    "trufflehog_vs_noseyparker": {
+      "n_types": 563,
+      "only_trufflehog": 74,
+      "only_noseyparker": 39,
+      "p_type_level": 0.001277625351448773,
+      "n_providers": 249,
+      "providers_favouring_trufflehog": 51,
+      "providers_favouring_noseyparker": 17,
+      "p_cluster": 4.453448771493584e-05,
+      "coverage_difference": 0.0622,
+      "coverage_difference_ci95_cluster_bootstrap": [
+        0.004,
+        0.1192
+      ],
+      "p_type_level_holm": 0.007665752108692638,
+      "p_cluster_holm": 0.00026990706101059914
+    },
+    "trufflehog_vs_kingfisher": {
+      "n_types": 133,
+      "only_trufflehog": 13,
+      "only_kingfisher": 17,
+      "p_type_level": 0.584664711728692,
+      "n_providers": 66,
+      "providers_favouring_trufflehog": 7,
+      "providers_favouring_kingfisher": 10,
+      "p_cluster": 0.629058837890625,
+      "coverage_difference": -0.0301,
+      "coverage_difference_ci95_cluster_bootstrap": [
+        -0.1545,
+        0.1049
+      ],
+      "p_type_level_holm": 1.0,
+      "p_cluster_holm": 1.0
+    },
+    "trufflehog_vs_detectsecrets": {
+      "n_types": 672,
+      "only_trufflehog": 118,
+      "only_detectsecrets": 40,
+      "p_type_level": 3.9660679320108615e-10,
+      "n_providers": 268,
+      "providers_favouring_trufflehog": 66,
+      "providers_favouring_detectsecrets": 8,
+      "p_cluster": 1.8077410513282367e-12,
+      "coverage_difference": 0.1161,
+      "coverage_difference_ci95_cluster_bootstrap": [
+        0.0174,
+        0.2093
+      ],
+      "p_type_level_holm": 4.362674725211948e-09,
+      "p_cluster_holm": 2.169289261593884e-11
+    },
+    "noseyparker_vs_kingfisher": {
+      "n_types": 590,
+      "only_noseyparker": 6,
+      "only_kingfisher": 47,
+      "p_type_level": 5.805322444984995e-09,
+      "n_providers": 570,
+      "providers_favouring_noseyparker": 6,
+      "providers_favouring_kingfisher": 45,
+      "p_cluster": 1.8323628836469652e-08,
+      "coverage_difference": -0.0695,
+      "coverage_difference_ci95_cluster_bootstrap": [
+        -0.0946,
+        -0.0457
+      ],
+      "p_type_level_holm": 5.2247902004864955e-08,
+      "p_cluster_holm": 2.0155991720116617e-07
+    },
+    "noseyparker_vs_detectsecrets": {
+      "n_types": 1129,
+      "only_noseyparker": 70,
+      "only_detectsecrets": 43,
+      "p_type_level": 0.01408749552375807,
+      "n_providers": 741,
+      "providers_favouring_noseyparker": 32,
+      "providers_favouring_detectsecrets": 9,
+      "p_cluster": 0.000430857042374555,
+      "coverage_difference": 0.0239,
+      "coverage_difference_ci95_cluster_bootstrap": [
+        -0.0239,
+        0.0676
+      ],
+      "p_type_level_holm": 0.04226248657127421,
+      "p_cluster_holm": 0.002154285211872775
+    },
+    "kingfisher_vs_detectsecrets": {
+      "n_types": 699,
+      "only_kingfisher": 72,
+      "only_detectsecrets": 9,
+      "p_type_level": 2.455743883347923e-13,
+      "n_providers": 609,
+      "providers_favouring_kingfisher": 58,
+      "providers_favouring_detectsecrets": 5,
+      "p_cluster": 1.6623508125590547e-12,
+      "coverage_difference": 0.0901,
+      "coverage_difference_ci95_cluster_bootstrap": [
+        0.0626,
+        0.1188
+      ],
+      "p_type_level_holm": 3.1924670483522998e-12,
+      "p_cluster_holm": 2.161056056326771e-11
+    }
+  },
+  "sensitivity": {
+    "one_type_per_provider": {
+      "autopilot_vs_gitleaks": {
+        "n_types": 607,
+        "only_autopilot": 1,
+        "only_gitleaks": 27,
+        "p_type_level": 2.1606683731079102e-07,
+        "n_providers": 607,
+        "providers_favouring_autopilot": 1,
+        "providers_favouring_gitleaks": 27,
+        "p_cluster": 2.1606683731079102e-07,
+        "p_type_level_holm": 2.16066837310791e-06,
+        "p_cluster_holm": 2.16066837310791e-06
+      },
+      "autopilot_vs_trufflehog": {
+        "n_types": 268,
+        "only_autopilot": 2,
+        "only_trufflehog": 48,
+        "p_type_level": 2.2666313270747196e-12,
+        "n_providers": 268,
+        "providers_favouring_autopilot": 2,
+        "providers_favouring_trufflehog": 48,
+        "p_cluster": 2.2666313270747196e-12,
+        "p_type_level_holm": 2.9466207251971355e-11,
+        "p_cluster_holm": 2.9466207251971355e-11
+      },
+      "autopilot_vs_noseyparker": {
+        "n_types": 740,
+        "only_autopilot": 3,
+        "only_noseyparker": 22,
+        "p_type_level": 0.00015652179718017578,
+        "n_providers": 740,
+        "providers_favouring_autopilot": 3,
+        "providers_favouring_noseyparker": 22,
+        "p_cluster": 0.00015652179718017578,
+        "p_type_level_holm": 0.0010956525802612305,
+        "p_cluster_holm": 0.0010956525802612305
+      },
+      "autopilot_vs_kingfisher": {
+        "n_types": 607,
+        "only_autopilot": 2,
+        "only_kingfisher": 53,
+        "p_type_level": 8.554268404736831e-14,
+        "n_providers": 607,
+        "providers_favouring_autopilot": 2,
+        "providers_favouring_kingfisher": 53,
+        "p_cluster": 8.554268404736831e-14,
+        "p_type_level_holm": 1.2831402607105247e-12,
+        "p_cluster_holm": 1.2831402607105247e-12
+      },
+      "autopilot_vs_detectsecrets": {
+        "n_types": 760,
+        "only_autopilot": 8,
+        "only_detectsecrets": 6,
+        "p_type_level": 0.79052734375,
+        "n_providers": 760,
+        "providers_favouring_autopilot": 8,
+        "providers_favouring_detectsecrets": 6,
+        "p_cluster": 0.79052734375,
+        "p_type_level_holm": 1.0,
+        "p_cluster_holm": 1.0
+      },
+      "gitleaks_vs_trufflehog": {
+        "n_types": 66,
+        "only_gitleaks": 10,
+        "only_trufflehog": 10,
+        "p_type_level": 1.0,
+        "n_providers": 66,
+        "providers_favouring_gitleaks": 10,
+        "providers_favouring_trufflehog": 10,
+        "p_cluster": 1.0,
+        "p_type_level_holm": 1.0,
+        "p_cluster_holm": 1.0
+      },
+      "gitleaks_vs_noseyparker": {
+        "n_types": 570,
+        "only_gitleaks": 22,
+        "only_noseyparker": 6,
+        "p_type_level": 0.0037191659212112427,
+        "n_providers": 570,
+        "providers_favouring_gitleaks": 22,
+        "providers_favouring_noseyparker": 6,
+        "p_cluster": 0.0037191659212112427,
+        "p_type_level_holm": 0.01487666368484497,
+        "p_cluster_holm": 0.01487666368484497
+      },
+      "gitleaks_vs_kingfisher": {
+        "n_types": 609,
+        "only_gitleaks": 3,
+        "only_kingfisher": 27,
+        "p_type_level": 8.430331945419312e-06,
+        "n_providers": 609,
+        "providers_favouring_gitleaks": 3,
+        "providers_favouring_kingfisher": 27,
+        "p_cluster": 8.430331945419312e-06,
+        "p_type_level_holm": 6.744265556335449e-05,
+        "p_cluster_holm": 6.744265556335449e-05
+      },
+      "gitleaks_vs_detectsecrets": {
+        "n_types": 609,
+        "only_gitleaks": 31,
+        "only_detectsecrets": 3,
+        "p_type_level": 7.660128176212311e-07,
+        "n_providers": 609,
+        "providers_favouring_gitleaks": 31,
+        "providers_favouring_detectsecrets": 3,
+        "p_cluster": 7.660128176212311e-07,
+        "p_type_level_holm": 6.89411535859108e-06,
+        "p_cluster_holm": 6.89411535859108e-06
+      },
+      "trufflehog_vs_noseyparker": {
+        "n_types": 249,
+        "only_trufflehog": 37,
+        "only_noseyparker": 12,
+        "p_type_level": 0.0004697573180081349,
+        "n_providers": 249,
+        "providers_favouring_trufflehog": 37,
+        "providers_favouring_noseyparker": 12,
+        "p_cluster": 0.0004697573180081349,
+        "p_type_level_holm": 0.0023487865900406746,
+        "p_cluster_holm": 0.0023487865900406746
+      },
+      "trufflehog_vs_kingfisher": {
+        "n_types": 66,
+        "only_trufflehog": 7,
+        "only_kingfisher": 10,
+        "p_type_level": 0.629058837890625,
+        "n_providers": 66,
+        "providers_favouring_trufflehog": 7,
+        "providers_favouring_kingfisher": 10,
+        "p_cluster": 0.629058837890625,
+        "p_type_level_holm": 1.0,
+        "p_cluster_holm": 1.0
+      },
+      "trufflehog_vs_detectsecrets": {
+        "n_types": 268,
+        "only_trufflehog": 50,
+        "only_detectsecrets": 5,
+        "p_type_level": 2.1358426138817777e-10,
+        "n_providers": 268,
+        "providers_favouring_trufflehog": 50,
+        "providers_favouring_detectsecrets": 5,
+        "p_cluster": 2.1358426138817777e-10,
+        "p_type_level_holm": 2.563011136658133e-09,
+        "p_cluster_holm": 2.563011136658133e-09
+      },
+      "noseyparker_vs_kingfisher": {
+        "n_types": 570,
+        "only_noseyparker": 6,
+        "only_kingfisher": 43,
+        "p_type_level": 5.7277652842913085e-08,
+        "n_providers": 570,
+        "providers_favouring_noseyparker": 6,
+        "providers_favouring_kingfisher": 43,
+        "p_cluster": 5.7277652842913085e-08,
+        "p_type_level_holm": 6.300541812720439e-07,
+        "p_cluster_holm": 6.300541812720439e-07
+      },
+      "noseyparker_vs_detectsecrets": {
+        "n_types": 741,
+        "only_noseyparker": 26,
+        "only_detectsecrets": 5,
+        "p_type_level": 0.00019219517707824707,
+        "n_providers": 741,
+        "providers_favouring_noseyparker": 26,
+        "providers_favouring_detectsecrets": 5,
+        "p_cluster": 0.00019219517707824707,
+        "p_type_level_holm": 0.0011531710624694824,
+        "p_cluster_holm": 0.0011531710624694824
+      },
+      "kingfisher_vs_detectsecrets": {
+        "n_types": 609,
+        "only_kingfisher": 56,
+        "only_detectsecrets": 4,
+        "p_type_level": 9.084503982403902e-13,
+        "n_providers": 609,
+        "providers_favouring_kingfisher": 56,
+        "providers_favouring_detectsecrets": 4,
+        "p_cluster": 9.084503982403902e-13,
+        "p_type_level_holm": 1.2718305575365463e-11,
+        "p_cluster_holm": 1.2718305575365463e-11
+      }
+    },
+    "coverage_at_0.8": {
+      "autopilot_vs_gitleaks": {
+        "n_types": 675,
+        "only_autopilot": 3,
+        "only_gitleaks": 39,
+        "p_type_level": 5.631591193377972e-09,
+        "n_providers": 607,
+        "providers_favouring_autopilot": 2,
+        "providers_favouring_gitleaks": 26,
+        "p_cluster": 3.032386302947998e-06,
+        "p_type_level_holm": 5.6315911933779716e-08,
+        "p_cluster_holm": 3.032386302947998e-05
+      },
+      "autopilot_vs_trufflehog": {
+        "n_types": 648,
+        "only_autopilot": 7,
+        "only_trufflehog": 112,
+        "p_type_level": 1.7958823645979435e-25,
+        "n_providers": 268,
+        "providers_favouring_autopilot": 4,
+        "providers_favouring_trufflehog": 60,
+        "p_cluster": 7.363044635805283e-14,
+        "p_type_level_holm": 2.6938235468969153e-24,
+        "p_cluster_holm": 1.1044566953707924e-12
+      },
+      "autopilot_vs_noseyparker": {
+        "n_types": 1105,
+        "only_autopilot": 8,
+        "only_noseyparker": 60,
+        "p_type_level": 5.7477609314866146e-11,
+        "n_providers": 740,
+        "providers_favouring_autopilot": 3,
+        "providers_favouring_noseyparker": 25,
+        "p_cluster": 2.744048833847046e-05,
+        "p_type_level_holm": 6.897313117783938e-10,
+        "p_cluster_holm": 0.0001920834183692932
+      },
+      "autopilot_vs_kingfisher": {
+        "n_types": 675,
+        "only_autopilot": 2,
+        "only_kingfisher": 64,
+        "p_type_level": 5.99563801384484e-17,
+        "n_providers": 607,
+        "providers_favouring_autopilot": 2,
+        "providers_favouring_kingfisher": 51,
+        "p_cluster": 3.1796787425264483e-13,
+        "p_type_level_holm": 8.393893219382775e-16,
+        "p_cluster_holm": 4.451550239537028e-12
+      },
+      "autopilot_vs_detectsecrets": {
+        "n_types": 1214,
+        "only_autopilot": 25,
+        "only_detectsecrets": 50,
+        "p_type_level": 0.0052282430040142824,
+        "n_providers": 760,
+        "providers_favouring_autopilot": 10,
+        "providers_favouring_detectsecrets": 9,
+        "p_cluster": 1.0,
+        "p_type_level_holm": 0.02511759166741362,
+        "p_cluster_holm": 1.0
+      },
+      "gitleaks_vs_trufflehog": {
+        "n_types": 133,
+        "only_gitleaks": 17,
+        "only_trufflehog": 14,
+        "p_type_level": 0.720100131817162,
+        "n_providers": 66,
+        "providers_favouring_gitleaks": 10,
+        "providers_favouring_trufflehog": 8,
+        "p_cluster": 0.8145294189453125,
+        "p_type_level_holm": 0.9165166392922401,
+        "p_cluster_holm": 1.0
+      },
+      "gitleaks_vs_noseyparker": {
+        "n_types": 590,
+        "only_gitleaks": 22,
+        "only_noseyparker": 7,
+        "p_type_level": 0.008130058646202087,
+        "n_providers": 570,
+        "providers_favouring_gitleaks": 20,
+        "providers_favouring_noseyparker": 6,
+        "p_cluster": 0.009355306625366211,
+        "p_type_level_holm": 0.02511759166741362,
+        "p_cluster_holm": 0.037421226501464844
+      },
+      "gitleaks_vs_kingfisher": {
+        "n_types": 699,
+        "only_gitleaks": 3,
+        "only_kingfisher": 28,
+        "p_type_level": 4.649162292480469e-06,
+        "n_providers": 609,
+        "providers_favouring_gitleaks": 3,
+        "providers_favouring_kingfisher": 27,
+        "p_cluster": 8.430331945419312e-06,
+        "p_type_level_holm": 3.254413604736328e-05,
+        "p_cluster_holm": 7.58729875087738e-05
+      },
+      "gitleaks_vs_detectsecrets": {
+        "n_types": 699,
+        "only_gitleaks": 42,
+        "only_detectsecrets": 8,
+        "p_type_level": 1.163555804595262e-06,
+        "n_providers": 609,
+        "providers_favouring_gitleaks": 29,
+        "providers_favouring_detectsecrets": 4,
+        "p_cluster": 1.0928604751825333e-05,
+        "p_type_level_holm": 9.308446436762097e-06,
+        "p_cluster_holm": 8.742883801460266e-05
+      },
+      "trufflehog_vs_noseyparker": {
+        "n_types": 563,
+        "only_trufflehog": 70,
+        "only_noseyparker": 37,
+        "p_type_level": 0.0018401240468733445,
+        "n_providers": 249,
+        "providers_favouring_trufflehog": 48,
+        "providers_favouring_noseyparker": 15,
+        "p_cluster": 3.760612132541752e-05,
+        "p_type_level_holm": 0.011040744281240068,
+        "p_cluster_holm": 0.0002256367279525051
+      },
+      "trufflehog_vs_kingfisher": {
+        "n_types": 133,
+        "only_trufflehog": 12,
+        "only_kingfisher": 17,
+        "p_type_level": 0.45825831964612007,
+        "n_providers": 66,
+        "providers_favouring_trufflehog": 6,
+        "providers_favouring_kingfisher": 10,
+        "p_cluster": 0.454498291015625,
+        "p_type_level_holm": 0.9165166392922401,
+        "p_cluster_holm": 1.0
+      },
+      "trufflehog_vs_detectsecrets": {
+        "n_types": 672,
+        "only_trufflehog": 112,
+        "only_detectsecrets": 34,
+        "p_type_level": 6.42131847302157e-11,
+        "n_providers": 268,
+        "providers_favouring_trufflehog": 62,
+        "providers_favouring_detectsecrets": 6,
+        "p_cluster": 8.181953378705309e-13,
+        "p_type_level_holm": 7.063450320323728e-10,
+        "p_cluster_holm": 1.0636539392316902e-11
+      },
+      "noseyparker_vs_kingfisher": {
+        "n_types": 590,
+        "only_noseyparker": 5,
+        "only_kingfisher": 42,
+        "p_type_level": 2.4579776436439715e-08,
+        "n_providers": 570,
+        "providers_favouring_noseyparker": 5,
+        "providers_favouring_kingfisher": 40,
+        "p_cluster": 7.878384167270269e-08,
+        "p_type_level_holm": 2.2121798792795744e-07,
+        "p_cluster_holm": 8.666222583997296e-07
+      },
+      "noseyparker_vs_detectsecrets": {
+        "n_types": 1129,
+        "only_noseyparker": 69,
+        "only_detectsecrets": 39,
+        "p_type_level": 0.0050235183334827235,
+        "n_providers": 741,
+        "providers_favouring_noseyparker": 30,
+        "providers_favouring_detectsecrets": 8,
+        "p_cluster": 0.0004719867429230362,
+        "p_type_level_holm": 0.02511759166741362,
+        "p_cluster_holm": 0.002359933714615181
+      },
+      "kingfisher_vs_detectsecrets": {
+        "n_types": 699,
+        "only_kingfisher": 68,
+        "only_detectsecrets": 9,
+        "p_type_level": 2.4488215083103315e-12,
+        "n_providers": 609,
+        "providers_favouring_kingfisher": 54,
+        "providers_favouring_detectsecrets": 5,
+        "p_cluster": 1.9067358802971057e-11,
+        "p_type_level_holm": 3.183467960803431e-11,
+        "p_cluster_holm": 2.2880830563565269e-10
+      }
+    }
+  },
+  "defect_prevalence": {
+    "autopilot": {
+      "unquoted": {
+        "types": 67,
+        "total_failure": 8,
+        "share": 0.1194,
+        "providers": 19,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.2979
+        ]
+      },
+      "yaml_value": {
+        "types": 67,
+        "total_failure": 8,
+        "share": 0.1194,
+        "providers": 19,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.3
+        ]
+      },
+      "env_file": {
+        "types": 67,
+        "total_failure": 8,
+        "share": 0.1194,
+        "providers": 19,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.3043
+        ]
+      },
+      "url_query": {
+        "types": 67,
+        "total_failure": 8,
+        "share": 0.1194,
+        "providers": 19,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.3019
+        ]
+      },
+      "trailing_comma": {
+        "types": 67,
+        "total_failure": 8,
+        "share": 0.1194,
+        "providers": 19,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.3
+        ]
+      },
+      "in_parens": {
+        "types": 67,
+        "total_failure": 8,
+        "share": 0.1194,
+        "providers": 19,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.2963
+        ]
+      },
+      "trailing_hyphen": {
+        "types": 12,
+        "total_failure": 6,
+        "share": 0.5,
+        "providers": 7,
+        "ci95_cluster_bootstrap": [
+          0.0909,
+          0.8
+        ]
+      },
+      "trailing_under": {
+        "types": 18,
+        "total_failure": 0,
+        "share": 0.0,
+        "providers": 8,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0
+        ]
+      },
+      "url_query_amp": {
+        "types": 67,
+        "total_failure": 8,
+        "share": 0.1194,
+        "providers": 19,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.3014
+        ]
+      }
+    },
+    "gitleaks": {
+      "unquoted": {
+        "types": 427,
+        "total_failure": 5,
+        "share": 0.0117,
+        "providers": 121,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0394
+        ]
+      },
+      "yaml_value": {
+        "types": 427,
+        "total_failure": 5,
+        "share": 0.0117,
+        "providers": 121,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0393
+        ]
+      },
+      "env_file": {
+        "types": 427,
+        "total_failure": 5,
+        "share": 0.0117,
+        "providers": 121,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0394
+        ]
+      },
+      "url_query": {
+        "types": 427,
+        "total_failure": 0,
+        "share": 0.0,
+        "providers": 121,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0
+        ]
+      },
+      "trailing_comma": {
+        "types": 427,
+        "total_failure": 198,
+        "share": 0.4637,
+        "providers": 121,
+        "ci95_cluster_bootstrap": [
+          0.3455,
+          0.5927
+        ]
+      },
+      "in_parens": {
+        "types": 427,
+        "total_failure": 302,
+        "share": 0.7073,
+        "providers": 121,
+        "ci95_cluster_bootstrap": [
+          0.5596,
+          0.8641
+        ]
+      },
+      "trailing_hyphen": {
+        "types": 119,
+        "total_failure": 3,
+        "share": 0.0252,
+        "providers": 46,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0632
+        ]
+      },
+      "trailing_under": {
+        "types": 119,
+        "total_failure": 2,
+        "share": 0.0168,
+        "providers": 43,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0476
+        ]
+      },
+      "url_query_amp": {
+        "types": 427,
+        "total_failure": 305,
+        "share": 0.7143,
+        "providers": 121,
+        "ci95_cluster_bootstrap": [
+          0.5625,
+          0.8693
+        ]
+      }
+    },
+    "trufflehog": {
+      "unquoted": {
+        "types": 688,
+        "total_failure": 0,
+        "share": 0.0,
+        "providers": 555,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0
+        ]
+      },
+      "yaml_value": {
+        "types": 688,
+        "total_failure": 0,
+        "share": 0.0,
+        "providers": 555,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0
+        ]
+      },
+      "env_file": {
+        "types": 688,
+        "total_failure": 2,
+        "share": 0.0029,
+        "providers": 555,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0092
+        ]
+      },
+      "url_query": {
+        "types": 688,
+        "total_failure": 2,
+        "share": 0.0029,
+        "providers": 555,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0091
+        ]
+      },
+      "trailing_comma": {
+        "types": 688,
+        "total_failure": 3,
+        "share": 0.0044,
+        "providers": 555,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0119
+        ]
+      },
+      "in_parens": {
+        "types": 688,
+        "total_failure": 3,
+        "share": 0.0044,
+        "providers": 555,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0119
+        ]
+      },
+      "trailing_hyphen": {
+        "types": 132,
+        "total_failure": 97,
+        "share": 0.7348,
+        "providers": 118,
+        "ci95_cluster_bootstrap": [
+          0.6439,
+          0.8217
+        ]
+      },
+      "trailing_under": {
+        "types": 116,
+        "total_failure": 0,
+        "share": 0.0,
+        "providers": 98,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0
+        ]
+      },
+      "url_query_amp": {
+        "types": 688,
+        "total_failure": 3,
+        "share": 0.0044,
+        "providers": 555,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0118
+        ]
+      }
+    },
+    "noseyparker": {
+      "unquoted": {
+        "types": 203,
+        "total_failure": 1,
+        "share": 0.0049,
+        "providers": 73,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0172
+        ]
+      },
+      "yaml_value": {
+        "types": 203,
+        "total_failure": 3,
+        "share": 0.0148,
+        "providers": 73,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0423
+        ]
+      },
+      "env_file": {
+        "types": 203,
+        "total_failure": 1,
+        "share": 0.0049,
+        "providers": 73,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0169
+        ]
+      },
+      "url_query": {
+        "types": 203,
+        "total_failure": 1,
+        "share": 0.0049,
+        "providers": 73,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0172
+        ]
+      },
+      "trailing_comma": {
+        "types": 203,
+        "total_failure": 1,
+        "share": 0.0049,
+        "providers": 73,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.017
+        ]
+      },
+      "in_parens": {
+        "types": 203,
+        "total_failure": 1,
+        "share": 0.0049,
+        "providers": 73,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.017
+        ]
+      },
+      "trailing_hyphen": {
+        "types": 43,
+        "total_failure": 7,
+        "share": 0.1628,
+        "providers": 21,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.3659
+        ]
+      },
+      "trailing_under": {
+        "types": 50,
+        "total_failure": 0,
+        "share": 0.0,
+        "providers": 22,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0
+        ]
+      },
+      "url_query_amp": {
+        "types": 203,
+        "total_failure": 1,
+        "share": 0.0049,
+        "providers": 73,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0171
+        ]
+      }
+    },
+    "kingfisher": {
+      "unquoted": {
+        "types": 616,
+        "total_failure": 0,
+        "share": 0.0,
+        "providers": 253,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0
+        ]
+      },
+      "yaml_value": {
+        "types": 616,
+        "total_failure": 0,
+        "share": 0.0,
+        "providers": 253,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0
+        ]
+      },
+      "env_file": {
+        "types": 616,
+        "total_failure": 0,
+        "share": 0.0,
+        "providers": 253,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0
+        ]
+      },
+      "url_query": {
+        "types": 616,
+        "total_failure": 0,
+        "share": 0.0,
+        "providers": 253,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0
+        ]
+      },
+      "trailing_comma": {
+        "types": 616,
+        "total_failure": 268,
+        "share": 0.4351,
+        "providers": 253,
+        "ci95_cluster_bootstrap": [
+          0.3479,
+          0.5261
+        ]
+      },
+      "in_parens": {
+        "types": 616,
+        "total_failure": 436,
+        "share": 0.7078,
+        "providers": 253,
+        "ci95_cluster_bootstrap": [
+          0.5985,
+          0.8149
+        ]
+      },
+      "trailing_hyphen": {
+        "types": 173,
+        "total_failure": 2,
+        "share": 0.0116,
+        "providers": 85,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0309
+        ]
+      },
+      "trailing_under": {
+        "types": 175,
+        "total_failure": 2,
+        "share": 0.0114,
+        "providers": 85,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0324
+        ]
+      },
+      "url_query_amp": {
+        "types": 616,
+        "total_failure": 436,
+        "share": 0.7078,
+        "providers": 253,
+        "ci95_cluster_bootstrap": [
+          0.5997,
+          0.8169
+        ]
+      }
+    },
+    "detectsecrets": {
+      "unquoted": {
+        "types": 82,
+        "total_failure": 0,
+        "share": 0.0,
+        "providers": 14,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0
+        ]
+      },
+      "yaml_value": {
+        "types": 82,
+        "total_failure": 0,
+        "share": 0.0,
+        "providers": 14,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0
+        ]
+      },
+      "env_file": {
+        "types": 82,
+        "total_failure": 0,
+        "share": 0.0,
+        "providers": 14,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0
+        ]
+      },
+      "url_query": {
+        "types": 82,
+        "total_failure": 0,
+        "share": 0.0,
+        "providers": 14,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0
+        ]
+      },
+      "trailing_comma": {
+        "types": 82,
+        "total_failure": 0,
+        "share": 0.0,
+        "providers": 14,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0
+        ]
+      },
+      "in_parens": {
+        "types": 82,
+        "total_failure": 0,
+        "share": 0.0,
+        "providers": 14,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0
+        ]
+      },
+      "trailing_hyphen": {
+        "types": 30,
+        "total_failure": 0,
+        "share": 0.0,
+        "providers": 6,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0
+        ]
+      },
+      "trailing_under": {
+        "types": 31,
+        "total_failure": 0,
+        "share": 0.0,
+        "providers": 7,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0
+        ]
+      },
+      "url_query_amp": {
+        "types": 82,
+        "total_failure": 0,
+        "share": 0.0,
+        "providers": 14,
+        "ci95_cluster_bootstrap": [
+          0.0,
+          0.0
+        ]
+      }
+    }
+  }
+}

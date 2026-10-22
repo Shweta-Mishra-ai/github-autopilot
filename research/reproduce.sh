@@ -171,6 +171,7 @@ if [[ "${1:-}" != "--figures" ]]; then
   log "RQ3      Gitleaks full table";   python bench_gitleaks_fulltable.py > "$RESULTS/gitleaks_fulltable_bench.json"
   log "RQ3/RQ4  three tools, 774 types"; python bench_threetool_expanded.py > "$RESULTS/threetool_expanded_bench.json"
   log "RQ5      multi-language corpus"; python bench_realworld_multilang.py > "$RESULTS/realworld_multilang_bench.json"
+  log "EXT      derived figures";       python analysis_expanded.py    > "$RESULTS/expanded_summary.json"
   log "RQ4      corpus A/B comparison"; python bench_comparative2.py   > "$RESULTS/comparative_bench.json"
   log "RQ4      paired sign test";      python paired_stats.py         > "$RESULTS/paired_stats.txt"
   log "RQ4      co-occurrence";         python bench_cooccurrence.py   > "$RESULTS/cooccurrence_bench.json"

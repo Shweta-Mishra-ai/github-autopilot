@@ -1,0 +1,54 @@
+{
+  "cases": {
+    "gl_a_quoted": "bittrex_key = \"<32 hex>\"",
+    "gl_b_parens": "client = Client(bittrex_key=<32 hex>)",
+    "gl_c_amp": "url = \"https://api.example.com/v1?bittrex_key=<32 hex>&page=2\"",
+    "gl_d_comma": "client = Client(bittrex_key=<32 hex>, retries=3)",
+    "gl_e_escaped": "payload = \"{\\\"bittrex_key\\\": \\\"<32 hex>\\\"}\"",
+    "gl_f_hf_newline": "token = hf_<34 letters>\nnext = 1",
+    "gl_g_hf_parens": "login(hf_<34 letters>)",
+    "gl_h_hf_quoted": "token = \"hf_<34 letters>\"",
+    "th_a_letter": "token = \"r8_<36 alphanumerics>x\"",
+    "th_b_hyphen": "token = \"r8_<36 alphanumerics>-\"",
+    "th_c_hyphen_eol": "REPLICATE_API_TOKEN=r8_<36 alphanumerics>-",
+    "th_d_hyphen_letter": "token = \"r8_<36 alphanumerics>-x\""
+  },
+  "found": {
+    "trufflehog 3.82.13": {
+      "th_a_letter": true,
+      "th_b_hyphen": false,
+      "th_c_hyphen_eol": false,
+      "th_d_hyphen_letter": true
+    },
+    "3.82.13 source build": {
+      "th_a_letter": true,
+      "th_b_hyphen": false,
+      "th_c_hyphen_eol": false,
+      "th_d_hyphen_letter": true
+    },
+    "3.82.13 repaired": {
+      "th_a_letter": true,
+      "th_b_hyphen": true,
+      "th_c_hyphen_eol": true,
+      "th_d_hyphen_letter": true
+    },
+    "trufflehog 3.99.3": {
+      "th_a_letter": true,
+      "th_b_hyphen": false,
+      "th_c_hyphen_eol": false,
+      "th_d_hyphen_letter": true
+    },
+    "3.99.3 source build": {
+      "th_a_letter": true,
+      "th_b_hyphen": false,
+      "th_c_hyphen_eol": false,
+      "th_d_hyphen_letter": true
+    },
+    "3.99.3 repaired": {
+      "th_a_letter": true,
+      "th_b_hyphen": true,
+      "th_c_hyphen_eol": true,
+      "th_d_hyphen_letter": true
+    }
+  }
+}

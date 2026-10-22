@@ -1,0 +1,102 @@
+{
+  "design": "validate_gitleaks_repair.py \u2014 What the two repairs of repair_gitleaks.py cost",
+  "n_projects": 31,
+  "n_files": 38309,
+  "n_lines": 9870820,
+  "totals": {
+    "original": 1358,
+    "R1P": 1358
+  },
+  "totals_by_repo": {
+    "original": {
+      "gin-gonic/gin": 2,
+      "sendgrid/sendgrid-go": 10,
+      "expressjs/express": 2,
+      "stripe/stripe-node": 8,
+      "nestjs/nest": 52,
+      "slackapi/node-slack-sdk": 0,
+      "google/gson": 0,
+      "square/retrofit": 0,
+      "sinatra/sinatra": 1,
+      "jekyll/jekyll": 1,
+      "tokio-rs/axum": 11,
+      "BurntSushi/ripgrep": 0,
+      "guzzle/guzzle": 6,
+      "twilio/twilio-php": 22,
+      "JamesNK/Newtonsoft.Json": 2,
+      "App-vNext/Polly": 0,
+      "openai/openai-python": 6,
+      "psf/requests": 21,
+      "pallets/flask": 6,
+      "redis/redis-py": 67,
+      "cli/cli": 8,
+      "digitalocean/godo": 143,
+      "npm/cli": 129,
+      "openai/openai-node": 15,
+      "Shopify/shopify-app-js": 791,
+      "huggingface/huggingface_hub": 15,
+      "python-gitlab/python-gitlab": 19,
+      "slackapi/python-slack-sdk": 10,
+      "anthropics/anthropic-sdk-python": 0,
+      "stripe/stripe-java": 3,
+      "stripe/stripe-ruby": 8
+    },
+    "R1P": {
+      "gin-gonic/gin": 2,
+      "sendgrid/sendgrid-go": 10,
+      "expressjs/express": 2,
+      "stripe/stripe-node": 8,
+      "nestjs/nest": 52,
+      "slackapi/node-slack-sdk": 0,
+      "google/gson": 0,
+      "square/retrofit": 0,
+      "sinatra/sinatra": 1,
+      "jekyll/jekyll": 1,
+      "tokio-rs/axum": 11,
+      "BurntSushi/ripgrep": 0,
+      "guzzle/guzzle": 6,
+      "twilio/twilio-php": 22,
+      "JamesNK/Newtonsoft.Json": 2,
+      "App-vNext/Polly": 0,
+      "openai/openai-python": 6,
+      "psf/requests": 21,
+      "pallets/flask": 6,
+      "redis/redis-py": 67,
+      "cli/cli": 8,
+      "digitalocean/godo": 143,
+      "npm/cli": 129,
+      "openai/openai-node": 15,
+      "Shopify/shopify-app-js": 791,
+      "huggingface/huggingface_hub": 15,
+      "python-gitlab/python-gitlab": 19,
+      "slackapi/python-slack-sdk": 10,
+      "anthropics/anthropic-sdk-python": 0,
+      "stripe/stripe-java": 3,
+      "stripe/stripe-ruby": 8
+    }
+  },
+  "added": {
+    "R1P": {
+      "n": 0,
+      "by_category": {},
+      "by_char_after_secret": {},
+      "by_rule": {},
+      "by_repo": {}
+    }
+  },
+  "removed": {
+    "R1P": {
+      "n": 0,
+      "by_category": {},
+      "by_char_after_secret": {},
+      "by_rule": {},
+      "by_repo": {}
+    }
+  },
+  "added_findings": {
+    "R1P": []
+  },
+  "removed_findings": {
+    "R1P": []
+  }
+}

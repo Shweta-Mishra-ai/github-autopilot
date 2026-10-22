@@ -1,0 +1,41 @@
+{
+  "rules_file": "app/security/enhanced_secrets.py",
+  "changes": [
+    {
+      "rule": "OpenAI API Key (new)",
+      "kind": "boundary",
+      "before": "\\bsk-proj-[a-zA-Z0-9_-]{50,}\\b",
+      "after": "\\bsk-proj-[a-zA-Z0-9_-]{50,}(?![A-Za-z0-9_])"
+    },
+    {
+      "rule": "GCP API Key",
+      "kind": "boundary",
+      "before": "\\bAIza[0-9A-Za-z_\\-]{35}\\b",
+      "after": "\\bAIza[0-9A-Za-z_\\-]{35}(?![A-Za-z0-9_])"
+    },
+    {
+      "rule": "Google OAuth Token",
+      "kind": "boundary",
+      "before": "\\bya29\\.[0-9A-Za-z_\\-]{68,}\\b",
+      "after": "\\bya29\\.[0-9A-Za-z_\\-]{68,}(?![A-Za-z0-9_])"
+    },
+    {
+      "rule": "SendGrid API Key",
+      "kind": "boundary",
+      "before": "\\bSG\\.[a-zA-Z0-9_-]{22}\\.[a-zA-Z0-9_-]{43}\\b",
+      "after": "\\bSG\\.[a-zA-Z0-9_-]{22}\\.[a-zA-Z0-9_-]{43}(?![A-Za-z0-9_])"
+    },
+    {
+      "rule": "JWT Token",
+      "kind": "boundary",
+      "before": "\\beyJ[a-zA-Z0-9_-]{10,}\\.[a-zA-Z0-9_-]{10,}\\.[a-zA-Z0-9_-]{10,}\\b",
+      "after": "\\beyJ[a-zA-Z0-9_-]{10,}\\.[a-zA-Z0-9_-]{10,}\\.[a-zA-Z0-9_-]{10,}(?![A-Za-z0-9_])"
+    },
+    {
+      "rule": "PagerDuty Integration Key",
+      "kind": "precision",
+      "before": "\\b[a-z0-9]{32}\\b",
+      "after": "(?i)pagerduty.{0,20}['\\\"][a-z0-9]{32}['\\\"]"
+    }
+  ]
+}

@@ -1,11 +1,13 @@
 """Regression tests for the six-scanner harness and the repair scripts, one
 per defect found in them while they were written. Each was a wrong table or
 a wrong number before it was a test."""
+import ast
 import random
 import re
 
 import bench_multitool as mt
 import exrex
+import repair_autopilot as ra
 import repair_gitleaks as rg
 import repair_trufflehog as rt
 
@@ -104,6 +106,45 @@ class TestRepairsOnlyWiden:
 
     def test_word_alphabets_are_left_alone(self):
         assert rt.repair_literal(r"\b(ghp_[A-Za-z0-9_]{36})\b", False) is None
+
+
+class TestSubjectRepair:
+    """repair_autopilot.py: the boundary changes only widen; the PagerDuty
+    change narrows, deliberately, and must still find a keyed value."""
+
+    RULES = {r: (ast.literal_eval(o), ast.literal_eval(n), k) for r, o, n, k in ra.CHANGES}
+
+    def test_boundary_changes_keep_every_original_match_and_add_the_hyphen(self):
+        random.seed(1)
+        for rule, (old, new, kind) in self.RULES.items():
+            if kind != "boundary":
+                continue
+            core = old[2:-2]  # the credential without its \b anchors
+            old_rx, new_rx = re.compile(old), re.compile(new)
+            for _ in range(20):
+                v = exrex.getone(core, limit=12)
+                for after in ('"', "'", ")", ",", " ", "-x", "a", ""):
+                    line = f'k = "{v}{after}'
+                    if old_rx.search(line):
+                        assert new_rx.search(line), (rule, line)
+            # A credential ending in '-': the repaired rule reports all of it.
+            # The original either misses it or, with a variable-count
+            # quantifier, backtracks and reports it one character short.
+            v = exrex.getone(core, limit=12)
+            cred = v[:-1] + "-"
+            if re.fullmatch(core, cred):
+                hy = f'k = "{cred}"'
+                assert new_rx.search(hy).group() == cred, rule
+                m = old_rx.search(hy)
+                assert m is None or m.group() != cred, rule
+
+    def test_pagerduty_needs_its_keyword(self):
+        old, new, kind = self.RULES["PagerDuty Integration Key"]
+        assert kind == "precision"
+        word = "abcdefghijklmnopqrstuvwxyz012345"
+        assert re.search(old, f'cfg_value = "{word}"')
+        assert not re.search(new, f'cfg_value = "{word}"')
+        assert re.search(new, f'PAGERDUTY_KEY = "{word}"')
 
 
 class TestReproducerValuesAreRandom:

@@ -106,10 +106,14 @@ benchmarks/            harnesses, one per research question, plus analyses
                          same staged 31-repository tree as above
   verify_tse.py          re-checks every number in paper/tse/main.tex; fails
                          while a \PENDING figure remains
-repair/                repairs of the defects in the external scanners
+repair/                repairs of the defects found, in the external scanners
+                       and in the primary subject
   repair_gitleaks.py     R1, R1P (recommended), R2 for Gitleaks 8.21.2; the
                          same addition for 8.30.1 and Betterleaks 1.9.0
   repair_trufflehog.py   trailing \b -> (?:\b|\W|$) across pkg/detectors
+  repair_autopilot.py    the subject's shipped fixes applied to 38b2013: the
+                         hyphen repair (widening) and the keyword-anchored
+                         PagerDuty rule (narrowing)
   validate_*_repair.py   each repair on the battery and on 9.87M real lines,
                          findings added AND removed
 upstream/              issue drafts for Gitleaks, Betterleaks, Kingfisher and

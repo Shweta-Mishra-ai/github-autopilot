@@ -26,28 +26,41 @@ M.~Meli, M.~R. McNiece, and B.~Reaves, ``How bad can it git? {C}haracterizing
   secret leakage in public {GitHub} repositories,'' in \emph{Proc. NDSS}, 2019.
 
 \bibitem{gitleaks}
+\BIBentryALTinterwordspacing
 {Gitleaks contributors}, ``Gitleaks: a {SAST} tool for detecting secrets,
-  v8.21.2,'' 2024, \url{https://github.com/gitleaks/gitleaks}.
+  v8.21.2,'' 2024. [Online]. Available:
+  \url{https://github.com/gitleaks/gitleaks}
+\BIBentrySTDinterwordspacing
 
 \bibitem{trufflehog}
-{Truffle Security Co.}, ``{TruffleHog}, v3.82.13,'' 2024,
-  \url{https://github.com/trufflesecurity/trufflehog}.
+\BIBentryALTinterwordspacing
+{Truffle Security Co.}, ``{TruffleHog}, v3.82.13,'' 2024. [Online]. Available:
+  \url{https://github.com/trufflesecurity/trufflehog}
+\BIBentrySTDinterwordspacing
 
 \bibitem{noseyparker}
-{Praetorian}, ``{Nosey Parker}, v0.24.0,'' 2025,
-  \url{https://github.com/praetorian-inc/noseyparker}.
+\BIBentryALTinterwordspacing
+{Praetorian}, ``{Nosey Parker}, v0.24.0,'' 2025. [Online]. Available:
+  \url{https://github.com/praetorian-inc/noseyparker}
+\BIBentrySTDinterwordspacing
 
 \bibitem{kingfisher}
-{MongoDB}, ``Kingfisher, v2.11.1,'' 2026,
-  \url{https://github.com/mongodb/kingfisher}.
+\BIBentryALTinterwordspacing
+{MongoDB}, ``Kingfisher, v2.11.1,'' 2026. [Online]. Available:
+  \url{https://github.com/mongodb/kingfisher}
+\BIBentrySTDinterwordspacing
 
 \bibitem{detectsecrets}
-{Yelp}, ``detect-secrets, v1.5.0,'' 2024,
-  \url{https://github.com/Yelp/detect-secrets}.
+\BIBentryALTinterwordspacing
+{Yelp}, ``detect-secrets, v1.5.0,'' 2024. [Online]. Available:
+  \url{https://github.com/Yelp/detect-secrets}
+\BIBentrySTDinterwordspacing
 
 \bibitem{betterleaks}
-{Betterleaks contributors}, ``Betterleaks, v1.9.0,'' 2026,
-  \url{https://github.com/betterleaks/betterleaks}.
+\BIBentryALTinterwordspacing
+{Betterleaks contributors}, ``Betterleaks, v1.9.0,'' 2026. [Online]. Available:
+  \url{https://github.com/betterleaks/betterleaks}
+\BIBentrySTDinterwordspacing
 
 \bibitem{saha2020}
 A.~Saha, T.~Denning, V.~Srikumar, and S.~K. Kasera, ``Secrets in source code:
@@ -127,12 +140,22 @@ S.~Herbold, A.~Trautsch, and F.~Trautsch, ``On the feasibility of automated
   Engineering}, vol.~25, no.~6, pp. 5333--5369, 2020.
 
 \bibitem{osvscalibr}
-{Google}, ``{OSV-SCALIBR} (veles secret detectors),'' 2026,
-  \url{https://github.com/google/osv-scalibr}.
+\BIBentryALTinterwordspacing
+{Google}, ``{OSV-SCALIBR} (veles secret detectors),'' 2026. [Online].
+  Available: \url{https://github.com/google/osv-scalibr}
+\BIBentrySTDinterwordspacing
 
 \bibitem{gitleaks830}
-{Gitleaks contributors}, ``Gitleaks, v8.30.1,'' 2026,
-  \url{https://github.com/gitleaks/gitleaks}.
+\BIBentryALTinterwordspacing
+{Gitleaks contributors}, ``Gitleaks, v8.30.1,'' 2026. [Online]. Available:
+  \url{https://github.com/gitleaks/gitleaks}
+\BIBentrySTDinterwordspacing
+
+\bibitem{trufflehog399}
+\BIBentryALTinterwordspacing
+{Truffle Security Co.}, ``{TruffleHog}, v3.99.3,'' 2026. [Online]. Available:
+  \url{https://github.com/trufflesecurity/trufflehog}
+\BIBentrySTDinterwordspacing
 
 \bibitem{mishra2026zenodo}
 S.~Mishra, ``Boundary-mutation testing for pattern-based secret detection:

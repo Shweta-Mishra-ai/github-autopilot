@@ -218,6 +218,10 @@ if [[ "${1:-}" != "--figures" ]]; then
     TRUFFLEHOG_SOURCE="$HERE/trufflehog-srcbuild" TRUFFLEHOG_REPAIRED="$HERE/trufflehog-repaired" \
       python ../repair/validate_trufflehog_repair.py > "$RESULTS/trufflehog_repair_validation.json"
   fi
+  log "REPAIR   primary subject (hyphen, PagerDuty)"
+  python ../repair/repair_autopilot.py "$SUBJECT" "$HERE/autopilot-repaired" "$RESULTS/repair/repair_autopilot.json" \
+    && SUBJECT_ORIGINAL="$SUBJECT" SUBJECT_REPAIRED="$HERE/autopilot-repaired" \
+       python ../repair/validate_autopilot_repair.py > "$RESULTS/autopilot_repair_validation.json"
   log "RQ4      corpus A/B comparison"; python bench_comparative2.py   > "$RESULTS/comparative_bench.json"
   log "RQ4      paired sign test";      python paired_stats.py         > "$RESULTS/paired_stats.txt"
   log "RQ4      co-occurrence";         python bench_cooccurrence.py   > "$RESULTS/cooccurrence_bench.json"

@@ -1,0 +1,321 @@
+{
+  "design": "validate_autopilot_repair.py \u2014 What repair_autopilot.py fixes and what it",
+  "original_reproduces_published": true,
+  "battery": {
+    "n_types": 1238,
+    "original": {
+      "label_matched": 67,
+      "mislabelled_coverage_by_rule": {
+        "PagerDuty Integration Key": 98,
+        "JWT Token": 12,
+        "Generic Token": 9,
+        "Stripe Secret Key": 2,
+        "Connection String": 1
+      },
+      "missed_entirely_by_context": {
+        "canonical": {
+          "types": 67,
+          "total_failure": 0
+        },
+        "env_file": {
+          "types": 67,
+          "total_failure": 8
+        },
+        "esc_json_in_string": {
+          "types": 67,
+          "total_failure": 8
+        },
+        "esc_newline_after": {
+          "types": 67,
+          "total_failure": 8
+        },
+        "esc_quote_around": {
+          "types": 67,
+          "total_failure": 8
+        },
+        "fs_dockerfile_env": {
+          "types": 67,
+          "total_failure": 8
+        },
+        "fs_toml_inline": {
+          "types": 67,
+          "total_failure": 0
+        },
+        "fs_yaml_block": {
+          "types": 67,
+          "total_failure": 8
+        },
+        "in_parens": {
+          "types": 67,
+          "total_failure": 8
+        },
+        "in_parens_spaced": {
+          "types": 67,
+          "total_failure": 8
+        },
+        "json_value": {
+          "types": 67,
+          "total_failure": 0
+        },
+        "leading_space": {
+          "types": 67,
+          "total_failure": 0
+        },
+        "mk_html_escaped": {
+          "types": 67,
+          "total_failure": 8
+        },
+        "mk_markdown_code": {
+          "types": 67,
+          "total_failure": 8
+        },
+        "mk_xml_attribute": {
+          "types": 67,
+          "total_failure": 0
+        },
+        "single_quoted": {
+          "types": 67,
+          "total_failure": 0
+        },
+        "tpl_bearer_header": {
+          "types": 67,
+          "total_failure": 8
+        },
+        "tpl_jinja_default": {
+          "types": 67,
+          "total_failure": 8
+        },
+        "tpl_js_template": {
+          "types": 67,
+          "total_failure": 8
+        },
+        "tpl_shell_default": {
+          "types": 67,
+          "total_failure": 8
+        },
+        "trailing_comma": {
+          "types": 67,
+          "total_failure": 8
+        },
+        "trailing_comma_spaced": {
+          "types": 10,
+          "total_failure": 8
+        },
+        "trailing_hyphen": {
+          "types": 12,
+          "total_failure": 6
+        },
+        "trailing_under": {
+          "types": 18,
+          "total_failure": 0
+        },
+        "tx_base64_wrapped": {
+          "types": 67,
+          "total_failure": 67
+        },
+        "tx_k8s_secret": {
+          "types": 67,
+          "total_failure": 67
+        },
+        "tx_split_concat": {
+          "types": 67,
+          "total_failure": 63
+        },
+        "tx_url_encoded": {
+          "types": 67,
+          "total_failure": 8
+        },
+        "unquoted": {
+          "types": 67,
+          "total_failure": 8
+        },
+        "url_query": {
+          "types": 67,
+          "total_failure": 8
+        },
+        "url_query_amp": {
+          "types": 67,
+          "total_failure": 8
+        },
+        "yaml_value": {
+          "types": 67,
+          "total_failure": 8
+        }
+      }
+    },
+    "repaired": {
+      "label_matched": 66,
+      "mislabelled_coverage_by_rule": {
+        "JWT Token": 12,
+        "Generic Token": 9,
+        "Stripe Secret Key": 2,
+        "Connection String": 1
+      },
+      "missed_entirely_by_context": {
+        "canonical": {
+          "types": 66,
+          "total_failure": 0
+        },
+        "env_file": {
+          "types": 66,
+          "total_failure": 8
+        },
+        "esc_json_in_string": {
+          "types": 66,
+          "total_failure": 8
+        },
+        "esc_newline_after": {
+          "types": 66,
+          "total_failure": 8
+        },
+        "esc_quote_around": {
+          "types": 66,
+          "total_failure": 8
+        },
+        "fs_dockerfile_env": {
+          "types": 66,
+          "total_failure": 8
+        },
+        "fs_toml_inline": {
+          "types": 66,
+          "total_failure": 0
+        },
+        "fs_yaml_block": {
+          "types": 66,
+          "total_failure": 8
+        },
+        "in_parens": {
+          "types": 66,
+          "total_failure": 8
+        },
+        "in_parens_spaced": {
+          "types": 66,
+          "total_failure": 8
+        },
+        "json_value": {
+          "types": 66,
+          "total_failure": 0
+        },
+        "leading_space": {
+          "types": 66,
+          "total_failure": 0
+        },
+        "mk_html_escaped": {
+          "types": 66,
+          "total_failure": 8
+        },
+        "mk_markdown_code": {
+          "types": 66,
+          "total_failure": 8
+        },
+        "mk_xml_attribute": {
+          "types": 66,
+          "total_failure": 0
+        },
+        "single_quoted": {
+          "types": 66,
+          "total_failure": 0
+        },
+        "tpl_bearer_header": {
+          "types": 66,
+          "total_failure": 8
+        },
+        "tpl_jinja_default": {
+          "types": 66,
+          "total_failure": 8
+        },
+        "tpl_js_template": {
+          "types": 66,
+          "total_failure": 8
+        },
+        "tpl_shell_default": {
+          "types": 66,
+          "total_failure": 8
+        },
+        "trailing_comma": {
+          "types": 66,
+          "total_failure": 8
+        },
+        "trailing_comma_spaced": {
+          "types": 10,
+          "total_failure": 8
+        },
+        "trailing_hyphen": {
+          "types": 12,
+          "total_failure": 0
+        },
+        "trailing_under": {
+          "types": 18,
+          "total_failure": 0
+        },
+        "tx_base64_wrapped": {
+          "types": 66,
+          "total_failure": 66
+        },
+        "tx_k8s_secret": {
+          "types": 66,
+          "total_failure": 66
+        },
+        "tx_split_concat": {
+          "types": 66,
+          "total_failure": 62
+        },
+        "tx_url_encoded": {
+          "types": 66,
+          "total_failure": 8
+        },
+        "unquoted": {
+          "types": 66,
+          "total_failure": 8
+        },
+        "url_query": {
+          "types": 66,
+          "total_failure": 8
+        },
+        "url_query_amp": {
+          "types": 66,
+          "total_failure": 8
+        },
+        "yaml_value": {
+          "types": 66,
+          "total_failure": 8
+        }
+      }
+    },
+    "label_matched_lost": [
+      "AP:PagerDuty Integration Key"
+    ],
+    "label_matched_gained": [],
+    "cells_with_lower_retention": []
+  },
+  "real_code": {
+    "n_projects": 31,
+    "n_files": 38309,
+    "n_lines": 9870820,
+    "findings": {
+      "original": 2108,
+      "repaired": 2069
+    },
+    "removed_by_rule": {
+      "PagerDuty Integration Key": 55
+    },
+    "added_by_rule": {
+      "High Entropy String (unclassified)": 16
+    },
+    "removed_by_project": {
+      "Shopify/shopify-app-js": 55
+    },
+    "added_by_project": {
+      "Shopify/shopify-app-js": 16
+    },
+    "removed_by_path": {
+      "test_doc_or_fixture": 55
+    },
+    "added_by_path": {
+      "test_doc_or_fixture": 16
+    },
+    "removed_with_provider_named_on_line": 0,
+    "added_on_a_removed_finding_line": 8,
+    "added_on_a_later_occurrence_of_a_removed_value": 8
+  }
+}

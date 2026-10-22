@@ -341,6 +341,61 @@ def main(allow_pending):
     c.has("exposure median", f"Over the {w['n_repositories']} repositories with at least 20 such "
                              f"tokens the median share is {w['median_share_rejected'] * 100:.1f}\\%")
 
+    # ── the primary subject's own repairs (repair/validate_autopilot_repair.py)
+    av = load("autopilot_repair_validation.json")
+    assert av["original_reproduces_published"]
+    ba = av["battery"]
+    o, r = ba["original"], ba["repaired"]
+    c.has("ap repair types", f"all {thousands(ba['n_types'])} types")
+    hy_o, hy_r = o["missed_entirely_by_context"]["trailing_hyphen"], \
+        r["missed_entirely_by_context"]["trailing_hyphen"]
+    assert hy_o["types"] == hy_r["types"]
+    c.has("ap repair hyphen", f"trailing-hyphen failures from {hy_o['total_failure']} of its "
+                              f"{hy_o['types']} applicable types to {hy_r['total_failure']}")
+    assert not ba["cells_with_lower_retention"]
+    c.has("ap repair no loss", "lower its retention in no cell of any other type or context")
+    mis_o = sum(o["mislabelled_coverage_by_rule"].values())
+    mis_r = sum(r["mislabelled_coverage_by_rule"].values())
+    pd = o["mislabelled_coverage_by_rule"]["PagerDuty Integration Key"]
+    assert "PagerDuty Integration Key" not in r["mislabelled_coverage_by_rule"]
+    assert mis_o - mis_r == pd
+    c.has("ap repair mislabel", f"Mislabelled types fall from {mis_o} to {mis_r}: the {pd} the "
+                                "PagerDuty rule claimed")
+    c.has("ap repair mislabel rq4", f"removes all {pd} and leaves {mis_r} mislabelled types")
+    c.has("ap repair coverage", f"covers {r['label_matched']} label-matched types instead of "
+                                f"{o['label_matched']}")
+    assert ba["label_matched_lost"] == ["AP:PagerDuty Integration Key"]
+    assert not ba["label_matched_gained"]
+    rc = av["real_code"]
+    assert (rc["n_files"], rc["n_lines"]) == (rw["n_files"], rw["n_lines"])
+    assert rc["findings"]["original"] == rw["totals"]["autopilot"]["n_findings"]
+    c.has("ap repair real", f"reports {thousands(rc['findings']['repaired'])} findings instead "
+                            f"of {thousands(rc['findings']['original'])}")
+    n_rm = sum(rc["removed_by_rule"].values())
+    assert rc["removed_by_rule"] == {"PagerDuty Integration Key": n_rm}
+    assert len(rc["removed_by_project"]) == 1
+    assert rc["removed_by_path"] == {"test_doc_or_fixture": n_rm}
+    assert rc["removed_with_provider_named_on_line"] == 0
+    c.has("ap repair removed", f"The {n_rm} removed are all PagerDuty findings, all in test, "
+                               "documentation or fixture paths of one project, and none has "
+                               "PagerDuty named on its line")
+    n_ad = sum(rc["added_by_rule"].values())
+    assert rc["added_by_rule"] == {"High Entropy String (unclassified)": n_ad}
+    assert rc["added_by_project"].keys() == rc["removed_by_project"].keys()
+    assert rc["added_by_path"] == {"test_doc_or_fixture": n_ad}
+    same, later = rc["added_on_a_removed_finding_line"], \
+        rc["added_on_a_later_occurrence_of_a_removed_value"]
+    assert same + later == n_ad
+    c.has("ap repair added", f"The {n_ad} added are high-entropy findings in the same project's "
+                             f"test, documentation or fixture paths: {same} on lines the PagerDuty "
+                             f"rule had reported, and {later} on later occurrences")
+    boundary = [ch["rule"] for ch in load("repair/repair_autopilot.json")["changes"]
+                if ch["kind"] == "boundary"]
+    assert not set(boundary) & (set(rc["removed_by_rule"]) | set(rc["added_by_rule"]))
+    words = {5: "five"}
+    c.has("ap repair boundary rules", f"No finding of the {words[len(boundary)]} "
+                                      "boundary-repaired rules changes")
+
     pending = re.findall(r"\\PENDING\{([^}]*)\}", tex)
     print(f"{c.ok}/{c.ok + c.bad} numeric claims verified against raw data")
     if pending:

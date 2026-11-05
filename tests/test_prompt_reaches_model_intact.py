@@ -111,7 +111,18 @@ class TestNumberedPatch:
     def test_removed_lines_carry_no_number(self):
         text, _ = numbered_patch(self.PATCH)
         removed = [line for line in text.splitlines() if line.strip().startswith("- ")]
-        assert removed == ["       -     return {}"]
+        assert removed == ["       - |     return {}"]
+
+    def test_the_code_starts_after_a_visible_bar(self):
+        """PR #119: an unchanged top-level `def` printed as `598   def …` was
+        reported as "indented with two spaces … an IndentationError"."""
+        patch = "@@ -1,2 +1,3 @@\n def f():\n+    x = 1\n     return x"
+        text, _ = numbered_patch(patch)
+        assert text.splitlines()[1:] == [
+            "     1   | def f():",
+            "     2 + |     x = 1",
+            "     3   |     return x",
+        ]
 
     def test_cut_is_on_a_line_boundary_and_reported(self):
         text, cut = numbered_patch(self.PATCH, max_chars=40)

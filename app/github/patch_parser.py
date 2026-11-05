@@ -82,10 +82,14 @@ def numbered_patch(patch: str, max_chars: int | None = None) -> tuple[str, bool]
     boundary to at most `max_chars`. Returns (text, was_cut).
 
         @@ -10,3 +10,4 @@ def load():
-           10   cfg = read()
-           11 + if cfg is None:
-           12 +     raise ConfigError
-              -     return {}
+           10   | cfg = read()
+           11 + | if cfg is None:
+           12 + |     raise ConfigError
+              - |     return {}
+
+    The `|` is where the code starts. Without it an unchanged line's blank
+    marker read as indentation: on PR #119 the review called an unchanged
+    top-level `def` "indented with two spaces … an IndentationError".
 
     The review asks the model which line each finding is on. Given a raw
     unified diff it had to count forward from the `@@` header itself, which it
@@ -109,12 +113,12 @@ def numbered_patch(patch: str, max_chars: int | None = None) -> tuple[str, bool]
         elif not in_hunk or raw.startswith("\\"):
             line = raw
         elif raw.startswith("+"):
-            line = f"{new_ln:>6} + {raw[1:]}"
+            line = f"{new_ln:>6} + | {raw[1:]}"
             new_ln += 1
         elif raw.startswith("-"):
-            line = f"{'':>6} - {raw[1:]}"
+            line = f"{'':>6} - | {raw[1:]}"
         else:
-            line = f"{new_ln:>6}   {raw[1:] if raw.startswith(' ') else raw}"
+            line = f"{new_ln:>6}   | {raw[1:] if raw.startswith(' ') else raw}"
             new_ln += 1
         if max_chars is not None and size + len(line) + 1 > max_chars:
             cut = True

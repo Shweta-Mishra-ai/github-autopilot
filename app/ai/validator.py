@@ -144,6 +144,27 @@ def _str(val: Any, max_len: int = 300) -> str:
     return str(val)[:max_len].strip() if val is not None else ""
 
 
+def clip(text: str, limit: int) -> str:
+    """
+    `text` in at most `limit` characters, cut at a word and marked with "…".
+
+    For prose a reader sees. A plain slice published "CI workflow adjustmen"
+    and "Retry-Af" in the PR report. Not for code or quoted diff text, which
+    is matched against the diff character for character.
+    """
+    text = " ".join(str(text or "").split())
+    if len(text) <= limit:
+        return text
+    cut = text[: max(limit - 1, 1)]
+    if " " in cut and not text[len(cut)].isspace():
+        cut = cut.rsplit(" ", 1)[0]
+    return cut.rstrip(" ,;:-—") + "…"
+
+
+def _prose(val: Any, max_len: int) -> str:
+    return clip(str(val), max_len) if val is not None else ""
+
+
 def _list_of_str(val: Any, max_items: int = 10, max_item_len: int = 100) -> list[str]:
     """Safe list-of-strings extraction."""
     if not isinstance(val, list):
@@ -223,7 +244,7 @@ def validate_pr_analysis(raw: dict) -> dict:
         "description": _str(raw.get("description", ""), 5000),
         "risk_level": risk,
         "risk_measured": risk_measured,
-        "risk_reason": _str(raw.get("risk_reason", ""), 300),
+        "risk_reason": _prose(raw.get("risk_reason", ""), 300),
         "review_focus": review_focus,
         "confidence": confidence,
     }
@@ -379,7 +400,7 @@ def validate_code_review(raw: dict) -> dict:
                 # The quoted line, which grounding.ground_finding() checks
                 # against the diff. Read there, so not a dead field.
                 "code": _str(item.get("code", ""), 300),
-                "issue": _str(item.get("issue", ""), 300),
+                "issue": _prose(item.get("issue", ""), 300),
                 "fix": _str(item.get("fix", ""), 500),
             }
         )
@@ -397,7 +418,7 @@ def validate_code_review(raw: dict) -> dict:
     # alias because older prompts emitted that name, but it is not returned:
     # the duplicate output field was justified by a comment claiming
     # app/mcp/handlers.py and evals/ read it, and neither ever did.
-    assessment = _str(raw.get("summary") or raw.get("verdict", ""), 200)
+    assessment = _prose(raw.get("summary") or raw.get("verdict", ""), 200)
 
     return {
         "score": score,

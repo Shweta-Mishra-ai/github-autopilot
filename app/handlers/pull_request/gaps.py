@@ -456,6 +456,28 @@ def _excerpt(f: dict) -> str:
     return f"### {one_line(f.get('filename', '?'))}{cut}\n{patch[:EXCERPT_CHARS]}"
 
 
+_VALID_RISK = {"high", "medium", "low"}
+
+
+def gap_row(g: dict) -> str:
+    """
+    One row of the gaps table. The suggested test was cut at 80 characters,
+    mid-word ("…returning a 429 response with a Retry-Af"), and a `|` in any
+    model-written cell split the row into extra columns.
+    """
+    from app.ai.validator import clip
+
+    def cell(value, limit: int) -> str:
+        return clip(str(value or ""), limit).replace("|", "\\|")
+
+    risk = str(g.get("risk", "medium")).lower()
+    risk = risk if risk in _VALID_RISK else "medium"
+    return (
+        f"| `{cell(g.get('file', '?'), 120)}` | `{cell(g.get('function', '?'), 80)}` | "
+        f"`{risk}` | {cell(g.get('suggested_test', ''), 160)} |"
+    )
+
+
 def _detect_test_gaps(pr, repo, pr_number, files, token, config, log) -> str:
     """Detect test coverage gaps. Returns markdown, empty when there are none;
     raises when the detection itself could not be done."""
@@ -607,17 +629,7 @@ Only report real gaps. If tests are adequate, set has_gaps to false.""",
         log.info("test_gaps.all_claims_refuted_by_tests", pr=pr_number)
         return ""
 
-    VALID_RISK = {"high", "medium", "low"}
-
-    def _risk(g) -> str:
-        v = str(g.get("risk", "medium")).lower()
-        return v if v in VALID_RISK else "medium"
-
-    gaps_md = "\n".join(
-        f"| `{g.get('file', '?')}` | `{g.get('function', '?')}` | "
-        f"`{_risk(g)}` | {str(g.get('suggested_test', ''))[:80]} |"
-        for g in gaps[:5]
-    )
+    gaps_md = "\n".join(gap_row(g) for g in gaps[:5])
 
     # The score is COUNTED, not asked for. It was the model's
     # "coverage_score", and the prompt's example JSON set that to 6 —

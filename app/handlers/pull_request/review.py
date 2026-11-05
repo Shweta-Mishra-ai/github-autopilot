@@ -87,7 +87,10 @@ def _fix_tail(fix) -> str:
     fix = " ".join(str(fix or "").split())
     if not fix:
         return ""
-    fix = fix[:80].replace("`", "'")
+    # Display only: the committable suggestion is built from the full fix.
+    from app.ai.validator import clip
+
+    fix = clip(fix, 120).replace("`", "'")
     return f" → `{fix}`"
 
 

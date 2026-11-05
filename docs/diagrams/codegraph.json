@@ -259,11 +259,11 @@
       "id": "app.ai.validator",
       "path": "app/ai/validator.py",
       "layer": "ai",
-      "loc": 471,
-      "functions": 17,
+      "loc": 492,
+      "functions": 19,
       "classes": 0,
       "is_package": false,
-      "fan_in": 13,
+      "fan_in": 15,
       "fan_out": 1,
       "external_deps": [
         "logging",
@@ -1271,8 +1271,8 @@
       "id": "app.handlers.pull_request.analysis",
       "path": "app/handlers/pull_request/analysis.py",
       "layer": "handlers",
-      "loc": 537,
-      "functions": 9,
+      "loc": 582,
+      "functions": 11,
       "classes": 0,
       "is_package": false,
       "fan_in": 4,
@@ -1330,12 +1330,12 @@
       "id": "app.handlers.pull_request.gaps",
       "path": "app/handlers/pull_request/gaps.py",
       "layer": "handlers",
-      "loc": 647,
-      "functions": 18,
+      "loc": 659,
+      "functions": 19,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 8,
+      "fan_out": 9,
       "external_deps": [
         "__future__",
         "ast",
@@ -1380,7 +1380,7 @@
       "id": "app.handlers.pull_request.report",
       "path": "app/handlers/pull_request/report.py",
       "layer": "handlers",
-      "loc": 58,
+      "loc": 74,
       "functions": 1,
       "classes": 0,
       "is_package": false,
@@ -1395,12 +1395,12 @@
       "id": "app.handlers.pull_request.review",
       "path": "app/handlers/pull_request/review.py",
       "layer": "handlers",
-      "loc": 740,
+      "loc": 743,
       "functions": 11,
       "classes": 0,
       "is_package": false,
       "fan_in": 1,
-      "fan_out": 14,
+      "fan_out": 15,
       "external_deps": [
         "__future__"
       ]
@@ -3316,6 +3316,11 @@
     },
     {
       "source": "app.handlers.pull_request.gaps",
+      "target": "app.ai.validator",
+      "kind": "runtime"
+    },
+    {
+      "source": "app.handlers.pull_request.gaps",
       "target": "app.core.sanitizer",
       "kind": "import"
     },
@@ -3393,6 +3398,11 @@
       "source": "app.handlers.pull_request.review",
       "target": "app.ai.validator",
       "kind": "import"
+    },
+    {
+      "source": "app.handlers.pull_request.review",
+      "target": "app.ai.validator",
+      "kind": "runtime"
     },
     {
       "source": "app.handlers.pull_request.review",
@@ -3912,8 +3922,8 @@
   ],
   "stats": {
     "modules": 106,
-    "edges": 434,
-    "total_loc": 29844,
+    "edges": 436,
+    "total_loc": 29941,
     "layers": [
       "ai",
       "core",
@@ -3945,16 +3955,16 @@
         "fan_out": 3
       },
       {
+        "id": "app.ai.validator",
+        "loc": 492,
+        "fan_in": 15,
+        "fan_out": 1
+      },
+      {
         "id": "app.security.enhanced_secrets",
         "loc": 1122,
         "fan_in": 5,
         "fan_out": 0
-      },
-      {
-        "id": "app.ai.validator",
-        "loc": 471,
-        "fan_in": 13,
-        "fan_out": 1
       },
       {
         "id": "app.core.sanitizer",

@@ -145,3 +145,74 @@ class TestTheRiskIsReadFirst:
     def test_an_analysis_without_a_risk_line_stays_folded(self):
         body = self._report("### Review Focus\n- x")
         assert "<summary>📋 Analysis</summary>" in body and "### Review Focus" in body
+
+
+class TestTheSummaryKeepsItsShape:
+    """PR #119: the summary's bullet list was published as one paragraph."""
+
+    def test_lines_and_list_markers_survive_the_filter(self):
+        from app.handlers.pull_request.analysis import grounded_sentences
+
+        files = [_file("evals/run.py", 3), _file("tests/test_evals_harness.py", 3)]
+        text = (
+            "**Key technical changes**\n"
+            "- In `evals/run.py`, outages are no longer crashes.\n"
+            "- Updated app/ghost.py to cache tokens.\n"
+            "- Added tests in tests/test_evals_harness.py."
+        )
+        out = grounded_sentences(text, files)
+        assert out.splitlines() == [
+            "**Key technical changes**",
+            "- In `evals/run.py`, outages are no longer crashes.",
+            "- Added tests in tests/test_evals_harness.py.",
+        ], out
+
+
+class TestACutDiffSaysSo:
+    """PR #119: the analysis was shown each file's diff cut mid-line with no
+    mark, and rated the PR HIGH for an `if` "with only comments" and a function
+    that "lacks a return" — both past the cut."""
+
+    def _files(self):
+        lines = "\n".join(f"+    value_{i} = compute(argument_{i})" for i in range(200))
+        return [
+            {"filename": "a.py", "patch": f"@@ -0,0 +1,200 @@\n{lines}"},
+            {"filename": "b.py", "patch": "@@ -0,0 +1,1 @@\n+x = 1"},
+        ]
+
+    def test_a_cut_file_ends_on_a_whole_line_with_the_mark(self):
+        excerpt, _shown, _total = analysis.diff_excerpt_coverage(self._files(), 1500)
+        a = excerpt.split("### b.py")[0] if excerpt.index("### a.py") < excerpt.index("### b.py") else excerpt.split("### a.py")[1]
+        body = a.strip().splitlines()
+        assert body[-1] == analysis.DIFF_CUT_MARK
+        assert body[-2].startswith("+    value_") and body[-2].endswith(")"), body[-2]
+
+    def test_the_excerpt_stays_within_its_budget(self):
+        excerpt, _s, _t = analysis.diff_excerpt_coverage(self._files(), 1500)
+        assert len(excerpt) <= 1500
+
+    def test_an_uncut_file_has_no_mark(self):
+        excerpt, _s, _t = analysis.diff_excerpt_coverage(self._files()[1:], 1500)
+        assert analysis.DIFF_CUT_MARK not in excerpt
+
+    def test_both_prompts_explain_the_mark(self):
+        prompts = []
+
+        def capture(*args, **kwargs):
+            prompts.append(args[1])
+            raise RuntimeError("stop after the prompt")
+
+        pr = {"title": "t", "body": "", "user": {"login": "u"}, "base": {"ref": "main"}, "head": {}}
+        with patch.object(analysis.router, "ask", side_effect=capture), patch.object(
+            analysis.router, "ask_text", side_effect=capture
+        ):
+            for call in (
+                lambda: analysis._analyze_pr(pr, "o/r", 1, self._files(), "t", MagicMock(), MagicMock(), "", MagicMock()),
+                lambda: analysis._build_pr_summary(pr, "o/r", 1, self._files(), "t", MagicMock(), MagicMock()),
+            ):
+                try:
+                    call()
+                except RuntimeError:
+                    pass
+        assert len(prompts) == 2
+        assert all("the code goes on" in p for p in prompts)

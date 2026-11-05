@@ -41,7 +41,7 @@
     "patch": "@@ -1,2 +1,5 @@\n+def truncate(text: str, limit: int = 80) -> str:\n+    \"\"\"Truncate text to limit chars, appending an ellipsis when cut.\"\"\"\n+    return text if len(text) <= limit else text[: limit - 1] + \"\\u2026\"\n",
     "planted": "nothing — clean helper; reviewer should NOT invent critical issues",
     "must_not_mention": [
-      "critical"
+      "\\b\\d+ (critical|major)\\b|\\*\\*(CRITICAL|MAJOR)\\*\\*"
     ],
     "min_length": 40
   },

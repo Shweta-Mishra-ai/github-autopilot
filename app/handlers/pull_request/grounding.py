@@ -54,9 +54,9 @@ _MIN_QUOTE = 6
 # new line: at least this long, or at least half of that line.
 _DISTINCTIVE_QUOTE = 25
 
-# The review shows numbered lines ("    42 + code"); a model sometimes copies
-# the number and marker along with the code.
-_NUMBER_PREFIX = re.compile(r"^\s*\d*\s*[+\- ]\s")
+# The review shows numbered lines ("    42 + | code"); a model sometimes
+# copies the number, marker and bar along with the code.
+_NUMBER_PREFIX = re.compile(r"^\s*\d*\s*[+\- ]\s*\|\s?|^\s*\d*\s*[+\- ]\s")
 _WS = re.compile(r"\s+")
 
 

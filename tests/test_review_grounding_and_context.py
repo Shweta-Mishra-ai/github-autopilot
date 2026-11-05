@@ -95,7 +95,7 @@ class TestSurroundingCode:
 
     def test_lines_carry_their_real_numbers(self):
         out = surrounding_code(SOURCE, "app/cfg.py", SOURCE_PATCH, 5000)
-        assert "     9       except OSError:" in out.splitlines()
+        assert "     9   |     except OSError:" in out.splitlines()
 
     def test_other_languages_get_a_window(self):
         js = "\n".join(f"line{n}();" for n in range(1, 61))

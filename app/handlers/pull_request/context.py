@@ -102,7 +102,7 @@ def surrounding_code(source: str, filename: str, patch: str, budget: int) -> str
     out: list[str] = []
     size = 0
     for start, end in _merge(ranges, len(lines)):
-        block = [f"{n:>6}   {lines[n - 1]}" for n in range(start, end + 1)]
+        block = [f"{n:>6}   | {lines[n - 1]}" for n in range(start, end + 1)]
         if out:
             block.insert(0, "   ...")
         for line in block:

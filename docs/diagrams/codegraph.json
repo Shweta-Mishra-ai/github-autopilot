@@ -1271,7 +1271,7 @@
       "id": "app.handlers.pull_request.analysis",
       "path": "app/handlers/pull_request/analysis.py",
       "layer": "handlers",
-      "loc": 582,
+      "loc": 596,
       "functions": 11,
       "classes": 0,
       "is_package": false,
@@ -3923,7 +3923,7 @@
   "stats": {
     "modules": 106,
     "edges": 436,
-    "total_loc": 29941,
+    "total_loc": 29955,
     "layers": [
       "ai",
       "core",

@@ -188,8 +188,22 @@ def grounded_sentences(text: str, files: list, seen: set[str] | None = None) -> 
             return False
         return not (_MIGRATION_CLAIM.search(sentence) and not has_migration)
 
-    sentences = re.split(r"(?<=[.!?])\s+", (text or "").strip())
-    return " ".join(s for s in sentences if s and grounded(s)).strip()
+    # Line by line: the sentences were split across the whole text and joined
+    # with spaces, which ran a bulleted list into one paragraph ("**Key
+    # technical changes** - In `evals/run.py`, ... - Updated ...", PR #119).
+    out: list[str] = []
+    for line in (text or "").strip().splitlines():
+        if not line.strip():
+            if out and out[-1]:
+                out.append("")
+            continue
+        marker = _LIST_MARKER.match(line)
+        prefix = marker.group(0) if marker and marker.group(0).strip() else ""
+        body = line[len(prefix) :].strip()
+        kept = [s for s in re.split(r"(?<=[.!?])\s+", body) if s and grounded(s)]
+        if kept:
+            out.append(prefix + " ".join(kept))
+    return "\n".join(out).strip()
 
 
 def grounded_description(model_text: str, files: list) -> str:

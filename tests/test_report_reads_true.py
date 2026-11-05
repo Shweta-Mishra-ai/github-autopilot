@@ -145,3 +145,24 @@ class TestTheRiskIsReadFirst:
     def test_an_analysis_without_a_risk_line_stays_folded(self):
         body = self._report("### Review Focus\n- x")
         assert "<summary>📋 Analysis</summary>" in body and "### Review Focus" in body
+
+
+class TestTheSummaryKeepsItsShape:
+    """PR #119: the summary's bullet list was published as one paragraph."""
+
+    def test_lines_and_list_markers_survive_the_filter(self):
+        from app.handlers.pull_request.analysis import grounded_sentences
+
+        files = [_file("evals/run.py", 3), _file("tests/test_evals_harness.py", 3)]
+        text = (
+            "**Key technical changes**\n"
+            "- In `evals/run.py`, outages are no longer crashes.\n"
+            "- Updated app/ghost.py to cache tokens.\n"
+            "- Added tests in tests/test_evals_harness.py."
+        )
+        out = grounded_sentences(text, files)
+        assert out.splitlines() == [
+            "**Key technical changes**",
+            "- In `evals/run.py`, outages are no longer crashes.",
+            "- Added tests in tests/test_evals_harness.py.",
+        ], out

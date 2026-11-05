@@ -683,3 +683,26 @@ class TestAProviderOutageIsNotACrash:
 
         assert ev._attempt(call, {"id": "review-y"}, results) is None
         assert results and results[0].failures[0].startswith("exception:")
+
+
+class TestACleanReviewIsJudgedOnItsFindings:
+    """2026-11-05: review-clean-change failed on /critical/ with NO findings —
+    the word was in the reviewer's own words about the file, not a finding."""
+
+    def _case(self):
+        cases = json.loads((_ROOT / "evals" / "cases" / "review_cases.json").read_text(encoding="utf-8"))
+        return next(c for c in cases if c["id"] == "review-clean-change")
+
+    def test_saying_there_are_no_critical_issues_passes(self):
+        out = "## Code review\n\n- `app/util/strings.py`: Clean helper; no critical issues — no issues found."
+        assert score_output(out, self._case(), findings="").passed
+
+    def test_a_critical_finding_on_clean_code_still_fails(self):
+        finding = "- **CRITICAL** `app/util/strings.py:3`: slicing can raise IndexError"
+        r = score_output("Review\n" + finding, self._case(), findings=finding)
+        assert not r.passed
+
+    def test_the_failure_quotes_where_the_word_was(self):
+        case = {"id": "x", "must_not_mention": ["critical"], "min_length": 0}
+        r = score_output("All good. This is not critical at all.", case)
+        assert "not critical at all" in r.failures[0]

@@ -170,7 +170,11 @@ def check_configured_models(key: str) -> tuple[bool, str]:
 #
 # Pacing prevents it; the retry survives a burst; and a case still empty after
 # that is reported as blocked rather than counted against the score.
-CASE_DELAY_SECONDS = float(os.environ.get("EVAL_CASE_DELAY_SECONDS", "3"))
+#
+# 3 seconds was not enough: all four live runs on 2026-11-05 met 2 to 9 Groq
+# rate limits (and the fallbacks behind them), on a suite now 25 cases long.
+# Ten seconds adds about four minutes to a nightly run with a 30-minute limit.
+CASE_DELAY_SECONDS = float(os.environ.get("EVAL_CASE_DELAY_SECONDS", "10"))
 THROTTLE_BACKOFF_SECONDS = float(os.environ.get("EVAL_THROTTLE_BACKOFF_SECONDS", "20"))
 
 # Anything shorter than this is not an answer. The providers return an empty

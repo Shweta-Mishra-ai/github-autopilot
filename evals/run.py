@@ -193,7 +193,26 @@ _BLOCKED_MARKERS = (
     "circuit open",
     "try again",
     "temporarily unavailable",
+    # The bot's honest reply when the model answered with something that was
+    # not JSON (app.ai.guarded.degraded_comment, reason "unparseable"). It
+    # was scored as a /fix quality failure: on 2026-11-05, with Groq
+    # rate-limited, two /fix cases "failed" on a reply that says no fix was
+    # produced. A fix WITHHELD for low confidence is not listed: the model
+    # answered and the bot refused it, which is a quality result.
+    "could not be parsed",
 )
+
+
+def _blocked_reason(output: str) -> str:
+    """Why a /fix or review case was not scored, from the text it produced."""
+    lowered = (output or "").strip().lower()
+    if not lowered:
+        return "no answer from the provider"
+    if "could not be parsed" in lowered:
+        return "the model's answer was not valid JSON"
+    if len(lowered) < _BLOCKED_OUTPUT_CHARS:
+        return "an empty or near-empty answer"
+    return "the providers were down or rate-limited"
 
 
 def looks_blocked(output: str) -> bool:
@@ -247,7 +266,7 @@ def run_fix_cases() -> tuple[list, list]:
             continue
         if looks_blocked(output):
             blocked.append(case["id"])
-            _print_blocked(case["id"])
+            _print_blocked(case["id"], _blocked_reason(output))
             continue
         result = score_output(output, case)
         results.append(result)
@@ -341,7 +360,7 @@ def run_review_cases() -> tuple[list, list]:
             continue
         if looks_blocked(output):
             blocked.append(case["id"])
-            _print_blocked(case["id"])
+            _print_blocked(case["id"], _blocked_reason(output))
             continue
 
         result = score_output(output, case, findings="\n".join(findings))

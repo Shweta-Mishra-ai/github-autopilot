@@ -629,3 +629,24 @@ class TestUnscoredCasesAreExplained:
         code, report = self._main(monkeypatch, tmp_path, [passing], ["fix-b"])
         assert code == 4
         assert "Failed" not in report and "`fix-b`" in report
+
+
+class TestAnUnparseableAnswerIsNotAQualityResult:
+    """2026-11-05, Groq rate-limited: two /fix cases were scored as failures on
+    the bot's own "the model returned a response that could not be parsed"
+    reply — no fix was produced, so there was nothing to score."""
+
+    def test_the_unparseable_reply_is_blocked_with_its_reason(self):
+        import evals.run as ev
+        from app.ai.guarded import degraded_comment
+
+        out = degraded_comment({"_reason": "unparseable"}, "fix")
+        assert ev.looks_blocked(out)
+        assert ev._blocked_reason(out) == "the model's answer was not valid JSON"
+
+    def test_a_fix_withheld_for_low_confidence_is_still_scored(self):
+        import evals.run as ev
+        from app.ai.guarded import degraded_comment
+
+        out = degraded_comment({"_reason": "low_confidence", "_confidence": 0.2}, "fix")
+        assert not ev.looks_blocked(out), "a refused answer is a quality result"

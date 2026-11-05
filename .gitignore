@@ -65,3 +65,4 @@ Thumbs.db
 app/**/**pycache**/
 tests/**/**pycache**/
 eval-cases.md
+dump.rdb

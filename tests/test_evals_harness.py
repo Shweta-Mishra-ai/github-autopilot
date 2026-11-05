@@ -650,3 +650,36 @@ class TestAnUnparseableAnswerIsNotAQualityResult:
 
         out = degraded_comment({"_reason": "low_confidence", "_confidence": 0.2}, "fix")
         assert not ev.looks_blocked(out), "a refused answer is a quality result"
+
+
+class TestAProviderOutageIsNotACrash:
+    """The second live run on PR #117 exited 5 — "a case raised, fix the code,
+    not the prompts" — because Groq was rate-limiting and every provider was
+    down on both tries of one review case."""
+
+    def test_a_case_that_meets_an_outage_twice_is_not_scored(self, monkeypatch):
+        import evals.run as ev
+        from app.ai.circuit_breaker import AllProvidersDown
+
+        monkeypatch.setattr(ev, "THROTTLE_BACKOFF_SECONDS", 0.0)
+        results: list = []
+
+        def call():
+            raise AllProvidersDown(60)
+
+        assert ev._attempt(call, {"id": "review-x"}, results) == ""
+        assert results == [], "an outage was recorded as a crash"
+        ev._print_blocked("review-x", ev._blocked_reason(""))
+        assert ev.BLOCK_REASONS["review-x"].startswith("all providers were down or rate-limited")
+
+    def test_a_real_exception_is_still_a_crash(self, monkeypatch):
+        import evals.run as ev
+
+        monkeypatch.setattr(ev, "THROTTLE_BACKOFF_SECONDS", 0.0)
+        results: list = []
+
+        def call():
+            raise TypeError("_review_code() got an unexpected keyword argument")
+
+        assert ev._attempt(call, {"id": "review-y"}, results) is None
+        assert results and results[0].failures[0].startswith("exception:")

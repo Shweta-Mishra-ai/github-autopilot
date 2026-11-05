@@ -14,9 +14,12 @@ Exit codes, and they are distinct on purpose:
 
     0  pass-rate >= --min-pass-rate
     1  the bot answered, and answered worse than the threshold allows
+       (judged on the scored cases only, even when others were not scored)
     2  unrunnable — no provider key
     3  the configured model does not exist at the provider
-    4  the provider throttled us, so quality was never measured
+    4  the provider throttled us, or answered unusably, on some cases: every
+       scored case passed, but those were never measured
+    5  a case raised — a fault in the code or the harness
 
 3 and 4 are separate from 1 because they send a maintainer to opposite ends
 of the codebase. The first scheduled run of this suite returned a 0.0 pass rate and
@@ -443,7 +446,18 @@ def run_gaps_cases() -> tuple[list, list]:
                     return ""
                 raise
 
-        output = _attempt(_run, case, results, blocked_check=lambda _out, captured=captured: not captured)
+        # An unusable answer is retried too. Only an empty capture used to be,
+        # so a reply that was not JSON was never asked again, and was then
+        # reported as "provider returned nothing" — the 2026-11-05 run blamed
+        # a rate limit for a case that had an answer, just not a usable one.
+        output = _attempt(
+            _run,
+            case,
+            results,
+            blocked_check=lambda _out, captured=captured: (
+                not captured or is_unusable(captured[0])
+            ),
+        )
         if output is None:
             continue
 
@@ -452,7 +466,7 @@ def run_gaps_cases() -> tuple[list, list]:
         verdict = captured[0] if captured else None
         if verdict is None or is_unusable(verdict):
             blocked.append(case["id"])
-            _print_blocked(case["id"])
+            _print_blocked(case["id"], _unusable_reason(verdict))
             continue
 
         # Score what the bot PUBLISHES, not the model's first answer. A gap
@@ -519,8 +533,45 @@ def _attempt(call, case: dict, results: list, blocked_check=None):
     return output
 
 
-def _print_blocked(case_id: str) -> None:
-    print(f"  [BLOCKED] {case_id}  provider returned nothing — not scored")
+# Why each case of this run was not scored, by case id. Read by main() for the
+# summary and the nightly issue, which used to say "rate-limited" for every
+# blocked case whatever had actually happened.
+BLOCK_REASONS: dict[str, str] = {}
+
+
+def _unusable_reason(verdict) -> str:
+    """What was wrong with a gap answer that cannot be scored."""
+    if verdict is None:
+        return "no answer from the provider"
+    if isinstance(verdict, dict) and verdict.get("error"):
+        return f"provider error: {str(verdict['error'])[:120]}"
+    if isinstance(verdict, dict) and "raw" in verdict:
+        return "the model's answer was not valid JSON"
+    return "the model's answer could not be read"
+
+
+def _print_blocked(case_id: str, reason: str = "empty or refusal-looking answer") -> None:
+    BLOCK_REASONS[case_id] = reason
+    print(f"  [BLOCKED] {case_id}  {reason} (after a retry) — not scored")
+
+
+def _case_report(results: list, blocked: list[str]) -> str:
+    """
+    The cases a reader has to look at, as Markdown: written next to the run
+    output for the nightly issue, so the issue names what failed and why
+    instead of a generic paragraph that sends everyone to the log.
+    """
+    lines = []
+    failed = [r for r in results if not r.passed]
+    if failed:
+        lines.append(f"**Failed ({len(failed)} of {len(results)} scored):**")
+        lines += [f"- `{r.case_id}`: {r.failures[0] if r.failures else 'failed'}" for r in failed]
+    if blocked:
+        if lines:
+            lines.append("")
+        lines.append(f"**Not scored ({len(blocked)}):**")
+        lines += [f"- `{c}`: {BLOCK_REASONS.get(c, 'not scored')}" for c in blocked]
+    return "\n".join(lines)
 
 
 def _print_case(result) -> None:
@@ -571,22 +622,13 @@ def main() -> int:
     print("\n== summary ==")
     print(json.dumps(stats, indent=2))
 
-    # A throttled case is not a quality signal, and averaging it into the
-    # pass-rate turns a provider limit into a statement about the prompts.
-    # The 2026-08-29 run reported 0.545 having never scored a single review
-    # case: all five were empty because both breakers had opened on rate
-    # limits, and every one counted as a failure.
-    if blocked:
-        print(
-            f"\nBLOCKED: {len(blocked)} of {len(blocked) + len(results)} cases got no "
-            f"answer from the provider, after a retry each.\n"
-            f"  {', '.join(blocked)}\n\n"
-            f"This is NOT a quality result — those cases were never scored. The\n"
-            f"usual cause is the provider's rate limit: the suite runs cases back\n"
-            f"to back, and a larger model has a smaller allowance. Raise\n"
-            f"EVAL_CASE_DELAY_SECONDS (currently {CASE_DELAY_SECONDS:g}s between cases) and re-run."
-        )
-        return 4
+    # The nightly issue quotes this file, so it names the cases and the reason
+    # for each rather than a paragraph that guesses.
+    report = _case_report(results, blocked)
+    try:
+        Path(os.environ.get("EVAL_REPORT_PATH", "eval-cases.md")).write_text(report + "\n", encoding="utf-8")
+    except OSError as exc:
+        print(f"(could not write the case report: {exc})")
 
     # A case that raised is a fault in the code or the harness, not a quality
     # result. It was scored 0 and folded into the pass rate, so a broken call
@@ -598,9 +640,27 @@ def main() -> int:
 
     from evals.scorers import gate
 
-    ok, detail = gate(stats, args.min_pass_rate)
+    # An unscored case is not a quality signal, and averaging it into the
+    # pass-rate turns a provider limit into a statement about the prompts.
+    # The 2026-08-29 run reported 0.545 having never scored a single review
+    # case: all five were empty because both breakers had opened on rate
+    # limits, and every one counted as a failure. So the gate reads only the
+    # cases that were scored — but it still reads them. Returning "blocked"
+    # before the gate hid real failures: the 2026-11-05 run had one unscored
+    # case and two gap cases that invented gaps in tested code, and the issue
+    # it opened said "NOT a regression".
+    ok, detail = gate(stats, args.min_pass_rate) if results else (True, "no case was scored")
+    if blocked:
+        print(
+            f"\nNOT SCORED: {len(blocked)} of {len(blocked) + len(results)} cases, after a retry each:\n"
+            + "\n".join(f"  {c}: {BLOCK_REASONS.get(c, 'not scored')}" for c in blocked)
+            + "\n\nThose cases are left out of the pass rate. If the reason is a rate\n"
+            f"limit, raise EVAL_CASE_DELAY_SECONDS (currently {CASE_DELAY_SECONDS:g}s between cases)."
+        )
     print(f"\n{'PASS' if ok else 'FAIL'}: {detail}")
-    return 0 if ok else 1
+    if not ok:
+        return 1
+    return 4 if blocked else 0
 
 
 if __name__ == "__main__":

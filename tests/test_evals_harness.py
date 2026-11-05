@@ -550,3 +550,82 @@ class TestGateNeedsBothKinds:
         assert not summary_only.passed
         named = score_output("x", case, findings="- **MAJOR** `a.py:3`: slice is size + 1 long")
         assert named.passed
+
+
+class TestUnscoredCasesAreExplained:
+    """
+    The 2026-11-05 nightly run opened an issue saying the provider had
+    rate-limited the suite and that it was "NOT a regression". The log showed
+    one gap case whose answer came back unusable — never retried, and blamed
+    on a rate limit nothing had reported — and two gap cases that FAILED,
+    inventing gaps in code its tests already covered.
+    """
+
+    def _run_gaps(self, monkeypatch, answers):
+        from unittest.mock import MagicMock, patch
+
+        import app.ai.router as router_mod
+        import evals.run as ev
+
+        monkeypatch.setattr(ev, "CASE_DELAY_SECONDS", 0.0)
+        monkeypatch.setattr(ev, "THROTTLE_BACKOFF_SECONDS", 0.0)
+        calls = []
+
+        def ask(self, system, user, **kwargs):
+            calls.append(1)
+            answer = answers(len(calls))
+            return answer, MagicMock(provider="groq", model="m", total_tokens=1, cost_usd=0.0)
+
+        with patch.object(router_mod.LLMRouter, "ask", ask):
+            results, blocked = ev.run_gaps_cases()
+        return results, blocked, len(calls)
+
+    def test_an_unusable_answer_is_retried(self, monkeypatch):
+        """Odd calls answer with text that is not JSON; the retry answers."""
+        good = {"has_gaps": False, "gaps": [], "summary": "ok"}
+        results, blocked, calls = self._run_gaps(
+            monkeypatch, lambda n: {"raw": "Sure! Here are the gaps:"} if n % 2 else good
+        )
+        assert blocked == [], blocked
+        assert len(results) == _gap_case_count()
+        assert calls == 2 * _gap_case_count()
+
+    def test_an_unusable_answer_twice_is_blocked_with_its_reason(self, monkeypatch):
+        import evals.run as ev
+
+        results, blocked, _ = self._run_gaps(monkeypatch, lambda n: {"raw": "not json"})
+        assert results == []
+        assert len(blocked) == _gap_case_count()
+        assert {ev.BLOCK_REASONS[c] for c in blocked} == {"the model's answer was not valid JSON"}
+
+    def _main(self, monkeypatch, tmp_path, results, blocked):
+        import sys
+
+        import evals.run as ev
+
+        report = tmp_path / "cases.md"
+        monkeypatch.setenv("GROQ_API_KEY", "gsk_real_looking")
+        monkeypatch.setenv("EVAL_REPORT_PATH", str(report))
+        monkeypatch.setattr(ev, "check_configured_models", lambda key: (True, "models ok"))
+        monkeypatch.setattr(ev, "run_fix_cases", lambda: (results, blocked))
+        monkeypatch.setattr(sys, "argv", ["evals.run", "--task", "fix"])
+        for case_id in blocked:
+            ev.BLOCK_REASONS[case_id] = "the model's answer was not valid JSON"
+        return ev.main(), report.read_text(encoding="utf-8")
+
+    def test_a_failing_scored_case_is_reported_even_when_another_was_not_scored(
+        self, monkeypatch, tmp_path
+    ):
+        case = {"id": "fix-a", "must_mention": ["off.by.one"], "min_length": 1}
+        failing = score_output("looks fine", case)
+        code, report = self._main(monkeypatch, tmp_path, [failing], ["fix-b"])
+        assert code == 1, "an unscored case hid a real failure"
+        assert "`fix-a`" in report and "must_mention" in report
+        assert "`fix-b`: the model's answer was not valid JSON" in report
+
+    def test_unscored_cases_alone_are_not_called_a_failure(self, monkeypatch, tmp_path):
+        case = {"id": "fix-a", "must_mention": ["off.by.one"], "min_length": 1}
+        passing = score_output("an off-by-one", case)
+        code, report = self._main(monkeypatch, tmp_path, [passing], ["fix-b"])
+        assert code == 4
+        assert "Failed" not in report and "`fix-b`" in report

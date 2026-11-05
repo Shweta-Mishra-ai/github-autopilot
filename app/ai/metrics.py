@@ -1,85 +1,58 @@
 """
 app/ai/metrics.py
-V4 Sprint 3: LLM usage tracker + /budget formatter.
+Today's LLM usage per provider, for /budget.
 
-FIXED (Sprint 3 — bot review):
-  - Variable `r` renamed to `redis_client` (more descriptive)
-  - Added try/except inside get_usage_today() inner loop
-  - Added None/missing key check before division
+The limits are routing_policy.DAILY_LIMITS — the deployment's assumptions,
+overridable per provider — not a second hard-coded table. This module had its
+own copy, labelled "Groq Llama 70B" for a slot that serves gpt-oss-120b, with
+"$0.00 (free)" cost strings and limits presented as the provider's quota.
 """
 
 import datetime
 import logging
+import os
 
 log = logging.getLogger(__name__)
 
-PROVIDER_LIMITS = {
-    "groq_70b": {
-        "requests": 5_000,
-        "tokens": 80_000,
-        "label": "Groq Llama 70B",
-        "cost": "$0.00 (free)",
-    },
-    "groq_8b": {
-        "requests": 12_000,
-        "tokens": 400_000,
-        "label": "Groq Llama 8B",
-        "cost": "$0.00 (free)",
-    },
-    "gemini": {
-        "requests": 1_200,
-        "tokens": 800_000,
-        "label": "Gemini Flash",
-        "cost": "$0.00 (free)",
-    },
-    "openrouter": {
-        "requests": 200,
-        "tokens": 50_000,
-        "label": "OpenRouter (emergency)",
-        "cost": "~$0.01/1K tokens",
-    },
-}
+
+def _model_labels() -> dict:
+    """The model each provider slot is configured to call."""
+    from app.ai.providers.gemini import gemini_model
+    from app.ai.providers.openrouter import openrouter_model
+    from app.ai.router import DEFAULT_FALLBACK_MODEL, DEFAULT_PRIMARY_MODEL
+
+    return {
+        "groq_70b": f"Groq · {os.environ.get('LLM_PRIMARY_MODEL', DEFAULT_PRIMARY_MODEL)}",
+        "groq_8b": f"Groq · {os.environ.get('LLM_FALLBACK_MODEL', DEFAULT_FALLBACK_MODEL)}",
+        "gemini": f"Gemini · {gemini_model()}",
+        "openrouter": f"OpenRouter · {openrouter_model()}",
+    }
 
 
 def get_usage_today() -> dict:
-    """
-    Returns per-provider usage for today.
-    FIXED: renamed `r` → `redis_client`, added inner try/except per provider.
-    """
-    today = datetime.date.today().isoformat()
+    """Per-provider usage for today (UTC). Raises when Redis cannot be read —
+    a failed read used to be reported as zero use."""
+    from app.ai.routing_policy import DAILY_LIMITS
+    from app.core.redis_client import get_redis
+
+    today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+    labels = _model_labels()
+    r = get_redis()
     result = {}
-
-    try:
-        from app.core.redis_client import get_redis
-
-        redis_client = get_redis()  # FIXED: was `r`
-
-        for pk, limits in PROVIDER_LIMITS.items():
-            try:
-                req_used = int(redis_client.get(f"llm:requests:{pk}:{today}") or 0)
-                tok_used = int(redis_client.get(f"llm:tokens:{pk}:{today}") or 0)
-            except Exception as inner_e:
-                log.warning(f"metrics.get_usage_failed provider={pk}: {inner_e}")
-                req_used = 0
-                tok_used = 0
-
-            req_limit = limits.get("requests") or 1  # FIXED: avoid div by zero
-            tok_limit = limits.get("tokens") or 1
-
-            result[pk] = {
-                "label": limits["label"],
-                "requests_used": req_used,
-                "requests_limit": req_limit,
-                "requests_pct": round(req_used / req_limit * 100, 1),
-                "tokens_used": tok_used,
-                "tokens_limit": tok_limit,
-                "tokens_pct": round(tok_used / tok_limit * 100, 1),
-                "cost": limits["cost"],
-            }
-
-    except Exception as e:
-        log.warning(f"metrics.get_usage_today failed: {e}")
-
+    for pk, limits in DAILY_LIMITS.items():
+        req_used = int(r.get(f"llm:requests:{pk}:{today}") or 0)
+        tok_used = int(r.get(f"llm:tokens:{pk}:{today}") or 0)
+        req_limit = limits.get("requests") or 0
+        tok_limit = limits.get("tokens") or 0
+        result[pk] = {
+            "label": labels.get(pk, pk),
+            "requests_used": req_used,
+            "requests_limit": req_limit,
+            "requests_pct": round(req_used / req_limit * 100, 1) if req_limit else 0,
+            "tokens_used": tok_used,
+            "tokens_limit": tok_limit,
+            "tokens_pct": round(tok_used / tok_limit * 100, 1) if tok_limit else 0,
+        }
     return result
 
 
@@ -88,9 +61,16 @@ def format_budget_comment() -> str:
     from app.ai.circuit_breaker import status_all
     import os
 
-    usage = get_usage_today()
+    try:
+        usage = get_usage_today()
+    except Exception as e:
+        log.warning(f"metrics.usage_unreadable: {e}")
+        return (
+            "## 💰 LLM Budget\n\nToday's usage could not be read from Redis "
+            f"(`{type(e).__name__}`). This is not a report of zero use."
+        )
     breakers = status_all()
-    today = datetime.date.today().strftime("%B %d, %Y")
+    today = datetime.datetime.now(datetime.timezone.utc).date().strftime("%B %d, %Y")
 
     lines = [f"## 💰 LLM Budget — {today}\n"]
 
@@ -124,7 +104,7 @@ def format_budget_comment() -> str:
     lines.append("\n### Circuit Breakers\n")
     all_ok = True
     for pk, state in breakers.items():
-        label = PROVIDER_LIMITS.get(pk, {}).get("label", pk)
+        label = usage.get(pk, {}).get("label", pk)
         s = state.get("state", "unknown")
         if s == "closed":
             icon = "✅"
@@ -148,25 +128,10 @@ def format_budget_comment() -> str:
         )
 
     lines.append("\n---")
-    lines.append("🟢 < 70% · 🟡 70–90% · 🔴 > 90% · Resets at midnight UTC")
+    lines.append(
+        "Limits are this deployment's assumptions (`LLM_DAILY_LIMIT_<PROVIDER>_TOKENS`/"
+        "`_REQUESTS`), not read from the provider — set them to your plan's quotas. "
+        "Counts reset at midnight UTC. 🟢 < 70% · 🟡 70–90% · 🔴 > 90%"
+    )
 
     return "\n".join(lines)
-
-
-def record_call(provider_key: str, tokens: int):
-    """Manual usage recording."""
-    try:
-        from app.core.redis_client import get_redis
-
-        if tokens <= 0:
-            return
-        redis_client = get_redis()  # FIXED: was `r`
-        today = datetime.date.today().isoformat()
-        for k in (
-            f"llm:tokens:{provider_key}:{today}",
-            f"llm:requests:{provider_key}:{today}",
-        ):
-            redis_client.incr(k)
-            redis_client.expire(k, 86400)
-    except Exception as e:
-        log.debug(f"metrics.record_call_failed provider={provider_key}: {e}")

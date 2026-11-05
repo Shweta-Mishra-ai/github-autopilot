@@ -20,5 +20,5 @@ Report, in this order, and lead with whichever is non-empty:
    are where a change is most expensive, so they are where tests pay best.
 4. Totals: modules, imports, lines.
 
-The map is derived from the AST and never imports the code it reads, so it is
-safe to point at a repository you do not trust.
+The map is derived from the AST of the code this GitHub Autopilot deployment is
+running — it cannot map another repository — and never imports what it reads.

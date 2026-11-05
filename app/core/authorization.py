@@ -20,6 +20,7 @@ ALLOWED for maintainer-only commands: admin, maintain, write
 
 import logging
 import threading
+from app.core.commands import ADMIN_COMMANDS
 from app.core.commands import RESTRICTED_COMMANDS as _RESTRICTED_COMMANDS
 from app.github.client import gh_get, GitHubError
 
@@ -152,6 +153,14 @@ def check_command_permission(
     # is_maintainer() and then get_user_permission() issued a second lookup on
     # every denial, and for an uncached "unknown" that meant two live API calls.
     perm = get_user_permission(repo, author, token)
+
+    if full_cmd in ADMIN_COMMANDS and perm != PERMISSION_UNKNOWN and perm != "admin":
+        log.warning(f"auth.denied_not_admin cmd={cmd} user={author} repo={repo} perm={perm}")
+        return False, (
+            f"`{cmd}` requires **admin** access on this repository: it shows "
+            f"secret-scanning alerts, which GitHub shows only to admins.\n\n"
+            f"Your current access level: `{perm or 'none'}`"
+        )
 
     if perm in MAINTAINER_PERMISSIONS:
         log.info(f"auth.allowed cmd={cmd} user={author} repo={repo}")

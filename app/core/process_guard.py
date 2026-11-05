@@ -59,7 +59,18 @@ _KEY_PREFIX = "web:proc:"
 
 
 def register_this_process() -> None:
-    """Record this PID at boot. Never raises — a diagnostic must not stop boot."""
+    """
+    Record this PID. Never raises — a diagnostic must not stop boot.
+
+    Called at boot AND from verdict(), which /health calls. It used to run at
+    boot only, with a 90-second TTL, so ninety seconds after start the count
+    was 0 and /health said "Redis is unavailable" while Redis was fine.
+    worker.py is not a web process and does not register: it imports server,
+    whose boot registered it, and the recommended web+worker topology read as
+    "2 web processes".
+    """
+    if os.environ.get("AUTOPILOT_PROCESS_ROLE") == "worker":
+        return
     try:
         from app.core.redis_client import get_redis, is_redis_available
 
@@ -102,6 +113,7 @@ def verdict() -> tuple[str, str]:
     """
     ("ok" | "warn" | "unknown", explanation) — the shape preflight reports in.
     """
+    register_this_process()
     count = active_process_count()
 
     if count == 0:

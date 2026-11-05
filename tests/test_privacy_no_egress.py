@@ -35,6 +35,10 @@ PROXY_VARS = (
 )
 
 
+# This module blocks and records egress at the socket layer itself.
+pytestmark = pytest.mark.socket_egress_watch
+
+
 @pytest.fixture
 def watch_egress(monkeypatch):
     """Record every address attempted. Loopback still connects.

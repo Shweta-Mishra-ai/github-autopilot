@@ -18,18 +18,11 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# ─── Mock heavy deps before any project imports ──────────────────────────────
-# requests needs a proper mock with adapters sub-module
-_req_mock = MagicMock()
-_req_mock.adapters = MagicMock()
-_req_mock.adapters.HTTPAdapter = MagicMock
-_req_mock.Session = MagicMock
-_req_mock.exceptions = MagicMock()
-_req_mock.exceptions.RequestException = Exception
-_req_mock.exceptions.ConnectionError = ConnectionError
-sys.modules.setdefault("requests", _req_mock)
-sys.modules.setdefault("requests.adapters", _req_mock.adapters)
-sys.modules.setdefault("requests.exceptions", _req_mock.exceptions)
+# The real requests: it is a hard dependency, always installed where tests
+# run. A MagicMock installed here with setdefault became `requests` for the
+# whole session whenever this file was collected first, and every later
+# test that touched HTTP failed with "MagicMock has no attribute 'request'".
+import requests  # noqa: E402,F401
 
 # Mock ONLY genuinely-missing deps. This list used to blanket-mock flask,
 # which (as the alphabetically-first offender at collection time) poisoned
@@ -59,18 +52,10 @@ ALL_COMMANDS = sorted({
 })
 
 
-def _extract_command(body: str):
-    """Fixed word-boundary extractor (the new implementation)."""
-    body_lower = body.lower()
-    for cmd in ALL_COMMANDS:
-        if re.search(r'(?<![/\w])' + re.escape(cmd) + r'\b', body_lower):
-            return cmd
-    return None
-
-
-def _old_extract_command(body: str):
-    """Old buggy substring extractor."""
-    return next((c for c in ALL_COMMANDS if c in body.lower()), None)
+# These tests used to exercise a COPY of the extractor defined here in the
+# test file, so they passed whatever the application did. They now test the
+# real one.
+from app.handlers.comments.dispatcher import extract_command as _extract_command  # noqa: E402
 
 
 def _mock_llm(resp=None, tokens=50):
@@ -93,7 +78,10 @@ class TestCommandMatching:
         assert _extract_command("/fix the crash") == "/fix"
 
     def test_release_matches_correctly(self):
-        assert _extract_command("please /release now") == "/release"
+        assert _extract_command("/release now") == "/release"
+
+    def test_release_mentioned_in_prose_does_not_run(self):
+        assert _extract_command("please /release now") is None
 
     def test_runtests_matches_correctly(self):
         assert _extract_command("/runtests please") == "/runtests"
@@ -109,8 +97,15 @@ class TestCommandMatching:
     def test_inline_text_after_command(self):
         assert _extract_command("/health check now") == "/health"
 
-    def test_command_in_middle_of_sentence(self):
-        assert _extract_command("please run /runtests on this branch") == "/runtests"
+    def test_command_in_middle_of_sentence_does_not_run(self):
+        """Prose that mentions a command is not an instruction."""
+        assert _extract_command("please run /runtests on this branch") is None
+
+    def test_command_after_a_mention_runs(self):
+        assert _extract_command("@github-autopilot /runtests") == "/runtests"
+
+    def test_command_on_a_later_line_runs(self):
+        assert _extract_command("Looks good.\n/runtests") == "/runtests"
 
     def test_no_command_returns_none(self):
         assert _extract_command("just a normal comment") is None
@@ -134,9 +129,12 @@ class TestCommandMatching:
         # The new extractor must correctly get /autofix
         assert _extract_command("/autofix the null pointer") == "/autofix"
 
-    def test_prefixed_slash_not_confused(self):
-        """'/release' in URL should still match."""
-        assert _extract_command("See /release for details") == "/release"
+    def test_a_reference_to_a_command_does_not_run_it(self):
+        """This used to cut a release."""
+        assert _extract_command("See /release for details") is None
+
+    def test_fixture_is_not_fix(self):
+        assert _extract_command("/fixture update") is None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -303,8 +301,9 @@ class TestRunAutofix:
         meta = LLMResponse(text="ok", provider="groq", model="llama3", total_tokens=50)
         plan = self._plan(target="app/foo.py")
         fix_resp = {
-            "fixed_content": "def foo():\n    if x is None: return\n    return x.strip()\n",
-            "changed_lines": 1,
+            "edits": [
+                {"find": "    return x.strip()", "replace": "    if x is None: return\n    return x.strip()"}
+            ],
         }
         orig_content = b"def foo():\n    return x.strip()\n"
 
@@ -353,6 +352,27 @@ class TestRunAutofix:
 # 3. /release TESTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _release_gh(tags, since_tag, commits=()):
+    """GitHub, by route: the tags, the compare against the latest tag, the
+    branch commits (used only when there is no tag)."""
+    seen = []
+
+    def get(path, token):
+        seen.append(path)
+        if "/tags" in path:
+            return tags
+        if "/releases" in path:
+            return []  # no drafts yet
+        if "/compare/" in path:
+            return {"commits": list(since_tag), "total_commits": len(since_tag)}
+        if "/commits" in path:
+            return list(commits)
+        raise AssertionError(f"unexpected GET {path}")
+
+    get.seen = seen
+    return get
+
+
 class TestCmdRelease:
     """Tests for _cmd_release."""
 
@@ -372,10 +392,10 @@ class TestCmdRelease:
         }
         with patch("app.handlers.comments.router.ask",
                    return_value=self._mock_router_text(plan)), \
-             patch("app.handlers.comments.gh_get", side_effect=[
-                 [{"name": "v1.1.0"}],   # tags
-                 [{"commit": {"message": "feat: add thing"}}] * 5,  # commits
-             ]), \
+             patch("app.handlers.comments.gh_get", side_effect=_release_gh(
+                 [{"name": "v1.1.0"}],
+                 [{"commit": {"message": "feat: add thing"}}] * 5,  # since v1.1.0
+             )), \
              patch("app.handlers.comments.gh_post", return_value={
                  "html_url": "https://github.com/test/repo/releases/1",
                  "number": 1,
@@ -398,16 +418,39 @@ class TestCmdRelease:
         }
         with patch("app.handlers.comments.router.ask",
                    return_value=self._mock_router_text(plan)), \
-             patch("app.handlers.comments.gh_get", side_effect=[
+             patch("app.handlers.comments.gh_get", side_effect=_release_gh(
                  [],  # no tags
-                 [{"commit": {"message": "init"}}],
-             ]), \
+                 [],
+                 commits=[{"commit": {"message": "init"}}],
+             )), \
              patch("app.handlers.comments.gh_post", return_value={
                  "html_url": "https://github.com/test/repo/releases/1",
              }):
                 result = _cmd_release("test/repo", "token", "author")
 
-        assert "v0.0" in result or "Release" in result
+        # Not `"Release" in result`: "Release failed" contains it too.
+        assert result.startswith("## 🚀 Draft Release Created"), result
+        assert "`v0.0.1`" in result
+
+    def test_a_second_release_does_not_draft_the_same_version_again(self):
+        """Round-4 audit: a draft creates no tag, so /release twice drafted
+        the same version twice."""
+        from app.handlers.comments import _cmd_release
+
+        def gh(path, token):
+            if "/tags" in path:
+                return [{"name": "v1.2.3"}]
+            if "/compare/" in path:
+                return {"commits": [{"commit": {"message": "fix: x"}}], "total_commits": 1}
+            if "/releases" in path:
+                return [{"tag_name": "v1.2.4", "draft": True, "html_url": "https://r/1"}]
+            raise AssertionError(path)
+
+        with patch("app.handlers.comments.gh_get", side_effect=gh), \
+             patch("app.handlers.comments.gh_post") as post:
+            result = _cmd_release("test/repo", "token", "author")
+        post.assert_not_called()
+        assert "Draft Already Exists" in result and "https://r/1" in result
 
     def test_release_github_api_failure(self):
         from app.handlers.comments import _cmd_release
@@ -425,10 +468,10 @@ class TestCmdRelease:
         }
         with patch("app.handlers.comments.router.ask",
                    return_value=self._mock_router_text(plan)), \
-             patch("app.handlers.comments.gh_get", side_effect=[
+             patch("app.handlers.comments.gh_get", side_effect=_release_gh(
                  [{"name": "v1.9.0"}],
                  [{"commit": {"message": "feat: big thing"}}],
-             ]), \
+             )), \
              patch("app.handlers.comments.gh_post", return_value={
                  "html_url": "https://github.com/test/repo/releases/42",
              }):
@@ -591,33 +634,58 @@ class TestCmdReport:
 
 class TestGeneralCommandSafety:
 
+    # Both tests below passed for the wrong reason: the payload had no
+    # `sender`, so the handler returned at "missing required fields" before
+    # the rule under test, and the mint they patched was the package's name,
+    # not service.py's. And `edited` is handled now — an edit runs a command
+    # when the edit added it — so "non-created action skipped" was false.
+
+    @staticmethod
+    def _payload(action="created", body="/fix stuff", sender="user", sender_type="User", before=None):
+        p = {
+            "action": action,
+            "comment": {"body": body, "user": {"login": sender}},
+            "repository": {"full_name": "test/repo"},
+            "issue": {"number": 1, "title": "t"},
+            "installation": {"id": 123},
+            "sender": {"login": sender, "type": sender_type},
+        }
+        if before is not None:
+            p["changes"] = {"body": {"from": before}}
+        return p
+
+    def _reached_auth(self, payload) -> bool:
+        """True when the handler got as far as minting a token."""
+        from app.handlers.comments import handle
+
+        with patch(
+            "app.handlers.comments.service.get_installation_token",
+            side_effect=RuntimeError("reached auth"),
+        ) as mint:
+            try:
+                handle(payload)
+            except RuntimeError as e:
+                if "reached auth" not in str(e):
+                    raise
+        return mint.called
+
+    def test_the_payload_reaches_auth_from_a_person(self):
+        """The control: without it, every 'skipped' below could be a payload
+        the handler rejects for some other reason."""
+        assert self._reached_auth(self._payload())
+
     def test_bot_author_skipped(self):
         """Bot comments must be silently ignored."""
-        from app.handlers.comments import handle
-        payload = {
-            "action": "created",
-            "comment": {"body": "/fix stuff", "user": {"login": "dependabot[bot]"}},
-            "repository": {"full_name": "test/repo"},
-            "issue": {"number": 1},
-            "installation": {"id": 123},
-        }
-        # Should return without doing anything — no token call
-        with patch("app.handlers.comments.get_installation_token") as mock_token:
-            handle(payload)
-            mock_token.assert_not_called()
+        assert not self._reached_auth(self._payload(sender="dependabot[bot]", sender_type="Bot"))
 
-    def test_non_created_action_skipped(self):
-        from app.handlers.comments import handle
-        payload = {
-            "action": "edited",  # not 'created'
-            "comment": {"body": "/fix stuff", "user": {"login": "user"}},
-            "repository": {"full_name": "test/repo"},
-            "issue": {"number": 1},
-            "installation": {"id": 123},
-        }
-        with patch("app.handlers.comments.get_installation_token") as mock_token:
-            handle(payload)
-            mock_token.assert_not_called()
+    def test_an_edit_that_kept_the_command_is_skipped(self):
+        assert not self._reached_auth(self._payload(action="edited", body="/fix stuffs", before="/fix stuff"))
+
+    def test_an_edit_that_added_the_command_runs(self):
+        assert self._reached_auth(self._payload(action="edited", body="/fix stuff", before="/fxi stuff"))
+
+    def test_a_deleted_comment_is_skipped(self):
+        assert not self._reached_auth(self._payload(action="deleted"))
 
 
 # ─── Runner ──────────────────────────────────────────────────────────────────
@@ -625,3 +693,41 @@ class TestGeneralCommandSafety:
 if __name__ == "__main__":
     print("Run with: python -m pytest tests/test_commands_fixed.py -v")
 
+
+
+def test_breaking_change_counts_only_as_a_footer_token():
+    """Round-4 audit: "This is not a BREAKING CHANGE." in a body bumped the
+    major version."""
+    from app.handlers.comments.publisher import next_version
+
+    assert next_version("v1.4.2", ["fix: typo\n\nThis is not a BREAKING CHANGE."]) == "v1.4.3"
+    assert next_version("v1.4.2", ["fix: api\n\nBREAKING CHANGE: drops /v1"]) == "v2.0.0"
+    assert next_version("v1.4.2", ["feat!: new auth"]) == "v2.0.0"
+
+
+def test_a_merge_commit_is_not_a_feature():
+    """Round-4 audit: /merge titled its commit "feat: merge …", so the next
+    /release bumped the minor version for a typo fix."""
+    from app.handlers.comments.publisher import next_version
+
+    title = "Merge pull request #7 from fix-typo (/merge by maint)"
+    assert next_version("v1.4.2", [title, "fix: typo"]) == "v1.4.3"
+
+
+def test_version_shows_the_highest_tag_and_a_published_release():
+    """Round-4 audit: tags[0] is name-ordered (v1.9.0 before v1.10.0) and the
+    latest "release" could be a draft or have no name."""
+    from app.handlers.comments.reviewer import cmd_version
+
+    def gh(path, token):
+        if "/tags" in path:
+            return [{"name": "v1.9.0"}, {"name": "v1.10.0"}, {"name": "nightly"}]
+        if "/releases" in path:
+            return [{"name": "Next", "draft": True, "tag_name": "v1.11.0"},
+                    {"name": None, "draft": False, "tag_name": "v1.10.0"}]
+        return [{"sha": "a" * 40, "commit": {"message": "fix: x"}}]
+
+    with patch("app.handlers.comments.gh_get", side_effect=gh):
+        out = cmd_version("o/r", "t")
+    assert "| **Latest Tag** | `v1.10.0` |" in out
+    assert "| **Latest Release** | `v1.10.0` |" in out

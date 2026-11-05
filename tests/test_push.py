@@ -4,6 +4,7 @@ Sprint 8 — push handler tests.
 Covers: secret scan, dep scan, commit lint, dedup, bot skip, branch filter.
 """
 
+import pytest
 from unittest.mock import MagicMock, patch
 
 
@@ -14,9 +15,10 @@ def _payload(
     ref="refs/heads/main",
     commits=None,
     installation_id=99,
+    default_branch="main",
 ):
     return {
-        "repository": {"full_name": "org/repo"},
+        "repository": {"full_name": "org/repo", "default_branch": default_branch},
         "pusher": {"name": pusher},
         "ref": ref,
         "commits": commits if commits is not None else [{"id": "abc1234", "message": "feat: add login", "added": [], "modified": []}],
@@ -56,15 +58,20 @@ class TestHandleSkips:
             mock_tok.assert_not_called()
 
     def test_non_main_branch_skipped(self):
-        """V5: non-main branches still run secret scan, so token IS fetched."""
+        """V5: non-main branches still run secret scan, so token IS fetched.
+        (Asserted nothing; the name said "skipped" while the docstring said
+        the opposite. What happens: the secret scan runs, the rest does not.)"""
         with patch("app.handlers.push.get_installation_token", return_value="tok") as mock_tok, \
              patch("app.handlers.push.load_config", return_value=_mock_config()), \
-             patch("app.handlers.push._scan_secrets"), \
-             patch("app.handlers.push._scan_dependencies"), \
-             patch("app.handlers.push._lint_commits"), \
-             patch("app.handlers.push._index_changed_files"):
+             patch("app.handlers.push._scan_secrets") as secrets, \
+             patch("app.handlers.push._scan_dependencies") as deps, \
+             patch("app.handlers.push._lint_commits") as lint:
             from app.handlers.push import handle
             handle(_payload(ref="refs/heads/feature/foo"))
+        mock_tok.assert_called_once()
+        secrets.assert_called_once()
+        deps.assert_not_called()
+        lint.assert_not_called()
 
     def test_empty_commits_skipped(self):
         import importlib
@@ -74,15 +81,24 @@ class TestHandleSkips:
             push_mod.handle(_payload(commits=[]))
             mock_tok.assert_not_called()
 
-    def test_master_branch_allowed(self):
+    def _scans(self, **payload_kw):
         with patch("app.handlers.push.get_installation_token", return_value="tok"), \
              patch("app.handlers.push.load_config", return_value=_mock_config()), \
-             patch("app.handlers.push._scan_secrets"), \
-             patch("app.handlers.push._scan_dependencies"), \
-             patch("app.handlers.push._lint_commits"), \
-             patch("app.handlers.push._index_changed_files"):
+             patch("app.handlers.push._scan_secrets") as secrets, \
+             patch("app.handlers.push._scan_dependencies") as deps, \
+             patch("app.handlers.push._lint_commits") as lint:
             from app.handlers.push import handle
-            handle(_payload(ref="refs/heads/master"))  # Should not skip
+            handle(_payload(**payload_kw))
+        return secrets.called, deps.called, lint.called
+
+    # This was "master branch allowed" with no assertion. The handler reads
+    # the repository's real default branch, so master gets the full scan
+    # when it IS the default, and only the secret scan in a `main` repo.
+    def test_master_is_fully_scanned_when_it_is_the_default(self):
+        assert self._scans(ref="refs/heads/master", default_branch="master") == (True, True, True)
+
+    def test_a_stray_master_in_a_main_repo_gets_only_the_secret_scan(self):
+        assert self._scans(ref="refs/heads/master", default_branch="main") == (True, False, False)
 
     def test_auth_failure_returns_early(self):
         with patch("app.handlers.push.get_installation_token", side_effect=Exception("auth failed")), \
@@ -170,36 +186,6 @@ class TestScanSecrets:
             args = mock_post.call_args[0]
             assert "issues" in args[0]
 
-    def test_dedup_suppresses_second_issue(self):
-        """SPRINT 8 KEY TEST: same finding set within 1h → only 1 issue."""
-        fake_finding = MagicMock()
-        fake_finding.pattern_name = "GitHub PAT (classic)"
-        fake_finding.severity = "critical"
-
-        post_calls = []
-
-        def fake_already_reported(repo, key, ttl_seconds=3600):
-            # First call → False (not reported), second → True (already done)
-            already = len(post_calls) > 0
-            return already
-
-        with patch("app.handlers.push.gh_get", return_value={"files": [{"patch": "+tok=ghp_xxx"}]}), \
-             patch("app.handlers.push.gh_post", side_effect=lambda *a, **kw: post_calls.append(1)) as mock_post, \
-             patch("app.handlers.push.scan_diff", return_value=[fake_finding]), \
-             patch("app.handlers.push.format_secret_findings", return_value="## Secret"), \
-             patch("app.handlers.push._already_reported", side_effect=fake_already_reported), \
-             patch("app.handlers.push.notify_secret_detected"):
-            from app.handlers.push import _scan_secrets
-            log = MagicMock()
-            commits = [_commit()]
-            _scan_secrets("org/repo", commits, "tok", MagicMock(), log)  # creates issue
-            _scan_secrets("org/repo", commits, "tok", MagicMock(), log)  # deduped
-
-        assert mock_post.call_count == 1, (
-            "SPRINT 8 REGRESSION: _scan_secrets dedup failed — "
-            "second push with same secrets created duplicate issue"
-        )
-
     def test_different_findings_reuse_the_same_alert_issue(self):
         """
         V7: two pushes with different secret patterns must NOT open two issues.
@@ -223,7 +209,6 @@ class TestScanSecrets:
         with patch("app.handlers.push.gh_get", return_value={"files": [{"patch": "+t=x"}]}), \
              patch("app.handlers.push.gh_post", return_value={"number": 9}) as mock_post, \
              patch("app.handlers.push.format_secret_findings", return_value="## S"), \
-             patch("app.handlers.push._already_reported", return_value=False), \
              patch("app.core.redis_client.get_redis", return_value=fake_redis), \
              patch("app.handlers.push.notify_secret_detected"):
             from app.handlers.push import _scan_secrets
@@ -264,12 +249,14 @@ class TestScanSecrets:
             _scan_secrets("org/repo", [_commit()], "tok", MagicMock(), MagicMock())
             mock_post.assert_not_called()
 
-    def test_gh_get_error_handled_gracefully(self):
+    def test_an_unreadable_commit_is_raised_for_retry_not_called_clean(self):
+        """A commit the scan could not read was logged and treated as clean."""
         with patch("app.handlers.push.gh_get", side_effect=Exception("network error")), \
              patch("app.handlers.push.gh_post") as mock_post:
             from app.handlers.push import _scan_secrets
             log = MagicMock()
-            _scan_secrets("org/repo", [_commit()], "tok", MagicMock(), log)
+            with pytest.raises(Exception, match="network error"):
+                _scan_secrets("org/repo", [_commit()], "tok", MagicMock(), log)
             mock_post.assert_not_called()
 
 
@@ -406,7 +393,8 @@ class TestLintCommits:
 
 
 class TestSecretScanSkip:
-    """Test/example/docs paths must be skipped by the push secret scanner."""
+    """Only files whose purpose is stand-in values are skipped — as the
+    scanner defines them, matched on path segments."""
 
     def test_skips_test_and_example_paths(self):
         from app.handlers.push import _skip_secret_scan
@@ -417,9 +405,7 @@ class TestSecretScanSkip:
             "test_secrets.py",
             ".env.example",
             "config/prod.env.example",
-            "docs/setup.md",
             "fixtures/keys.txt",
-            "examples/demo.py",
         ]:
             assert _skip_secret_scan(p) is True, p
 
@@ -428,3 +414,223 @@ class TestSecretScanSkip:
 
         for p in ["app/handlers/push.py", "server.py", "src/config.py", ""]:
             assert _skip_secret_scan(p) is False, p
+
+
+class TestSecretScanPaths:
+    def test_a_directory_name_containing_test_or_docs_is_not_skipped(self):
+        """Substring matching skipped all of these: contest/, protest/, attest/
+        and latest/ contain "test/"; mydocs/ contains "docs/"."""
+        from app.handlers.push import _skip_secret_scan
+
+        for p in [
+            "deploy/latest/settings.py",
+            "app/contest/config.py",
+            "src/mydocs/creds.py",
+            "infra/protest/keys.env",
+            "services/attest/secrets.yaml",
+        ]:
+            assert _skip_secret_scan(p) is False, p
+
+    def test_documentation_is_scanned_for_real_tokens(self):
+        """docs/ was skipped outright; the scanner scans prose with its
+        high-specificity patterns, so a pasted token in docs is found."""
+        from app.handlers.push import _skip_secret_scan
+        from app.security.enhanced_secrets import scan_diff
+
+        assert _skip_secret_scan("docs/setup.md") is False
+        token = "ghp_" + "aB3dE5fG7hJ9kL1mN3pQ5rS7tU9vW1xY3zA5"
+        found = scan_diff(f"+export GITHUB_TOKEN={token}\n", file_path="docs/setup.md")
+        assert found and found[0].severity == "critical"
+
+
+class _KV:
+    """The two Redis calls the secret path makes, with real NX semantics."""
+
+    def __init__(self):
+        self.data = {}
+
+    def set(self, key, value, nx=False, ex=None):
+        if nx and key in self.data:
+            return None
+        self.data[key] = value
+        return True
+
+    def get(self, key):
+        return self.data.get(key)
+
+
+def _finding(pattern="GitHub PAT (classic)", value="ghp_…Ab12", path="app/a.py"):
+    from app.security.enhanced_secrets import SecretFinding
+
+    return SecretFinding(
+        pattern_name=pattern, line_number=1, severity="critical",
+        redacted_match=value, file_path=path,
+    )
+
+
+class TestSecretDedupIsPerFinding:
+    """The dedup key was per repo: after one alert, every other secret pushed
+    to that repo for an hour was dropped and never re-scanned."""
+
+    def _push(self, kv, findings):
+        posts = []
+
+        def _gh_get(path, _token):
+            if "/commits/" in path:
+                return {"files": [{"patch": "+x", "filename": "app/a.py"}]}
+            return {"state": "open"}
+
+        def _gh_post(path, _token, body):
+            posts.append(path)
+            return {"number": 7}
+
+        with patch("app.core.redis_client.get_redis", return_value=kv), \
+             patch("app.handlers.push.gh_get", side_effect=_gh_get), \
+             patch("app.handlers.push.gh_post", side_effect=_gh_post), \
+             patch("app.handlers.push.scan_diff", return_value=findings), \
+             patch("app.handlers.push.notify_secret_detected"):
+            from app.handlers.push import _scan_secrets
+
+            _scan_secrets("org/repo", [_commit()], "tok", MagicMock(), MagicMock())
+        return posts
+
+    def test_the_same_secret_pushed_again_is_reported_once(self):
+        kv = _KV()
+        assert self._push(kv, [_finding()]) == ["/repos/org/repo/issues"]
+        assert self._push(kv, [_finding()]) == []
+
+    def test_a_different_secret_minutes_later_is_reported(self):
+        kv = _KV()
+        self._push(kv, [_finding()])
+        posts = self._push(kv, [_finding("AWS Access Key ID", "AKIA…WXYZ")])
+        assert posts == ["/repos/org/repo/issues/7/comments"], (
+            "a new secret must be appended to the open alert, not dropped"
+        )
+
+    def test_only_the_new_findings_are_reported(self):
+        kv = _KV()
+        self._push(kv, [_finding()])
+        with patch("app.handlers.push.format_secret_findings", return_value="b") as fmt:
+            self._push(kv, [_finding(), _finding("AWS Access Key ID", "AKIA…WXYZ")])
+        assert [f.pattern_name for f in fmt.call_args[0][0]] == ["AWS Access Key ID"]
+
+    def test_one_secret_in_several_commits_is_one_finding(self):
+        kv = _KV()
+        with patch("app.handlers.push.format_secret_findings", return_value="b") as fmt:
+            self._push(kv, [_finding(), _finding()])
+        assert len(fmt.call_args[0][0]) == 1
+
+    def test_redis_down_reports_nothing_rather_than_duplicates(self):
+        class Down:
+            def set(self, *a, **kw):
+                raise ConnectionError("down")
+
+            def get(self, *a):
+                raise ConnectionError("down")
+
+        assert self._push(Down(), [_finding()]) == []
+
+    def test_the_fingerprint_does_not_contain_the_value(self):
+        from app.handlers.push import _secret_fingerprint
+
+        fp = _secret_fingerprint(_finding(value="ghp_…Ab12"))
+        assert "Ab12" not in fp and len(fp) == 24
+
+
+class TestDefaultBranch:
+    """The default branch is the repository's, not a hard-coded main/master."""
+
+    def _run(self, ref, default_branch):
+        with patch("app.handlers.push.get_installation_token", return_value="tok"), \
+             patch("app.handlers.push.load_config", return_value=_mock_config()), \
+             patch("app.handlers.push._scan_secrets"), \
+             patch("app.handlers.push._scan_dependencies") as deps, \
+             patch("app.handlers.push._lint_commits") as lint, \
+             patch("app.handlers.readme.maybe_update_readme"), \
+             patch("app.handlers.commit_message.suggest_commit_messages"):
+            from app.handlers.push import handle
+
+            handle(_payload(ref=ref, default_branch=default_branch))
+        return deps, lint
+
+    def test_a_develop_default_branch_gets_the_full_scan(self):
+        deps, lint = self._run("refs/heads/develop", "develop")
+        deps.assert_called_once()
+        assert lint.call_args.kwargs["branch"] == "develop"
+
+    def test_a_stray_master_in_a_main_repo_is_not_the_default(self):
+        deps, lint = self._run("refs/heads/master", "main")
+        deps.assert_not_called()
+        lint.assert_not_called()
+
+    def test_the_dependency_scan_reads_the_pushed_commit(self):
+        deps, _ = self._run("refs/heads/main", "main")
+        assert deps.call_args.kwargs["ref"] == "abc1234"
+
+    def test_the_dependency_file_is_fetched_at_that_commit(self):
+        from app.handlers.push import _scan_dependencies
+
+        commits = [_commit(modified=["requirements.txt"])]
+        with patch("app.handlers.push.gh_get", side_effect=Exception("stop")) as get, \
+             pytest.raises(Exception, match="stop"):
+            _scan_dependencies("org/repo", commits, "tok", _mock_config(), MagicMock(), ref="abc1234")
+        assert get.call_args[0][0] == "/repos/org/repo/contents/requirements.txt?ref=abc1234"
+
+    def test_the_lint_issue_names_the_branch(self):
+        commits = [_commit(sha=f"abc{i}xxx", msg="wip") for i in range(4)]
+        with patch("app.handlers.push._already_reported", return_value=False), \
+             patch("app.handlers.push.gh_post") as post:
+            from app.handlers.push import _lint_commits
+
+            _lint_commits("org/repo", commits, "tok", _mock_config(), MagicMock(), branch="trunk")
+        assert post.call_args[0][2]["title"].endswith("pushed to trunk")
+
+
+class TestAlertsAreNotLostToOneFailedPost:
+    """The dedupe key was taken before the issue POST; a 502 on the POST was
+    swallowed and the next push was told the alert had been sent."""
+
+    def test_a_failed_secret_alert_releases_its_keys_and_raises(self, fake_redis):
+        from app.handlers import push
+
+        finding = MagicMock(
+            file_path="app/x.py", pattern_name="AWS", redacted_match="AKIA****", severity="critical"
+        )
+        with (
+            patch.object(
+                push, "_commit_files", return_value=[{"filename": "app/x.py", "patch": "+k"}]
+            ),
+            patch.object(push, "scan_diff", return_value=[finding]),
+            patch.object(push, "_actionable_secrets", side_effect=lambda f: f),
+            patch.object(
+                push, "_open_secret_issue", side_effect=push.GitHubError("bad gateway", 502)
+            ),
+        ):
+            with pytest.raises(push.GitHubError):
+                push._scan_secrets("o/r", [_commit()], "tok", MagicMock(), MagicMock())
+        assert push._unreported_secrets("o/r", [finding]) == [finding], "key was released"
+
+    def test_a_failed_lint_issue_releases_its_key_and_raises(self, fake_redis):
+        from app.handlers import push
+
+        commits = [_commit(sha=f"abc{i}xxx", msg="wip") for i in range(4)]
+        with patch.object(push, "gh_post", side_effect=push.GitHubError("bad gateway", 502)):
+            with pytest.raises(push.GitHubError):
+                push._lint_commits("o/r", commits, "tok", _mock_config(), MagicMock())
+        assert push._already_reported("o/r", "commit_lint") is False, "key was released"
+
+    def test_large_commits_are_read_page_by_page(self):
+        from app.handlers import push
+
+        pages = {1: [{"filename": f"f{i}"} for i in range(300)], 2: [{"filename": "f300"}]}
+        with patch.object(
+            push, "gh_get", side_effect=lambda p, t: {"files": pages[int(p.rsplit("page=", 1)[1])]}
+        ):
+            assert len(push._commit_files("o/r", "sha", "tok")) == 301
+
+
+def test_a_connection_error_is_transient():
+    import server
+    from app.github.client import GitHubError
+
+    assert server._is_transient(GitHubError("ReadTimeout: x", 0))

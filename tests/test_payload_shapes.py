@@ -19,6 +19,7 @@ These tests drive the real entry points with the real payload shapes.
 
 from __future__ import annotations
 
+import pytest
 from unittest.mock import MagicMock, patch
 
 
@@ -57,24 +58,31 @@ class TestHandlersSurviveADeletedAccount:
     invisible: server._run_handler caught the TypeError and the event was gone
     with a log line that named no cause."""
 
+    # These patched app.github.auth, which the handlers do not look the name
+    # up on, and relied on the handler swallowing whatever happened next — so
+    # they could not tell "reached auth" from "crashed before it". Auth
+    # failures are raised now; the sentinel proves which one happened.
     def test_pull_request_handler_does_not_crash_on_a_null_user(self):
-        from app.handlers.pull_request import handle
+        from app.handlers import pull_request
 
-        with patch("app.github.auth.get_installation_token", side_effect=Exception("stop here")):
-            handle(_pr_payload(user=None))  # must reach auth, not raise before it
+        with patch.object(pull_request, "get_installation_token", side_effect=RuntimeError("reached auth")), \
+             pytest.raises(RuntimeError, match="reached auth"):
+            pull_request.handle(_pr_payload(user=None))
 
     def test_issue_handler_does_not_crash_on_a_null_user(self):
-        from app.handlers.issues import handle
+        from app.handlers import issues
 
-        with patch("app.github.auth.get_installation_token", side_effect=Exception("stop here")):
-            handle(_issue_payload(user=None))
+        with patch.object(issues, "get_installation_token", side_effect=RuntimeError("reached auth")), \
+             pytest.raises(RuntimeError, match="reached auth"):
+            issues.handle(_issue_payload(user=None))
 
     def test_a_ghosted_issue_is_still_triaged(self):
         """An empty author is not a reason to drop the issue. The bot-loop
         guard that follows checks for '[bot]' suffixes, which "" is not."""
         from app.handlers import issues
 
-        with patch.object(issues, "get_installation_token", side_effect=Exception("reached")) as t:
+        with patch.object(issues, "get_installation_token", side_effect=RuntimeError("reached")) as t, \
+             pytest.raises(RuntimeError, match="reached"):
             issues.handle(_issue_payload(user=None))
         assert t.called, "handler returned before auth — the ghosted issue was dropped"
 

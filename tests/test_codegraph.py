@@ -430,3 +430,26 @@ class TestTwoFilesCannotSilentlyShareOneImportPath:
             f"two files share one import path: {stats.get('collisions')}. "
             "Python imports only one of them; the other is dead code."
         )
+
+
+class TestAuditRound2Codegraph:
+    def test_loc_counts_lines_not_newlines_plus_one(self, tmp_path):
+        from app.intelligence.codegraph import build_graph
+
+        pkg = tmp_path / "pkg"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+        (pkg / "a.py").write_text("x = 1\ny = 2\n")
+        graph = build_graph("pkg", root=str(tmp_path))
+        assert graph.nodes["pkg.a"].loc == 2
+
+    def test_a_name_imported_from_an_own_module_is_not_an_external_dep(self, tmp_path):
+        from app.intelligence.codegraph import build_graph
+
+        pkg = tmp_path / "pkg"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+        (pkg / "a.py").write_text("def f():\n    pass\n")
+        (pkg / "b.py").write_text("import json\nfrom pkg.a import f\n")
+        graph = build_graph("pkg", root=str(tmp_path))
+        assert graph.nodes["pkg.b"].external_deps == ["json"]

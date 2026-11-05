@@ -153,3 +153,57 @@ class TestHealthEndpointExposesIt:
             "app.core.health_check.get_system_health", side_effect=RuntimeError("x")
         ):
             assert srv._provider_health() == {}
+
+
+class TestHealthReportsOnlyWhatWasMeasured:
+    """Round-3 audit F10: /health counters that could never move and checks
+    that read "ok" with no data behind them."""
+
+    def _get(self):
+        import server
+
+        headers = (
+            {"Authorization": f"Bearer {server.METRICS_TOKEN}"} if server.METRICS_TOKEN else {}
+        )
+        return server.app.test_client().get("/health", headers=headers).get_json()
+
+    def test_github_api_is_unknown_before_any_call(self):
+        from app.github import rate_limit
+
+        with patch.object(rate_limit, "_state", {}):
+            assert self._get()["checks"]["github_api"].startswith("unknown")
+
+    def test_github_api_reads_the_measured_remaining(self):
+        import time
+
+        from app.github import rate_limit
+
+        state = {"k": {"key": "k", "remaining": 10, "reset_at": time.time() + 600}}
+        with patch.object(rate_limit, "_state", state):
+            body = self._get()
+        assert body["checks"]["github_api"] == "rate_limited"
+        assert body["status"] != "ok"
+
+    def test_a_secondary_rate_limit_is_counted(self):
+        import requests
+
+        from app.core.metrics import metrics
+        from app.github import client
+
+        before = metrics.get("github.secondary_rate_limited")
+        resp = requests.models.Response()
+        resp.status_code = 403
+        resp._content = b'{"message": "You have exceeded a secondary rate limit"}'
+        with pytest.raises(client.GitHubSecondaryRateLimitError):
+            client._handle_response(resp, "GET", "/repos/o/r")
+        assert metrics.get("github.secondary_rate_limited") == before + 1
+        assert self._get()["metrics"]["secondary_rate_limited"] == before + 1
+
+    def test_unreadable_latency_is_not_zero(self, registered):
+        registered("gemini")
+        with patch("app.core.redis_client.get_redis", side_effect=ConnectionError("down")):
+            p = H.get_system_health()["providers"]["gemini"]
+        assert p["avg_latency_ms"] is None and p["error_rate"] is None
+
+    def test_the_dead_degraded_banner_is_gone(self):
+        assert not hasattr(H, "get_degraded_message")

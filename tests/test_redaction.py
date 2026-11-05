@@ -41,3 +41,43 @@ class TestRedaction:
 
     def test_none_safe(self):
         assert redact(None) == ""
+
+
+class TestAudit2:
+    """Found by the 2026-10-08 audit."""
+
+    def test_a_keyword_value_is_not_left_behind(self):
+        from app.core.redaction import redact
+
+        value = "Xk9#pQ2vL7mN4wR8tZ"
+        out = redact(f'set db_password = "{value}" before deploying')
+        assert value not in out and "before deploying" in out
+
+    def test_a_short_value_is_masked_too(self):
+        """Matches of 12 characters or fewer were skipped entirely."""
+        from app.core.redaction import redact
+
+        out = redact("db: mysql://root:hunter2x9@db.internal/app")
+        assert "hunter2x9" not in out
+
+    def test_a_line_without_a_secret_is_untouched(self):
+        from app.core.redaction import redact
+
+        text = "Use the token_count field when budgeting = yes"
+        assert redact(text) == text
+
+    def test_webhook_path_in_a_urllib3_error_is_redacted(self):
+        from app.core.redaction import redact_secrets
+
+        err = (
+            "HTTPSConnectionPool(host='hooks.slack.com', port=443): Max retries exceeded "
+            "with url: /services/T0000AAAA/B0000BBBB/SlAcKsEcReTvAlUe (Caused by ...)"
+        )
+        out = redact_secrets(err)
+        assert "SlAcKsEcReTvAlUe" not in out and "/services/REDACTED" in out
+
+    def test_discord_webhook_path_is_redacted(self):
+        from app.core.redaction import redact_secrets
+
+        out = redact_secrets("with url: /api/webhooks/123456789/AbCdEfToKeN (Caused by")
+        assert "AbCdEfToKeN" not in out

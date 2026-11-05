@@ -101,8 +101,7 @@ never raise.
 - **Semantic injection.** A payload that reads as ordinary prose and carries no
   signature pattern will pass. Structural separation (defence 6) is the mitigation:
   the model is told which text is data.
-- **Injection via retrieved context.** Repo memory and embedding retrieval feed
-  the prompt too. Memory writes pass through `app/core/redaction.py`, but that
+- **Injection via retrieved context.** Repo memory feeds the prompt too. Memory writes pass through `app/core/redaction.py`, but that
   targets secrets and code bodies, not instructions.
 - **Model-side compliance.** None of this guarantees the model obeys the framing.
   These defences raise the cost of an attack; they do not eliminate it.

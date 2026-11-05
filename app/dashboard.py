@@ -111,7 +111,7 @@ async function poll(){
 
 function pill(state){
   const s = String(state).toLowerCase();
-  const cls = (s==='ok'||s==='closed') ? 'ok' : (s==='degraded'||s==='half_open'||s==='saturated') ? 'warn' : 'bad';
+  const cls = (s==='ok'||s==='closed') ? 'ok' : (s==='degraded'||s==='half_open'||s==='saturated'||s.startsWith('unknown')) ? 'warn' : 'bad';
   return '<span class="pill '+cls+'">'+state+'</span>';
 }
 

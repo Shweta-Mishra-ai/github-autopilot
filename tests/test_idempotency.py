@@ -45,15 +45,23 @@ class TestMakeFingerprint:
         assert make_fingerprint("del-1", "pull_request", payload) == \
                make_fingerprint("del-1", "pull_request", payload)
 
-    def test_different_delivery_id_different_fingerprint(self):
-        payload = {"action": "opened"}
-        assert make_fingerprint("del-A", "push", payload) != \
-               make_fingerprint("del-B", "push", payload)
+    def test_a_replayed_body_under_a_new_delivery_id_is_the_same_event(self):
+        """X-GitHub-Delivery is not covered by the signature: a captured signed
+        body replayed with a fresh delivery id used to be processed again."""
+        payload = {"action": "opened", "pull_request": {"number": 1, "head": {"sha": "abc"}}}
+        assert make_fingerprint("del-A", "pull_request", payload) == \
+               make_fingerprint("del-B", "pull_request", payload)
 
-    def test_different_event_type_different_fingerprint(self):
-        payload = {"action": "opened"}
-        assert make_fingerprint("del-1", "pull_request", payload) != \
+    def test_a_replayed_body_under_another_event_header_is_the_same_event(self):
+        """X-GitHub-Event is not signed either."""
+        payload = {"action": "opened", "issue": {"number": 1}}
+        assert make_fingerprint("del-1", "pull_request", payload) == \
                make_fingerprint("del-1", "issues", payload)
+
+    def test_two_real_deliveries_differ_because_their_bodies_differ(self):
+        a = {"action": "synchronize", "pull_request": {"number": 1}, "after": "aaa"}
+        b = {"action": "synchronize", "pull_request": {"number": 1}, "after": "bbb"}
+        assert make_fingerprint("del-1", "pull_request", a) != make_fingerprint("del-2", "pull_request", b)
 
     def test_different_action_different_fingerprint(self):
         fp1 = make_fingerprint("del-1", "issues", {"action": "opened"})
@@ -86,8 +94,8 @@ class TestMakeFingerprint:
         assert len(fp) == 32
 
     def test_pr_and_issue_same_number_different_fingerprints(self):
-        fp_pr = make_fingerprint("del-1", "pull_request", {"action": "opened", "number": 1})
-        fp_is = make_fingerprint("del-1", "issues", {"action": "opened", "number": 1})
+        fp_pr = make_fingerprint("del-1", "pull_request", {"action": "opened", "pull_request": {"number": 1}})
+        fp_is = make_fingerprint("del-1", "issues", {"action": "opened", "issue": {"number": 1}})
         assert fp_pr != fp_is
 
 
@@ -133,4 +141,4 @@ class TestIsDuplicate:
         assert is_duplicate(fp) is False   # first delivery
         assert is_duplicate(fp) is True    # GitHub retry → duplicate
         fp2 = make_fingerprint("gh-del-xyz999", "pull_request", payload)
-        assert is_duplicate(fp2) is False  # different delivery_id → new event
+        assert is_duplicate(fp2) is True   # same signed body, new delivery id → replay

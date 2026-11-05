@@ -7,6 +7,9 @@ Run: python -m pytest tests/test_hallucination.py -v
 
 import sys
 import os
+
+import pytest
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.ai.hallucination import check_response, add_confidence_footer, HallucinationResult
@@ -124,18 +127,20 @@ class TestAddConfidenceFooter:
         assert output == comment
         assert "Confidence" not in output
 
-    def test_medium_confidence_adds_footer(self):
-        result  = HallucinationResult(confidence=0.6)
+    def test_medium_confidence_names_what_was_found_not_a_percentage(self):
+        """It printed "AI Confidence: 60%" — a pattern-penalty score shown as
+        if it were a measured probability."""
+        result  = HallucinationResult(confidence=0.6, warnings=["Hallucination signal: hedging"])
         comment = "## Fix\n\nSomething."
         output  = add_confidence_footer(comment, result)
-        assert "Confidence" in output or "confidence" in output.lower()
-        assert "60%" in output
+        assert "Verify before applying" in output and "hedging" in output
+        assert "%" not in output
 
     def test_low_confidence_adds_warning_footer(self):
         result  = HallucinationResult(confidence=0.3)
         comment = "## Fix\n\nSomething."
         output  = add_confidence_footer(comment, result)
-        assert "⚠️" in output or "Low confidence" in output
+        assert "⚠️" in output and "%" not in output
 
     def test_footer_appended_after_comment(self):
         result  = HallucinationResult(confidence=0.5)
@@ -148,6 +153,26 @@ class TestAddConfidenceFooter:
         comment = "## Test"
         output  = add_confidence_footer(comment, result)
         assert output == comment
+
+    @pytest.mark.parametrize("confidence,lead", [
+        (0.69, "Verify before applying"),
+        (0.5, "Verify before applying"),
+        (0.49, "Treat with caution"),
+        (0.0, "Treat with caution"),
+    ])
+    def test_the_wording_follows_the_score(self, confidence, lead):
+        output = add_confidence_footer("## Test", HallucinationResult(confidence=confidence))
+        assert lead in output
+        assert "%" not in output
+
+    def test_at_most_three_findings_are_listed(self):
+        result = HallucinationResult(confidence=0.4, warnings=["w1", "w2", "w3", "w4"])
+        output = add_confidence_footer("## Test", result)
+        assert "w1; w2; w3" in output and "w4" not in output
+
+    def test_no_warnings_still_says_what_was_checked(self):
+        output = add_confidence_footer("## Test", HallucinationResult(confidence=0.4, warnings=[]))
+        assert "patterns of a guessed answer" in output
 
 class TestHallucinationResult:
 

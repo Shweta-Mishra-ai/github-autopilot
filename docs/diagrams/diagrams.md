@@ -464,8 +464,8 @@ Analytics written                CI failure tracked
     │ Bot-spam          │ Circuit breakers  │                        │
     │ prevention        │                   │ /secfull               │ /perf /arch
     │                   │ Gemini Flash      │                        │
-    │ SHA-256           │ fallback          │ CI failure handler     │ Vector context
-    │ deduplication     │                   │                        │ (Qdrant)
+    │ SHA-256           │ fallback          │ CI failure handler     │
+    │ deduplication     │                   │                        │
     │                   │ OpenRouter        │ Retry + backoff        │
     │                   │ emergency         │                        │ Learning
     │                   │                   │ /health endpoint       │ system

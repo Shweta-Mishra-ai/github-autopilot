@@ -286,3 +286,38 @@ def test_authorized_requires_exact_bearer(monkeypatch):
     assert server._authorized(_req("Bearer s3cret")) is True
     assert server._authorized(_req("Bearer wrong")) is False
     assert server._authorized(_req("")) is False
+
+
+def test_memory_dedup_admits_an_event_once_under_concurrency(monkeypatch):
+    """Round-3 audit C10: the in-memory fallback had no lock, so two threads
+    delivering one event could both find it new. The check-and-record step is
+    slowed here so an unlocked version admits the event many times."""
+    import threading
+    import time as _time
+
+    from app.core import idempotency as idem
+
+    monkeypatch.setattr(idem, "is_redis_available", lambda: False)
+    idem._seen_local.clear()
+    def slow(fp):
+        if fp in idem._seen_local:
+            return True
+        _time.sleep(0.01)  # the window between "is it there" and "record it"
+        idem._seen_local[fp] = _time.time()
+        return False
+
+    monkeypatch.setattr(idem, "_check_and_record_local", slow)
+    barrier = threading.Barrier(8)
+    admitted = []
+
+    def deliver():
+        barrier.wait()
+        if not idem.is_duplicate("same-event"):
+            admitted.append(1)
+
+    threads = [threading.Thread(target=deliver) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert len(admitted) == 1

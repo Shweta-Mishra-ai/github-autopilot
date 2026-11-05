@@ -148,6 +148,20 @@ class TestEncryptedBackup:
         with pytest.raises(InvalidToken):
             memory_backup.import_encrypted(blob)
 
+    def test_an_empty_memory_never_overwrites_a_backup(self, monkeypatch):
+        """known_repos() is [] when Redis errors, and a wiped Redis is empty:
+        both used to upload {"repos": {}} over the good backup."""
+        from unittest.mock import patch
+
+        from app.core import memory_backup
+
+        monkeypatch.setenv("MEMORY_BACKUP_KEY", memory_backup.generate_key())
+        assert memory_backup.export_encrypted(["nobody/never-stored"]) is None
+        with patch("app.intelligence.memory.known_repos", return_value=[]), \
+             patch.object(memory_backup, "gh_put", create=True) as put:
+            assert memory_backup.backup_to_github("o/b", "mem.bin", "tok") is False
+        put.assert_not_called()
+
     def test_export_none_when_unconfigured(self):
         from app.core import memory_backup
 
@@ -205,3 +219,38 @@ class TestGithubTransport:
         assert gh_put.called
         sent = gh_put.call_args[0][2]
         assert "content" in sent and sent["content"]  # base64 ciphertext
+
+
+class TestMemoryAudit2:
+    """Found by the 2026-10-08 audit."""
+
+    def test_an_evicted_memory_can_be_stored_again(self, monkeypatch):
+        from app.intelligence import memory
+
+        monkeypatch.setattr(memory, "MEMORY_MAX_ITEMS", 3)
+        repo = "o/evict-test"
+        memory.clear(repo)
+        assert memory.remember(repo, "first fact here", kind="fact")
+        for i in range(4):
+            memory.remember(repo, f"filler fact number {i}", kind="fact")
+        assert memory.remember(repo, "first fact here", kind="fact"), (
+            "an evicted memory's hash must not block storing it again"
+        )
+
+    def test_a_redis_failure_is_not_reported_as_a_duplicate(self, monkeypatch):
+        from app.handlers.comments import generator
+
+        monkeypatch.setattr("app.intelligence.memory.remember_status", lambda *a, **k: "error")
+        out = generator.cmd_ignore("o/r", "line-length nitpicks", "alice")
+        assert "Not Saved" in out and "already stored" not in out
+
+    def test_preferences_older_than_the_recall_window_still_apply(self, monkeypatch):
+        from app.intelligence import memory
+
+        monkeypatch.setattr(memory, "MEMORY_RECALL_SCAN", 2)
+        monkeypatch.setattr(memory, "injection_allowed", lambda: True)
+        repo = "o/prefs-test"
+        memory.remember(repo, "ignore line-length nitpicks", kind="preference")
+        for i in range(5):
+            memory.remember(repo, f"issue pattern {i}", kind="pattern")
+        assert "ignore line-length nitpicks" in memory.preferences(repo)

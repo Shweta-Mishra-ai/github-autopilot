@@ -11,7 +11,10 @@
       }
     ],
     "expect_gaps": false,
-    "must_not_mention": ["Gaps Found", "apply_discount"]
+    "must_not_mention": [
+      "Gaps Found",
+      "apply_discount"
+    ]
   },
   {
     "id": "gaps-new-function-with-no-tests-at-all",
@@ -20,7 +23,9 @@
     "patch": "@@ -0,0 +1,16 @@\n+def apply_refund(charge, amount, reason=None):\n+    if charge[\"status\"] != \"succeeded\":\n+        raise ValueError(\"only a succeeded charge can be refunded\")\n+    if amount > charge[\"amount\"]:\n+        raise ValueError(\"refund exceeds the original charge\")\n+    remaining = charge[\"amount\"] - amount\n+    return {\n+        \"refunded\": amount,\n+        \"remaining\": remaining,\n+        \"status\": \"refunded\" if remaining == 0 else \"partially_refunded\",\n+        \"reason\": reason,\n+    }\n",
     "test_files": [],
     "expect_gaps": true,
-    "must_mention": ["apply_refund|refund"]
+    "must_mention": [
+      "apply_refund|refund"
+    ]
   },
   {
     "id": "gaps-happy-path-tested-error-branch-not",
@@ -34,7 +39,9 @@
       }
     ],
     "expect_gaps": true,
-    "must_mention": ["giveup|give up|exhaust|raise|last|all attempts|call_with_retry"]
+    "must_mention": [
+      "giveup|give up|exhaust|raise|last|all attempts|call_with_retry"
+    ]
   },
   {
     "id": "gaps-refactor-covered-by-updated-tests",
@@ -48,6 +55,37 @@
       }
     ],
     "expect_gaps": false,
-    "must_not_mention": ["Gaps Found", "_normalise"]
+    "must_not_mention": [
+      "Gaps Found",
+      "_normalise"
+    ]
+  },
+  {
+    "id": "gaps-docstring-only-stays-quiet",
+    "planted": "nothing — the change only rewords a docstring; there is no behaviour to test",
+    "filename": "app/billing/discount.py",
+    "patch": "@@ -1,3 +1,3 @@\n def apply_discount(total, percent):\n-    \"\"\"Reduce total by percent.\"\"\"\n+    \"\"\"Reduce `total` by `percent`, which must be between 0 and 100.\"\"\"\n     if percent < 0 or percent > 100:\n",
+    "test_files": [],
+    "expect_gaps": false,
+    "must_not_mention": [
+      "Gaps Found"
+    ]
+  },
+  {
+    "id": "gaps-both-branches-tested-in-existing-style",
+    "planted": "nothing — a new guard clause and a test for each side of it",
+    "filename": "app/users/names.py",
+    "patch": "@@ -0,0 +1,5 @@\n+def display_name(user):\n+    if user.get(\"nickname\"):\n+        return user[\"nickname\"]\n+    return f\"{user['first']} {user['last']}\"\n",
+    "test_files": [
+      {
+        "filename": "tests/test_names.py",
+        "patch": "@@ -0,0 +1,8 @@\n+from app.users.names import display_name\n+\n+def test_nickname_wins():\n+    assert display_name({\"nickname\": \"Ash\", \"first\": \"A\", \"last\": \"K\"}) == \"Ash\"\n+\n+def test_falls_back_to_full_name():\n+    assert display_name({\"first\": \"Ada\", \"last\": \"Lovelace\"}) == \"Ada Lovelace\"\n"
+      }
+    ],
+    "expect_gaps": false,
+    "must_not_mention": [
+      "Gaps Found",
+      "display_name"
+    ]
   }
 ]

@@ -307,6 +307,28 @@ def effective_model(provider_key: str, configured: str) -> str:
     return entry["to"] if entry else configured
 
 
+# Models that are the SMALL end of a family. With LLM_QUALITY_FLOOR=high a
+# high-tier slot must not heal to one: the floor refuses gpt-oss-20b when it
+# sits in the groq_8b slot, and auto-heal used to put the very same model in
+# the groq_70b slot and answer a "deep" task with it.
+_SMALL_MODELS: dict[str, re.Pattern] = {
+    "groq": re.compile(r"gpt-oss-\d{1,2}b$|compound-mini$|-\d{1,2}b-instant$"),
+    "gemini": re.compile(r"flash-lite|-8b"),
+}
+
+
+def _below_the_floor(provider_key: str, provider: str, model: str) -> bool:
+    from app.ai.routing_policy import provider_tier, quality_floor_active
+
+    small = _SMALL_MODELS.get(provider)
+    return bool(
+        quality_floor_active()
+        and provider_tier(provider_key) == "high"
+        and small
+        and small.search(model)
+    )
+
+
 def substitute(provider_key: str, provider: str, tier: str, failed_model: str) -> str:
     """
     Pick a replacement for a model the provider says it does not serve.
@@ -327,6 +349,12 @@ def substitute(provider_key: str, provider: str, tier: str, failed_model: str) -
         return active["to"]
 
     replacement = best_model(provider, tier, exclude=(failed_model,))
+    if replacement and _below_the_floor(provider_key, provider, replacement):
+        log.error(
+            f"model_catalog.substitute_refused provider={provider_key} candidate={replacement} "
+            "— LLM_QUALITY_FLOOR=high and this is a small model"
+        )
+        return ""
     if not replacement or replacement == failed_model:
         return ""
 

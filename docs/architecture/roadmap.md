@@ -14,8 +14,8 @@ Shipped and tested (905 passing, CI green):
 - **Private repo memory** — explainable ("knows *why*"), encrypted backup
 - **Live ops dashboard**, **Claude Code plugin + marketplace**, **MCP registration**
 - **Maintainability** — `mcp_server.py` split into `tools.py` / `handlers.py` / dispatch
-- **Auto-capture decisions** — `/apply` and merge outcomes feed `learning.py`
-  (`record_fix_accepted`, `record_autofix_merged`); dead `prompt_builder.py`
+- **Auto-capture decisions** — autofix PR outcomes (merged / closed unmerged)
+  feed `learning.py` from the PR `closed` event; dead `prompt_builder.py`
   (never wired, no tests) removed in the V6.3 audit pass
 - **Silent-failure audit** — every bare `except Exception: pass` in `app/`
   (26 sites) now logs at debug/warning so Redis/GitHub-API degradation is
@@ -61,8 +61,9 @@ Shipped and tested (905 passing, CI green):
 ### P2 — smarter brain
 8. **Semantic memory.** Swap lexical recall for local Ollama embeddings
    (`/api/embeddings`) — still 100% local, much sharper retrieval.
-9. **Feed learned patterns into prompts.** `learning.py::get_repo_patterns`
-   is recorded but not yet read back into prompt construction.
+9. **Learn repo conventions.** Not built. A "learned conventions" store
+   existed but nothing ever wrote to it; it was removed (2026-10). Building
+   it for real means deriving conventions from merged diffs.
 10. **Feedback loop.** Track which suggestions get accepted and bias future
     confidence thresholds per repo.
 

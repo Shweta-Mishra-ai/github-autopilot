@@ -190,6 +190,13 @@ def classify_expression(expr: str) -> str:
     if not expr or not expr.strip():
         return "unknown"
 
+    # "or later" and "Library or Lesser" are part of a licence's NAME, not an
+    # SPDX choice. Split on that "or", "GPLv2 or later" became the choice
+    # between GPLv2 and an unknown licence called "later", and the most
+    # permissive branch — unknown — won, so a GPL package was not reported
+    # as copyleft. Trove classifiers spell LGPL exactly that way.
+    expr = re.sub(r"\s+or\s+later\b", "-or-later", expr, flags=re.I)
+    expr = re.sub(r"\blibrary\s+or\s+lesser\b", "Lesser", expr, flags=re.I)
     expr = _strip_outer_parens(expr)
 
     or_parts = _split_top_level(expr, "or")
@@ -294,39 +301,64 @@ MAX_PACKAGES = 20
 SCAN_DEADLINE_SECONDS = 20.0
 
 
-def scan_requirements(content: str) -> list[dict]:
+def scan_requirements_report(content: str) -> dict:
     """
-    Scan requirements.txt and report packages that are copyleft or unknown.
+    Licence findings for a requirements file AND how much of it was checked.
 
-    Best-effort by design: a package that could not be checked before the
-    deadline is simply absent from the report rather than reported as risky.
-    Guessing "unknown" for a package we never asked about would be a false
-    positive, and this scanner exists to be trusted.
+    Best-effort by design: a package that could not be checked is absent from
+    the findings rather than reported as risky — guessing "unknown" for a
+    package we never asked about would be a false positive. But it is counted,
+    because the report used to say "All dependencies use permissive licenses"
+    after checking the first 20 pinned packages, with every unpinned line,
+    every package past 20 and every lookup that failed silently included in
+    "all".
     """
     import time
 
-    from app.security.dependencies import parse_requirements
+    from app.security.dependencies import requirement_names
 
-    packages = parse_requirements(content)
-    results = []
+    names = requirement_names(content)
+    findings: list[dict] = []
+    checked = 0
     deadline = time.monotonic() + SCAN_DEADLINE_SECONDS
-    for pkg in packages[:MAX_PACKAGES]:
+    for name in names[:MAX_PACKAGES]:
         if time.monotonic() >= deadline:
-            log.info("licenses.scan_truncated", checked=len(results))
+            log.info("licenses.scan_truncated", checked=checked)
             break
-        result = check_package_license(pkg["name"])
+        result = check_package_license(name)
         # "unchecked" is excluded deliberately: a package this scanner could
         # not reach — a private index, a git dependency, a network blip — is
         # not evidence of a licence problem, and reporting it as one is the
         # false positive that makes the whole section ignorable.
+        if result["risk"] == "unchecked":
+            continue
+        checked += 1
         if result["risk"] in ("copyleft", "unknown"):
-            results.append(result)
-    return results
+            findings.append(result)
+    return {"findings": findings, "total": len(names), "checked": checked}
 
 
-def format_findings(findings: list[dict]) -> str:
+def scan_requirements(content: str) -> list[dict]:
+    """Packages that are copyleft or declare no licence (see the report)."""
+    return scan_requirements_report(content)["findings"]
+
+
+def format_findings(
+    findings: list[dict], total: int | None = None, checked: int | None = None
+) -> str:
+    """
+    The licence section. With `total`/`checked`, an empty result states how
+    much was checked rather than claiming every dependency is permissive.
+    """
     if not findings:
-        return "## ✅ License Scan\n\nAll dependencies use permissive licenses."
+        if total is not None and checked is not None and checked < total:
+            return (
+                "## ⚠️ License Scan — partial\n\n"
+                f"No restrictive licences among the {checked} of {total} package(s) "
+                f"checked; {total - checked} could not be checked (not on PyPI, "
+                f"PyPI unreachable, or past the {MAX_PACKAGES}-package limit)."
+            )
+        return "## ✅ License Scan\n\nAll checked dependencies use permissive licenses."
 
     lines = [
         "## ⚖️ License Compliance\n",
@@ -338,6 +370,8 @@ def format_findings(findings: list[dict]) -> str:
         emoji = "🔴" if f["risk"] == "copyleft" else "🟡"
         lines.append(f"| `{f['package']}` | {f['license']} | {emoji} `{f['risk']}` |")
 
+    if total is not None and checked is not None and checked < total:
+        lines.append(f"\n_{total - checked} of {total} package(s) could not be checked._")
     lines.append(
         "\n> Review copyleft licenses carefully — they may require you to open-source your code."
     )

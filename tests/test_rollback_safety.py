@@ -47,71 +47,126 @@ def _snapshot_with(actions):
     }
 
 
-class TestSafetySnapshotActuallyGuards:
-    def test_rollback_aborts_when_the_safety_snapshot_fails(self):
-        """take_snapshot returns None on failure rather than raising."""
-        with (
-            patch.object(P, "gh_patch") as edit,
-            patch("app.core.snapshot.take_snapshot", return_value=None),
-            patch(
-                "app.core.snapshot.get_snapshot_by_number",
-                return_value=_snapshot_with([{"type": "create_issue", "number": 7}]),
-            ),
-        ):
+class FakeGitHub:
+    """Issues and PRs that change when patched, so a rollback's
+    "is this still the bot's text?" reads see the state its writes made."""
+
+    def __init__(self, issues=None, prs=None, fail=()):
+        self.issues = {n: {"state": st} for n, st in (issues or {}).items()}
+        self.prs = {n: dict(v) for n, v in (prs or {}).items()}
+        self.fail = list(fail)
+        self.writes = []
+
+    def get(self, path, token):
+        num = int(path.rsplit("/", 1)[-1])
+        return dict((self.prs if "/pulls/" in path else self.issues).get(num, {}))
+
+    def patch(self, path, token, data):
+        if self.fail:
+            err = self.fail.pop(0)
+            if err:
+                raise err
+        num = int(path.rsplit("/", 1)[-1])
+        (self.prs if "/pulls/" in path else self.issues).setdefault(num, {}).update(data)
+        self.writes.append((path, data))
+
+    def __enter__(self):
+        self._p = [patch.object(P, "gh_get", side_effect=self.get),
+                   patch.object(P, "gh_patch", side_effect=self.patch)]
+        for p in self._p:
+            p.start()
+        return self
+
+    def __exit__(self, *exc):
+        for p in self._p:
+            p.stop()
+
+
+def _with_snapshot(actions):
+    return patch("app.core.snapshot.get_snapshot_by_number", return_value=_snapshot_with(actions))
+
+
+class TestOncePerSnapshot:
+    """Round-4 audit: the same snapshot could be rolled back twice, re-issuing
+    every write; the "safety snapshot" it took held no actions, so it could
+    undo nothing while pushing real snapshots out of the last ten."""
+
+    def test_a_snapshot_is_rolled_back_once(self, fake_redis):
+        with FakeGitHub(issues={7: "open"}) as gh, \
+             _with_snapshot([{"type": "create_issue", "number": 7}]):
+            first = P.cmd_rollback("o/r", 1, "tok", "1 confirm", "dev")
+            gh.issues[7]["state"] = "open"  # reopened by someone since
+            second = P.cmd_rollback("o/r", 1, "tok", "1 confirm", "dev")
+        assert "Rollback Complete" in first
+        assert "Already Rolled Back" in second
+        assert len(gh.writes) == 1
+
+    def test_no_store_means_nothing_is_done(self):
+        with FakeGitHub(issues={7: "open"}) as gh, \
+             _with_snapshot([{"type": "create_issue", "number": 7}]), \
+             patch("app.core.redis_client.get_redis", side_effect=RuntimeError("down")):
             out = P.cmd_rollback("o/r", 1, "tok", "1 confirm", "dev")
+        assert "Snapshots Unavailable" in out and gh.writes == []
 
-        assert "Rollback Aborted" in out
-        edit.assert_not_called(), "nothing may be undone without a way back"
+    def test_a_rollback_that_undid_nothing_can_be_tried_again(self, fake_redis):
+        with FakeGitHub(issues={7: "open"}, fail=[GitHubError("403", 403)]) as gh, \
+             _with_snapshot([{"type": "create_issue", "number": 7}]):
+            first = P.cmd_rollback("o/r", 1, "tok", "1 confirm", "dev")
+            second = P.cmd_rollback("o/r", 1, "tok", "1 confirm", "dev")
+        assert "Failed" in first
+        assert "Closed issue #7" in second and len(gh.writes) == 1
 
-    def test_rollback_aborts_when_take_snapshot_raises(self):
-        with (
-            patch.object(P, "gh_patch") as edit,
-            patch("app.core.snapshot.take_snapshot", side_effect=RuntimeError("redis")),
-            patch(
-                "app.core.snapshot.get_snapshot_by_number",
-                return_value=_snapshot_with([{"type": "create_issue", "number": 7}]),
-            ),
-        ):
+    def test_no_safety_snapshot_is_taken(self, fake_redis):
+        with FakeGitHub(issues={7: "open"}), \
+             _with_snapshot([{"type": "create_issue", "number": 7}]), \
+             patch("app.core.snapshot.take_snapshot") as take:
+            P.cmd_rollback("o/r", 1, "tok", "1 confirm", "dev")
+        take.assert_not_called()
+
+    def test_a_confirm_for_a_snapshot_that_has_since_moved_is_refused(self, fake_redis):
+        with FakeGitHub(issues={7: "open"}) as gh, \
+             _with_snapshot([{"type": "create_issue", "number": 7}]):
+            out = P.cmd_rollback("o/r", 1, "tok", "1 confirm zzzz", "dev")
+        assert "Has Changed" in out and gh.writes == []
+
+
+class TestLaterEditsAreKept:
+    """Round-4 audit: a title or state someone changed after the bot was
+    overwritten with the value from before the bot."""
+
+    def test_a_title_edited_since_is_left_alone(self, fake_redis):
+        action = {"type": "edit_pr_title", "number": 5, "old_title": "orig", "new_title": "bot's"}
+        with FakeGitHub(prs={5: {"title": "a human's"}}) as gh, _with_snapshot([action]):
             out = P.cmd_rollback("o/r", 1, "tok", "1 confirm", "dev")
+        assert gh.writes == []
+        assert "left the title (edited since)" in out
 
-        assert "Rollback Aborted" in out
-        edit.assert_not_called()
-
-    def test_rollback_proceeds_when_the_safety_snapshot_succeeds(self):
-        with (
-            patch.object(P, "gh_patch") as edit,
-            patch("app.core.snapshot.take_snapshot", return_value="safe1"),
-            patch(
-                "app.core.snapshot.get_snapshot_by_number",
-                return_value=_snapshot_with([{"type": "create_issue", "number": 7}]),
-            ),
-        ):
+    def test_an_unverifiable_old_record_is_not_applied(self, fake_redis):
+        action = {"type": "edit_pr_title", "number": 5, "old_title": "orig"}  # no new_title
+        with FakeGitHub(prs={5: {"title": "whatever"}}) as gh, _with_snapshot([action]):
             out = P.cmd_rollback("o/r", 1, "tok", "1 confirm", "dev")
+        assert gh.writes == [] and "cannot show it is still the bot's" in out
 
-        assert "Rollback Complete" in out
-        edit.assert_called_once()
+    def test_an_issue_already_closed_is_not_closed_again(self, fake_redis):
+        with FakeGitHub(issues={7: "closed"}) as gh, \
+             _with_snapshot([{"type": "create_issue", "number": 7}]):
+            out = P.cmd_rollback("o/r", 1, "tok", "1 confirm", "dev")
+        assert gh.writes == [] and "already closed" in out
 
 
 class TestUndoOrdering:
-    def test_repeated_title_edits_restore_the_original(self):
+    def test_repeated_title_edits_restore_the_original(self, fake_redis):
         """bot_actions is newest-first; undo must apply it in that order."""
         actions = [  # newest first, as _get_bot_actions returns them
-            {"type": "edit_pr_title", "number": 5, "old_title": "second"},
-            {"type": "edit_pr_title", "number": 5, "old_title": "original"},
+            {"type": "edit_pr_title", "number": 5, "old_title": "second", "new_title": "third"},
+            {"type": "edit_pr_title", "number": 5, "old_title": "original", "new_title": "second"},
         ]
-        with (
-            patch.object(P, "gh_patch") as edit,
-            patch("app.core.snapshot.take_snapshot", return_value="safe1"),
-            patch(
-                "app.core.snapshot.get_snapshot_by_number",
-                return_value=_snapshot_with(actions),
-            ),
-        ):
+        with FakeGitHub(prs={5: {"title": "third"}}) as gh, _with_snapshot(actions):
             P.cmd_rollback("o/r", 1, "tok", "1 confirm", "dev")
 
-        applied = [c.args[2]["title"] for c in edit.call_args_list]
+        applied = [d["title"] for _, d in gh.writes]
         assert applied == ["second", "original"]
-        assert applied[-1] == "original", (
+        assert gh.prs[5]["title"] == "original", (
             "the last write decides the final title; undoing oldest-first "
             "leaves the intermediate value"
         )
@@ -156,19 +211,13 @@ class TestUnrecoverableActionsAreReported:
         edit.assert_not_called()
         assert "no issue/PR number recorded" in out
 
-    def test_api_failure_on_one_action_does_not_stop_the_rest(self):
+    def test_api_failure_on_one_action_does_not_stop_the_rest(self, fake_redis):
         actions = [
             {"type": "create_issue", "number": 1},
             {"type": "create_issue", "number": 2},
         ]
-        with (
-            patch.object(P, "gh_patch", side_effect=[GitHubError("403", 403), None]),
-            patch("app.core.snapshot.take_snapshot", return_value="safe1"),
-            patch(
-                "app.core.snapshot.get_snapshot_by_number",
-                return_value=_snapshot_with(actions),
-            ),
-        ):
+        with FakeGitHub(issues={1: "open", 2: "open"}, fail=[GitHubError("403", 403)]), \
+             _with_snapshot(actions):
             out = P.cmd_rollback("o/r", 1, "tok", "1 confirm", "dev")
 
         assert "Failed" in out
@@ -189,7 +238,7 @@ class TestConfirmationGate:
 
         assert "Confirm Rollback" in out
         edit.assert_not_called()
-        snap.assert_not_called(), "a preview must not take a safety snapshot"
+        snap.assert_not_called()
 
     def test_non_numeric_argument_is_rejected(self):
         out = P.cmd_rollback("o/r", 1, "tok", "banana", "dev")

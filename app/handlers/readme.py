@@ -225,6 +225,40 @@ def _default_branch(repo: str, token: str) -> str:
         return "main"
 
 
+# Where hosting platforms publish the commit a deployment was built from.
+_DEPLOYED_SHA_VARS = ("AUTOPILOT_DEPLOYED_SHA", "RENDER_GIT_COMMIT", "RAILWAY_GIT_COMMIT_SHA")
+
+
+def _deployed_sha() -> str:
+    import os
+
+    for var in _DEPLOYED_SHA_VARS:
+        value = os.environ.get(var, "").strip().lower()
+        if value:
+            return value
+    return ""
+
+
+def _renders_the_pushed_commit(commits: list) -> bool:
+    """
+    True only when the running code IS the commit that was just pushed.
+
+    The renderers read this process's own source tree. A push webhook arrives
+    before the new code is deployed, so rendering then described the PREVIOUS
+    deployment — and since CI already makes every PR carry a current README,
+    the "drift" it found was the new commit's correct numbers, and the PR it
+    opened reverted them to stale ones. Unknown deployed revision: skip.
+    """
+    deployed = _deployed_sha()
+    head = ""
+    if commits and isinstance(commits[-1], dict):
+        head = str(commits[-1].get("id") or "").lower()
+    if not deployed or not head:
+        return False
+    shorter, longer = sorted((deployed, head), key=len)
+    return len(shorter) >= 7 and longer.startswith(shorter)
+
+
 def maybe_update_readme(repo, commits, token, config, log_ctx) -> bool:
     """
     Refresh the README's managed regions and open a PR if anything changed.
@@ -249,6 +283,12 @@ def maybe_update_readme(repo, commits, token, config, log_ctx) -> bool:
         allowed = os.environ.get("README_SELF_UPDATE_REPO", "").strip()
         if not allowed or allowed != repo:
             log_ctx.debug("readme.skipped_not_self")
+            return False
+        if not _renders_the_pushed_commit(commits):
+            log_ctx.info(
+                "readme.skipped_deployed_tree_differs — the running code is not the "
+                f"pushed commit (set one of {', '.join(_DEPLOYED_SHA_VARS)})"
+            )
             return False
 
         try:

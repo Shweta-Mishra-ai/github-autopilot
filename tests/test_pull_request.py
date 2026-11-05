@@ -5,6 +5,7 @@ Covers: handle() routing, _analyze_pr, _review_code, _detect_test_gaps,
         bot skip, action filter, auth failure, confidence gate.
 """
 
+import pytest
 from unittest.mock import MagicMock, patch
 from app.ai.providers.base import LLMResponse
 
@@ -65,13 +66,15 @@ class TestHandleRouting:
             handle(_pr(author="dependabot[bot]"))
             mock_tok.assert_not_called()
 
-    def test_auth_failure_returns_early(self):
+    def test_auth_failure_is_raised_before_any_analysis(self):
+        # Raised for the queue to retry; returning reported it as handled.
         with patch("app.handlers.pull_request.get_installation_token",
                    side_effect=Exception("auth failed")), \
-             patch("app.handlers.pull_request._analyze_pr", return_value="") as mock_analyze:
+             patch("app.handlers.pull_request._analyze_pr", return_value="") as mock_analyze, \
+             pytest.raises(Exception, match="auth failed"):
             from app.handlers.pull_request import handle
             handle(_pr())
-            mock_analyze.assert_not_called()
+        mock_analyze.assert_not_called()
 
     def test_pr_disabled_skips_analysis(self):
         with patch("app.handlers.pull_request.get_installation_token", return_value="tok"), \
@@ -96,16 +99,20 @@ class TestHandleRouting:
             mock_analyze.assert_called_once()
             mock_sum.assert_called_once()
 
-    def test_synchronize_skips_analyze(self):
+    def test_synchronize_analyses_the_new_head_without_touching_metadata(self):
+        """The risk record auto-merge reads is keyed by head SHA, so every head
+        needs one; the title/description rewrite stays first-look only."""
         with patch("app.handlers.pull_request.get_installation_token", return_value="tok"), \
              patch("app.handlers.pull_request.load_config", return_value=_mock_config()), \
              patch("app.handlers.pull_request.gh_get", return_value=[]), \
              patch("app.handlers.pull_request._analyze_pr", return_value="") as mock_analyze, \
+             patch("app.handlers.pull_request._build_pr_summary", return_value=""), \
              patch("app.handlers.pull_request._review_code", return_value=("", [])), \
              patch("app.handlers.pull_request._detect_test_gaps", return_value=""):
             from app.handlers.pull_request import handle
             handle(_pr(action="synchronize"))
-            mock_analyze.assert_not_called()
+            mock_analyze.assert_called_once()
+            assert mock_analyze.call_args.kwargs["apply_metadata"] is False
 
     def test_code_review_disabled_skips_review(self):
         with patch("app.handlers.pull_request.get_installation_token", return_value="tok"), \
@@ -329,7 +336,10 @@ class TestDetectTestGaps:
             pr = _pr()["pull_request"]
             log = MagicMock()
             gaps_md = _detect_test_gaps(pr, "org/repo", 1, files, "tok", cfg, log)
-            assert "Missing edge case tests" in gaps_md  # V7: returned, not posted
+            # The gap is published; the model's free-text summary is not — it
+            # described "the test suite" it was never shown.
+            assert "`login`" in gaps_md  # V7: returned, not posted
+            assert "Missing edge case tests" not in gaps_md
             mock_post.assert_not_called()
 
     def test_no_gaps_detected_no_comment(self):

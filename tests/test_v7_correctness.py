@@ -6,6 +6,7 @@ the discipline the existing suite lacked: 908 tests passed while the bot was
 publishing "Score: 7/10 — no issues found" for reviews that never ran.
 """
 
+import pytest
 from unittest.mock import MagicMock, patch
 
 from app.ai.validator import (
@@ -85,9 +86,11 @@ class TestTriageVocabulary:
         )
         assert out["time_estimate"] == ""
 
-    def test_unknown_priority_still_falls_back(self):
+    def test_an_unknown_priority_is_not_assessed_rather_than_medium(self):
+        # It "fell back" to medium, which was then posted and labelled as the
+        # model's assessment of the issue.
         out = validate_issue_triage({"type": "bug", "priority": "urgent-ish", "welcome": "hi"})
-        assert out["priority"] == "medium"
+        assert out["priority"] is None and out["type"] == "bug"
 
 
 class TestDegradedTriage:
@@ -198,8 +201,13 @@ class TestReviewRendering:
         files = [{"filename": "app/x.py", "patch": "@@ -1,1 +1,1 @@\n-x = 0\n+x = 1\n"}]
         llm = ({"raw": "Sorry, I cannot help with that."}, MagicMock())
 
-        with patch.object(pr_mod.router, "ask", return_value=llm):
-            md, inline = pr_mod._review_code(
+        from app.handlers.pull_request.errors import SectionUnavailable
+
+        # Nothing is rendered — and the section says so, rather than returning
+        # "" and leaving the report to read as a review that found nothing.
+        with patch.object(pr_mod.router, "ask", return_value=llm), \
+             pytest.raises(SectionUnavailable, match="could not be used"):
+            pr_mod._review_code(
                 {"head": {"sha": "abc"}},
                 "o/r",
                 1,
@@ -210,9 +218,3 @@ class TestReviewRendering:
                 "",
                 MagicMock(),
             )
-
-        assert md == ""
-        assert inline == []
-        assert "Score: 7" not in md
-        assert "No issues found" not in md
-        assert "Score: None" not in md

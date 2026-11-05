@@ -6,6 +6,7 @@ at-least-once crash recovery, dead-lettering, graceful degradation, stats.
 """
 
 import json
+import time
 
 import pytest
 
@@ -109,40 +110,70 @@ class TestConsume:
 
 
 class TestRecovery:
-    def _stranded(self, r, attempts=0, raw=None):
+    """Recovery used to requeue EVERYTHING in processing at boot, including
+    events a still-running process (deploy overlap, a second worker) was
+    handling — so they ran twice. Now only abandoned work is recovered."""
+
+    def _stranded(self, r, attempts=0, raw=None, owner=None, at=None):
         env = raw or json.dumps(
             {"id": "d1", "event": "push", "repo": "o/r", "payload": {}, "attempts": attempts}
         )
         r.lpush(eq.PROCESSING_KEY, env)
+        if owner is not None:
+            r.hset(eq.CLAIMS_KEY, eq._claim_id(env), json.dumps({"pid": owner, "at": at or int(time.time())}))
+        return env
 
-    def test_stranded_event_requeued_with_attempt_bump(self, fake_redis):
-        self._stranded(fake_redis, attempts=0)
+    def test_an_event_held_by_a_live_process_is_left_alone(self, fake_redis):
+        fake_redis.set(eq.ALIVE_KEY.format("other"), "1")
+        self._stranded(fake_redis, owner="other")
+        assert eq.recover_stale() == 0
+        assert fake_redis.llen(eq.PROCESSING_KEY) == 1
+
+    def test_an_event_whose_owner_died_is_requeued_with_attempt_bump(self, fake_redis):
+        self._stranded(fake_redis, owner="gone")
         assert eq.recover_stale() == 1
         assert fake_redis.llen(eq.PROCESSING_KEY) == 0
-        env = _envelope(fake_redis)
-        assert env["attempts"] == 1
+        assert _envelope(fake_redis)["attempts"] == 1
+
+    def test_a_lease_that_ran_out_is_recovered_even_if_the_owner_lives(self, fake_redis):
+        fake_redis.set(eq.ALIVE_KEY.format("other"), "1")
+        self._stranded(fake_redis, owner="other", at=int(time.time()) - eq.LEASE_SECONDS - 5)
+        assert eq.recover_stale() == 1
+
+    def test_an_unclaimed_event_gets_a_grace_period_then_is_recovered(self, fake_redis, monkeypatch):
+        self._stranded(fake_redis)
+        assert eq.recover_stale() == 0, "a live consumer may be about to claim it"
+        monkeypatch.setattr(eq.time, "time", lambda: _REAL_TIME() + eq.UNCLAIMED_GRACE + 5)
+        assert eq.recover_stale() == 1
 
     def test_exhausted_attempts_dead_lettered(self, fake_redis):
-        self._stranded(fake_redis, attempts=1)  # +1 == MAX_ATTEMPTS
+        self._stranded(fake_redis, attempts=eq.MAX_ATTEMPTS - 1, owner="gone")
         assert eq.recover_stale() == 0
         assert fake_redis.llen(eq.PENDING_KEY) == 0
         assert fake_redis.llen(eq.DEAD_KEY) == 1
 
     def test_corrupt_envelope_dead_lettered(self, fake_redis):
-        self._stranded(fake_redis, raw="{not json")
+        self._stranded(fake_redis, raw="{not json", owner="gone")
         assert eq.recover_stale() == 0
         assert fake_redis.llen(eq.DEAD_KEY) == 1
 
     def test_dead_letter_list_trimmed(self, fake_redis, monkeypatch):
         monkeypatch.setattr(eq, "DEAD_MAX", 3)
-        for _ in range(5):
-            self._stranded(fake_redis, attempts=1)
+        for i in range(5):
+            self._stranded(
+                fake_redis,
+                raw=json.dumps({"id": f"d{i}", "event": "push", "payload": {}, "attempts": eq.MAX_ATTEMPTS - 1}),
+                owner="gone",
+            )
         eq.recover_stale()
         assert fake_redis.llen(eq.DEAD_KEY) <= 3
 
     def test_no_redis_recovers_nothing(self, monkeypatch):
         monkeypatch.setattr(eq, "is_redis_available", lambda: False)
         assert eq.recover_stale() == 0
+
+
+_REAL_TIME = time.time
 
 
 # ── stats & lifecycle ─────────────────────────────────────────────────────────
@@ -178,3 +209,159 @@ class TestStatsAndLifecycle:
         finally:
             eq.stop_consumers(timeout=6.0)
         assert eq.queue_stats()["consumers"] == 0
+
+
+# ── outcomes (2026-10-08 audit) ───────────────────────────────────────────────
+
+
+class TestHandlerOutcomes:
+    """The envelope was removed whatever the handler did, so a transient
+    GitHub 5xx or rate limit dropped the event for good."""
+
+    def test_retries_are_scheduled_with_growing_delays_then_dead_lettered(self, fake_redis, monkeypatch):
+        """A retry slept in the consumer for 30s and two attempts dead-lettered
+        every event of a rate-limit outage. Retries are now scheduled."""
+        now = 1000.0
+        monkeypatch.setattr(eq.time, "time", lambda: now)
+        eq.enqueue("push", {}, "o/r", "d1")
+        due = []
+        for _ in range(eq.MAX_ATTEMPTS - 1):
+            assert eq._consume_once(lambda *a: eq.HandlerOutcome.RETRY) is True
+            assert fake_redis.llen(eq.PENDING_KEY) == 0, "not requeued before its time"
+            assert eq.promote_due() == 0
+            (_raw, at), = fake_redis.zrange(eq.DELAYED_KEY, 0, -1, withscores=True)
+            due.append(at - now)
+            now = at
+            monkeypatch.setattr(eq.time, "time", lambda at=at: at)
+            assert eq.promote_due() == 1
+        assert due == list(eq.RETRY_DELAYS[: eq.MAX_ATTEMPTS - 1])
+        assert eq._consume_once(lambda *a: eq.HandlerOutcome.RETRY) is True
+        assert fake_redis.llen(eq.DEAD_KEY) == 1
+        assert fake_redis.llen(eq.PROCESSING_KEY) == 0
+
+    def test_dead_lettering_releases_the_dedupe_key(self, fake_redis, monkeypatch):
+        """GitHub's Redeliver reuses the delivery; it was answered "duplicate"
+        for 24h, so a dead-lettered event could never be recovered."""
+        forgotten = []
+        monkeypatch.setattr("app.core.idempotency.forget", forgotten.append)
+        eq.enqueue("push", {}, "o/r", "d1", fingerprint="fp-123")
+        eq._consume_once(lambda *a: eq.HandlerOutcome.FAILED)
+        assert forgotten == ["fp-123"]
+
+    def test_claims_are_cleared_when_an_event_settles(self, fake_redis):
+        eq.enqueue("push", {}, "o/r", "d1")
+        eq._consume_once(lambda *a: None)
+        assert fake_redis.hgetall(eq.CLAIMS_KEY) == {}
+
+    def test_failed_goes_straight_to_dead_letter(self, fake_redis):
+        eq.enqueue("push", {}, "o/r", "d1")
+        eq._consume_once(lambda *a: eq.HandlerOutcome.FAILED)
+        assert fake_redis.llen(eq.DEAD_KEY) == 1
+        assert fake_redis.llen(eq.PENDING_KEY) == 0
+
+    def test_ok_and_none_are_consumed(self, fake_redis):
+        eq.enqueue("push", {}, "o/r", "d1")
+        eq.enqueue("push", {}, "o/r", "d2")
+        eq._consume_once(lambda *a: eq.HandlerOutcome.OK)
+        eq._consume_once(lambda *a: None)
+        assert fake_redis.llen(eq.DEAD_KEY) == 0
+        assert fake_redis.llen(eq.PENDING_KEY) == 0
+
+
+class TestRunHandlerClassifiesFailures:
+    def _run(self, exc):
+        from unittest.mock import patch
+
+        import server
+
+        with patch("app.handlers.push.handle", side_effect=exc):
+            return server._run_handler("push", {}, "o/r")
+
+    def test_github_5xx_is_transient(self):
+        from app.github.client import GitHubError
+
+        assert self._run(GitHubError("boom", 502)) == eq.HandlerOutcome.RETRY
+
+    def test_rate_limit_exhausted_is_transient(self):
+        from app.github.rate_limit import GitHubRateLimitExhausted
+
+        assert self._run(GitHubRateLimitExhausted("x")) == eq.HandlerOutcome.RETRY
+
+    def test_secondary_rate_limit_is_transient(self):
+        from app.github.client import GitHubSecondaryRateLimitError
+
+        exc = GitHubSecondaryRateLimitError.__new__(GitHubSecondaryRateLimitError)
+        GitHubError_init = Exception.__init__
+        GitHubError_init(exc, "secondary")
+        exc.status_code = 403
+        exc.retry_after = 60
+        assert self._run(exc) == eq.HandlerOutcome.RETRY
+
+    def test_a_bug_is_failed_not_retried(self):
+        assert self._run(KeyError("x")) == eq.HandlerOutcome.FAILED
+
+    def test_a_404_is_not_transient(self):
+        from app.github.client import GitHubError
+
+        assert self._run(GitHubError("nope", 404)) == eq.HandlerOutcome.FAILED
+
+    def test_errors_are_counted_where_health_reads_them(self):
+        from app.core.metrics import metrics
+
+        before = metrics.get("events.error")
+        self._run(KeyError("x"))
+        assert metrics.get("events.error") == before + 1
+
+
+class TestA503ReleasesTheDedupKey:
+    """The key was set before enqueue; on 503 it stayed, and GitHub's (manual)
+    redelivery with the same delivery id was answered 'duplicate — skipped'."""
+
+    def test_redelivery_after_a_full_queue_is_processed(self, fake_redis):
+        from app.core import idempotency
+
+        fp = idempotency.make_fingerprint("delivery-1", "push", {"repository": {"full_name": "o/r"}})
+        assert idempotency.is_duplicate(fp) is False
+        idempotency.forget(fp)
+        assert idempotency.is_duplicate(fp) is False, "the redelivery must run"
+        assert idempotency.is_duplicate(fp) is True
+
+
+class TestInstallationRegistry:
+    """Installation events have no repository: 'unknown' was registered as one,
+    and uninstalls were never forgotten (2026-10-08 audit)."""
+
+    def _run(self, event, payload):
+        from unittest.mock import patch
+
+        import server
+
+        with patch("app.core.installations.remember_installation") as remember, \
+             patch("app.core.installations.forget_installation") as forget, \
+             patch("app.core.installations.touch"):
+            server._track_installations(event, payload, payload.get("repository", {}).get("full_name", "unknown"))
+        return remember, forget
+
+    def test_an_installation_event_never_registers_unknown(self):
+        remember, _ = self._run("installation", {"action": "new_permissions_accepted", "installation": {"id": 9}})
+        remember.assert_not_called()
+
+    def test_uninstall_forgets_its_repositories(self):
+        _, forget = self._run("installation", {
+            "action": "deleted", "installation": {"id": 9},
+            "repositories": [{"full_name": "o/a"}, {"full_name": "o/b"}],
+        })
+        assert [c.args[0] for c in forget.call_args_list] == ["o/a", "o/b"]
+
+    def test_repositories_added_and_removed(self):
+        remember, forget = self._run("installation_repositories", {
+            "action": "added", "installation": {"id": 9},
+            "repositories_added": [{"full_name": "o/new"}],
+            "repositories_removed": [{"full_name": "o/old"}],
+        })
+        remember.assert_called_once_with("o/new", 9)
+        forget.assert_called_once_with("o/old")
+
+    def test_an_ordinary_event_registers_its_repo(self):
+        remember, _ = self._run("push", {"repository": {"full_name": "o/r"}, "installation": {"id": 9}})
+        remember.assert_called_once_with("o/r", 9)

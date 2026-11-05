@@ -14,9 +14,12 @@ Exit codes, and they are distinct on purpose:
 
     0  pass-rate >= --min-pass-rate
     1  the bot answered, and answered worse than the threshold allows
+       (judged on the scored cases only, even when others were not scored)
     2  unrunnable — no provider key
     3  the configured model does not exist at the provider
-    4  the provider throttled us, so quality was never measured
+    4  the provider throttled us, or answered unusably, on some cases: every
+       scored case passed, but those were never measured
+    5  a case raised — a fault in the code or the harness
 
 3 and 4 are separate from 1 because they send a maintainer to opposite ends
 of the codebase. The first scheduled run of this suite returned a 0.0 pass rate and
@@ -39,9 +42,28 @@ import os
 import sys
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 CASES_DIR = Path(__file__).parent / "cases"
+
+
+def _real_collaborators():
+    """
+    The config, confidence gate and logger the PR handler builds, with the
+    repository's config file absent.
+
+    These were MagicMocks. A mock gate's verdict is a mock whose
+    `auto_apply` is truthy and whose float() is 1.0, so the low-confidence
+    demotion the production review applies never ran here — the suite scored
+    output users would have seen marked "treat it as a prompt to look". And
+    the mock config answered True to every setting, which no repository is.
+    """
+    from app.core.confidence import ConfidenceGate
+    from app.core.config import Config
+    from app.core.logger import EventLogger
+
+    cfg = Config({})
+    return cfg, ConfidenceGate(cfg), EventLogger("eval", repo="eval/repo")
 
 
 # Model ids are configuration, and providers retire them. Checking before the
@@ -171,7 +193,26 @@ _BLOCKED_MARKERS = (
     "circuit open",
     "try again",
     "temporarily unavailable",
+    # The bot's honest reply when the model answered with something that was
+    # not JSON (app.ai.guarded.degraded_comment, reason "unparseable"). It
+    # was scored as a /fix quality failure: on 2026-11-05, with Groq
+    # rate-limited, two /fix cases "failed" on a reply that says no fix was
+    # produced. A fix WITHHELD for low confidence is not listed: the model
+    # answered and the bot refused it, which is a quality result.
+    "could not be parsed",
 )
+
+
+def _blocked_reason(output: str) -> str:
+    """Why a /fix or review case was not scored, from the text it produced."""
+    lowered = (output or "").strip().lower()
+    if not lowered:
+        return "no answer from the provider"
+    if "could not be parsed" in lowered:
+        return "the model's answer was not valid JSON"
+    if len(lowered) < _BLOCKED_OUTPUT_CHARS:
+        return "an empty or near-empty answer"
+    return "the providers were down or rate-limited"
 
 
 def looks_blocked(output: str) -> bool:
@@ -218,14 +259,14 @@ def run_fix_cases() -> tuple[list, list]:
         # loop today, but a closure over a loop variable silently reads the
         # LAST case the moment anyone defers the call.
         def _run(case=case):
-            return cmd_fix(case["title"], case["context"], repo="")
+            return cmd_fix(case["title"], case["context"])
 
         output = _attempt(_run, case, results)
         if output is None:
             continue
         if looks_blocked(output):
             blocked.append(case["id"])
-            _print_blocked(case["id"])
+            _print_blocked(case["id"], _blocked_reason(output))
             continue
         result = score_output(output, case)
         results.append(result)
@@ -252,13 +293,33 @@ def run_review_cases() -> tuple[list, list]:
             _sink.append(body)
             return {"id": 1}
 
-        cfg = MagicMock()
-        cfg.get.side_effect = lambda *a, **kw: kw.get("default", True)
-        cfg.footer = ""
+        cfg, gate, elog = _real_collaborators()
+        findings: list[str] = []
         files = [{"filename": case["filename"], "patch": case["patch"]}]
         pr = {"head": {"sha": "eval0000"}}
 
-        def _run(pr=pr, files=files, cfg=cfg, captured=captured):
+        # The whole file at the head commit, when the case supplies it — the
+        # review fetches it to show the model the code around the change.
+        # Without a `source` the fetch fails, as it would for a deleted file,
+        # and the review runs on the diff alone.
+        def _contents(path, token, _case=case):
+            import base64
+
+            if "source" not in _case:
+                raise RuntimeError("no source in this eval case")
+            body = _case["source"].encode()
+            return {"encoding": "base64", "size": len(body), "content": base64.b64encode(body).decode()}
+
+        def _run(
+            pr=pr,
+            files=files,
+            cfg=cfg,
+            gate=gate,
+            elog=elog,
+            captured=captured,
+            findings=findings,
+            _contents=_contents,
+        ):
             # _review_code RETURNS the review; its own docstring says "This
             # function posts nothing itself." The harness captured gh_post and
             # threw the return value away, so `captured` was always empty and
@@ -272,15 +333,26 @@ def run_review_cases() -> tuple[list, list]:
             # empty, and a list shared across attempts would score the second
             # try's review joined to the first try's.
             captured.clear()
-            with patch("app.handlers.pull_request.review.gh_post", side_effect=_capture):
+            with (
+                patch("app.handlers.pull_request.review.gh_post", side_effect=_capture),
+                patch("app.handlers.pull_request.review.gh_get", side_effect=_contents),
+            ):
                 markdown, inline = _review_code(
-                    pr, "eval/repo", 1, files, "tok", cfg, MagicMock(), "", MagicMock()
+                    pr, "eval/repo", 1, files, "tok", cfg, gate, "", elog
                 )
             # Everything the reviewer produced: the body, the line-anchored
             # comments, and anything the fallback path did post.
             parts = [markdown]
             parts += [c.get("body", "") for c in inline or []]
             parts += captured
+            # The findings alone: anchored comments and the "- **severity**"
+            # lines of findings that could not anchor. A planted bug is
+            # caught only if it is named HERE. Matching the whole text let a
+            # model that reported nothing pass on its file summary — "start
+            # + size + 1" matched the off-by-one case's pattern.
+            findings[:] = [c.get("body", "") for c in inline or []] + [
+                line for line in (markdown or "").splitlines() if line.startswith("- **")
+            ]
             return "\n".join(p for p in parts if p)
 
         output = _attempt(_run, case, results)
@@ -288,13 +360,39 @@ def run_review_cases() -> tuple[list, list]:
             continue
         if looks_blocked(output):
             blocked.append(case["id"])
-            _print_blocked(case["id"])
+            _print_blocked(case["id"], _blocked_reason(output))
             continue
 
-        result = score_output(output, case)
+        result = score_output(output, case, findings="\n".join(findings))
         results.append(result)
         _print_case(result)
     return results, blocked
+
+
+def _eval_repo_github(case: dict):
+    """
+    GitHub as seen from the eval case's repository, which does not exist.
+
+    The gap check searches the repository for tests of each function and
+    reads the changed file at the head commit. Those calls went to the real
+    API for "eval/repo" with the token "tok", so the result depended on the
+    network and on how GitHub answers a bad token — not on the case. Here the
+    repository holds exactly what the case gives it: no tests beyond the
+    case's own test files, and the changed file's `source` when one is given.
+    """
+    from app.github.client import GitHubError
+
+    def _get(path, token):
+        if path.startswith("/search/code"):
+            return {"items": [], "incomplete_results": False}
+        if "/contents/" in path and "source" in case:
+            import base64
+
+            body = case["source"].encode()
+            return {"encoding": "base64", "size": len(body), "content": base64.b64encode(body).decode()}
+        raise GitHubError(f"Not found: {path}", 404)
+
+    return _get
 
 
 def run_gaps_cases() -> tuple[list, list]:
@@ -344,34 +442,72 @@ def run_gaps_cases() -> tuple[list, list]:
                 {"filename": t["filename"], "patch": t["patch"], "status": "modified"}
                 for t in case.get("test_files", [])
             ]
-            cfg = MagicMock()
-            cfg.get.side_effect = lambda *a, **kw: kw.get("default", True)
-            cfg.footer = ""
-            with patch.object(gaps_module.router, "ask", side_effect=_spy):
-                return gaps_module._detect_test_gaps(
-                    {"head": {"sha": "eval0000"}},
-                    "eval/repo",
-                    1,
-                    files,
-                    "tok",
-                    cfg,
-                    MagicMock(),
-                )
+            cfg, _gate, elog = _real_collaborators()
+            try:
+                with (
+                    patch.object(gaps_module.router, "ask", side_effect=_spy),
+                    patch("app.github.client.gh_get", side_effect=_eval_repo_github(case)),
+                ):
+                    return gaps_module._detect_test_gaps(
+                        {"head": {"sha": "eval0000"}},
+                        "eval/repo",
+                        1,
+                        files,
+                        "tok",
+                        cfg,
+                        elog,
+                    )
+            except Exception:
+                # The section raises when the model never answered or its
+                # answer was unusable — blocked, below, not a scored failure.
+                # Anything raised after a usable answer is the code's fault.
+                if not captured or is_unusable(captured[0]):
+                    return ""
+                raise
 
-        output = _attempt(_run, case, results, blocked_check=lambda _out: not captured)
+        # An unusable answer is retried too. Only an empty capture used to be,
+        # so a reply that was not JSON was never asked again, and was then
+        # reported as "provider returned nothing" — the 2026-11-05 run blamed
+        # a rate limit for a case that had an answer, just not a usable one.
+        output = _attempt(
+            _run,
+            case,
+            results,
+            blocked_check=lambda _out, captured=captured: (
+                not captured or is_unusable(captured[0])
+            ),
+        )
         if output is None:
             continue
 
-        # _detect_test_gaps swallows every exception and returns "". An empty
-        # capture therefore means the provider never answered, not that the
+        # An empty capture means the provider never answered, not that the
         # code under test decided there was nothing to say.
         verdict = captured[0] if captured else None
         if verdict is None or is_unusable(verdict):
             blocked.append(case["id"])
-            _print_blocked(case["id"])
+            _print_blocked(case["id"], _unusable_reason(verdict))
             continue
 
-        result = score_output(output, case, structured=verdict)
+        # Score what the bot PUBLISHES, not the model's first answer. A gap
+        # the model proposes in already-tested code is published only when
+        # the diff proves it (gaps._proof_of_gap), so the raw verdict and the
+        # published one can differ — and the published one is what a reviewer
+        # reads. The model's own claims are printed whenever the two differ or
+        # a case fails, so the outcome is never a guess about what it said.
+        published = {"has_gaps": bool((output or "").strip())}
+        claimed_gaps = bool(verdict.get("has_gaps"))
+        if claimed_gaps != published["has_gaps"]:
+            print(f"    (model said has_gaps={claimed_gaps}; published has_gaps={published['has_gaps']})")
+        if claimed_gaps != (case.get("expect_gaps") is True) or published["has_gaps"] != (
+            case.get("expect_gaps") is True
+        ):
+            for g in verdict.get("gaps") or []:
+                if isinstance(g, dict):
+                    print(
+                        f"    claimed: {g.get('function')} | line: {str(g.get('untested_line'))[:80]!r}"
+                        f" | {str(g.get('suggested_test'))[:120]}"
+                    )
+        result = score_output(output, case, structured=published)
         results.append(result)
         _print_case(result)
     return results, blocked
@@ -416,8 +552,45 @@ def _attempt(call, case: dict, results: list, blocked_check=None):
     return output
 
 
-def _print_blocked(case_id: str) -> None:
-    print(f"  [BLOCKED] {case_id}  provider returned nothing — not scored")
+# Why each case of this run was not scored, by case id. Read by main() for the
+# summary and the nightly issue, which used to say "rate-limited" for every
+# blocked case whatever had actually happened.
+BLOCK_REASONS: dict[str, str] = {}
+
+
+def _unusable_reason(verdict) -> str:
+    """What was wrong with a gap answer that cannot be scored."""
+    if verdict is None:
+        return "no answer from the provider"
+    if isinstance(verdict, dict) and verdict.get("error"):
+        return f"provider error: {str(verdict['error'])[:120]}"
+    if isinstance(verdict, dict) and "raw" in verdict:
+        return "the model's answer was not valid JSON"
+    return "the model's answer could not be read"
+
+
+def _print_blocked(case_id: str, reason: str = "empty or refusal-looking answer") -> None:
+    BLOCK_REASONS[case_id] = reason
+    print(f"  [BLOCKED] {case_id}  {reason} (after a retry) — not scored")
+
+
+def _case_report(results: list, blocked: list[str]) -> str:
+    """
+    The cases a reader has to look at, as Markdown: written next to the run
+    output for the nightly issue, so the issue names what failed and why
+    instead of a generic paragraph that sends everyone to the log.
+    """
+    lines = []
+    failed = [r for r in results if not r.passed]
+    if failed:
+        lines.append(f"**Failed ({len(failed)} of {len(results)} scored):**")
+        lines += [f"- `{r.case_id}`: {r.failures[0] if r.failures else 'failed'}" for r in failed]
+    if blocked:
+        if lines:
+            lines.append("")
+        lines.append(f"**Not scored ({len(blocked)}):**")
+        lines += [f"- `{c}`: {BLOCK_REASONS.get(c, 'not scored')}" for c in blocked]
+    return "\n".join(lines)
 
 
 def _print_case(result) -> None:
@@ -468,29 +641,45 @@ def main() -> int:
     print("\n== summary ==")
     print(json.dumps(stats, indent=2))
 
-    # A throttled case is not a quality signal, and averaging it into the
+    # The nightly issue quotes this file, so it names the cases and the reason
+    # for each rather than a paragraph that guesses.
+    report = _case_report(results, blocked)
+    try:
+        Path(os.environ.get("EVAL_REPORT_PATH", "eval-cases.md")).write_text(report + "\n", encoding="utf-8")
+    except OSError as exc:
+        print(f"(could not write the case report: {exc})")
+
+    # A case that raised is a fault in the code or the harness, not a quality
+    # result. It was scored 0 and folded into the pass rate, so a broken call
+    # signature read as "the model got worse".
+    crashed = [r.case_id for r in results if any(f.startswith("exception:") for f in r.failures)]
+    if crashed:
+        print(f"\nERROR: {len(crashed)} case(s) raised — fix the code, not the prompts: {', '.join(crashed)}")
+        return 5
+
+    from evals.scorers import gate
+
+    # An unscored case is not a quality signal, and averaging it into the
     # pass-rate turns a provider limit into a statement about the prompts.
     # The 2026-08-29 run reported 0.545 having never scored a single review
     # case: all five were empty because both breakers had opened on rate
-    # limits, and every one counted as a failure.
+    # limits, and every one counted as a failure. So the gate reads only the
+    # cases that were scored — but it still reads them. Returning "blocked"
+    # before the gate hid real failures: the 2026-11-05 run had one unscored
+    # case and two gap cases that invented gaps in tested code, and the issue
+    # it opened said "NOT a regression".
+    ok, detail = gate(stats, args.min_pass_rate) if results else (True, "no case was scored")
     if blocked:
         print(
-            f"\nBLOCKED: {len(blocked)} of {len(blocked) + len(results)} cases got no "
-            f"answer from the provider, after a retry each.\n"
-            f"  {', '.join(blocked)}\n\n"
-            f"This is NOT a quality result — those cases were never scored. The\n"
-            f"usual cause is the provider's rate limit: the suite runs cases back\n"
-            f"to back, and a larger model has a smaller allowance. Raise\n"
-            f"EVAL_CASE_DELAY_SECONDS (currently {CASE_DELAY_SECONDS:g}s between cases) and re-run."
+            f"\nNOT SCORED: {len(blocked)} of {len(blocked) + len(results)} cases, after a retry each:\n"
+            + "\n".join(f"  {c}: {BLOCK_REASONS.get(c, 'not scored')}" for c in blocked)
+            + "\n\nThose cases are left out of the pass rate. If the reason is a rate\n"
+            f"limit, raise EVAL_CASE_DELAY_SECONDS (currently {CASE_DELAY_SECONDS:g}s between cases)."
         )
-        return 4
-
-    ok = stats["pass_rate"] >= args.min_pass_rate
-    print(
-        f"\n{'PASS' if ok else 'FAIL'}: pass_rate={stats['pass_rate']} "
-        f"(threshold {args.min_pass_rate})"
-    )
-    return 0 if ok else 1
+    print(f"\n{'PASS' if ok else 'FAIL'}: {detail}")
+    if not ok:
+        return 1
+    return 4 if blocked else 0
 
 
 if __name__ == "__main__":

@@ -75,11 +75,13 @@ class TestSendSlack:
         resp = MagicMock(status_code=500)
         with patch("app.github.notifications.requests.post", return_value=resp):
             notif._send_slack("Title", "Message", "warning")  # must not raise
+        assert notif.last_outcome.get("slack") == "failed"
 
     def test_send_slack_handles_exception(self, monkeypatch):
         monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://hooks.slack.example/x")
         with patch("app.github.notifications.requests.post", side_effect=Exception("boom")):
             notif._send_slack("Title", "Message", "info")  # must not raise
+        assert notif.last_outcome.get("slack") == "failed"
 
 
 class TestSendDiscord:
@@ -105,11 +107,13 @@ class TestSendDiscord:
         resp = MagicMock(status_code=400, text="bad request")
         with patch("app.github.notifications.requests.post", return_value=resp):
             notif._send_discord("T", "D", "info", [], "")  # must not raise
+        assert notif.last_outcome.get("discord") == "failed"
 
     def test_send_discord_handles_exception(self, monkeypatch):
         monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://discord.example/x")
         with patch("app.github.notifications.requests.post", side_effect=Exception("boom")):
             notif._send_discord("T", "D", "info", [], "")  # must not raise
+        assert notif.last_outcome.get("discord") == "failed"
 
 
 class TestNotificationHelpers:
@@ -198,7 +202,7 @@ class TestDiscordTestAndRichSend:
         with patch("app.github.notifications.requests.post", side_effect=Exception("net down")):
             ok, msg = notif.test_discord()
         assert ok is False
-        assert "net down" in msg
+        assert msg == "Exception (details in the server log)"
 
     def test_send_rich_discord_without_webhook_configured(self, monkeypatch):
         monkeypatch.delenv("DISCORD_WEBHOOK_URL", raising=False)
@@ -474,9 +478,22 @@ class TestRichSlackSender:
         assert att["title_link"] == "https://x/y"
         assert att["fields"][0]["title"] == "Repo"
 
-    def test_network_error_is_reported_not_raised(self, monkeypatch):
+    def test_network_error_is_reported_not_raised(self, monkeypatch, caplog):
         monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://hooks.slack.example/x")
         with patch("app.github.notifications.requests.post", side_effect=OSError("dns")):
             ok, msg = notif.send_rich_slack("t", "d")
         assert ok is False
-        assert "dns" in msg
+        # The reply is posted as a public comment: the error type only. The
+        # detail (redacted) is in the log.
+        assert msg == "OSError (details in the server log)"
+        assert "notification.slack_error: dns" in caplog.text
+
+    def test_a_url_without_https_is_refused_without_sending_or_echoing(self, monkeypatch):
+        """Round-4 audit: a scheme-less URL was sent, and requests' error
+        quoted the whole webhook secret into the /notify reply."""
+        monkeypatch.setenv("SLACK_WEBHOOK_URL", "hooks.slack.com/services/T0/B0/SECRETVALUE")
+        with patch("app.github.notifications.requests.post") as post:
+            ok, msg = notif.send_rich_slack("t", "d")
+        post.assert_not_called()
+        assert ok is False
+        assert "SECRETVALUE" not in msg and "not an https:// URL" in msg

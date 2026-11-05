@@ -77,10 +77,15 @@ def _mcp_named_keys() -> dict[str, str]:
     """
     raw = os.environ.get("MCP_API_KEYS", "")
     keys: dict[str, str] = {}
-    for entry in filter(None, (e.strip() for e in raw.split(","))):
+    for position, entry in enumerate(filter(None, (e.strip() for e in raw.split(","))), 1):
         name, sep, key = entry.partition(":")
         if not sep or not name.strip() or not key.strip():
-            log.warning(f"mcp.bad_key_entry skipped (want name:key): {entry[:20]!r}...")
+            # Position and length only: an entry missing its "name:" is a
+            # bare key, and its first 20 characters went into the log.
+            log.warning(
+                f"mcp.bad_key_entry skipped (want name:key): entry {position} "
+                f"of MCP_API_KEYS, {len(entry)} characters"
+            )
             continue
         keys[name.strip()] = key.strip()
     return keys
@@ -92,13 +97,16 @@ def _resolve_client(auth_token: str) -> str | None:
     Compares against EVERY candidate (no early exit) so response timing does
     not reveal which key position matched.
     """
-    token = auth_token or ""
+    # Bytes, not str: compare_digest raises TypeError for a str holding any
+    # non-ASCII character, so a header like "Bearer café" was a 500 instead
+    # of a 401.
+    token = (auth_token or "").encode("utf-8", "surrogatepass")
     matched: str | None = None
     legacy = _mcp_api_key()
-    if legacy and hmac.compare_digest(token, legacy):
+    if legacy and hmac.compare_digest(token, legacy.encode("utf-8")):
         matched = "default"
     for name, key in _mcp_named_keys().items():
-        if hmac.compare_digest(token, key) and matched is None:
+        if hmac.compare_digest(token, key.encode("utf-8")) and matched is None:
             matched = name
     return matched
 
@@ -124,8 +132,11 @@ def handle_mcp_request(method: str, params: dict, auth_token: str) -> tuple[dict
         return {"tools": MCP_TOOLS}, 200
 
     if method == "tools/call":
+        params = params if isinstance(params, dict) else {}
         tool_name = params.get("name", "")
-        tool_args = params.get("arguments", {})
+        tool_args = params.get("arguments") or {}
+        if not isinstance(tool_args, dict):
+            return {"error": {"code": -32602, "message": "arguments must be an object"}}, 400
 
         handler = TOOL_HANDLERS.get(tool_name)
         if not handler:
@@ -138,7 +149,13 @@ def handle_mcp_request(method: str, params: dict, auth_token: str) -> tuple[dict
             }, 400
 
         try:
-            result_text = handler(tool_args)
+            # Charged to the named repository's daily AI budget, as a comment
+            # command is: outside metered(), MCP tool calls were not counted,
+            # and REPO_DAILY_AI_LIMIT did not apply to them.
+            from app.core.guardrails import metered
+
+            with metered(str(tool_args.get("repo") or "")):
+                result_text = handler(tool_args)
             latency_ms = int((time.time() - start) * 1000)
             # Audit line: WHO did WHAT — never the arguments (may contain code).
             log.info(f"mcp.audit client={client} tool={tool_name} status=ok latency={latency_ms}ms")

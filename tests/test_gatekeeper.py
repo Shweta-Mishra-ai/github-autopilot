@@ -153,6 +153,18 @@ class TestTheCallIsBounded:
         user_prompt = provider.call_raw.call_args.kwargs["user"]
         assert len(user_prompt) < 8000, f"prompt was {len(user_prompt)} chars"
 
+    def test_the_configured_timeout_reaches_the_request(self, configured, monkeypatch):
+        """OllamaProvider gives review-sized calls at least 120 s; the gate
+        must not inherit that floor, or GATEKEEPER_TIMEOUT=8 holds a PR
+        event for two minutes. Every other test mocks the provider class,
+        so only this one sees the timeout the HTTP call is actually given."""
+        monkeypatch.setenv("GATEKEEPER_TIMEOUT", "8")
+        r = MagicMock(status_code=200)
+        r.json.return_value = {"message": {"content": "SUBSTANTIVE"}, "done_reason": "stop"}
+        with patch("app.ai.providers.ollama.http_requests.post", return_value=r) as post:
+            assert G.is_substantive(FILES)[0] is True
+        assert post.call_args.kwargs["timeout"] == 8
+
     @pytest.mark.parametrize("value,expected", [("3", 3), ("0", 1), ("999", 30), ("junk", 8)])
     def test_the_timeout_is_clamped(self, monkeypatch, value, expected):
         monkeypatch.setenv("GATEKEEPER_TIMEOUT", value)

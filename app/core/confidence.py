@@ -150,9 +150,14 @@ class ConfidenceGate:
             **ai_response,
             "confidence_score": score,
             "auto_apply": auto_apply,
+            # No percentage: the score is a weighted sum of checks, and "67%"
+            # read as a measured probability. And no "posted for human
+            # review" — nothing is posted for review; the action is just not
+            # taken automatically.
             "confidence_note": (
                 None
                 if auto_apply
-                else f"Confidence {score:.0%} below threshold — posted for human review."
+                else "The answer did not pass the reliability checks (complete fields, "
+                "no warning signs), so nothing was applied automatically."
             ),
         }

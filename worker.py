@@ -34,6 +34,10 @@ log = logging.getLogger("worker")
 
 
 def run() -> None:
+    # Before server is imported below: a worker is not a web process, and must
+    # not be counted as one by app/core/process_guard.py. Set here, not at
+    # import, so merely importing this module changes nothing.
+    os.environ.setdefault("AUTOPILOT_PROCESS_ROLE", "worker")
     from app.core.event_queue import start_consumers, stop_consumers
     from app.core.webhook_security import startup_check
     from server import _run_handler

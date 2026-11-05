@@ -12,18 +12,31 @@ while code bodies and anything secret-shaped are dropped before storage.
 
 from __future__ import annotations
 
+import logging
 import re
+
+log = logging.getLogger(__name__)
 
 _FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
 _INDENTED_BLOCK_RE = re.compile(r"(?m)^(?: {4}|\t).*$")
 
 _CODE_PLACEHOLDER = "[code omitted]"
-_SECRET_PLACEHOLDER = "[REDACTED]"
 
-# Leading unmasked run of a redacted match, e.g. "ghp_" from
-# "ghp_********************aaaa". Anything shorter than 4 chars is too generic
-# to substitute on without risking collateral damage to ordinary prose.
-_PREFIX_RE = re.compile(r"[^*.]+")
+# What is masked on a line the scanner flagged: a quoted value, the password in
+# `scheme://user:password@`, the value after `=` or `:`, and any long
+# token-shaped run. Applied ONLY to flagged lines, so ordinary prose survives.
+_LINE_MASKS = (
+    (re.compile(r"(['\"])[^'\"]{4,}\1"), r"\1[REDACTED]\1"),
+    (re.compile(r"(://[^:@/\s]+:)[^@\s]+@"), r"\1[REDACTED]@"),
+    (re.compile(r"([=:]\s*)(?!\[REDACTED\])[^\s'\"]{6,}"), r"\1[REDACTED]"),
+    (re.compile(r"(?<![\w\[])[A-Za-z0-9_\-/+=.]{16,}"), "[REDACTED]"),
+)
+
+
+def _mask_line(line: str) -> str:
+    for pattern, repl in _LINE_MASKS:
+        line = pattern.sub(repl, line)
+    return line
 
 
 def redact(text: str | None) -> str:
@@ -34,6 +47,12 @@ def redact(text: str | None) -> str:
     failure must not take down the command that triggered the write. The
     structural strip (fences, indented blocks) runs first and unconditionally,
     so even if the secret scan fails the bulk of any code body is already gone.
+
+    A line the scanner flags has every value-shaped part masked. This used to
+    substitute on the first four characters of the scanner's REDACTED match
+    up to the next space, which for `password = "…"` replaced `pass` + `word`
+    and left the value, and skipped matches of 12 characters or fewer
+    entirely — while the memory record said the text had been redacted.
     """
     if not text:
         return ""
@@ -44,20 +63,59 @@ def redact(text: str | None) -> str:
     try:
         from app.security.enhanced_secrets import scan_diff
 
+        lines = text.split("\n")
         # scan_diff only inspects lines beginning with "+", so present each
-        # line as a diff addition.
-        as_diff = "\n".join(f"+{line}" for line in text.splitlines())
-        for finding in scan_diff(as_diff):
-            # redacted_match looks like "ghp_********************aaaa" — the
-            # leading run before the mask is the only part we can match on.
-            prefix = _PREFIX_RE.match(finding.redacted_match or "")
-            token = prefix.group(0) if prefix else ""
-            if len(token) >= 4:
-                text = re.sub(re.escape(token) + r"\S*", _SECRET_PLACEHOLDER, text)
-    except Exception:
-        pass  # structural strip above already ran
+        # line as a diff addition. With no hunk header, a finding's line
+        # number is its position here.
+        as_diff = "\n".join(f"+{line}" for line in lines)
+        flagged = {f.line_number for f in scan_diff(as_diff)}
+        for n in flagged:
+            if 1 <= n <= len(lines):
+                lines[n - 1] = _mask_line(lines[n - 1])
+        text = "\n".join(lines)
+    except Exception as e:
+        # Fail closed. This was `pass`: a scanner error left every secret in
+        # place while the caller stored the text as redacted — and memory is
+        # recalled into cloud prompts. Unable to tell which lines hold a
+        # secret, mask the value-shaped parts of all of them.
+        log.error(f"redaction.scan_failed — masking every line: {type(e).__name__}: {e}")
+        text = "\n".join(_mask_line(line) for line in text.split("\n"))
 
     return text
+
+
+# Diff and numbered-diff prefixes ("+", "-", " ", "    42 + "), stripped only
+# to let the scanner's line-anchored patterns see the content.
+_DIFF_PREFIX = re.compile(r"^\s*(?:\d+\s+)?[+\- ]\s?")
+
+
+def mask_secret_lines(text: str | None) -> str:
+    """
+    `text` with the value-shaped parts of every line the secret scanner flags
+    masked, and nothing else changed: same lines, same order.
+
+    For text leaving the deployment — a PR's diff sent to a cloud model was
+    sent with any credential committed in it. Line-preserving, so grounding
+    can apply the same mask to the patch and compare quotes to what the
+    model was actually shown. A scanner failure is logged and the text is
+    returned as it was (the behaviour before this existed), because masking
+    every line would leave the model nothing to review.
+    """
+    if not text:
+        return text or ""
+    lines = text.split("\n")
+    try:
+        from app.security.enhanced_secrets import scan_diff
+
+        as_diff = "\n".join("+" + _DIFF_PREFIX.sub("", line, count=1) for line in lines)
+        flagged = {f.line_number for f in scan_diff(as_diff)}
+    except Exception as e:
+        log.error(f"redaction.mask_scan_failed — text sent unmasked: {type(e).__name__}: {e}")
+        return text
+    for n in flagged:
+        if 1 <= n <= len(lines):
+            lines[n - 1] = _mask_line(lines[n - 1])
+    return "\n".join(lines)
 
 
 # ── Credentials carried in a URL ─────────────────────────────────────────────
@@ -93,10 +151,36 @@ _SECRET_QUERY_RE = re.compile(r"(?i)\b(" + "|".join(_SECRET_QUERY_PARAMS) + r")=
 # Credentials that ARE the URL path. The bearer of the URL can post as the
 # bot, so the whole tail is secret — but the host is kept, because knowing
 # WHICH integration failed is the entire value of the log line.
+# Any scheme, a misspelt one ("htps://") or none: a URL pasted without its
+# scheme is quoted back verbatim by requests ("Invalid URL 'hooks.slack.com/
+# services/…': No scheme supplied"), and that was logged and posted.
+_ANY_SCHEME = r"(?:[a-z][a-z0-9+.-]*://)?"
 _WEBHOOK_PATH_RES = (
-    re.compile(r"(?i)(https?://hooks\.slack\.com/services/)\S+"),
-    re.compile(r"(?i)(https?://(?:ptb\.|canary\.)?discord(?:app)?\.com/api/webhooks/)\S+"),
-    re.compile(r"(?i)(https?://[\w.-]*webhook\.office\.com/webhookb2/)\S+"),
+    # Slack incoming webhooks, Workflow Builder triggers and workflows.
+    re.compile(r"(?i)(" + _ANY_SCHEME + r"hooks\.slack\.com/)(?:services|triggers|workflows)/\S+"),
+    # Discord, with or without an API version segment (/api/v10/webhooks/).
+    re.compile(
+        r"(?i)("
+        + _ANY_SCHEME
+        + r"(?:ptb\.|canary\.)?discord(?:app)?\.com/api/(?:v\d+/)?webhooks/)\S+"
+    ),
+    re.compile(r"(?i)(" + _ANY_SCHEME + r"[\w.-]*webhook\.office\.com/webhookb2/)\S+"),
+    # urllib3's "Max retries exceeded with url: …" quotes only the PATH, so
+    # the host-anchored patterns above never matched the commonest failure
+    # message, and the full webhook secret was logged — and, from the rich
+    # senders, returned to /notify and posted into a GitHub comment.
+    re.compile(r"(?i)((?<![\w/])/(?:services|triggers|workflows)/)T[A-Z0-9]+/\S+"),
+    re.compile(r"(?i)((?<![\w/])/api/(?:v\d+/)?webhooks/)\d+/\S+"),
+    re.compile(r"((?<![\w/])/webhookb2/)\S+"),
+)
+
+
+_URL_USERINFO_RE = re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://)[^/@\s:]+:[^/@\s]+@")
+# The same without a scheme: "No connection adapters were found for
+# 'admin:pw@ollama.internal:11434/api/chat'" carried an OLLAMA_HOST password.
+_BARE_USERINFO_RE = re.compile(
+    r"(?<![\w/@.:-])[\w.%+-]+:[^\s/@'\"`]+@(?=[a-z0-9-]+(?:\.[a-z0-9-]+)*(?:[:/'\"\s]|$)|[a-z0-9-]+(?:\.[a-z0-9-]+)+)",
+    re.I,
 )
 
 
@@ -110,6 +194,10 @@ def redact_secrets(text: str | None) -> str:
     if not text:
         return ""
     out = str(text)
+    # Credentials in a URL's user-info (`http://user:pass@host`, as an
+    # OLLAMA_HOST may be written) — quoted by every connection error.
+    out = _URL_USERINFO_RE.sub(r"\1REDACTED@", out)
+    out = _BARE_USERINFO_RE.sub("REDACTED@", out)
     for pattern in _WEBHOOK_PATH_RES:
         out = pattern.sub(lambda m: f"{m.group(1)}REDACTED", out)
     return _SECRET_QUERY_RE.sub(lambda m: f"{m.group(1)}=REDACTED", out)

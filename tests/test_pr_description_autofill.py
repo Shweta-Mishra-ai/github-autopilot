@@ -83,7 +83,9 @@ class TestDescriptionIsActuallyWritten:
         put = _run(_pr(body=""), _analysis(), Cfg())
         assert put.call_count == 1
         body = put.call_args[0][2]
-        assert body["body"].startswith("## Summary")
+        # Attributed, and only the summary is the model's own prose.
+        assert body["body"].startswith("<!-- github-autopilot:generated-description -->")
+        assert "## Summary\nAdds a widget." in body["body"]
 
     def test_title_and_body_go_in_one_request(self):
         """GitHub emits a `pull_request.edited` webhook per PATCH and this bot

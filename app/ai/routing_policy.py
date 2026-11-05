@@ -47,12 +47,35 @@ TASK_MAP: dict[str, str] = {
 }
 
 # ── Quotas and cost ──────────────────────────────────────────────────────────
-DAILY_LIMITS = {
+# Daily quotas this deployment ASSUMES each provider allows. They are not read
+# from the provider — no provider exposes them — and free tiers change, so
+# each can be set to match the account's plan:
+#     LLM_DAILY_LIMIT_GROQ_70B_TOKENS=200000  LLM_DAILY_LIMIT_GEMINI_REQUESTS=500
+# Routing steers away from a provider near its limit, and /budget shows them
+# labelled as assumptions.
+_DEFAULT_DAILY_LIMITS = {
     "groq_70b": {"tokens": 80_000, "requests": 5_000},
     "groq_8b": {"tokens": 400_000, "requests": 12_000},
     "gemini": {"tokens": 800_000, "requests": 1_200},
     "openrouter": {"tokens": 50_000, "requests": 200},
 }
+
+
+def _daily_limits() -> dict:
+    out = {}
+    for key, defaults in _DEFAULT_DAILY_LIMITS.items():
+        out[key] = {}
+        for kind, default in defaults.items():
+            raw = os.environ.get(f"LLM_DAILY_LIMIT_{key.upper()}_{kind.upper()}", "")
+            try:
+                value = int(raw) if raw.strip() else default
+            except ValueError:
+                value = default  # read at import: a typo must not stop the app
+            out[key][kind] = value if value >= 0 else default
+    return out
+
+
+DAILY_LIMITS = _daily_limits()
 
 COST_PER_1K = {
     "groq_70b": 0.0009,
@@ -65,6 +88,36 @@ COST_PER_1K = {
 # ── Prompt size caps ─────────────────────────────────────────────────────────
 MAX_SYSTEM_CHARS = 3_000
 MAX_USER_CHARS = 8_000
+
+
+# Per-provider prompt size. MAX_USER_CHARS exists to protect Groq's free-tier
+# daily token budget (80k tokens/day on the 70B model), and it is the hard
+# ceiling on how much code a review can see. Gemini's free tier allows ten
+# times that (DAILY_LIMITS above), so a review routed there may send three
+# times the code. Override with GEMINI_PROMPT_CHARS.
+def _env_chars(name: str, default: int) -> int:
+    """
+    A positive character count from the environment, or `default`.
+
+    Read at import, so it must never raise: a typo such as "24k" in this
+    setting would otherwise stop the whole app from starting.
+    """
+    try:
+        value = int(os.environ.get(name, "") or default)
+    except ValueError:
+        return default
+    return value if value >= MAX_USER_CHARS else default
+
+
+PROVIDER_PROMPT_CHARS: dict[str, int] = {
+    "gemini": _env_chars("GEMINI_PROMPT_CHARS", 24_000),
+}
+
+
+def prompt_chars_for(provider_key: str) -> int:
+    """The user-prompt size limit for one provider."""
+    return PROVIDER_PROMPT_CHARS.get(provider_key, MAX_USER_CHARS)
+
 
 # ── Quality tiers ────────────────────────────────────────────────────────────
 # "basic" providers are fine for fast tasks (labels, lint) but produce visibly

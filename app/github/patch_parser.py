@@ -25,6 +25,23 @@ CommentableLines = dict[int, tuple[str, bool]]
 _HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
 
 
+def diff_lines(text: str) -> list[str]:
+    """
+    The lines of a patch or file, split on "\n" ONLY — as git and GitHub
+    count them. str.splitlines() also splits on form feed, \x0b, \x1c-\x1e,
+    \x85, U+2028/U+2029 and a lone \r, so a PEP 8 page break (^L) or a U+2028
+    inside a JS string turned one diff line into two: every later line in the
+    hunk was numbered one too high, and a committable suggestion landed on —
+    and replaced — the wrong line. A trailing \r (CRLF files) is dropped.
+    """
+    if not text:
+        return []
+    lines = text.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    return [ln[:-1] if ln.endswith("\r") else ln for ln in lines]
+
+
 def commentable_lines(patch: str) -> CommentableLines:
     """
     Parse a unified-diff `patch` (as returned by GitHub's files API) into
@@ -37,7 +54,7 @@ def commentable_lines(patch: str) -> CommentableLines:
         return lines
     new_ln = 0
     in_hunk = False
-    for raw in patch.splitlines():
+    for raw in diff_lines(patch):
         m = _HUNK_RE.match(raw)
         if m:
             new_ln = int(m.group(1))
@@ -57,6 +74,54 @@ def commentable_lines(patch: str) -> CommentableLines:
             lines[new_ln] = (raw[1:] if raw.startswith(" ") else raw, False)
             new_ln += 1
     return lines
+
+
+def numbered_patch(patch: str, max_chars: int | None = None) -> tuple[str, bool]:
+    """
+    `patch` with each new-file line prefixed by its line number, cut on a line
+    boundary to at most `max_chars`. Returns (text, was_cut).
+
+        @@ -10,3 +10,4 @@ def load():
+           10   cfg = read()
+           11 + if cfg is None:
+           12 +     raise ConfigError
+              -     return {}
+
+    The review asks the model which line each finding is on. Given a raw
+    unified diff it had to count forward from the `@@` header itself, which it
+    does badly — and nearest_commentable() then snapped the guess onto any
+    commentable line within five, so a finding could land on a different
+    statement and the "anchor rate" the confidence gate trusts would still
+    read 100%. Printing the numbers makes the answer something it reads off
+    the page rather than computes.
+    """
+    out: list[str] = []
+    size = 0
+    cut = False
+    new_ln = 0
+    in_hunk = False
+    for raw in diff_lines(patch or ""):
+        m = _HUNK_RE.match(raw)
+        if m:
+            new_ln = int(m.group(1))
+            in_hunk = True
+            line = raw
+        elif not in_hunk or raw.startswith("\\"):
+            line = raw
+        elif raw.startswith("+"):
+            line = f"{new_ln:>6} + {raw[1:]}"
+            new_ln += 1
+        elif raw.startswith("-"):
+            line = f"{'':>6} - {raw[1:]}"
+        else:
+            line = f"{new_ln:>6}   {raw[1:] if raw.startswith(' ') else raw}"
+            new_ln += 1
+        if max_chars is not None and size + len(line) + 1 > max_chars:
+            cut = True
+            break
+        out.append(line)
+        size += len(line) + 1
+    return "\n".join(out), cut
 
 
 def parse_line_ref(ref) -> int | None:
@@ -153,6 +218,26 @@ _WRAPPERS = (
 )
 
 
+def _is_a_word(s: str) -> bool:
+    """
+    A bare name, `not <name>`, or a lone string: valid Python, never a fix.
+    "Remove", "Delete", "Unnecessary" and "not needed" all parsed, and became
+    one-click suggestions that replace a working line with that word.
+    """
+    try:
+        tree = ast.parse(s)
+    except (SyntaxError, ValueError, MemoryError, RecursionError):
+        return False
+    if len(tree.body) != 1 or not isinstance(tree.body[0], ast.Expr):
+        return False
+    value = tree.body[0].value
+    if isinstance(value, ast.UnaryOp) and isinstance(value.op, ast.Not):
+        value = value.operand
+    return isinstance(value, ast.Name) or (
+        isinstance(value, ast.Constant) and isinstance(value.value, str)
+    )
+
+
 def _looks_like_code(fix: str) -> bool:
     """
     True when `fix` parses as code rather than reading as a sentence about code.
@@ -165,7 +250,7 @@ def _looks_like_code(fix: str) -> bool:
     ships a committable suggestion that breaks the branch.
     """
     s = fix.strip()
-    if not s or s.lower() in _NON_ANSWER:
+    if not s or s.lower() in _NON_ANSWER or _is_a_word(s):
         return False
     for wrap in _WRAPPERS:
         try:

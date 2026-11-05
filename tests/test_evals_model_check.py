@@ -142,7 +142,8 @@ class TestExitCodeContract:
         wf = Path(__file__).resolve().parent.parent / ".github/workflows/evals.yml"
         text = wf.read_text(encoding="utf-8")
         assert "exit_code" in text, "the run step must publish its exit code"
-        assert 'outputs.exit_code }}\" = \"3\"' in text, (
+        assert 'code="${{ steps.run.outputs.exit_code }}"' in text
+        assert '"$code" = "3"' in text, (
             "the report step must branch on exit code 3, or a retired model is "
             "reported as a quality regression again"
         )
@@ -367,7 +368,7 @@ class TestAThrottledRunIsNotAQualityResult:
 
         wf = Path(__file__).resolve().parent.parent / ".github/workflows/evals.yml"
         text = wf.read_text(encoding="utf-8")
-        assert 'outputs.exit_code }}" = "4"' in text, (
+        assert '"$code" = "4"' in text, (
             "without its own branch a throttled run files 'quality regressed'"
         )
 
@@ -400,6 +401,6 @@ class TestAThrottledRunIsNotAQualityResult:
 
         source = inspect.getsource(run.main)
         assert "return 4" in source
-        assert "NOT a quality result" in source, (
+        assert "NOT SCORED" in source and "left out of the pass rate" in source, (
             "the message must say plainly that these cases were never scored"
         )

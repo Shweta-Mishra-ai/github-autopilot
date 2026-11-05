@@ -99,3 +99,44 @@ class TestSeamIsStructural:
         src = inspect.getsource(ci_mod)
         assert "guarded_ask" in src
         assert "is_degraded" in src
+
+
+class TestSafeRouterAskNeverRaises:
+    """Each way router.ask() can fail becomes a payload the caller can name.
+    Every other test patches safe_router_ask itself, so these branches were
+    reached by nothing."""
+
+    def _ask(self, exc):
+        from app.ai import guarded
+        from app.ai.router import router
+
+        with patch.object(router, "ask", side_effect=exc):
+            return guarded.safe_router_ask("s", "u", task="fix")
+
+    def test_a_spent_budget_says_so(self):
+        from app.core.guardrails import AIBudgetExceeded
+
+        payload, meta = self._ask(AIBudgetExceeded("Daily AI budget for o/r is spent"))
+        assert meta is None
+        assert payload == {"error": "Daily AI budget for o/r is spent", "_reason": "budget"}
+
+    def test_rejected_input_is_named(self):
+        from app.core.sanitizer import InjectionRejected
+
+        payload, _ = self._ask(InjectionRejected("ignore previous instructions"))
+        assert payload == {"error": "input_rejected", "_reason": "input_rejected"}
+
+    def test_an_unexpected_error_gives_its_type_not_its_message(self):
+        # The payload can reach a public comment; an exception's text can
+        # carry a URL with credentials in it.
+        payload, _ = self._ask(RuntimeError("https://user:hunter2@internal.host/"))
+        assert payload == {"error": "RuntimeError", "_reason": "error"}
+
+    def test_an_unexpected_error_is_not_mistaken_for_an_answer(self):
+        from app.ai.validator import is_unusable
+
+        payload, _ = self._ask(KeyError("choices"))
+        assert is_unusable(payload), (
+            "{} passed is_unusable and was reported as a failed reliability "
+            "check, for a request that never reached a model"
+        )

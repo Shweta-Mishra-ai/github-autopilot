@@ -1,5 +1,16 @@
 # Autofix Engine
 
+> **⚠️ Outdated design.** This page describes an earlier engine that rewrote
+> whole files, guarded by a 70% length check, and opened a pull request
+> itself. The current engine (`app/handlers/autofix.py`) asks the model for
+> exact find/replace edits against the full file, applies them only if every
+> `find` matches exactly once, refuses files too large to show in full (about
+> 6,000 characters), commits to a branch `fix/bot-issue-<N>-<timestamp>`, and
+> opens **no** pull request — a maintainer runs `/apply <branch>`. See
+> [the command reference](../guides/slash-commands.md#autofix) for current
+> behaviour; the sections below are kept for their history.
+
+
 > The most complex feature in GitHub Autopilot.
 > `/autofix` takes a GitHub issue as input and produces a working pull request as output — without human intervention in the fix generation step.
 > This document explains every stage of the engine, every bug that was fixed, every failure mode, and why the system is designed this way.

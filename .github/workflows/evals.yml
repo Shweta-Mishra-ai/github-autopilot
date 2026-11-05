@@ -139,61 +139,44 @@ jobs:
           # one costs real time: "quality regressed" sends a maintainer to read
           # prompts and diff model versions, when the actual fix is one
           # repository secret. Report what actually happened.
-          if [ "${{ steps.run.outputs.exit_code }}" = "4" ]; then
-            TITLE="Nightly AI evals could not measure — the provider throttled the run"
-            BODY=$(printf '%s\n' \
-              "The suite did not produce a quality result. It is NOT a regression:" \
-              "the provider rate-limited some cases, so they were never scored." \
-              "" \
+          # One paragraph per line: GitHub renders every newline in an issue
+          # as a line break, so the old wrapped lines arrived cut mid-sentence.
+          code="${{ steps.run.outputs.exit_code }}"
+          if [ "$code" = "4" ]; then
+            TITLE="Nightly AI evals could not score every case"
+            BODY=$(printf '%s\n\n' \
+              "Every case that was scored passed, but some cases were not scored, so this run cannot vouch for them. The list below gives the reason for each, after one retry." \
               "Run: $RUN_URL" \
-              "" \
-              "The run log names the blocked cases. The suite runs cases back to" \
-              "back and a larger model has a smaller allowance, so the usual fix is" \
-              "to raise \`EVAL_CASE_DELAY_SECONDS\` in the workflow." \
-              "" \
-              "Cases that DID get an answer were scored normally and are in the" \
-              "summary; the pass-rate is withheld because averaging unscored cases" \
-              "into it would report a provider limit as a drop in review quality." )
-          elif [ "${{ steps.run.outputs.exit_code }}" = "3" ]; then
+              "If the reason is a rate limit, raise \`EVAL_CASE_DELAY_SECONDS\` in the workflow. If the model's answer was not valid JSON, the prompt or the model needs a look." )
+          elif [ "$code" = "5" ]; then
+            TITLE="Nightly AI evals crashed — the harness or the code under test raised"
+            BODY=$(printf '%s\n\n' \
+              "The suite did not produce a quality result. It is NOT a model regression: one or more cases raised an exception, which is a code fault." \
+              "Run: $RUN_URL" \
+              "The usual cause is a production function whose signature changed under \`evals/run.py\`; \`tests/test_evals_harness.py\` runs the whole suite offline to catch that." )
+          elif [ "$code" = "3" ]; then
             TITLE="Nightly AI evals cannot run — the configured model no longer exists"
-            BODY=$(printf '%s\n' \
-              "The eval suite did not measure anything. It is NOT a quality regression:" \
-              "the provider returned 404 for the model this deployment asks for, so every" \
-              "request failed and every case scored zero on empty output." \
-              "" \
+            BODY=$(printf '%s\n\n' \
+              "The eval suite did not measure anything. It is NOT a quality regression: the provider returned 404 for the model this deployment asks for, so every request failed." \
               "Run: $RUN_URL" \
-              "" \
-              "**The live bot is failing the same way.** Every AI command -- /fix," \
-              "/explain, /review and the rest -- calls the same model id, so they are" \
-              "all returning provider errors right now, not just this suite." \
-              "" \
-              "Fix: set \`LLM_PRIMARY_MODEL\` and \`LLM_FALLBACK_MODEL\` to ids the" \
-              "provider still serves. The run log lists what is currently available." )
+              "**The live bot is failing the same way.** Every AI command (/fix, /explain, /review and the rest) calls the same model id, so they are all returning provider errors right now." \
+              "Fix: set \`LLM_PRIMARY_MODEL\` and \`LLM_FALLBACK_MODEL\` to ids the provider still serves. The run log lists what is currently available." )
           elif [ "${{ steps.preflight.outputs.unconfigured }}" = "true" ]; then
             TITLE="Nightly AI evals cannot run — GROQ_API_KEY is not set"
-            BODY=$(printf '%s\n' \
-              "The nightly eval suite did not run. It is not a quality regression:" \
-              "the \`GROQ_API_KEY\` repository secret is missing, so the suite had no" \
-              "provider to call." \
-              "" \
+            BODY=$(printf '%s\n\n' \
+              "The nightly eval suite did not run. It is not a quality regression: the \`GROQ_API_KEY\` repository secret is missing, so the suite had no provider to call." \
               "Run: $RUN_URL" \
-              "" \
-              "Fix: Settings > Secrets and variables > Actions > New repository secret," \
-              "named \`GROQ_API_KEY\`." \
-              "" \
-              "Until then this is the only quality gate in CI that is not running —" \
-              "everything else checks that the code is correct, and only this checks" \
-              "that the bot is still good at reviewing code." )
+              "Fix: Settings > Secrets and variables > Actions > New repository secret, named \`GROQ_API_KEY\`." \
+              "Until then this is the only quality gate in CI that is not running: everything else checks that the code is correct, and only this checks that the bot is still good at reviewing code." )
           else
             TITLE="Nightly AI evals are failing"
-            BODY=$(printf '%s\n' \
-              "The nightly AI-output eval suite fell below its pass-rate threshold." \
-              "" \
-              "Run: $RUN_URL" \
-              "" \
-              "This measures whether the bot still finds the planted bugs in" \
-              "\`evals/cases/\` — a drop usually means a prompt, model, or provider" \
-              "change degraded review quality." )
+            BODY=$(printf '%s\n\n' \
+              "The scored cases fell below the pass-rate threshold (overall, or for detection or restraint on their own). This measures whether the bot still finds the planted bugs in \`evals/cases/\` and stays quiet on clean code, so a drop means the bot's reviews got worse." \
+              "Run: $RUN_URL" )
+          fi
+          # The cases and the reason for each, written by evals/run.py.
+          if [ -s eval-cases.md ]; then
+            BODY=$(printf '%s\n\n%s\n' "$BODY" "$(cat eval-cases.md)")
           fi
           # Find the existing report by TITLE, not by label.
           #

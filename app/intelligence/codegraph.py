@@ -156,6 +156,12 @@ class CodeGraph:
         """
         internal: list[Edge] = []
         seen: set[tuple[str, str, str]] = set()
+        # `from app.core.config import load_config` is recorded as both
+        # app.core.config and app.core.config.load_config, so whichever is a
+        # module resolves. The other is a name inside this project, not an
+        # external dependency — counting it put `app` in 68 modules'
+        # external_deps.
+        own_roots = {node_id.split(".")[0] for node_id in self.nodes}
 
         for e in self.edges:
             if e.source not in self.nodes:
@@ -169,7 +175,7 @@ class CodeGraph:
             else:
                 deps = self.nodes[e.source].external_deps
                 root = e.target.split(".")[0]
-                if root and root not in deps:
+                if root and root not in own_roots and root not in deps:
                     deps.append(root)
 
         self.edges = internal
@@ -491,7 +497,9 @@ def build_graph(
                     id=module_id,
                     path=str(file_path.relative_to(root_path)),
                     layer=_layer_for(module_id),
-                    loc=source.count("\n") + 1,
+                    # Lines, not newlines + 1: every file ends in a newline,
+                    # so that over-counted each module by one.
+                    loc=len(source.splitlines()),
                     functions=visitor.functions,
                     classes=visitor.classes,
                     is_package=is_package,

@@ -164,9 +164,12 @@ class TestWebhookEndToEnd:
             raise KeyError("simulated handler bug")
 
         monkeypatch.setattr("app.handlers.issues.handle", _raises)
+        # A body of its own: events are deduplicated by their signed payload,
+        # so a body another test already sent would be (correctly) a replay.
         body = json.dumps(
             {
                 "action": "opened",
+                "issue": {"number": 9001},
                 "repository": {"full_name": "o/r"},
                 "sender": {"login": "a-human", "type": "User"},
             }

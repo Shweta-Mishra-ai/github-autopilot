@@ -35,7 +35,6 @@
 
 **Optional:**
 - Discord server (for notifications)
-- Qdrant Cloud account (for vector code context) — [qdrant.tech](https://qdrant.tech)
 
 ---
 
@@ -68,7 +67,7 @@ https://github.com/Shweta-Mishra-ai/github-autopilot
 6. Wait for the first deploy to complete (2–3 minutes)
 7. Copy your service URL: `https://your-service-name.onrender.com`
 
-> **Note:** On Render free tier, services spin down after 15 minutes of inactivity. The first webhook after a spin-down may take 30–60 seconds. This is normal. Consider [UptimeRobot](https://uptimerobot.com) (free) to ping `/health` every 5 minutes and keep the service warm.
+> **Note:** On Render free tier, services spin down after 15 minutes of inactivity. The first webhook after a spin-down may take 30–60 seconds. This is normal. Use [UptimeRobot](https://uptimerobot.com) (free) or cron-job.org to ping `/ping` every 5 minutes to keep the service warm. A GitHub Actions schedule is not enough: GitHub runs it on a best-effort basis, often hours apart.
 
 ---
 
@@ -81,7 +80,7 @@ https://github.com/Shweta-Mishra-ai/github-autopilot
    |---------|-------|
    | **Name** | `github-autopilot-redis` |
    | **Plan** | Free |
-   | **Max Memory Policy** | `allkeys-lru` |
+   | **Max Memory Policy** | `noeviction` (not `allkeys-lru`, which silently evicts the dedup keys) |
 
 3. Click **Create Redis**
 4. Once created, go to the Redis service → **Info** tab
@@ -125,9 +124,7 @@ Copy this value. You will need it again in step 4 when creating the GitHub App.
 |----------|---------|---------|
 | `DISCORD_WEBHOOK_URL` | — | Discord notifications on high-risk events |
 | `SLACK_WEBHOOK_URL` | — | Slack notifications |
-| `QDRANT_URL` | — | Vector DB for code context enrichment |
-| `QDRANT_API_KEY` | — | Qdrant Cloud authentication |
-| `METRICS_AUTH_TOKEN` | — | Protects `/metrics` endpoint (any string) |
+| `METRICS_AUTH_TOKEN` | — | Required to read `/health`, `/metrics`, `/graph.json`, `/setup/doctor` in production (any strong random string) |
 | `MAX_DISPATCH_WORKERS` | `6` | Thread pool size |
 | `REPO_DAILY_AI_LIMIT` | `150` | Max AI calls per repo per day |
 
@@ -214,9 +211,9 @@ The bot is now active. It will respond to all events on the selected repositorie
 
 ### Check the health endpoint
 
-Open in your browser:
+It needs your `METRICS_AUTH_TOKEN` (a browser cannot send it, so use curl):
 ```
-https://your-service-name.onrender.com/health
+curl -H "Authorization: Bearer $METRICS_AUTH_TOKEN" https://your-service-name.onrender.com/health
 ```
 
 Expected response:
@@ -283,7 +280,7 @@ bot:
 
 pull_requests:
   enabled: true
-  auto_polish_title: true       # Rewrites vague PR titles
+  auto_polish_title: false      # Rewrite non-conventional PR titles (default off)
   auto_fill_description: true   # Fills empty PR descriptions
   code_review: true             # Posts code quality review on every PR
   detect_test_gaps: true        # Detects missing test coverage

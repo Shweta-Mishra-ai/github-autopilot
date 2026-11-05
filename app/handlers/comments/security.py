@@ -39,7 +39,11 @@ def cmd_security(repo: str, issue_number: int, issue: dict, token: str) -> str:
 
     try:
         from app.security.enhanced_secrets import format_findings as fmt_secrets, scan_diff
-        from app.security.dependencies import scan_requirements_txt, format_dep_findings
+        from app.security.dependencies import (
+            format_dep_findings,
+            scan_requirements_txt,
+            unpinned_requirements,
+        )
 
         from app.github.helpers import pr_files as fetch_pr_files
 
@@ -64,22 +68,33 @@ def cmd_security(repo: str, issue_number: int, issue: dict, token: str) -> str:
                 unscannable.append(f.get("filename", "?"))
 
         dep_findings = []
+        dep_scanned = False
+        dep_error = ""
+        dep_unpinned: list[str] = []
         # The contents API defaults to the repository's default branch. Reading
         # requirements.txt without a ref therefore scanned the *base* file and
         # reported "no vulnerable dependencies" for a PR whose whole change was
         # adding one. Pin the read to the PR head instead.
         head_sha = _pr_head_sha(repo, issue_number, token)
         for f in pr_files:
-            if f.get("filename") != "requirements.txt":
+            # A REMOVED requirements.txt has nothing at the head to read: the
+            # 404 used to abort the whole scan, discarding the secret findings
+            # already computed above.
+            if f.get("filename") != "requirements.txt" or f.get("status") == "removed":
                 continue
             import base64
 
             path = "/repos/{}/contents/requirements.txt".format(repo)
             if head_sha:
                 path += f"?ref={head_sha}"
-            raw = gh_get(path, token)
-            content = base64.b64decode(raw["content"]).decode()
-            dep_findings.extend(scan_requirements_txt(content))
+            try:
+                raw = gh_get(path, token)
+                content = base64.b64decode(raw["content"]).decode()
+                dep_findings.extend(scan_requirements_txt(content, token, get=gh_get))
+                dep_unpinned = unpinned_requirements(content)
+                dep_scanned = True
+            except Exception as e:
+                dep_error = f"{type(e).__name__}"
 
         lines = ["## 🔒 Security Scan Results\n"]
         if all_findings:
@@ -95,11 +110,32 @@ def cmd_security(repo: str, issue_number: int, issue: dict, token: str) -> str:
                 f"⚠️ **{len(unscannable)} file(s) not scanned** — GitHub sends no diff for "
                 f"binary files or very large changes: {shown}{more}. Check these by hand.\n"
             )
-        lines.append(
-            format_dep_findings(dep_findings)
-            if dep_findings
-            else "✅ **No vulnerable dependencies** found.\n"
-        )
+        # Only what was measured. "No vulnerable dependencies found" was printed
+        # whether or not anything was scanned — for a PR touching only
+        # package.json, or none of its dependencies at all.
+        if dep_findings:
+            lines.append(format_dep_findings(dep_findings))
+        elif dep_scanned:
+            lines.append(
+                "✅ **No known advisories** for the versions pinned in `requirements.txt` "
+                "(GitHub's advisory database).\n"
+            )
+        if dep_scanned and dep_unpinned:
+            shown = ", ".join(f"`{n}`" for n in dep_unpinned[:10])
+            lines.append(
+                f"ℹ️ **{len(dep_unpinned)} unpinned package(s) not checked** — no exact "
+                f"version to look up: {shown}.\n"
+            )
+        if dep_error:
+            lines.append(
+                f"⚠️ **Dependencies not checked** — `requirements.txt` or the advisory "
+                f"database could not be read ({dep_error}).\n"
+            )
+        elif not dep_scanned:
+            lines.append(
+                "ℹ️ **Dependencies not checked** — this PR does not change a root "
+                "`requirements.txt`, the only manifest this command checks.\n"
+            )
         return "\n\n".join(lines)
 
     except Exception as exc:
@@ -122,16 +158,29 @@ def _license_section(repo: str, token: str) -> str:
     try:
         import base64
 
-        from app.security.licenses import format_findings, scan_requirements
+        from app.security.licenses import format_findings, scan_requirements_report
 
         raw = gh_get(f"/repos/{repo}/contents/requirements.txt", token)
         if not isinstance(raw, dict) or not raw.get("content"):
             return ""
         content = base64.b64decode(raw["content"]).decode("utf-8", errors="replace")
-        return format_findings(scan_requirements(content))
+        report = scan_requirements_report(content)
+        if not report["total"]:
+            return ""
+        return format_findings(report["findings"], report["total"], report["checked"])
     except Exception as exc:
         log.info(f"security.license_scan_skipped repo={repo}: {exc}")
         return ""
+
+
+def _is_private(repo: str, token: str) -> bool:
+    """True only when GitHub says the repository is private; a lookup that
+    fails is treated as public, so details are never posted by mistake."""
+    try:
+        return (gh_get(f"/repos/{repo}", token) or {}).get("private") is True
+    except Exception as exc:
+        log.info(f"security.visibility_unknown repo={repo}: {type(exc).__name__}")
+        return False
 
 
 def cmd_secfull(repo: str, token: str) -> str:
@@ -140,7 +189,7 @@ def cmd_secfull(repo: str, token: str) -> str:
         from app.security.scanner import run_security_scan
 
         report = run_security_scan(repo, token)
-        sections = [report.to_markdown(include_low=True)]
+        sections = [report.to_markdown(include_low=True, counts_only=not _is_private(repo, token))]
 
         licenses = _license_section(repo, token)
         if licenses:

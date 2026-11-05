@@ -23,7 +23,7 @@
 
 ## 1. Health Endpoint — /health
 
-`GET /health` — no authentication required. Returns HTTP 200 when healthy, HTTP 207 when degraded.
+`GET /health` — requires `Authorization: Bearer $METRICS_AUTH_TOKEN`; in production (`ENVIRONMENT=production`) it answers 401 to every request when the token is unset. Returns HTTP 200 when healthy, HTTP 207 when degraded. For Render's health check and uptime pings use `/ping`, which needs no token.
 
 ### Full response anatomy
 
@@ -69,6 +69,9 @@
 | `uptime_seconds` | Any positive | `< 60` after restart | Normal after deploy |
 | `checks.redis` | `"ok"` | `"unavailable (using in-memory)"` | Check `REDIS_URL` env var |
 | `checks.github_api` | `"ok"` | `"rate_limited"` | Wait for rate limit reset (1hr) |
+| `checks.github_api` | — | `"unknown (no call since start)"` | Not a fault: no GitHub response has been seen yet, so there is no rate-limit reading |
+| `metrics.secondary_rate_limited` | `0` | rising | GitHub secondary (abuse) limits since start; events are retried by the queue |
+| `providers.*.avg_latency_ms` | a number | `null` | `null` means no samples, or Redis could not be read — not 0 ms |
 | `checks.llm_providers.*.state` | `"closed"` | `"open"` or `"half_open"` | Check API key, provider status |
 | `checks.llm_providers.*.usage_pct` | `< 80` | `≥ 80` | Daily limit approaching, add fallback |
 | `thread_pool.pending_jobs` | `0–5` | `> 20` | Bot under load, events queueing |
@@ -89,7 +92,7 @@
 
 `GET /metrics`
 
-Requires `Authorization: Bearer {METRICS_AUTH_TOKEN}` header if `METRICS_AUTH_TOKEN` is set in environment. If not set, the endpoint is unprotected (acceptable for private repos, not recommended for public deployments).
+Requires `Authorization: Bearer {METRICS_AUTH_TOKEN}`. With `METRICS_AUTH_TOKEN` unset, the endpoint refuses every request when `ENVIRONMENT=production` (as `render.yaml` sets) and is open only in local development.
 
 Returns a JSON snapshot of all tracked counters:
 
@@ -223,8 +226,10 @@ ai.router: groq_70b unavailable, trying groq_8b
 # Hallucination detected — confidence below threshold
 hallucination.warning provider=groq_70b confidence=0.45 warnings=["uncertainty","short_fix"]
 
-# Config YAML invalid — using defaults
-config.invalid_yaml repo=org/repo error=...
+# Config YAML invalid — the last valid config is kept; with none on record
+# the bot is disabled for that repository until the file is fixed
+config.invalid repo=org/repo: <error> — keeping the last valid config
+config.invalid repo=org/repo: <error> — no earlier valid config, so the bot is disabled ...
 
 # Redis unavailable — using in-memory fallback
 redis.connection_failed REDIS_URL=redis://... — using in-memory fallback
@@ -444,7 +449,7 @@ Use `/budget` proactively before a busy period to check available capacity.
 
 ### Render health check alerts (built-in)
 
-Render → your service → **Settings** → **Health Check Path** → set to `/health`
+Render → your service → **Settings** → **Health Check Path** → set to `/ping` (as `render.yaml` does). Not `/health`: Render sends no token, and `/health` answers 401 without one.
 
 Render pings this path every 30 seconds. If it returns non-2xx for 3 consecutive checks, Render sends an email alert and attempts to restart the service.
 
@@ -454,9 +459,9 @@ Render free tier spins down after 15 minutes of inactivity. The first webhook af
 
 **Solution — UptimeRobot (free):**
 1. Create a free account at [uptimerobot.com](https://uptimerobot.com)
-2. Add monitor → HTTP(s) → URL: `https://your-service.onrender.com/health`
+2. Add monitor → HTTP(s) → URL: `https://your-service.onrender.com/ping`
 3. Check interval: 5 minutes
-4. This keeps the service warm 24/7
+4. This keeps the service warm. The repository's own GitHub Actions keep-alive does not: GitHub runs scheduled workflows on a best-effort basis, and this repository's `*/10` schedule ran every 2–7 hours in practice.
 
 ### Discord notifications for critical events
 

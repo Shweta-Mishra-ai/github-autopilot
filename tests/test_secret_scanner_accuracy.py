@@ -470,3 +470,34 @@ class TestDocsAndTextFilesAreStillScanned:
 
         assert is_example_path("docs/fixtures/sample.md")
 
+
+
+# Two passwords the random corpus above missed, kept as fixed cases so the
+# regression is not left to a 1-in-400,000 draw. Assembled at runtime so this
+# file never holds a credential-shaped literal.
+_FOUND_BY_THE_CORPUS = {
+    # `$` and `#` split the value into fragments too short to count as key
+    # material, and the `XXX` fragment then read as a placeholder word.
+    "an XXX fragment between symbols": "7FI0KWR$0P#BTGd$" + "XXX" + "$ygEr",
+    # `#` is a word boundary, so `\bmock\b` matched inside the string and the
+    # whole line was treated as a test fixture.
+    "a MoCK fragment before a symbol": "MoCK" + "#RTRoac9LqGBPmWDa7wp",
+}
+
+
+@pytest.mark.parametrize("name", sorted(_FOUND_BY_THE_CORPUS))
+def test_a_password_spelling_a_marker_is_still_reported(name):
+    value = _FOUND_BY_THE_CORPUS[name]
+    assert scan_diff(f'+password = "{value}"', file_path=SCANNED_FILE), name
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        '+api_key = "mock_token_value_1234567"',
+        '+api_key = "fake_secret_for_tests_only"',
+        '+password = "x"  # test fixture',
+    ],
+)
+def test_stand_ins_and_marked_lines_are_still_not_reported(line):
+    assert scan_diff(line, file_path=SCANNED_FILE) == []

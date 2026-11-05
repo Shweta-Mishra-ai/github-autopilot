@@ -107,7 +107,6 @@ longer exists) is worse than no table.
 | `test_snapshot.py` | 11 | Rollback snapshots, atomic bot-action recording |
 | `test_router.py` | 11 | Provider selection, task routing, fallback chain |
 | `test_ollama_local.py` | 11 | Local LLM provider + `LLM_LOCAL_ONLY`/`LLM_PREFER_LOCAL` router modes |
-| `test_learning.py` | 11 | Fix-acceptance tracking (see §11 — not currently wired into any handler) |
 | `test_confidence.py` | 11 | Per-action confidence gates, threshold enforcement |
 | `test_integration_e2e.py` | 10 | Real Flask app + real HMAC webhook, no mocked internals |
 | `test_coverage_boost.py` | 8 | Misc small-function coverage top-ups |
@@ -618,14 +617,17 @@ class TestFeatureFlags:
 
 ### `app/ai/prompt_builder.py` was removed as dead code (V6.3)
 
-`app/core/learning.py` is wired in: `record_fix_accepted` and
-`record_autofix_merged` are called from `handlers/comments/publisher.py`,
-and `get_pattern_summary` is called from `handlers/comments/generator.py`.
-`prompt_builder.py`, however, was never imported outside its own module and
-had no tests — a genuinely dead, tested-nowhere duplicate of the ad hoc
-prompt construction handlers already do inline. It was removed in the V6.3
-audit pass (see `docs/architecture/roadmap.md`). `get_repo_patterns` still
-isn't fed into prompt construction — that remains a real, scoped follow-up.
+`prompt_builder.py` was never imported outside its own module and had no
+tests — a dead duplicate of the prompt construction handlers already do
+inline. It was removed in the V6.3 audit pass.
+
+`app/core/learning.py` now holds only the autofix outcome counters (merged /
+closed unmerged), written from the PR `closed` event and shown beside the
+next autofix. Its "learned conventions" store and fix acceptance rate were
+removed (2026-10): nothing ever wrote a convention, and nothing recorded an
+ignored fix, so the /fix prompt's "Repo conventions" line was always empty
+and the rate could only read 0.5 or 1.0. The test that "proved" the prompt
+injection mocked the reader to return data.
 
 ### `format_budget_comment` patches at wrong location
 

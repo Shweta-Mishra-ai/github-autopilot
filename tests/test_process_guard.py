@@ -97,9 +97,9 @@ class TestTheVerdict:
         assert state == "ok"
 
     def test_two_processes_warn(self, shared_redis):
-        for pid in (201, 202):
-            with patch.object(os, "getpid", return_value=pid):
-                pg.register_this_process()
+        # One other process; verdict() registers this one itself.
+        with patch.object(os, "getpid", return_value=201):
+            pg.register_this_process()
         state, message = pg.verdict()
         assert state == "warn"
         assert "2 web processes" in message
@@ -136,24 +136,40 @@ class TestItNeverBreaksBoot:
         with patch("app.core.redis_client.get_redis", side_effect=RuntimeError("down")):
             pg.warn_if_multiprocess()  # must not raise
 
-    def test_it_warns_rather_than_refusing_to_start(self):
+    def test_it_warns_rather_than_refusing_to_start(self, shared_redis, caplog):
         """Refusing would turn a performance misconfiguration into an outage,
         and the operator who set --workers 4 did it because the service was
-        already struggling."""
-        import inspect
+        already struggling. (This read the function's source for the words
+        "raise" and "exit"; it now runs it with two processes registered.)"""
+        import logging
 
-        src = inspect.getsource(pg.warn_if_multiprocess)
-        assert "raise" not in src
-        assert "exit" not in src
+        with patch.object(os, "getpid", return_value=301):
+            pg.register_this_process()
+        with caplog.at_level(logging.ERROR):
+            pg.warn_if_multiprocess()  # returns: no raise, no exit
+        assert any("multiple_web_processes" in r.getMessage() for r in caplog.records)
 
 
 class TestItIsReachableFromWhereAHumanLooks:
-    def test_health_reports_it(self):
+    def test_health_reports_it(self, shared_redis):
+        """Through the endpoint. This asserted `... in co_names or True`,
+        which cannot fail, and then called the helper directly."""
         import server
 
-        assert "_web_process_check" in server.health.__code__.co_names or True
-        result = server._web_process_check()
-        assert set(result) == {"state", "count", "detail"}
+        with patch.object(os, "getpid", return_value=401):
+            pg.register_this_process()
+        headers = {"Authorization": f"Bearer {server.METRICS_TOKEN}"} if server.METRICS_TOKEN else {}
+        body = server.app.test_client().get("/health", headers=headers).get_json()
+        check = body["checks"]["web_processes"]
+        assert check["state"] == "warn" and check["count"] == 2
+        assert "2 web processes" in check["detail"]
+
+    def test_health_says_unknown_without_redis(self):
+        import server
+
+        with patch("app.core.redis_client.is_redis_available", return_value=False):
+            check = server._web_process_check()
+        assert check["state"] == "unknown" and check["count"] is None
 
     def test_the_doctor_reports_it(self, shared_redis):
         from app.core.preflight import inspect_environment

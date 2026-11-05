@@ -1,6 +1,6 @@
 {
   "name": "github-autopilot",
-  "description": "Call GitHub Autopilot's AI tools (analyze PR, fix issue, scan secrets, repo health) from Claude Code via MCP.",
+  "description": "Call GitHub Autopilot's tools (analyze PR, fix issue, scan secrets, security review, repo health checks, codebase map) from Claude Code via MCP.",
   "version": "7.2.0",
   "author": {
     "name": "Shweta Mishra",

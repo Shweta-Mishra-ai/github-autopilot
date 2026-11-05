@@ -30,10 +30,10 @@ curl -s "$GITHUB_AUTOPILOT_URL" | jq .name   # → "github-autopilot"
 
 | Command | Does |
 |---------|------|
-| `/github-autopilot:review <owner/repo> <pr#>` | Grade a PR — quality, security, test gaps, blast radius |
+| `/github-autopilot:review <owner/repo> <pr#>` | Analyse a PR's diff — security, test gaps, blast radius, recommendation |
 | `/github-autopilot:fix <owner/repo> <issue#>` | Root cause + fix + verification test |
 | `/github-autopilot:security [file]` | Scan for exposed secrets and CVEs |
-| `/github-autopilot:health <owner/repo>` | Repository health grade with quick wins |
+| `/github-autopilot:health <owner/repo>` | Repository health checks with recommendations |
 
 All commands call the `github-autopilot` MCP server defined in
 [`.mcp.json`](.mcp.json). The server is **fail-closed**: if `MCP_API_KEY` is unset

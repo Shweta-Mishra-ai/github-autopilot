@@ -216,3 +216,80 @@ class TestACutDiffSaysSo:
                     pass
         assert len(prompts) == 2
         assert all("the code goes on" in p for p in prompts)
+
+
+class TestAnOlderPushDoesNotOverwriteTheReport:
+    """PR #119: the 5-minute retry of the first commit's event rewrote the
+    report three pushes later — the first commit's summary under the newest
+    file count."""
+
+    FILES = [{"filename": "app/x.py", "status": "modified", "additions": 1, "deletions": 0,
+              "patch": "@@ -1 +1,2 @@\n x = 1\n+y = 2\n"}]
+
+    def _handle(self, current_head):
+        from app.core.config import Config
+        from app.handlers import pull_request as prh
+
+        written, asked = [], []
+
+        def gh_get(path, token, *a, **k):
+            if path.endswith("/pulls/7"):
+                if isinstance(current_head, Exception):
+                    raise current_head
+                return {"head": {"sha": current_head}}
+            return {"archived": False}
+
+        def ask(*a, **k):
+            asked.append(1)
+            return {"files": [], "confidence": 0.9}, MagicMock(total_tokens=0)
+
+        payload = {
+            "action": "synchronize", "repository": {"full_name": "o/r"}, "installation": {"id": 1},
+            "pull_request": {"number": 7, "title": "t", "body": "", "user": {"login": "u"},
+                             "head": {"sha": "old111"}, "base": {"ref": "main"}},
+        }
+        with patch.object(prh, "get_installation_token", return_value="t"), \
+             patch.object(prh, "load_config", return_value=Config({})), \
+             patch.object(prh, "gh_get", side_effect=gh_get), \
+             patch("app.github.helpers.pr_files", return_value=self.FILES), \
+             patch("app.ai.gatekeeper.is_substantive", return_value=(True, "")), \
+             patch("app.ai.router.router.ask", side_effect=ask), \
+             patch("app.ai.router.router.ask_text", side_effect=lambda *a, **k: ("Adds y.", MagicMock())), \
+             patch.object(prh, "update_sticky_if_present", side_effect=lambda *a: written.append(a) or {"id": 1}), \
+             patch.object(prh, "upsert_sticky", side_effect=lambda *a: written.append(a) or {"id": 1}):
+            try:
+                prh.handle(payload)
+            except Exception:
+                pass
+        return written, asked
+
+    def test_a_superseded_event_spends_nothing_and_writes_nothing(self):
+        written, asked = self._handle(current_head="new222")
+        assert written == [] and asked == []
+
+    def test_the_current_head_is_reported(self):
+        written, asked = self._handle(current_head="old111")
+        assert written and asked
+
+    def test_a_failed_lookup_does_not_stop_the_report(self):
+        written, _ = self._handle(current_head=RuntimeError("502"))
+        assert written, "the check must fail open"
+
+
+class TestAQuoteCopiedWithTheBarStillGrounds:
+    """The review now prints `NUMBER MARKER | CODE`; a model that copies the
+    prefix along with the code must still be matched to the line."""
+
+    PATCH = "@@ -1,2 +1,3 @@\n def f(case_id):\n+    reason = lookup(case_id)\n     return reason\n"
+
+    def test_added_line_quoted_with_its_prefix(self):
+        from app.handlers.pull_request.grounding import GROUNDED, ground_finding
+
+        issue = {"line": 2, "code": "     2 + |     reason = lookup(case_id)"}
+        assert ground_finding(issue, self.PATCH) == (GROUNDED, 2)
+
+    def test_unchanged_line_quoted_with_its_prefix_is_context(self):
+        from app.handlers.pull_request.grounding import CONTEXT, ground_finding
+
+        issue = {"line": 1, "code": "     1   | def f(case_id):"}
+        assert ground_finding(issue, self.PATCH)[0] == CONTEXT

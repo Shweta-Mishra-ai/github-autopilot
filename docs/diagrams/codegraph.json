@@ -1255,8 +1255,8 @@
       "id": "app.handlers.pull_request",
       "path": "app/handlers/pull_request/__init__.py",
       "layer": "handlers",
-      "loc": 470,
-      "functions": 5,
+      "loc": 502,
+      "functions": 6,
       "classes": 0,
       "is_package": true,
       "fan_in": 2,
@@ -3923,7 +3923,7 @@
   "stats": {
     "modules": 106,
     "edges": 436,
-    "total_loc": 29980,
+    "total_loc": 30012,
     "layers": [
       "ai",
       "core",

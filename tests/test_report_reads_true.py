@@ -293,3 +293,30 @@ class TestAQuoteCopiedWithTheBarStillGrounds:
 
         issue = {"line": 1, "code": "     1   | def f(case_id):"}
         assert ground_finding(issue, self.PATCH)[0] == CONTEXT
+
+
+class TestTheReviewHasRoomToAnswer:
+    """Live eval runs logged the review's JSON cut off at the router's default
+    1500 tokens; a four-file review now asks for twice that."""
+
+    def test_the_review_call_asks_for_its_own_limit(self):
+        from app.core.confidence import ConfidenceGate
+        from app.handlers.pull_request import review
+
+        seen = {}
+
+        def ask(system, user, **kw):
+            seen.update(kw)
+            raise RuntimeError("stop")
+
+        files = [_file("app/x.py", 5)]
+        cfg = MagicMock()
+        cfg.get.side_effect = lambda *a, **k: k.get("default")
+        with patch.object(review.router, "ask", side_effect=ask), patch.object(
+            review, "gh_get", side_effect=RuntimeError("no network")
+        ):
+            try:
+                review._review_code({"head": {"sha": "s"}}, "o/r", 1, files, "t", cfg, ConfidenceGate(None), "", MagicMock())
+            except RuntimeError:
+                pass
+        assert seen.get("max_tokens") == review.REVIEW_MAX_TOKENS > 1500

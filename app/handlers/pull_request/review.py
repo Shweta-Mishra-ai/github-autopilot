@@ -22,6 +22,11 @@ from .grounding import CONTEXT, GROUNDED, MISQUOTED, REMOVED, ground_finding
 # Per-file caps. Named rather than inline so the review budget is visible in one
 # place instead of buried in three slices.
 MAX_ISSUES_PER_FILE = 4
+# The answer's length limit. One call reviews up to four files, and at the
+# router's default of 1500 the JSON was cut off: live eval runs logged
+# "TRUNCATED: the answer reached its 1500-token limit" twice a run, and PR
+# reports listed files "sent for review but no usable answer came back".
+REVIEW_MAX_TOKENS = 3000
 # The most of one file's diff the model is shown, and the least worth showing:
 # below MIN_DIFF_CHARS a file is better left unreviewed — and said to be — than
 # reviewed from a fragment.
@@ -399,6 +404,7 @@ def _review_code(pr, repo, pr_number, files, token, config, gate, context, log):
         "Senior code reviewer. Give precise, actionable feedback. JSON only.",
         f"{_REVIEW_HEAD}{files_block}{context_part}{_REVIEW_TAIL}",
         task=task,
+        max_tokens=REVIEW_MAX_TOKENS,
     )
 
     if is_unusable(batch):

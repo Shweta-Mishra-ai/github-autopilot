@@ -1395,7 +1395,7 @@
       "id": "app.handlers.pull_request.review",
       "path": "app/handlers/pull_request/review.py",
       "layer": "handlers",
-      "loc": 745,
+      "loc": 751,
       "functions": 11,
       "classes": 0,
       "is_package": false,
@@ -3923,7 +3923,7 @@
   "stats": {
     "modules": 106,
     "edges": 436,
-    "total_loc": 30012,
+    "total_loc": 30018,
     "layers": [
       "ai",
       "core",

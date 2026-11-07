@@ -145,3 +145,178 @@ class TestTheRiskIsReadFirst:
     def test_an_analysis_without_a_risk_line_stays_folded(self):
         body = self._report("### Review Focus\n- x")
         assert "<summary>📋 Analysis</summary>" in body and "### Review Focus" in body
+
+
+class TestTheSummaryKeepsItsShape:
+    """PR #119: the summary's bullet list was published as one paragraph."""
+
+    def test_lines_and_list_markers_survive_the_filter(self):
+        from app.handlers.pull_request.analysis import grounded_sentences
+
+        files = [_file("evals/run.py", 3), _file("tests/test_evals_harness.py", 3)]
+        text = (
+            "**Key technical changes**\n"
+            "- In `evals/run.py`, outages are no longer crashes.\n"
+            "- Updated app/ghost.py to cache tokens.\n"
+            "- Added tests in tests/test_evals_harness.py."
+        )
+        out = grounded_sentences(text, files)
+        assert out.splitlines() == [
+            "**Key technical changes**",
+            "- In `evals/run.py`, outages are no longer crashes.",
+            "- Added tests in tests/test_evals_harness.py.",
+        ], out
+
+
+class TestACutDiffSaysSo:
+    """PR #119: the analysis was shown each file's diff cut mid-line with no
+    mark, and rated the PR HIGH for an `if` "with only comments" and a function
+    that "lacks a return" — both past the cut."""
+
+    def _files(self):
+        lines = "\n".join(f"+    value_{i} = compute(argument_{i})" for i in range(200))
+        return [
+            {"filename": "a.py", "patch": f"@@ -0,0 +1,200 @@\n{lines}"},
+            {"filename": "b.py", "patch": "@@ -0,0 +1,1 @@\n+x = 1"},
+        ]
+
+    def test_a_cut_file_ends_on_a_whole_line_with_the_mark(self):
+        excerpt, _shown, _total = analysis.diff_excerpt_coverage(self._files(), 1500)
+        a = excerpt.split("### b.py")[0] if excerpt.index("### a.py") < excerpt.index("### b.py") else excerpt.split("### a.py")[1]
+        body = a.strip().splitlines()
+        assert body[-1] == analysis.DIFF_CUT_MARK
+        assert body[-2].startswith("+    value_") and body[-2].endswith(")"), body[-2]
+
+    def test_the_excerpt_stays_within_its_budget(self):
+        excerpt, _s, _t = analysis.diff_excerpt_coverage(self._files(), 1500)
+        assert len(excerpt) <= 1500
+
+    def test_an_uncut_file_has_no_mark(self):
+        excerpt, _s, _t = analysis.diff_excerpt_coverage(self._files()[1:], 1500)
+        assert analysis.DIFF_CUT_MARK not in excerpt
+
+    def test_both_prompts_explain_the_mark(self):
+        prompts = []
+
+        def capture(*args, **kwargs):
+            prompts.append(args[1])
+            raise RuntimeError("stop after the prompt")
+
+        pr = {"title": "t", "body": "", "user": {"login": "u"}, "base": {"ref": "main"}, "head": {}}
+        with patch.object(analysis.router, "ask", side_effect=capture), patch.object(
+            analysis.router, "ask_text", side_effect=capture
+        ):
+            for call in (
+                lambda: analysis._analyze_pr(pr, "o/r", 1, self._files(), "t", MagicMock(), MagicMock(), "", MagicMock()),
+                lambda: analysis._build_pr_summary(pr, "o/r", 1, self._files(), "t", MagicMock(), MagicMock()),
+            ):
+                try:
+                    call()
+                except RuntimeError:
+                    pass
+        assert len(prompts) == 2
+        assert all("the code goes on" in p for p in prompts)
+
+
+class TestAnOlderPushDoesNotOverwriteTheReport:
+    """PR #119: the 5-minute retry of the first commit's event rewrote the
+    report three pushes later — the first commit's summary under the newest
+    file count."""
+
+    FILES = [{"filename": "app/x.py", "status": "modified", "additions": 1, "deletions": 0,
+              "patch": "@@ -1 +1,2 @@\n x = 1\n+y = 2\n"}]
+
+    def _handle(self, current_head):
+        from app.core.config import Config
+        from app.handlers import pull_request as prh
+
+        written, asked = [], []
+
+        def gh_get(path, token, *a, **k):
+            if path.endswith("/pulls/7"):
+                if isinstance(current_head, Exception):
+                    raise current_head
+                return {"head": {"sha": current_head}}
+            return {"archived": False}
+
+        def ask(*a, **k):
+            asked.append(1)
+            return {"files": [], "confidence": 0.9}, MagicMock(total_tokens=0)
+
+        payload = {
+            "action": "synchronize", "repository": {"full_name": "o/r"}, "installation": {"id": 1},
+            "pull_request": {"number": 7, "title": "t", "body": "", "user": {"login": "u"},
+                             "head": {"sha": "old111"}, "base": {"ref": "main"}},
+        }
+        with patch.object(prh, "get_installation_token", return_value="t"), \
+             patch.object(prh, "load_config", return_value=Config({})), \
+             patch.object(prh, "gh_get", side_effect=gh_get), \
+             patch("app.github.helpers.pr_files", return_value=self.FILES), \
+             patch("app.ai.gatekeeper.is_substantive", return_value=(True, "")), \
+             patch("app.ai.router.router.ask", side_effect=ask), \
+             patch("app.ai.router.router.ask_text", side_effect=lambda *a, **k: ("Adds y.", MagicMock())), \
+             patch.object(prh, "update_sticky_if_present", side_effect=lambda *a: written.append(a) or {"id": 1}), \
+             patch.object(prh, "upsert_sticky", side_effect=lambda *a: written.append(a) or {"id": 1}):
+            try:
+                prh.handle(payload)
+            except Exception:
+                pass
+        return written, asked
+
+    def test_a_superseded_event_spends_nothing_and_writes_nothing(self):
+        written, asked = self._handle(current_head="new222")
+        assert written == [] and asked == []
+
+    def test_the_current_head_is_reported(self):
+        written, asked = self._handle(current_head="old111")
+        assert written and asked
+
+    def test_a_failed_lookup_does_not_stop_the_report(self):
+        written, _ = self._handle(current_head=RuntimeError("502"))
+        assert written, "the check must fail open"
+
+
+class TestAQuoteCopiedWithTheBarStillGrounds:
+    """The review now prints `NUMBER MARKER | CODE`; a model that copies the
+    prefix along with the code must still be matched to the line."""
+
+    PATCH = "@@ -1,2 +1,3 @@\n def f(case_id):\n+    reason = lookup(case_id)\n     return reason\n"
+
+    def test_added_line_quoted_with_its_prefix(self):
+        from app.handlers.pull_request.grounding import GROUNDED, ground_finding
+
+        issue = {"line": 2, "code": "     2 + |     reason = lookup(case_id)"}
+        assert ground_finding(issue, self.PATCH) == (GROUNDED, 2)
+
+    def test_unchanged_line_quoted_with_its_prefix_is_context(self):
+        from app.handlers.pull_request.grounding import CONTEXT, ground_finding
+
+        issue = {"line": 1, "code": "     1   | def f(case_id):"}
+        assert ground_finding(issue, self.PATCH)[0] == CONTEXT
+
+
+class TestTheReviewHasRoomToAnswer:
+    """Live eval runs logged the review's JSON cut off at the router's default
+    1500 tokens; a four-file review now asks for twice that."""
+
+    def test_the_review_call_asks_for_its_own_limit(self):
+        from app.core.confidence import ConfidenceGate
+        from app.handlers.pull_request import review
+
+        seen = {}
+
+        def ask(system, user, **kw):
+            seen.update(kw)
+            raise RuntimeError("stop")
+
+        files = [_file("app/x.py", 5)]
+        cfg = MagicMock()
+        cfg.get.side_effect = lambda *a, **k: k.get("default")
+        with patch.object(review.router, "ask", side_effect=ask), patch.object(
+            review, "gh_get", side_effect=RuntimeError("no network")
+        ):
+            try:
+                review._review_code({"head": {"sha": "s"}}, "o/r", 1, files, "t", cfg, ConfidenceGate(None), "", MagicMock())
+            except RuntimeError:
+                pass
+        assert seen.get("max_tokens") == review.REVIEW_MAX_TOKENS > 1500

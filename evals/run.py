@@ -170,7 +170,11 @@ def check_configured_models(key: str) -> tuple[bool, str]:
 #
 # Pacing prevents it; the retry survives a burst; and a case still empty after
 # that is reported as blocked rather than counted against the score.
-CASE_DELAY_SECONDS = float(os.environ.get("EVAL_CASE_DELAY_SECONDS", "3"))
+#
+# 3 seconds was not enough: all four live runs on 2026-11-05 met 2 to 9 Groq
+# rate limits (and the fallbacks behind them), on a suite now 25 cases long.
+# Ten seconds adds about four minutes to a nightly run with a 30-minute limit.
+CASE_DELAY_SECONDS = float(os.environ.get("EVAL_CASE_DELAY_SECONDS", "10"))
 THROTTLE_BACKOFF_SECONDS = float(os.environ.get("EVAL_THROTTLE_BACKOFF_SECONDS", "20"))
 
 # Anything shorter than this is not an answer. The providers return an empty
@@ -366,6 +370,13 @@ def run_review_cases() -> tuple[list, list]:
         result = score_output(output, case, findings="\n".join(findings))
         results.append(result)
         _print_case(result)
+        if not result.passed:
+            # What the reviewer actually said, as the gap cases already print:
+            # two review cases failed on both live runs of PR #117, and the
+            # log could not show whether the model invented a finding or the
+            # scorer misread one.
+            for finding in findings or ["(no findings reported)"]:
+                print(f"    finding: {' '.join(str(finding).split())[:200]}")
     return results, blocked
 
 
@@ -538,6 +549,13 @@ def _attempt(call, case: dict, results: list, blocked_check=None):
                 print(f"  [RETRY] {case['id']}  after {type(exc).__name__}")
                 time.sleep(THROTTLE_BACKOFF_SECONDS)
                 continue
+            if _is_outage(exc):
+                # Not a fault in the code: every provider was down or
+                # rate-limited on both tries. It was recorded as a crash, and
+                # the 2026-11-05 run on PR #117 exited 5 — "fix the code, not
+                # the prompts" — because Groq was rate-limiting.
+                _OUTAGES[case["id"]] = f"all providers were down or rate-limited ({type(exc).__name__})"
+                return ""
             result = CaseResult(case["id"], 0.0, False, [f"exception: {exc}"])
             results.append(result)
             _print_case(result)
@@ -569,7 +587,20 @@ def _unusable_reason(verdict) -> str:
     return "the model's answer could not be read"
 
 
+# Cases whose call raised a provider outage on both tries, by case id.
+_OUTAGES: dict[str, str] = {}
+
+
+def _is_outage(exc: BaseException) -> bool:
+    """A provider outage or spent quota: infrastructure, not a code fault."""
+    from app.ai.circuit_breaker import AllProvidersDown
+    from app.core.guardrails import AIBudgetExceeded
+
+    return isinstance(exc, (AllProvidersDown, AIBudgetExceeded))
+
+
 def _print_blocked(case_id: str, reason: str = "empty or refusal-looking answer") -> None:
+    reason = _OUTAGES.pop(case_id, reason)
     BLOCK_REASONS[case_id] = reason
     print(f"  [BLOCKED] {case_id}  {reason} (after a retry) — not scored")
 

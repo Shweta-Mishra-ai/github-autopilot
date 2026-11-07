@@ -181,6 +181,11 @@ def handle(payload: dict):
     except Exception as e:
         log.debug(f"archived_check_skipped repo={repo}: {e}")
 
+    event_sha = (pr.get("head") or {}).get("sha", "")
+    if _superseded(repo, pr_number, event_sha, token):
+        log.info(f"pr.superseded sha={event_sha[:7]} — a newer push is reported instead")
+        return
+
     try:
         # Every page. A single fetch returned GitHub's default of 30 files, so
         # on a larger PR the rest were never reviewed or counted.
@@ -403,6 +408,11 @@ def handle(payload: dict):
     disclosed = last_model_disclosure()
     if disclosed:
         body += f"\n*Written with AI{disclosed}*"
+    # Again just before writing: a push can land while the AI calls run, and
+    # the report must not go back to describing the older commit.
+    if _superseded(repo, pr_number, head_sha, token):
+        log.info(f"pr.superseded sha={head_sha[:7]} — report not written")
+        return
     try:
         if edit_only:
             if update_sticky_if_present(
@@ -424,6 +434,28 @@ def handle(payload: dict):
             raise
     if retryable:
         _retry_later()
+
+
+def _superseded(repo: str, pr_number, head_sha: str, token: str) -> bool:
+    """
+    True when the PR's head has moved past the commit this event is about.
+
+    A retried event for an older push overwrote the newer report: on PR #119
+    the 5-minute retry of the first commit (its review had met a provider
+    outage) rewrote the report three pushes later, with the first commit's
+    summary under the newest file count. Fails open — any doubt, and the
+    event runs as before.
+    """
+    if not head_sha:
+        return False
+    try:
+        current = gh_get(f"/repos/{repo}/pulls/{pr_number}", token)
+    except Exception:
+        return False
+    if not isinstance(current, dict):
+        return False
+    sha = (current.get("head") or {}).get("sha") if isinstance(current.get("head"), dict) else None
+    return isinstance(sha, str) and bool(sha) and sha != head_sha
 
 
 _SECTIONS_TTL = 2 * 3600  # covers the queue's retries (30 s, 5 min, 30 min)

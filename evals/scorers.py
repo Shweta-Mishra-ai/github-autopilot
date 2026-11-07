@@ -89,8 +89,15 @@ def score_output(
         checks.append((hit, f"must_mention failed: /{pattern}/"))
 
     for pattern in case.get("must_not_mention", []):
-        hit = re.search(pattern, text, re.IGNORECASE) is not None
-        checks.append((not hit, f"must_not_mention violated: /{pattern}/"))
+        hit = re.search(pattern, text, re.IGNORECASE)
+        # The words around the match: on 2026-11-05 a clean review case failed
+        # on /critical/ with no findings at all, and the log could not say
+        # where the word was.
+        where = ""
+        if hit:
+            around = " ".join(text[max(hit.start() - 60, 0) : hit.end() + 60].split())
+            where = f" in “…{around}…”"
+        checks.append((not hit, f"must_not_mention violated: /{pattern}/{where}"))
 
     if case.get("require_code_block"):
         checks.append(("```" in text, "require_code_block failed: no ``` fence"))

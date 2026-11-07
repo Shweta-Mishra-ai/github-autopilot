@@ -650,3 +650,59 @@ class TestAnUnparseableAnswerIsNotAQualityResult:
 
         out = degraded_comment({"_reason": "low_confidence", "_confidence": 0.2}, "fix")
         assert not ev.looks_blocked(out), "a refused answer is a quality result"
+
+
+class TestAProviderOutageIsNotACrash:
+    """The second live run on PR #117 exited 5 — "a case raised, fix the code,
+    not the prompts" — because Groq was rate-limiting and every provider was
+    down on both tries of one review case."""
+
+    def test_a_case_that_meets_an_outage_twice_is_not_scored(self, monkeypatch):
+        import evals.run as ev
+        from app.ai.circuit_breaker import AllProvidersDown
+
+        monkeypatch.setattr(ev, "THROTTLE_BACKOFF_SECONDS", 0.0)
+        results: list = []
+
+        def call():
+            raise AllProvidersDown(60)
+
+        assert ev._attempt(call, {"id": "review-x"}, results) == ""
+        assert results == [], "an outage was recorded as a crash"
+        ev._print_blocked("review-x", ev._blocked_reason(""))
+        assert ev.BLOCK_REASONS["review-x"].startswith("all providers were down or rate-limited")
+
+    def test_a_real_exception_is_still_a_crash(self, monkeypatch):
+        import evals.run as ev
+
+        monkeypatch.setattr(ev, "THROTTLE_BACKOFF_SECONDS", 0.0)
+        results: list = []
+
+        def call():
+            raise TypeError("_review_code() got an unexpected keyword argument")
+
+        assert ev._attempt(call, {"id": "review-y"}, results) is None
+        assert results and results[0].failures[0].startswith("exception:")
+
+
+class TestACleanReviewIsJudgedOnItsFindings:
+    """2026-11-05: review-clean-change failed on /critical/ with NO findings —
+    the word was in the reviewer's own words about the file, not a finding."""
+
+    def _case(self):
+        cases = json.loads((_ROOT / "evals" / "cases" / "review_cases.json").read_text(encoding="utf-8"))
+        return next(c for c in cases if c["id"] == "review-clean-change")
+
+    def test_saying_there_are_no_critical_issues_passes(self):
+        out = "## Code review\n\n- `app/util/strings.py`: Clean helper; no critical issues — no issues found."
+        assert score_output(out, self._case(), findings="").passed
+
+    def test_a_critical_finding_on_clean_code_still_fails(self):
+        finding = "- **CRITICAL** `app/util/strings.py:3`: slicing can raise IndexError"
+        r = score_output("Review\n" + finding, self._case(), findings=finding)
+        assert not r.passed
+
+    def test_the_failure_quotes_where_the_word_was(self):
+        case = {"id": "x", "must_not_mention": ["critical"], "min_length": 0}
+        r = score_output("All good. This is not critical at all.", case)
+        assert "not critical at all" in r.failures[0]
